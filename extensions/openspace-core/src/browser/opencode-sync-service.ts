@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import { injectable, inject } from '@theia/core/shared/inversify';
+import { Emitter, Event } from '@theia/core';
 import {
     OpenCodeClient,
     SessionNotification,
@@ -41,8 +42,11 @@ export const OpenCodeSyncService = Symbol('OpenCodeSyncService');
  * OpenCode Server → SSE → Backend (OpenCodeProxy) → RPC callback → SyncService → SessionService → UI
  */
 export interface OpenCodeSyncService extends OpenCodeClient {
-    // No additional public methods needed beyond OpenCodeClient interface
-    // This service is purely reactive (receives events, updates state)
+    /**
+     * Event fired when a permission request is received.
+     * External components (e.g., PermissionDialogContribution) can subscribe to this event.
+     */
+    readonly onPermissionRequested: Event<PermissionNotification>;
 }
 
 /**
@@ -72,6 +76,18 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      * Maps messageId → accumulated text.
      */
     private streamingMessages = new Map<string, { text: string }>();
+
+    /**
+     * Emitter for permission requested events.
+     */
+    private readonly permissionRequestedEmitter = new Emitter<PermissionNotification>();
+
+    /**
+     * Event fired when a permission request is received.
+     */
+    get onPermissionRequested(): Event<PermissionNotification> {
+        return this.permissionRequestedEmitter.event;
+    }
 
     /**
      * Handle session lifecycle events (created/updated/deleted/init/abort/etc.).
@@ -325,8 +341,8 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     /**
      * Handle permission request events (requested/granted/denied).
      * 
-     * Phase 1 implementation: Minimal logging only.
-     * Task 1.14 will implement full permission UI and state management.
+     * Phase 1 implementation: Emit events for PermissionDialogContribution.
+     * Task 1.14 implements full permission UI and state management.
      * 
      * @param event - Permission event notification
      */
@@ -340,18 +356,23 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 return;
             }
 
-            // Phase 1: Log only (no UI for permissions yet)
+            // Emit permission requested events for UI to handle
+            if (event.type === 'requested' && event.permission) {
+                this.permissionRequestedEmitter.fire(event);
+            }
+
+            // Handle other event types
             switch (event.type) {
                 case 'requested':
-                    console.debug('[SyncService] Permission requested (no UI in Phase 1)');
+                    console.debug('[SyncService] Permission requested - event emitted');
                     break;
 
                 case 'granted':
-                    console.debug('[SyncService] Permission granted (no action in Phase 1)');
+                    console.debug('[SyncService] Permission granted');
                     break;
 
                 case 'denied':
-                    console.debug('[SyncService] Permission denied (no action in Phase 1)');
+                    console.debug('[SyncService] Permission denied');
                     break;
 
                 default:

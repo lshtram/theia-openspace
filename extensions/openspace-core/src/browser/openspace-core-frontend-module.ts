@@ -17,6 +17,7 @@ import {
 import { SessionService, SessionServiceImpl } from './session-service';
 import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
 import { OpenSpaceBridgeContribution } from './bridge-contribution';
+import { PermissionDialogContribution } from './permission-dialog-contribution';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     // 1. Filter contribution (existing - Phase 0)
@@ -43,6 +44,9 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     // 5. Application contributions
     // BridgeContribution runs on app startup (collects commands, publishes manifest, connects to Hub)
     bind(FrontendApplicationContribution).to(OpenSpaceBridgeContribution).inSingletonScope();
+    
+    // PermissionDialogContribution renders permission dialog UI
+    bind(FrontendApplicationContribution).to(PermissionDialogContribution).inSingletonScope();
 
     console.log('[OpenSpaceCore] Frontend module loaded');
 });

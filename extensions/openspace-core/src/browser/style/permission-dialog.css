@@ -1,0 +1,204 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2024 OpenSpace contributors.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * ****************************************************************************
+ */
+
+/**
+ * Permission Dialog Styles
+ * 
+ * Modal dialog for AI agent permission requests.
+ * Follows Theia dark theme aesthetic with accessible contrast.
+ */
+
+/* Modal overlay (full-screen backdrop) */
+.openspace-permission-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000; /* Above everything else */
+    animation: fadeIn 0.15s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Dialog container */
+.openspace-permission-dialog {
+    background-color: var(--theia-dialog-background, #1e1e1e);
+    border: 1px solid var(--theia-dialog-border, #454545);
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    min-width: 450px;
+    max-width: 600px;
+    padding: 0;
+    animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Dialog header */
+.openspace-permission-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--theia-dialog-border, #454545);
+    background-color: var(--theia-titleBar-activeBackground, #252526);
+}
+
+.openspace-permission-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--theia-foreground, #cccccc);
+}
+
+/* Dialog content */
+.openspace-permission-content {
+    padding: 20px;
+    color: var(--theia-foreground, #cccccc);
+    line-height: 1.6;
+}
+
+.openspace-permission-agent,
+.openspace-permission-action-type {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: baseline;
+}
+
+.openspace-permission-agent .label,
+.openspace-permission-action-type .label,
+.openspace-permission-details .label {
+    font-weight: 600;
+    color: var(--theia-descriptionForeground, #9d9d9d);
+    min-width: 80px;
+    display: inline-block;
+}
+
+.openspace-permission-agent .value,
+.openspace-permission-action-type .value {
+    color: var(--theia-textLink-foreground, #4080d0);
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.openspace-permission-details {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--theia-panel-border, #3c3c3c);
+}
+
+.openspace-permission-message {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background-color: var(--theia-input-background, #2d2d2d);
+    border: 1px solid var(--theia-input-border, #414141);
+    border-radius: 4px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--theia-editor-foreground, #d4d4d4);
+    word-break: break-word;
+}
+
+/* Action buttons */
+.openspace-permission-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--theia-dialog-border, #454545);
+    background-color: var(--theia-titleBar-activeBackground, #252526);
+}
+
+.openspace-permission-button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.openspace-permission-button:focus {
+    outline: 2px solid var(--theia-focusBorder, #007acc);
+    outline-offset: 2px;
+}
+
+/* Deny button (red) */
+.openspace-permission-deny {
+    background-color: #c74440;
+    color: #ffffff;
+}
+
+.openspace-permission-deny:hover {
+    background-color: #e04844;
+}
+
+.openspace-permission-deny:active {
+    background-color: #a83834;
+}
+
+/* Grant button (green) */
+.openspace-permission-grant {
+    background-color: #4caf50;
+    color: #ffffff;
+}
+
+.openspace-permission-grant:hover {
+    background-color: #5bc65f;
+}
+
+.openspace-permission-grant:active {
+    background-color: #3d8b40;
+}
+
+/* Queue indicator */
+.openspace-permission-queue-indicator {
+    padding: 8px 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground, #9d9d9d);
+    border-top: 1px solid var(--theia-panel-border, #3c3c3c);
+    background-color: var(--theia-sideBar-background, #202020);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .openspace-permission-dialog {
+        min-width: 90vw;
+        max-width: 90vw;
+    }
+}
