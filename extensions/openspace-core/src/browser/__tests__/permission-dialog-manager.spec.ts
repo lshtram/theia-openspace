@@ -273,10 +273,7 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event2);
 
             // Advance time by 60 seconds (trigger timeout)
-            clock.tick(60000);
-
-            // Wait for timeout handler to execute
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(60000);
 
             expect(manager.currentRequest?.permissionId).to.equal('perm-2');
             expect(manager.queueLength).to.equal(0);
@@ -291,10 +288,7 @@ describe('PermissionDialogManager', () => {
             expect(manager.isOpen).to.be.true;
 
             // Advance time by 60 seconds
-            clock.tick(60000);
-
-            // Wait for timeout handler
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(60000);
 
             expect(mockOpenCodeService.grantPermission.called).to.be.false;
             expect(manager.isOpen).to.be.false;
@@ -308,8 +302,7 @@ describe('PermissionDialogManager', () => {
             manager.onStateChange(stateChangeListener);
 
             // Advance time by 60 seconds
-            clock.tick(60000);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(60000);
 
             expect(stateChangeListener.calledOnce).to.be.true;
         });
@@ -319,15 +312,14 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event);
 
             // Advance time by 30 seconds (halfway)
-            clock.tick(30000);
+            await clock.tickAsync(30000);
 
             // User clicks Grant
             await manager.grant();
             expect(mockOpenCodeService.grantPermission.calledOnce).to.be.true;
 
             // Advance time by another 40 seconds (total 70, past timeout threshold)
-            clock.tick(40000);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(40000);
 
             // Verify permission was granted only once (not auto-denied)
             expect(mockOpenCodeService.grantPermission.calledOnce).to.be.true;
@@ -342,17 +334,15 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event2);
 
             // Grant first request after 30 seconds
-            clock.tick(30000);
+            await clock.tickAsync(30000);
             await manager.grant();
             expect(manager.currentRequest?.permissionId).to.equal('perm-2');
 
             // Second request should have its own 60-second timeout
-            clock.tick(30000); // Total 60 since first request, but only 30 for second
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(30000); // Total 60 since first request, but only 30 for second
             expect(manager.isOpen).to.be.true; // Still open
 
-            clock.tick(30000); // Now 60 seconds for second request
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await clock.tickAsync(30000); // Now 60 seconds for second request
             expect(manager.isOpen).to.be.false; // Timed out
         });
     });
