@@ -1,0 +1,39 @@
+{
+  "name": "theia-openspace",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.7.0 <2"
+  },
+  "workspaces": [
+    "browser-app",
+    "electron-app",
+    "extensions/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "yarn build:extensions && yarn build:browser",
+    "build:extensions": "yarn --cwd extensions/openspace-core build && yarn --cwd extensions/openspace-chat build && yarn --cwd extensions/openspace-presentation build && yarn --cwd extensions/openspace-whiteboard build && yarn --cwd extensions/openspace-layout build && yarn --cwd extensions/openspace-settings build",
+    "build:browser": "yarn --cwd browser-app build",
+    "build:electron": "yarn --cwd electron-app build",
+    "start:browser": "yarn --cwd browser-app start",
+    "start:electron": "yarn --cwd electron-app start",
+    "watch": "yarn --cwd browser-app watch",
+    "clean": "yarn --cwd browser-app clean && yarn --cwd electron-app clean && rimraf extensions/*/lib extensions/*/tsconfig.tsbuildinfo",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "~5.4.5",
+    "rimraf": "^5.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "./configs/tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@openspace/*": ["extensions/*/src"]
+    }
+  },
+  "exclude": ["node_modules", "lib", "*.d.ts"]
+}

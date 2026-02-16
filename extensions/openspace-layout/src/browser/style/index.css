@@ -1,0 +1,11 @@
+/* Theia Openspace Custom Styles */
+
+/* Header styling */
+#theia-top-panel {
+  background: var(--theia-titleBar-activeBackground);
+}
+
+/* Ensure our branding is visible */
+.theia-app-name::before {
+  content: '🚀 ';
+}

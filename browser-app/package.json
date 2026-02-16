@@ -1,0 +1,50 @@
+{
+  "name": "theia-openspace-browser",
+  "version": "0.1.0",
+  "license": "MIT",
+  "theia": {
+    "target": "browser",
+    "frontend": {
+      "config": {
+        "applicationName": "Theia Openspace",
+        "preferences": {
+          "files.enableTrash": false
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@theia/core": "1.68.2",
+    "@theia/editor": "1.68.2",
+    "@theia/filesystem": "1.68.2",
+    "@theia/markers": "1.68.2",
+    "@theia/messages": "1.68.2",
+    "@theia/monaco": "1.68.2",
+    "@theia/navigator": "1.68.2",
+    "@theia/outline-view": "1.68.2",
+    "@theia/preferences": "1.68.2",
+    "@theia/preview": "1.68.2",
+    "@theia/search-in-workspace": "1.68.2",
+    "@theia/terminal": "1.68.2",
+    "@theia/workspace": "1.68.2",
+    "@theia/ai-core": "1.68.2",
+    "@theia/ai-chat": "1.68.2",
+    "@theia/ai-chat-ui": "1.68.2",
+    "@theia/ai-ide": "1.68.2",
+    "openspace-core": "0.1.0",
+    "openspace-chat": "0.1.0",
+    "openspace-presentation": "0.1.0",
+    "openspace-whiteboard": "0.1.0",
+    "openspace-layout": "0.1.0",
+    "openspace-settings": "0.1.0"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.68.2"
+  },
+  "scripts": {
+    "build": "theia build --mode development",
+    "start": "theia start --port 3000",
+    "watch": "theia build --watch --mode development",
+    "clean": "rimraf lib src-gen"
+  }
+}

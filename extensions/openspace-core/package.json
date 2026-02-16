@@ -1,0 +1,31 @@
+{
+  "name": "openspace-core",
+  "version": "0.1.0",
+  "license": "MIT",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/openspace-core-frontend-module",
+      "backend": "lib/node/openspace-core-backend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2",
+    "@theia/debug": "1.68.2",
+    "@theia/editor": "1.68.2",
+    "@theia/filesystem": "1.68.2",
+    "@theia/request": "1.68.2",
+    "@theia/scm": "1.68.2",
+    "@theia/terminal": "1.68.2",
+    "@theia/workspace": "1.68.2",
+    "eventsource-parser": "^1.1.2"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "watch": "tsc --watch"
+  }
+}

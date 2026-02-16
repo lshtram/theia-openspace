@@ -1,0 +1,23 @@
+{
+  "name": "openspace-layout",
+  "version": "0.1.0",
+  "license": "MIT",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/openspace-layout-frontend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "build": "tsc && yarn copy:css",
+    "copy:css": "mkdir -p lib/browser/style && cp -r src/browser/style/*.css lib/browser/style/ || true",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "watch": "tsc --watch"
+  }
+}

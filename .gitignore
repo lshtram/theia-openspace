@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+lib/
+src-gen/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Theia
+.theia/
+
+# Testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Build artifacts
+dist/
+build/
+*.js.map
+
+# Environment
+.env
+.env.local
+
+# Git worktrees
+.worktrees/
