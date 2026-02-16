@@ -19,7 +19,7 @@ import { ILogger } from '@theia/core/lib/common/logger';
 import { RequestService, RequestContext, RequestOptions } from '@theia/request';
 import * as http from 'http';
 import * as https from 'https';
-import { createParser, EventSourceMessage } from 'eventsource-parser';
+import { createParser, ParsedEvent, ParseEvent } from 'eventsource-parser';
 import {
     OpenCodeService,
     OpenCodeClient,
@@ -407,12 +407,11 @@ export class OpenCodeProxy implements OpenCodeService {
         request.setTimeout(30000); // 30 seconds
 
         // Create SSE parser
-        const parser = createParser({
-            onEvent: (event: EventSourceMessage) => {
+        const parser = createParser((event: ParseEvent) => {
+            if (event.type === 'event') {
                 this.handleSSEEvent(event);
-            },
-            onError: (error) => {
-                this.logger.error(`[OpenCodeProxy] SSE parse error: ${error}`);
+            } else if (event.type === 'reconnect-interval') {
+                this.logger.debug(`[OpenCodeProxy] Server requested reconnect interval: ${event.value}ms`);
             }
         });
 
@@ -519,7 +518,7 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Handle incoming SSE event.
      */
-    protected handleSSEEvent(event: EventSourceMessage): void {
+    protected handleSSEEvent(event: ParsedEvent): void {
         if (!this._client) {
             this.logger.debug('[OpenCodeProxy] Received SSE event but no client connected');
             return;
