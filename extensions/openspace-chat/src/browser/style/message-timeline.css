@@ -1,0 +1,333 @@
+/********************************************************************************
+ * Copyright (C) 2024 OpenSpace contributors.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ ********************************************************************************/
+
+/* ============================================================================
+   Message Timeline - CSS Variables
+   ============================================================================ */
+
+.openspace-chat-widget {
+    /* Message bubble colors */
+    --message-user-bg: var(--theia-button-background);
+    --message-user-fg: var(--theia-button-foreground);
+    --message-assistant-bg: var(--theia-panel-background);
+    --message-assistant-fg: var(--theia-panel-foreground);
+    --message-assistant-border: var(--theia-panel-border);
+
+    /* Spacing and sizing */
+    --message-border-radius: 12px;
+    --message-padding: 12px 16px;
+    --message-max-width: 85%;
+    --message-gap: 16px;
+    --message-group-gap: 4px;
+    --timeline-padding: 16px;
+
+    /* Streaming indicator */
+    --cursor-color: var(--theia-editor-foreground);
+    --cursor-blink-duration: 1s;
+
+    /* New messages indicator */
+    --new-messages-bg: var(--theia-button-background);
+    --new-messages-fg: var(--theia-button-foreground);
+    --new-messages-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
+   Message Timeline Container
+   ============================================================================ */
+
+.openspace-chat-widget .message-timeline {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.openspace-chat-widget .message-timeline-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+.openspace-chat-widget .message-timeline-content {
+    display: flex;
+    flex-direction: column;
+    padding: var(--timeline-padding);
+    gap: var(--message-gap);
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+
+.openspace-chat-widget .message-timeline-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.openspace-chat-widget .message-timeline-empty-content {
+    text-align: center;
+    opacity: 0.7;
+}
+
+.openspace-chat-widget .message-timeline-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.openspace-chat-widget .message-timeline-empty-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 8px 0;
+    color: var(--theia-foreground);
+}
+
+.openspace-chat-widget .message-timeline-empty-hint {
+    font-size: 13px;
+    margin: 0;
+    color: var(--theia-descriptionForeground);
+}
+
+/* ============================================================================
+   Message Bubble Base Styles
+   ============================================================================ */
+
+.openspace-chat-widget .message-bubble {
+    display: flex;
+    flex-direction: column;
+    max-width: var(--message-max-width);
+    position: relative;
+    transition: opacity 0.2s ease;
+}
+
+.openspace-chat-widget .message-bubble-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.openspace-chat-widget .message-bubble-role {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.openspace-chat-widget .message-bubble-icon {
+    font-size: 14px;
+}
+
+.openspace-chat-widget .message-bubble-timestamp {
+    font-size: 11px;
+    opacity: 0.6;
+    font-weight: 400;
+}
+
+.openspace-chat-widget .message-bubble-content {
+    padding: var(--message-padding);
+    border-radius: var(--message-border-radius);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+/* ============================================================================
+   User Message Styling (Right-aligned, Blue)
+   ============================================================================ */
+
+.openspace-chat-widget .message-bubble-user {
+    align-self: flex-end;
+}
+
+.openspace-chat-widget .message-bubble-user .message-bubble-header {
+    justify-content: flex-end;
+    flex-direction: row-reverse;
+}
+
+.openspace-chat-widget .message-bubble-user .message-bubble-content {
+    background-color: var(--message-user-bg);
+    color: var(--message-user-fg);
+    border-bottom-right-radius: 4px;
+}
+
+/* ============================================================================
+   Assistant Message Styling (Left-aligned, Gray)
+   ============================================================================ */
+
+.openspace-chat-widget .message-bubble-assistant {
+    align-self: flex-start;
+}
+
+.openspace-chat-widget .message-bubble-assistant .message-bubble-content {
+    background-color: var(--message-assistant-bg);
+    color: var(--message-assistant-fg);
+    border: 1px solid var(--message-assistant-border);
+    border-bottom-left-radius: 4px;
+}
+
+/* ============================================================================
+   Streaming State
+   ============================================================================ */
+
+.openspace-chat-widget .message-bubble-streaming .message-bubble-content {
+    opacity: 0.95;
+}
+
+.openspace-chat-widget .message-streaming-cursor {
+    display: inline-block;
+    animation: message-cursor-blink var(--cursor-blink-duration) step-end infinite;
+    margin-left: 2px;
+    color: var(--cursor-color);
+}
+
+@keyframes message-cursor-blink {
+    0%, 50% {
+        opacity: 1;
+    }
+    51%, 100% {
+        opacity: 0;
+    }
+}
+
+/* ============================================================================
+   Message Grouping
+   ============================================================================ */
+
+/* Reduce gap between consecutive messages from same sender */
+.openspace-chat-widget .message-bubble-user + .message-bubble-user,
+.openspace-chat-widget .message-bubble-assistant + .message-bubble-assistant {
+    margin-top: calc(-1 * var(--message-gap) + var(--message-group-gap));
+}
+
+/* Hide header on non-first messages in group */
+.openspace-chat-widget .message-bubble-user:not(.message-bubble-first) .message-bubble-header,
+.openspace-chat-widget .message-bubble-assistant:not(.message-bubble-first) .message-bubble-header {
+    display: none;
+}
+
+/* Adjust border radius for grouped messages */
+.openspace-chat-widget .message-bubble-user:not(.message-bubble-first) .message-bubble-content {
+    border-top-right-radius: 4px;
+}
+
+.openspace-chat-widget .message-bubble-user:not(.message-bubble-last) .message-bubble-content {
+    border-bottom-right-radius: 4px;
+}
+
+.openspace-chat-widget .message-bubble-assistant:not(.message-bubble-first) .message-bubble-content {
+    border-top-left-radius: 4px;
+}
+
+.openspace-chat-widget .message-bubble-assistant:not(.message-bubble-last) .message-bubble-content {
+    border-bottom-left-radius: 4px;
+}
+
+/* ============================================================================
+   New Messages Indicator
+   ============================================================================ */
+
+.openspace-chat-widget .new-messages-indicator {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--new-messages-bg);
+    color: var(--new-messages-fg);
+    border: none;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--new-messages-shadow);
+    animation: new-messages-appear 0.3s ease;
+    z-index: 10;
+}
+
+.openspace-chat-widget .new-messages-indicator:hover {
+    filter: brightness(1.1);
+}
+
+.openspace-chat-widget .new-messages-indicator:active {
+    transform: translateX(-50%) scale(0.95);
+}
+
+.openspace-chat-widget .new-messages-icon {
+    font-size: 12px;
+    animation: new-messages-bounce 1s ease infinite;
+}
+
+@keyframes new-messages-appear {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes new-messages-bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(2px);
+    }
+}
+
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+.openspace-chat-widget .message-timeline-scroll-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.openspace-chat-widget .message-timeline-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.openspace-chat-widget .message-timeline-scroll-container::-webkit-scrollbar-thumb {
+    background: var(--theia-scrollbarSlider-background);
+    border-radius: 4px;
+}
+
+.openspace-chat-widget .message-timeline-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: var(--theia-scrollbarSlider-hoverBackground);
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-width: 400px) {
+    .openspace-chat-widget {
+        --message-max-width: 90%;
+        --timeline-padding: 12px;
+    }
+}

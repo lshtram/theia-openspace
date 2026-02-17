@@ -22,6 +22,7 @@ import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/sess
 import { Message, MessagePart, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
+import { MessageTimeline } from './message-timeline';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -73,7 +74,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
-    const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
     // Subscribe to model changes
@@ -163,13 +163,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         };
     }, [sessionService, loadSessions]);
 
-
-
-    // Auto-scroll to bottom on new messages
-    React.useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, streamingData]);
-
     // Close dropdown on outside click
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -252,14 +245,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     }, [sessionService]);
 
     // handleKeyDown removed - now handled by PromptInput component
-
-    // Render message text from parts
-    const renderMessageText = (message: Message): string => {
-        return (message.parts || [])
-            .filter(part => part.type === 'text')
-            .map(part => (part as { text: string }).text)
-            .join('');
-    };
 
     // Check if session is active
     const hasActiveSession = sessionService.activeSession !== undefined;
@@ -373,32 +358,12 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                         <div className="chat-header-secondary">
                             <ModelSelector sessionService={sessionService} />
                         </div>
-                        <div className="chat-messages">{messages.length === 0 ? (
-                                <div className="chat-empty">
-                                    <p>No messages yet</p>
-                                    <p className="chat-hint">Type a message below to get started</p>
-                                </div>
-                            ) : (
-                                messages.map(message => {
-                                    const messageText = renderMessageText(message);
-                                    const streamingText = streamingData.get(message.id);
-                                    const displayText = streamingText ? messageText + streamingText : messageText;
-
-                                    return (
-                                        <div key={message.id} className={`chat-message chat-message-${message.role}`}>
-                                            <div className="chat-message-role">
-                                                {message.role === 'user' ? 'You' : 'Assistant'}
-                                            </div>
-                                            <div className="chat-message-content">
-                                                {displayText}
-                                                {streamingText && <span className="chat-streaming-indicator">▋</span>}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
+                        <MessageTimeline
+                            messages={messages}
+                            streamingData={streamingData}
+                            isStreaming={isStreaming}
+                            streamingMessageId={isStreaming ? streamingData.keys().next().value : undefined}
+                        />
                         
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput

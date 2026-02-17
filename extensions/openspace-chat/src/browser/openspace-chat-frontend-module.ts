@@ -10,6 +10,7 @@ import { ChatWidget } from './chat-widget';
 import { ChatViewContribution } from './chat-view-contribution';
 
 import './style/chat-widget.css';
+import './style/message-timeline.css';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     // Chat agent
