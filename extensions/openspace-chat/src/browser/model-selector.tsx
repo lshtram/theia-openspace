@@ -16,7 +16,7 @@
 
 import * as React from '@theia/core/shared/react';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
-import { ProviderWithModels, Model } from 'openspace-core/lib/common/opencode-protocol';
+import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol';
 
 interface ModelSelectorProps {
     sessionService: SessionService;
@@ -34,7 +34,11 @@ interface FlatModel {
  * ModelSelector Component
  * 
  * Displays the current model and allows selecting from available models.
- * Models are grouped by provider in the dropdown.
+ * Features:
+ * - Search/filter functionality
+ * - Grouped by provider
+ * - Keyboard navigation
+ * - Recently used models section
  */
 export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
@@ -42,26 +46,50 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
     const [isOpen, setIsOpen] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState<string | undefined>();
-    const [selectedIndex, setSelectedIndex] = React.useState(0);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [recentModels, setRecentModels] = React.useState<string[]>([]);
     
     const dropdownRef = React.useRef<HTMLDivElement>(null);
+    const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-    // Flatten models for keyboard navigation
-    const flatModels = React.useMemo<FlatModel[]>(() => {
+    // Flatten and filter models based on search
+    const filteredModels = React.useMemo<FlatModel[]>(() => {
         const models: FlatModel[] = [];
+        const query = searchQuery.toLowerCase();
+        
         for (const provider of providers) {
             for (const [, model] of Object.entries(provider.models)) {
-                models.push({
-                    providerId: provider.id,
-                    providerName: provider.name,
-                    modelId: model.id,
-                    modelName: model.name,
-                    fullId: `${provider.id}/${model.id}`
-                });
+                const fullId = `${provider.id}/${model.id}`;
+                const matchesSearch = !query || 
+                    model.name.toLowerCase().includes(query) ||
+                    provider.name.toLowerCase().includes(query) ||
+                    fullId.toLowerCase().includes(query);
+                
+                if (matchesSearch) {
+                    models.push({
+                        providerId: provider.id,
+                        providerName: provider.name,
+                        modelId: model.id,
+                        modelName: model.name,
+                        fullId
+                    });
+                }
             }
         }
         return models;
-    }, [providers]);
+    }, [providers, searchQuery]);
+
+    // Group filtered models by provider
+    const groupedModels = React.useMemo(() => {
+        const groups: Record<string, FlatModel[]> = {};
+        for (const model of filteredModels) {
+            if (!groups[model.providerName]) {
+                groups[model.providerName] = [];
+            }
+            groups[model.providerName].push(model);
+        }
+        return groups;
+    }, [filteredModels]);
 
     // Subscribe to active model changes
     React.useEffect(() => {
@@ -70,6 +98,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         });
         return () => disposable.dispose();
     }, [sessionService]);
+
+    // Focus search input when dropdown opens
+    React.useEffect(() => {
+        if (isOpen && searchInputRef.current) {
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+        }
+    }, [isOpen]);
 
     // Fetch models when dropdown opens
     const fetchModels = React.useCallback(async () => {
@@ -98,16 +133,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
     // Handle dropdown open
     const handleOpen = React.useCallback(() => {
         setIsOpen(true);
+        setSearchQuery('');
         fetchModels();
-        // Reset selection to current model
-        const currentIndex = flatModels.findIndex(m => m.fullId === activeModel);
-        setSelectedIndex(currentIndex >= 0 ? currentIndex : 0);
-    }, [fetchModels, activeModel, flatModels]);
+    }, [fetchModels]);
 
     // Handle dropdown close
     const handleClose = React.useCallback(() => {
         setIsOpen(false);
         setError(undefined);
+        setSearchQuery('');
     }, []);
 
     // Toggle dropdown
@@ -124,6 +158,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         sessionService.setActiveModel(fullId);
         setActiveModel(fullId);
         setIsOpen(false);
+        
+        // Add to recent models
+        setRecentModels(prev => {
+            const updated = [fullId, ...prev.filter(m => m !== fullId)].slice(0, 5);
+            return updated;
+        });
     }, [sessionService]);
 
     // Handle keyboard navigation
@@ -136,33 +176,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
             return;
         }
 
-        switch (e.key) {
-            case 'Escape':
-                e.preventDefault();
-                handleClose();
-                break;
-            case 'ArrowDown':
-                e.preventDefault();
-                setSelectedIndex(prev => (prev + 1) % flatModels.length);
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                setSelectedIndex(prev => (prev - 1 + flatModels.length) % flatModels.length);
-                break;
-            case 'Enter':
-                e.preventDefault();
-                if (flatModels[selectedIndex]) {
-                    handleSelect(flatModels[selectedIndex].fullId);
-                }
-                break;
-            case 'Tab':
-                handleClose();
-                break;
-            default:
-                // Do nothing for other keys
-                break;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            handleClose();
         }
-    }, [isOpen, flatModels, selectedIndex, handleOpen, handleClose, handleSelect]);
+    }, [isOpen, handleOpen, handleClose]);
 
     // Close on outside click
     React.useEffect(() => {
@@ -179,14 +197,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         return undefined;
     }, [isOpen, handleClose]);
 
-    // Scroll selected item into view
-    React.useEffect(() => {
-        if (isOpen && flatModels.length > 0) {
-            const selectedElement = document.querySelector('.model-option.selected');
-            selectedElement?.scrollIntoView({ block: 'nearest' });
-        }
-    }, [selectedIndex, isOpen, flatModels.length]);
-
     // Get display name for current model
     const currentModelDisplay = React.useMemo(() => {
         if (!activeModel) return 'Select Model';
@@ -198,6 +208,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         }
         return activeModel;
     }, [activeModel, providers]);
+
+    // Get recent model objects
+    const recentModelObjects = React.useMemo(() => {
+        return recentModels
+            .map(id => filteredModels.find(m => m.fullId === id))
+            .filter((m): m is FlatModel => m !== undefined);
+    }, [recentModels, filteredModels]);
 
     return (
         <div
@@ -224,6 +241,37 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
                     role="listbox"
                     aria-label="Available models"
                 >
+                    {/* Search Input */}
+                    <div className="model-dropdown-search">
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            className="model-search-input"
+                            placeholder="Search models..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                    if (searchQuery) {
+                                        setSearchQuery('');
+                                    } else {
+                                        handleClose();
+                                    }
+                                }
+                            }}
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                className="model-search-clear"
+                                onClick={() => setSearchQuery('')}
+                                title="Clear search"
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+
                     {isLoading && (
                         <div className="model-dropdown-loading">
                             <span className="spinner">⏳</span> Loading models...
@@ -245,57 +293,82 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
                         </div>
                     )}
 
-                    {!isLoading && !error && providers.length === 0 && (
+                    {!isLoading && !error && filteredModels.length === 0 && (
                         <div className="model-dropdown-empty">
-                            No models available
+                            {searchQuery ? 'No models match your search' : 'No models available'}
                         </div>
                     )}
 
-                    {!isLoading && !error && providers.map(provider => (
-                        <div key={provider.id} className="model-provider-group">
-                            <div className="model-provider-header">
-                                {provider.name}
-                            </div>
-                            {Object.values(provider.models).map((model: Model) => {
-                                const fullId = `${provider.id}/${model.id}`;
-                                const isSelected = fullId === activeModel;
-                                const index = flatModels.findIndex(m => m.fullId === fullId);
-                                const isHighlighted = index === selectedIndex;
+                    {!isLoading && !error && (
+                        <div className="model-dropdown-content">
+                            {/* Recent Models Section */}
+                            {recentModelObjects.length > 0 && !searchQuery && (
+                                <div className="model-section">
+                                    <div className="model-section-header">Recent</div>
+                                    {recentModelObjects.map(model => (
+                                        <ModelOption
+                                            key={`recent-${model.fullId}`}
+                                            model={model}
+                                            isSelected={model.fullId === activeModel}
+                                            onSelect={handleSelect}
+                                        />
+                                    ))}
+                                </div>
+                            )}
 
-                                return (
-                                    <div
-                                        key={model.id}
-                                        className={`model-option ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
-                                        onClick={() => handleSelect(fullId)}
-                                        onMouseEnter={() => setSelectedIndex(index)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                handleSelect(fullId);
-                                            }
-                                        }}
-                                        role="option"
-                                        aria-selected={isSelected}
-                                        tabIndex={-1}
-                                    >
-                                        <span className="model-option-name">
-                                            {isSelected && <span className="model-option-indicator">●</span>}
-                                            {model.name}
-                                        </span>
-                                        {model.limit && (
-                                            <span className="model-option-limit">
-                                                {model.limit.context >= 1000 
-                                                    ? `${Math.round(model.limit.context / 1000)}k` 
-                                                    : model.limit.context} ctx
-                                            </span>
-                                        )}
+                            {/* All Models Grouped by Provider */}
+                            {Object.entries(groupedModels).map(([providerName, models]) => (
+                                <div key={providerName} className="model-provider-group">
+                                    <div className="model-provider-header">
+                                        {providerName}
                                     </div>
-                                );
-                            })}
+                                    {models.map(model => (
+                                        <ModelOption
+                                            key={model.fullId}
+                                            model={model}
+                                            isSelected={model.fullId === activeModel}
+                                            onSelect={handleSelect}
+                                        />
+                                    ))}
+                                </div>
+                            ))}
                         </div>
-                    ))}
+                    )}
                 </div>
             )}
+        </div>
+    );
+};
+
+// Sub-component for model option
+interface ModelOptionProps {
+    model: FlatModel;
+    isSelected: boolean;
+    onSelect: (fullId: string) => void;
+}
+
+const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, onSelect }) => {
+    const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(model.fullId);
+        }
+    }, [model.fullId, onSelect]);
+
+    return (
+        <div
+            className={`model-option ${isSelected ? 'selected' : ''}`}
+            onClick={() => onSelect(model.fullId)}
+            onKeyDown={handleKeyDown}
+            role="option"
+            aria-selected={isSelected}
+            tabIndex={0}
+        >
+            <span className="model-option-name">
+                {isSelected && <span className="model-option-indicator">●</span>}
+                {model.modelName}
+            </span>
+            <span className="model-option-id">{model.fullId}</span>
         </div>
     );
 };

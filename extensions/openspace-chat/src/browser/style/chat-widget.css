@@ -588,3 +588,83 @@
     color: var(--theia-list-activeSelectionForeground);
     opacity: 0.8;
 }
+
+/* Model Dropdown Search */
+.openspace-chat-widget .model-dropdown-search {
+    position: relative;
+    padding: 8px;
+    border-bottom: 1px solid var(--theia-panel-border);
+}
+
+.openspace-chat-widget .model-search-input {
+    width: 100%;
+    padding: 6px 24px 6px 10px;
+    background: var(--theia-input-background);
+    color: var(--theia-input-foreground);
+    border: 1px solid var(--theia-input-border);
+    border-radius: 3px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.openspace-chat-widget .model-search-input:focus {
+    outline: none;
+    border-color: var(--theia-focusBorder);
+}
+
+.openspace-chat-widget .model-search-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--theia-descriptionForeground);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.openspace-chat-widget .model-search-clear:hover {
+    color: var(--theia-foreground);
+}
+
+/* Model Dropdown Content (scrollable area) */
+.openspace-chat-widget .model-dropdown-content {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Model Section (for Recent, etc.) */
+.openspace-chat-widget .model-section {
+    padding: 4px 0;
+}
+
+.openspace-chat-widget .model-section:not(:last-child) {
+    border-bottom: 1px solid var(--theia-panel-border);
+}
+
+.openspace-chat-widget .model-section-header {
+    padding: 8px 12px 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--theia-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Model Option ID (full provider/model) */
+.openspace-chat-widget .model-option-id {
+    font-size: 10px;
+    color: var(--theia-descriptionForeground);
+    opacity: 0.7;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .model-option.selected .model-option-id {
+    color: var(--theia-list-activeSelectionForeground);
+    opacity: 0.9;
+}
