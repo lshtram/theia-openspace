@@ -349,7 +349,7 @@ task_id: TheiaOpenspaceWorkplan
 | **What** | Fix URL mismatch bug: BridgeContribution currently POSTs to `http://localhost:3001/openspace/manifest` and `http://localhost:3001/openspace/events` but Hub routes are registered at `/manifest` and `/events` (no `/openspace/` prefix). Standardize all routes to use `/openspace/` prefix. Update both Hub route registration and BridgeContribution fetch URLs to match. Also fix the port — BridgeContribution should use the same port as the Theia backend (typically 3000), not a hardcoded 3001. |
 | **Acceptance** | BridgeContribution successfully POSTs manifest to Hub on startup. No 404 errors in console. |
 | **Dependencies** | Phase 1 complete |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.8 — Architecture B1 integration verification
 | | |
@@ -370,15 +370,16 @@ task_id: TheiaOpenspaceWorkplan
 
 **V&V Targets:**
 - [x] Session list loads immediately on chat widget open (Task 2.0)
-- [ ] Multi-part prompt: text + file attachment + @mention sent correctly to opencode server
-- [ ] Message timeline renders streaming response with visible progress indicator
-- [ ] Auto-scroll follows new content; scrolling up pauses auto-scroll
-- [ ] Code blocks syntax-highlighted with working Copy button
-- [ ] File:line references in responses are clickable and open editor at correct line
-- [ ] Session sidebar shows all sessions with create/switch/delete working
-- [ ] Session fork/revert/compact operations work through UI
-- [ ] Token usage displays and updates during streaming
-- [ ] Chat integration test (2.9) passes
+- [ ] Model selection dropdown works and persists per-session (Task 2.1)
+- [ ] Multi-part prompt: text + file attachment + @mention sent correctly to opencode server (Task 2.2)
+- [ ] Message timeline renders streaming response with visible progress indicator (Task 2.3)
+- [ ] Auto-scroll follows new content; scrolling up pauses auto-scroll (Task 2.3)
+- [ ] Code blocks syntax-highlighted with working Copy button (Task 2.4)
+- [ ] File:line references in responses are clickable and open editor at correct line (Task 2.6)
+- [ ] Session sidebar shows all sessions with create/switch/delete working (Task 2.7)
+- [ ] Session fork/revert/compact operations work through UI (Task 2.8)
+- [ ] Token usage displays and updates during streaming (Task 2.9)
+- [ ] Chat integration test (2.10) passes
 
 ### 2.0 — Session List Auto-Load Fix (NEW)
 | | |
@@ -391,15 +392,25 @@ task_id: TheiaOpenspaceWorkplan
 | **Result** | Race condition eliminated via event subscription. 13 unit tests added (113/113 passing). Build clean. CodeReviewer: 87% confidence (APPROVED). Known improvements: accessibility enhancements, magic number extraction, enhanced error messages (all non-blocking). |
 | **Status** | ✅ |
 
-### 2.1 — Multi-part prompt input
+### 2.1 — Model Selection (PRIORITY)
+| | |
+|---|---|
+| **What** | Add model selection dropdown to the chat widget. When creating a new session or at any time during a session, user can select which LLM model to use (e.g., Claude Sonnet 4.5, GPT-4, etc.). Selection is stored per-session and sent to opencode server with messages. Display current model name in chat header. Add API to SessionService/OpenCodeProxy to get available models and set active model. If opencode server doesn't support model switching via API, explore config-based approach (writing to opencode config file). |
+| **Acceptance** | User can see current model name in chat header. Clicking model name opens dropdown with available models. Selecting a model updates the active model for the session. New messages use the selected model. |
+| **Dependencies** | Phase 1 complete, Task 1.15 (provider display) |
+| **Priority** | HIGH (user-requested blocker - currently uses default/last-used model) |
+| **Notes** | Currently model is read-only (Task 1.15). This adds write capability. May require opencode server support or config file modification. |
+| **Status** | ⬜ |
+
+### 2.2 — Multi-part prompt input
 | | |
 |---|---|
 | **What** | Upgrade the prompt input to support multiple parts: text (default), file attachments (drag-drop or button), image attachments, @agent mentions (typeahead). Port the multi-part input pattern from opencode client (`packages/app/src/components/prompt/`). Use Theia's `QuickInputService` for @mention typeahead. |
 | **Acceptance** | Can compose a message with text + attached files + @mention. Parts are sent to opencode server correctly. |
 | **Dependencies** | Phase 1 complete |
-| **Status** | ⬜ |
+| **Status** | 🟡 |
 
-### 2.2 — Message timeline with streaming
+### 2.3 — Message timeline with streaming
 | | |
 |---|---|
 | **What** | Replace the basic message list with a proper timeline. User messages right-aligned (or styled differently), assistant messages left-aligned. Streaming indicator (blinking cursor or progress bar) during response. Auto-scroll to bottom on new content, but respect user scrolling up (scroll spy). |
@@ -407,15 +418,15 @@ task_id: TheiaOpenspaceWorkplan
 | **Dependencies** | Phase 1 complete |
 | **Status** | ⬜ |
 
-### 2.3 — Response renderers: code blocks
+### 2.4 — Response renderers: code blocks
 | | |
 |---|---|
 | **What** | Create `openspace-chat/src/browser/response-renderers/code-renderer.tsx`. Detects markdown code blocks in assistant responses. Renders with syntax highlighting (use Monaco's tokenizer or a lightweight lib like Shiki). Add "Copy" button and "Apply to file" button (for when code references a file). |
 | **Acceptance** | Code blocks in responses are syntax-highlighted with working Copy button. |
-| **Dependencies** | 2.2 |
+| **Dependencies** | 2.3 |
 | **Status** | ⬜ |
 
-### 2.4 — Response renderers: diff view
+### 2.5 — Response renderers: diff view
 | | |
 |---|---|
 | **What** | Create `diff-renderer.tsx`. Detects diff blocks in responses. Renders as an inline diff view (using Monaco's diff editor or a React diff component). Shows added/removed lines with color coding. |
@@ -423,15 +434,15 @@ task_id: TheiaOpenspaceWorkplan
 | **Dependencies** | 2.2 |
 | **Status** | ⬜ |
 
-### 2.5 — Response renderers: file references
+### 2.6 — Response renderers: file references
 | | |
 |---|---|
 | **What** | Create `file-ref-renderer.tsx`. Detects file path references (e.g., `src/index.ts:42`) in responses. Renders as clickable links that open the file at the referenced line in the editor. Uses `EditorManager.open()`. |
 | **Acceptance** | Clicking a file:line reference opens the file and scrolls to that line. |
-| **Dependencies** | 2.2 |
+| **Dependencies** | 2.3 |
 | **Status** | ⬜ |
 
-### 2.6 — Session sidebar
+### 2.7 — Session sidebar
 | | |
 |---|---|
 | **What** | Create a sidebar panel showing session list: session title, creation date, last message preview. Clicking a session switches the active session. "New Session" button at top. Context menu with Delete, Fork options. Group by project if multiple projects. |
@@ -439,28 +450,28 @@ task_id: TheiaOpenspaceWorkplan
 | **Dependencies** | Phase 1 complete |
 | **Status** | ⬜ |
 
-### 2.7 — Session operations: fork / revert / compact
+### 2.8 — Session operations: fork / revert / compact
 | | |
 |---|---|
 | **What** | Implement session fork (create new session from a specific message), revert (roll back to a message), compact (summarize and trim context), and unrevert. Wire to SessionService → OpenCodeProxy → opencode server API. Add UI trigger: context menu on messages or session toolbar buttons. |
 | **Acceptance** | Can fork a session at a specific message → new session created with correct history. Revert removes messages after the target. Compact calls the server API. |
-| **Dependencies** | 2.6 |
+| **Dependencies** | 2.7 |
 | **Status** | ⬜ |
 
-### 2.8 — Token usage display
+### 2.9 — Token usage display
 | | |
 |---|---|
 | **What** | Display token usage (input tokens, output tokens, total) in the session header or status bar. Data comes from message metadata via the opencode API. Update in real-time during streaming. |
 | **Acceptance** | Token counts visible and updating during/after each message exchange. |
-| **Dependencies** | 2.2 |
+| **Dependencies** | 2.3 |
 | **Status** | ⬜ |
 
-### 2.9 — Chat integration test
+### 2.10 — Chat integration test
 | | |
 |---|---|
 | **What** | End-to-end test covering: multi-part prompt → send → streaming response with code block → click file reference → editor opens. Session create/switch/delete. |
 | **Acceptance** | Test passes reliably. |
-| **Dependencies** | 2.1–2.8 |
+| **Dependencies** | 2.1–2.10 |
 | **Status** | ⬜ |
 
 ---
