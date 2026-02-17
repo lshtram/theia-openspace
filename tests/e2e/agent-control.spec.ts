@@ -342,8 +342,6 @@ Normal text response`;
    * Verifies: Chunk boundary split → block correctly reassembled
    */
   test('T8: Chunk boundary split', async ({ page }) => {
-    const theiaReady = await waitForTheiaLoad(page);
-    
     // Test the chunk reassembly logic independently of Theia availability
     // Simulate streaming response that splits a block across chunks
     const chunk1 = '%%OS{"cmd": "openspace.editor.open"';
@@ -351,19 +349,16 @@ Normal text response`;
     
     // Verify that when chunks are concatenated, they form valid JSON
     const reassembled = chunk1 + chunk2;
-    // Fix: Use correct pattern - the block ends with %% not }% 
-    const jsonPart = reassembled.replace('%%OS{', '').replace('%%', '');
+    // After concat: %%OS{"cmd": "openspace.editor.open", "args": {"file": "test.ts", "line": 42}}%%
+    // Need to remove %%OS{ from start and }%% from end
+    const jsonPart = reassembled.slice(4, -2); // Remove %%OS{ and }%%
     const parsed = JSON.parse(jsonPart);
     
     expect(parsed.cmd).toBe('openspace.editor.open');
     expect(parsed.args.file).toBe('test.ts');
     expect(parsed.args.line).toBe(42);
     
-    // If Theia is not available, this test still passes for the logic verification
-    // but we note that full integration requires Theia
-    if (!theiaReady) {
-      console.log('Note: Full integration with Theia not available - logic verified only');
-    }
+    console.log('Note: Chunk reassembly logic verified');
   });
 
   /**
@@ -403,6 +398,7 @@ The file is now open.`;
   test('T10: Command palette shows openspace.* commands', async ({ page }) => {
     const theiaReady = await waitForTheiaLoad(page);
     
+    // Skip if Theia is not available
     if (!theiaReady) {
       test.skip(true, 'Theia not available - requires running browser app');
       return;
@@ -423,8 +419,6 @@ The file is now open.`;
     // Check if command palette is visible
     const paletteVisible = await page.locator('.theia-CommandPalette, [class*="command-palette"]').isVisible().catch(() => false);
     
-    // Note: This test verifies the command palette can be opened
-    // Full verification would require Theia to be fully running
     expect(paletteVisible).toBe(true);
   });
 
@@ -453,7 +447,8 @@ The file is now open.`;
     ];
     
     // Verify security checks would catch these
-    const pathTraversalPattern = /(\.\.[\/\\])|(^[\/\\]:)|(^[A-Z]:[\\])/i;
+    // Pattern matches: ../ or ..\ (parent directory traversal), absolute Unix paths, absolute Windows paths
+    const pathTraversalPattern = /(\.\.[/\\])|(^[/\\])|(^[A-Z]:[\\])/i;
     
     for (const path of maliciousPaths) {
       const isMalicious = pathTraversalPattern.test(path);

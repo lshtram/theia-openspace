@@ -173,7 +173,7 @@ More content
         it('should convert code blocks', () => {
             const md = '`inline code`';
             
-            let html = md.replace(/`(.*?)`/g, '<code>$1</code>');
+            const html = md.replace(/`(.*?)`/g, '<code>$1</code>');
             
             expect(html).to.include('<code>inline code</code>');
         });
