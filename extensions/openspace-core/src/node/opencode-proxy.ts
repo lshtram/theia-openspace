@@ -319,9 +319,11 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`);
     }
 
-    async createMessage(_projectId: string, sessionId: string, message: Partial<Message>): Promise<MessageWithParts> {
+    async createMessage(_projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts> {
         // OpenCode API: POST /session/:id/message
-        return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, message);
+        // Model is passed as top-level parameter, not in message metadata
+        const body = model ? { ...message, model } : message;
+        return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, body);
     }
 
     // =========================================================================

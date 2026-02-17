@@ -75,7 +75,7 @@ export interface SessionService extends Disposable {
     setActiveSession(sessionId: string): Promise<void>;
     setActiveModel(model: string): void;
     createSession(title?: string): Promise<Session>;
-    sendMessage(parts: MessagePart[]): Promise<void>;
+    sendMessage(parts: MessagePart[], model?: { providerID: string; modelID: string }): Promise<void>;
     abort(): Promise<void>;
     getSessions(): Promise<Session[]>;
     getAvailableModels(): Promise<ProviderWithModels[]>;
@@ -441,8 +441,8 @@ export class SessionServiceImpl implements SessionService {
      * @param parts - Message parts (text, file, image, etc.)
      * @throws Error if no active project or session
      */
-    async sendMessage(parts: MessagePart[]): Promise<void> {
-        console.info(`[SessionService] Operation: sendMessage(${parts.length} parts)`);
+    async sendMessage(parts: MessagePart[], model?: { providerID: string; modelID: string }): Promise<void> {
+        console.info(`[SessionService] Operation: sendMessage(${parts.length} parts, model: ${model ? `${model.providerID}/${model.modelID}` : 'none'})`);
 
         // Require active project and session
         if (!this._activeProject) {
@@ -471,7 +471,7 @@ export class SessionServiceImpl implements SessionService {
             sessionId: this._activeSession.id,
             role: 'user',
             parts,
-            metadata: { optimistic: true }
+            metadata: { optimistic: true, ...(model && { model }) }
         };
 
         // Add optimistic message immediately (UI updates)
@@ -486,10 +486,12 @@ export class SessionServiceImpl implements SessionService {
 
         try {
             // Call backend to create message
+            // Model is passed as top-level parameter (not in message metadata)
             const result = await this.openCodeService.createMessage(
                 this._activeProject.id,
                 this._activeSession.id,
-                { parts }
+                { parts },
+                model
             );
 
             // Replace optimistic message ID with real ID (if server returns updated user message)

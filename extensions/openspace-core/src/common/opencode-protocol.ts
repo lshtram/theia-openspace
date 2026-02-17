@@ -209,7 +209,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     // Message methods
     getMessages(projectId: string, sessionId: string): Promise<MessageWithParts[]>;
     getMessage(projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts>;
-    createMessage(projectId: string, sessionId: string, message: Partial<Message>): Promise<MessageWithParts>;
+    createMessage(projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts>;
 
     // File methods
     findFiles(projectId: string, sessionId: string): Promise<string[]>;

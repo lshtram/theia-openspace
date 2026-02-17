@@ -235,25 +235,16 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         }
 
         try {
-            // Add model metadata to first text part if model is selected
-            let partsToSend = parts;
-            const model = sessionService.activeModel;
-            if (model && parts[0]?.type === 'text') {
-                const [providerID, modelID] = model.split('/');
-                partsToSend = [
-                    {
-                        ...parts[0],
-                        metadata: {
-                            ...(parts[0].metadata || {}),
-                            providerID,
-                            modelID
-                        }
-                    },
-                    ...parts.slice(1)
-                ];
-            }
+            // Get selected model and pass it separately (not in parts metadata)
+            // OpenCode API expects model as top-level parameter: { providerID, modelID }
+            const activeModel = sessionService.activeModel;
+            const model = activeModel ? (() => {
+                const [providerID, modelID] = activeModel.split('/');
+                return { providerID, modelID };
+            })() : undefined;
 
-            await sessionService.sendMessage(partsToSend);
+            console.log('[ChatWidget] Sending message with model:', model || 'default');
+            await sessionService.sendMessage(parts, model);
         } catch (error) {
             console.error('[ChatWidget] Error sending message:', error);
             // TODO: Show error to user
