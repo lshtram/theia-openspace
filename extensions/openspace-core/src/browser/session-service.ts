@@ -22,7 +22,8 @@ import {
     Project,
     Session,
     Message,
-    MessagePart
+    MessagePart,
+    ProviderWithModels
 } from '../common/opencode-protocol';
 
 /**
@@ -53,6 +54,7 @@ export interface SessionService extends Disposable {
     // State (readonly properties)
     readonly activeProject: Project | undefined;
     readonly activeSession: Session | undefined;
+    readonly activeModel: string | undefined;
     readonly messages: Message[];
     readonly isLoading: boolean;
     readonly lastError: string | undefined;
@@ -61,6 +63,7 @@ export interface SessionService extends Disposable {
     // Events
     readonly onActiveProjectChanged: Event<Project | undefined>;
     readonly onActiveSessionChanged: Event<Session | undefined>;
+    readonly onActiveModelChanged: Event<string | undefined>;
     readonly onMessagesChanged: Event<Message[]>;
     readonly onMessageStreaming: Event<StreamingUpdate>;
     readonly onIsLoadingChanged: Event<boolean>;
@@ -70,10 +73,12 @@ export interface SessionService extends Disposable {
     // Operations
     setActiveProject(projectId: string): Promise<void>;
     setActiveSession(sessionId: string): Promise<void>;
+    setActiveModel(model: string): void;
     createSession(title?: string): Promise<Session>;
     sendMessage(parts: MessagePart[]): Promise<void>;
     abort(): Promise<void>;
     getSessions(): Promise<Session[]>;
+    getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
 
     // State update methods (for SyncService integration)
@@ -96,6 +101,7 @@ export class SessionServiceImpl implements SessionService {
     // Private state
     private _activeProject: Project | undefined;
     private _activeSession: Session | undefined;
+    private _activeModel: string | undefined;
     private _messages: Message[] = [];
     private _isLoading = false;
     private _lastError: string | undefined;
@@ -105,6 +111,7 @@ export class SessionServiceImpl implements SessionService {
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
     private readonly onActiveSessionChangedEmitter = new Emitter<Session | undefined>();
+    private readonly onActiveModelChangedEmitter = new Emitter<string | undefined>();
     private readonly onMessagesChangedEmitter = new Emitter<Message[]>();
     private readonly onMessageStreamingEmitter = new Emitter<StreamingUpdate>();
     private readonly onIsLoadingChangedEmitter = new Emitter<boolean>();
@@ -114,6 +121,7 @@ export class SessionServiceImpl implements SessionService {
     // Public event properties
     readonly onActiveProjectChanged = this.onActiveProjectChangedEmitter.event;
     readonly onActiveSessionChanged = this.onActiveSessionChangedEmitter.event;
+    readonly onActiveModelChanged = this.onActiveModelChangedEmitter.event;
     readonly onMessagesChanged = this.onMessagesChangedEmitter.event;
     readonly onMessageStreaming = this.onMessageStreamingEmitter.event;
     readonly onIsLoadingChanged = this.onIsLoadingChangedEmitter.event;
@@ -127,6 +135,10 @@ export class SessionServiceImpl implements SessionService {
 
     get activeSession(): Session | undefined {
         return this._activeSession;
+    }
+
+    get activeModel(): string | undefined {
+        return this._activeModel;
     }
 
     get messages(): Message[] {
@@ -302,6 +314,42 @@ export class SessionServiceImpl implements SessionService {
         } finally {
             this._isLoading = false;
             this.onIsLoadingChangedEmitter.fire(false);
+        }
+    }
+
+    /**
+     * Set the active model for the current session.
+     * Model format: "provider/model" (e.g., "anthropic/claude-sonnet-4-5")
+     * 
+     * @param model - Model ID in provider/model format
+     */
+    setActiveModel(model: string): void {
+        console.info(`[SessionService] Operation: setActiveModel(${model})`);
+        this._activeModel = model;
+        this.onActiveModelChangedEmitter.fire(model);
+        console.debug(`[SessionService] State: activeModel=${model}`);
+    }
+
+    /**
+     * Get available models from the OpenCode server.
+     * Uses the active project's directory if available.
+     * 
+     * @returns Array of providers with their models
+     */
+    async getAvailableModels(): Promise<ProviderWithModels[]> {
+        console.info('[SessionService] Operation: getAvailableModels()');
+        
+        try {
+            const directory = this._activeProject?.path;
+            const providers = await this.openCodeService.getAvailableModels(directory);
+            console.debug(`[SessionService] Found ${providers.length} providers`);
+            return providers;
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.error(`[SessionService] Error fetching models: ${errorMsg}`);
+            this._lastError = errorMsg;
+            this.onErrorChangedEmitter.fire(errorMsg);
+            return [];
         }
     }
 

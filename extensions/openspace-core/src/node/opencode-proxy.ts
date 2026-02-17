@@ -371,6 +371,12 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<AppConfig>('/config', queryParams);
     }
 
+    async getAvailableModels(directory?: string): Promise<import('../common/opencode-protocol').ProviderWithModels[]> {
+        const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
+        const response = await this.get<{ providers: import('../common/opencode-protocol').ProviderWithModels[] }>('/config/providers', queryParams);
+        return response.providers || [];
+    }
+
     // =========================================================================
     // SSE Event Forwarding
     // =========================================================================

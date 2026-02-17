@@ -395,11 +395,11 @@ task_id: TheiaOpenspaceWorkplan
 ### 2.1 — Model Selection (PRIORITY)
 | | |
 |---|---|
-| **What** | Add model selection dropdown to the chat widget. When creating a new session or at any time during a session, user can select which LLM model to use (e.g., Claude Sonnet 4.5, GPT-4, etc.). Selection is stored per-session and sent to opencode server with messages. Display current model name in chat header. Add API to SessionService/OpenCodeProxy to get available models and set active model. If opencode server doesn't support model switching via API, explore config-based approach (writing to opencode config file). |
-| **Acceptance** | User can see current model name in chat header. Clicking model name opens dropdown with available models. Selecting a model updates the active model for the session. New messages use the selected model. |
+| **What** | Add model selection dropdown to the chat widget. User can select which LLM model to use per-session (e.g., Claude Sonnet 4.5, GPT-4, etc.). **Implementation:** Fetch available models via `GET /config/providers` endpoint. Store selected model in SessionService per-session state. Pass model metadata with each message sent via `POST /session/{id}/message` (in message parts metadata). Display current model name in chat header. Add dropdown UI for model selection. Model format: `provider/model` (e.g., "anthropic/claude-sonnet-4-5"). |
+| **Acceptance** | User can see current model name in chat header. Clicking model name opens dropdown with available models from `GET /config/providers`. Selecting a model updates the active model for the session. New messages include model metadata and use the selected model. Model selection persists for the session. |
 | **Dependencies** | Phase 1 complete, Task 1.15 (provider display) |
 | **Priority** | HIGH (user-requested blocker - currently uses default/last-used model) |
-| **Notes** | Currently model is read-only (Task 1.15). This adds write capability. May require opencode server support or config file modification. |
+| **Implementation Notes** | **Discovery:** OpenCode uses per-message model metadata (not global API). Models fetched from `/config/providers`. Model stored in session state, passed with each message. See `model-selection-protocol.md` for full investigation results. |
 | **Status** | ⬜ |
 
 ### 2.2 — Multi-part prompt input

@@ -62,6 +62,10 @@ export type MessagePart =
 export interface TextMessagePart {
     readonly type: 'text';
     readonly text: string;
+    readonly metadata?: {
+        providerID?: string;
+        modelID?: string;
+    };
 }
 
 export interface ToolUseMessagePart {
@@ -135,6 +139,24 @@ export interface Provider {
 }
 
 /**
+ * Model interface with metadata.
+ */
+export interface Model {
+    readonly id: string;
+    readonly name: string;
+    readonly limit?: { context: number; output: number };
+}
+
+/**
+ * Provider with models interface.
+ */
+export interface ProviderWithModels {
+    readonly id: string;
+    readonly name: string;
+    readonly models: Record<string, Model>;
+}
+
+/**
  * Agent interface.
  */
 export interface Agent {
@@ -202,6 +224,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Config methods
     getConfig(directory?: string): Promise<AppConfig>;
+
+    // Model methods
+    getAvailableModels(directory?: string): Promise<ProviderWithModels[]>;
 }
 
 /**

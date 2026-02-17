@@ -62,7 +62,15 @@
   - [x] 1B1.7 Fix Hub URL prefix mismatch ✅
   - [x] 1B1.8 Integration verification — ✅ PASS (Janitor verified: 100 unit + 21 E2E tests)
 - [ ] Phase 2: Chat & Prompt System
-- [ ] Phase 3: Agent IDE Control
+- [ ] Phase 3: Agent IDE Control — 🟡 IN PROGRESS
+  - [x] Requirements document created (REQ-AGENT-IDE-CONTROL.md)
+  - [x] Multi-perspective audit complete (15 gaps identified)
+  - [x] User approval: All BLOCKING + RECOMMENDED gaps integrated
+  - [x] Technical specs complete (§17 + gap analysis)
+  - [x] REQ-TECHSPEC review: 100% correspondence verified
+  - [x] Task 3.1 contract created
+  - [x] Task 3.1: PaneService implementation — ✅ COMPLETE (13 tests, 6 methods)
+  - [ ] Task 3.2: Pane Commands Registration — PENDING
 - [ ] Phase 4: Modality Surfaces
 - [ ] Phase 5: Polish & Desktop
 - [ ] Phase 6: Extended Features

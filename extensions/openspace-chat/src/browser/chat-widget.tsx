@@ -19,7 +19,9 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
-import { Message, MessagePart, Session, OpenCodeService, Provider } from 'openspace-core/lib/common/opencode-protocol';
+import { Message, MessagePart, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
+import { PromptInput } from './prompt-input/prompt-input';
+import { ModelSelector } from './model-selector';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -69,12 +71,18 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     const [showSessionList, setShowSessionList] = React.useState(false);
     const [streamingData, setStreamingData] = React.useState<Map<string, string>>(new Map());
     const [isStreaming, setIsStreaming] = React.useState(false);
-    const [inputValue, setInputValue] = React.useState('');
-    const [providerInfo, setProviderInfo] = React.useState<Provider | undefined>(undefined);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const disposablesRef = React.useRef<Disposable[]>([]);
+
+    // Subscribe to model changes
+    React.useEffect(() => {
+        const disposable = sessionService.onActiveModelChanged(model => {
+            console.debug('[ChatWidget] Active model changed:', model);
+        });
+        return () => disposable.dispose();
+    }, [sessionService]);
 
     // Load sessions
     const loadSessions = React.useCallback(async () => {
@@ -155,22 +163,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         };
     }, [sessionService, loadSessions]);
 
-    // Load provider info when session changes
-    React.useEffect(() => {
-        if (sessionService.activeSession) {
-            openCodeService.getProvider()
-                .then(provider => {
-                    setProviderInfo(provider);
-                    console.debug('[ModelDisplay] Provider loaded:', provider);
-                })
-                .catch(err => {
-                    console.debug('[ModelDisplay] Failed to load provider:', err);
-                    setProviderInfo(undefined);
-                });
-        } else {
-            setProviderInfo(undefined);
-        }
-    }, [sessionService.activeSession, openCodeService]);
+
 
     // Auto-scroll to bottom on new messages
     React.useEffect(() => {
@@ -235,32 +228,39 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         }
     }, [sessionService, loadSessions]);
 
-    // Handle send message
-    const handleSend = React.useCallback(async () => {
-        const text = inputValue.trim();
-        if (!text) {
+    // Handle send message (updated for multi-part input and model selection)
+    const handleSend = React.useCallback(async (parts: MessagePart[]) => {
+        if (parts.length === 0) {
             return;
         }
 
-        // Clear input immediately
-        setInputValue('');
-
         try {
-            const parts: MessagePart[] = [{ type: 'text', text }];
-            await sessionService.sendMessage(parts);
+            // Add model metadata to first text part if model is selected
+            let partsToSend = parts;
+            const model = sessionService.activeModel;
+            if (model && parts[0]?.type === 'text') {
+                const [providerID, modelID] = model.split('/');
+                partsToSend = [
+                    {
+                        ...parts[0],
+                        metadata: {
+                            ...(parts[0].metadata || {}),
+                            providerID,
+                            modelID
+                        }
+                    },
+                    ...parts.slice(1)
+                ];
+            }
+
+            await sessionService.sendMessage(partsToSend);
         } catch (error) {
             console.error('[ChatWidget] Error sending message:', error);
             // TODO: Show error to user
         }
-    }, [inputValue, sessionService]);
+    }, [sessionService]);
 
-    // Handle Enter key
-    const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    }, [handleSend]);
+    // handleKeyDown removed - now handled by PromptInput component
 
     // Render message text from parts
     const renderMessageText = (message: Message): string => {
@@ -366,21 +366,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         );
     };
 
-    // Model/Provider Display component
-    const ModelProviderDisplay: React.FC = () => {
-        if (!providerInfo) {
-            return null;
-        }
 
-        return (
-            <div className="model-provider-status">
-                <span className="model-provider-status-icon">🤖</span>
-                <span className="model-provider-status-text">
-                    {providerInfo.name} {providerInfo.model}
-                </span>
-            </div>
-        );
-    };
 
     return (
         <div className="chat-container">
@@ -393,7 +379,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                     </div>
                 ) : (
                     <>
-                        <ModelProviderDisplay />
+                        <div className="chat-header-secondary">
+                            <ModelSelector sessionService={sessionService} />
+                        </div>
                         <div className="chat-messages">{messages.length === 0 ? (
                                 <div className="chat-empty">
                                     <p>No messages yet</p>
@@ -420,25 +408,13 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                             )}
                             <div ref={messagesEndRef} />
                         </div>
-                        <div className="chat-input-container">
-                            <textarea
-                                className="chat-input"
-                                value={inputValue}
-                                onChange={e => setInputValue(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
-                                disabled={isStreaming}
-                                rows={3}
-                            />
-                            <button
-                                type="button"
-                                className="chat-send-button"
-                                onClick={handleSend}
-                                disabled={isStreaming || !inputValue.trim()}
-                            >
-                                Send
-                            </button>
-                        </div>
+                        
+                        {/* Multi-part Prompt Input (Task 2.1) */}
+                        <PromptInput
+                            onSend={handleSend}
+                            disabled={isStreaming}
+                            placeholder="Type your message, @mention files/agents, or attach images..."
+                        />
                     </>
                 )}
             </div>

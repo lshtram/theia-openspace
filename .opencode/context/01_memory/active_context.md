@@ -4,16 +4,16 @@
 **Last Updated:** 2026-02-17
 
 ## Current Focus
-- **Status:** PHASE 1B1 ✅ COMPLETE — Ready for Phase 2
+- **Status:** PHASE 3 REQUIREMENTS ✅ APPROVED — Ready for implementation
 - **Completed (2026-02-17):**
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
   - Architecture refactor: C → B1 complete
-  - 3 blocking issues fixed (nested JSON, iteration, validation)
-  - Janitor runtime verification: PASS (5/5 steps)
-  - User manual verification: PASS
-- **Known Issue (User-Reported):** Session list not visible immediately when chat window opens (logged for Phase 2)
-- **Next:** Begin Phase 2 (Chat & Prompt System) — prioritize session list visibility fix
+  - Phase 3 requirements document created and audited
+  - Multi-perspective audit (4 perspectives, 15 gaps identified)
+  - User decision: All BLOCKING + RECOMMENDED gaps integrated into Phase 3 requirements
+  - Technical debt document created for OPTIONAL gaps
+- **Next:** Begin Phase 3 implementation in `.worktrees/phase-3-agent-control` worktree
 
 ## Architecture B1 Summary
 | Component | Before (Architecture C) | After (Architecture B1) |
@@ -25,7 +25,55 @@
 | BridgeContribution | Manifest + SSE listener + command dispatch | Manifest + pane state only |
 | SyncService | SSE event forwarding only | SSE events + agent command dispatch + command queue |
 
-## Phase 1B1 Status — Architecture B1 Refactoring ✅ COMPLETE
+## Phase 3 Requirements Review Status ✅ APPROVED
+**Completed:** 2026-02-17
+
+**Deliverables Created:**
+1. ✅ Requirements document: `docs/requirements/REQ-AGENT-IDE-CONTROL.md` (920 lines)
+   - Executive summary, 6 user stories, 11 functional requirements
+   - 5 categories of non-functional requirements
+   - Risks, dependencies, acceptance criteria
+   - 20 Phase 3 commands fully specified
+
+2. ✅ Presentation: `design/deck/phase-3-requirements-review.deck.md` (17 slides)
+   - Architecture explanation (B1 RPC path)
+   - Scope and commands overview
+   - Implementation plan and risks
+
+3. ✅ Multi-perspective audit (NSO skill `rm-multi-perspective-audit`)
+   - 4 perspectives: User, Security Engineer, SRE, Legal/Compliance
+   - 15 gaps identified:
+     - 3 BLOCKING (GAP-1, GAP-2, GAP-4)
+     - 6 RECOMMENDED (GAP-3, GAP-5, GAP-6, GAP-8, GAP-9)
+     - 6 OPTIONAL (GAP-7, GAP-10-15)
+
+4. ✅ Technical debt document: `docs/technical-debt/PHASE-3-OPTIONAL-GAPS.md`
+   - Documents 6 OPTIONAL gaps deferred to post-Phase 3 work
+   - Includes revisit criteria and implementation estimates
+
+**User Decision:**
+- ✅ Integrate all BLOCKING + RECOMMENDED gaps (GAP-1 through GAP-9) into Phase 3 requirements NOW
+- ✅ Defer OPTIONAL gaps (GAP-7, GAP-10-15) as technical debt
+- ✅ Requirements document status updated to APPROVED
+
+**Security Enhancements (BLOCKING + RECOMMENDED):**
+- GAP-1: Symlink path traversal protection
+- GAP-2: Prompt injection prevention (ignore `%%OS{...}%%` in code fences)
+- GAP-3: Configurable failure notifications
+- GAP-4: Resource cleanup on session end
+- GAP-5: First-run consent dialog
+- GAP-6: Per-message command rate limiting (max 10 commands)
+- GAP-8: Dangerous command confirmation (rm, sudo, etc.)
+- GAP-9: Sensitive file denylist (.env, .git/, id_rsa, etc.)
+
+**Technical Specifications:**
+- ✅ REQ-TECHSPEC-GAP-ANALYSIS.md — Multi-perspective audit complete
+- ✅ Added §6.8 (E2E Test) to TECHSPEC
+- ✅ Added §17.9 (Terminal Output Sanitization) to TECHSPEC
+- ✅ All gaps resolved: 100% REQ-TECHSPEC correspondence
+- ✅ Ready for Builder to begin implementation
+
+
 **Completed:** 2026-02-17
 
 All 8 refactoring tasks completed:

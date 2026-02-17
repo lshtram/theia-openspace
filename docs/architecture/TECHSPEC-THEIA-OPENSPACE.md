@@ -1104,6 +1104,58 @@ interface CommandQueue {
 }
 ```
 
+### 6.8 End-to-End Agent Control Test
+
+**Purpose:** Verify the complete agent control pipeline from `%%OS{...}%%` emission to IDE action.
+
+**Test Flow:**
+```
+Agent emits %%OS{...}%% blocks in response
+    |
+    v
+OpenCodeProxy (stream interceptor)
+    |
+    +---> Clean text --> Chat Widget (user sees clean text)
+    |
+    +---> onAgentCommand() RPC callback --> SyncService
+                                                |
+                                                v
+                                          CommandRegistry
+                                                |
+                                                v
+                                      IDE Action (editor, terminal, pane...)
+```
+
+**Test Scenarios:**
+
+| # | Scenario | Expected Result |
+|---|----------|-----------------|
+| T1 | Agent emits `%%OS{"cmd":"openspace.editor.open","args":{"path":"src/index.ts","line":42}}%%` | File opens at line 42, user sees clean text |
+| T2 | Agent emits `%%OS{"cmd":"openspace.editor.highlight","args":{"path":"src/index.ts","ranges":[{"startLine":42,"endLine":50}]}}%%` | Lines 42-50 highlighted |
+| T3 | Agent emits `%%OS{"cmd":"openspace.terminal.create","args":{"title":"test"}}%%` + `%%OS{"cmd":"openspace.terminal.send","args":{"terminalId":"test","text":"echo hello"}}%%` | Terminal created, command executed |
+| T4 | Agent emits `%%OS{"cmd":"openspace.terminal.read_output","args":{"terminalId":"test","lines":10}}%%` | Returns ["hello"] |
+| T5 | Agent emits `%%OS{"cmd":"openspace.pane.open","args":{"type":"editor","contentId":"README.md"}}%%` | Pane opens with README.md |
+| T6 | Multiple blocks in one response | All commands executed, clean text shown |
+| T7 | Malformed JSON block | Block discarded, clean text continues |
+| T8 | Chunk boundary split | Block correctly reassembled and executed |
+
+**Verification Checklist:**
+
+- [ ] User sees clean text (no `%%OS{...}%%` visible in chat)
+- [ ] `onAgentCommand` RPC callback fires for each block
+- [ ] SyncService dispatches to CommandRegistry
+- [ ] IDE state changes as expected (file opens, terminal creates, etc.)
+- [ ] Command results logged to Hub
+- [ ] All 8 scenarios pass
+
+**Test Implementation Location:** `extensions/openspace-core/src/browser/__tests__/agent-control-e2e.spec.ts`
+
+**Running the Test:**
+```bash
+cd extensions/openspace-core
+yarn test:e2e agent-control
+```
+
 ### 6.6 Complete Command Inventory
 
 All commands use the `openspace.*` prefix and are registered in the Theia CommandRegistry.
@@ -1622,6 +1674,459 @@ Phase 0's `OpenSpaceFilterContribution` uses constructor name matching to remove
 5. ~~**Session storage:**~~ **RESOLVED.** Split: Theia StorageService for UI state (panel layout, sizes, active tabs), opencode server for session data (conversations, messages, files). No custom persistence layer.
 6. ~~**Stream interceptor placement:**~~ **RESOLVED.** Backend middleware in the Theia backend process (BackendApplicationContribution). No separate service.
 7. ~~**Hub deployment:**~~ **RESOLVED.** Co-located as BackendApplicationContribution in the Theia backend. Hub endpoints are Express routes added in the backend's `configure(app)` method.
+
+---
+
+## 17. Phase 3 Security & UX Enhancements
+
+> **Status:** ADDED 2026-02-17 based on multi-perspective audit
+> **Purpose:** Technical implementation specifications for BLOCKING and RECOMMENDED security gaps integrated into Phase 3
+
+This section provides detailed technical specifications for the security and UX enhancements required by Phase 3 (NFR-3.6, NFR-3.7, NFR-3.8).
+
+### 17.1 GAP-1: Symlink Path Traversal Protection
+
+**Problem:** File commands could follow symlinks pointing outside the workspace, allowing access to sensitive system files.
+
+**Implementation Location:** `openspace-core/src/browser/file-commands.ts` (new file)
+
+**Algorithm:**
+```typescript
+async function validatePath(workspaceRoot: URI, requestedPath: string): Promise<URI | null> {
+  // 1. Resolve the path to absolute
+  const absolutePath = path.resolve(workspaceRoot.path.fsPath(), requestedPath);
+  
+  // 2. Resolve any symlinks in the path
+  const realPath = fs.realpathSync(absolutePath);
+  
+  // 3. Check if real path is within workspace
+  if (!realPath.startsWith(workspaceRoot.path.fsPath())) {
+    return null; // Reject: symlink points outside workspace
+  }
+  
+  return new URI(realPath);
+}
+```
+
+**Commands Affected:** `openspace.file.read`, `openspace.file.write`, `openspace.file.list`, `openspace.file.search`
+
+**Test Cases:**
+| Input | Expected |
+|---|---|
+| `../etc/passwd` | Reject (path traversal) |
+| Symlink to `/etc/passwd` inside workspace | Reject (resolves outside) |
+| `src/utils.ts` | Accept |
+| Symlink to `src/utils.ts` inside workspace | Accept |
+
+---
+
+### 17.2 GAP-2: Prompt Injection Prevention (Code Fence Detection)
+
+**Problem:** An agent could include malicious `%%OS{...}%%` blocks inside code examples, causing the interceptor to execute unintended commands.
+
+**Implementation Location:** `openspace-core/src/node/opencode-proxy.ts` — update `interceptStream()` method
+
+**Algorithm:**
+```typescript
+interface ParseState {
+  inCodeFence: boolean;
+  codeFenceDelimiter: string | null; // '```', '~~~', or null
+}
+
+// Track code fence state across chunks
+let parseState: ParseState = { inCodeFence: false, codeFenceDelimiter: null };
+
+function shouldExtractBlock(text: string, state: ParseState): boolean {
+  // Update code fence state
+  for (const delimiter of ['```', '~~~']) {
+    const fencePattern = new RegExp(`(${delimiter})`, 'g');
+    let match;
+    while ((match = fencePattern.exec(text)) !== null) {
+      if (!state.inCodeFence) {
+        state.inCodeFence = true;
+        state.codeFenceDelimiter = delimiter;
+      } else if (match[1] === state.codeFenceDelimiter) {
+        state.inCodeFence = false;
+        state.codeFenceDelimiter = null;
+      }
+    }
+  }
+  
+  // If we're inside a code fence, don't extract OS blocks
+  return !state.inCodeFence;
+}
+```
+
+**Test Cases:**
+| Input | Expected |
+|---|---|
+| `` Text ```%%OS{"cmd":"evil"}%%``` more `` | Block NOT extracted (inside code fence) |
+| `` Text `%%OS{"cmd":"evil"}%%` more `` | Block extracted (inline code allowed) |
+| `` ~~~%%OS{"cmd":"evil"}%%~~~ `` | Block NOT extracted (tilde fence) |
+| Plain text with block | Block extracted |
+
+**Edge Case:** Reset code fence state on chunk boundary timeout (5s) to prevent stuck state.
+
+---
+
+### 17.3 GAP-8: Dangerous Command Confirmation
+
+**Problem:** Terminal commands like `rm -rf` could cause data loss without user awareness.
+
+**Implementation Location:** `openspace-core/src/browser/terminal-confirmation.ts` (new file)
+
+**Dangerous Pattern Detection:**
+```typescript
+const DANGEROUS_PATTERNS = [
+  /^rm\s+-rf\s+/,           // rm -rf
+  /^rm\s+-r\s+/,            // rm -r (recursive delete)
+  /^sudo\s+/,               // sudo elevation
+  /^chmod\s+777\s+/,        // chmod 777 (world writable)
+  /^chmod\s+-R\s+777\s+/,  // chmod -R 777
+  /^dd\s+if=/,              // dd with input file
+  /^:\(\)\{:\|:&\}\;:*/,   // Fork bomb
+  /^curl.*\|\s*sh/,         // Pipe to shell
+  /^wget.*\|\s*sh/,         // Wget pipe to shell
+];
+
+function isDangerous(command: string): boolean {
+  return DANGEROUS_PATTERNS.some(pattern => pattern.test(command.trim()));
+}
+```
+
+**User Flow:**
+1. Agent sends `openspace.terminal.send` with dangerous command
+2. SyncService detects dangerous pattern
+3. Confirmation dialog appears: "Agent wants to run: [command] — Allow or Deny?"
+4. User decision is cached for session (optional "remember" checkbox)
+5. If denied, command returns `{ success: false, error: "User denied" }`
+
+**Configuration:** Via Theia preferences (`openspace.security.confirmDangerousCommands`)
+
+---
+
+### 17.4 GAP-9: Sensitive File Denylist
+
+**Problem:** Agent could read sensitive files like `.env`, `.git/`, SSH keys, credentials.
+
+**Implementation Location:** `openspace-core/src/browser/file-commands.ts` — extend existing validation
+
+**Denylist:**
+```typescript
+const SENSITIVE_PATTERNS = [
+  /^\.env$/i,                    // .env
+  /^\.env\.[a-zA-Z0-9]+$/i,     // .env.production, .env.local
+  /^\.git\//i,                   // .git/anything
+  /^.*\.git\//i,                // anything/.git/
+  /^id_rsa$/i,                   // SSH private key
+  /^id_dsa$/i,
+  /^id_ecdsa$/i,
+  /^id_ed25519$/i,
+  /^.*\.pem$/i,                  // Any .pem file
+  /^.*\.key$/i,                  // Any .key file
+  /^credentials\.json$/i,        // credentials.json
+  /^secrets\..+$/i,              // secrets.anything
+  /^.*\/secrets\//i,             // anything/secrets/
+  /^.*\.aws\/credentials$/i,     // AWS credentials
+];
+
+function isSensitive(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/');
+  return SENSITIVE_PATTERNS.some(pattern => pattern.test(normalized));
+}
+```
+
+**Commands Affected:** `openspace.file.read`, `openspace.editor.read_file`
+
+**Behavior:** Returns `{ success: false, error: "Access denied: sensitive file" }`
+
+**Configuration:** Via Theia preferences (`openspace.security.sensitiveFilePatterns`) — user can add custom patterns
+
+---
+
+### 17.5 GAP-4: Resource Cleanup on Session End
+
+**Problem:** Agent-created resources (terminals, highlights, panes) persist after session ends, causing resource leaks.
+
+**Implementation Location:** `openspace-core/src/browser/session-resource-manager.ts` (new file)
+
+**Resource Tracking:**
+```typescript
+interface TrackedResource {
+  id: string;
+  type: 'terminal' | 'highlight' | 'pane';
+  createdAt: Date;
+  pinned: boolean; // User can pin to prevent cleanup
+}
+
+class SessionResourceManager {
+  private resources: Map<string, TrackedResource[]> = new Map();
+  
+  track(sessionId: string, resource: TrackedResource): void {
+    const sessionResources = this.resources.get(sessionId) || [];
+    sessionResources.push(resource);
+    this.resources.set(sessionId, sessionResources);
+  }
+  
+  async cleanup(sessionId: string): Promise<void> {
+    const sessionResources = this.resources.get(sessionId) || [];
+    for (const resource of sessionResources) {
+      if (resource.pinned) continue; // Skip pinned resources
+      
+      switch (resource.type) {
+        case 'terminal':
+          await terminalService.close(resource.id);
+          break;
+        case 'highlight':
+          await editorService.clearHighlight(resource.id);
+          break;
+        case 'pane':
+          await paneService.close(resource.id);
+          break;
+      }
+    }
+    this.resources.delete(sessionId);
+  }
+}
+```
+
+**Triggers:**
+1. Session disconnect (detected via OpenCodeClient RPC)
+2. User clicks "End Session" in UI
+3. Timeout (no activity for 30 minutes, configurable)
+
+---
+
+### 17.6 GAP-6: Per-Message Command Rate Limiting
+
+**Problem:** Agent could flood commands in a single response, overwhelming the system.
+
+**Implementation:** Extend existing command queue in `OpenCodeSyncService`
+
+```typescript
+// In OpenCodeSyncService
+const MAX_COMMANDS_PER_MESSAGE = 10;
+
+async handleAgentMessage(message: AgentMessage): Promise<void> {
+  const commands = extractCommands(message);
+  
+  if (commands.length > MAX_COMMANDS_PER_MESSAGE) {
+    this.logger.warn(
+      `Agent message contains ${commands.length} commands, ` +
+      `limiting to ${MAX_COMMANDS_PER_MESSAGE}`
+    );
+    commands.splice(MAX_COMMANDS_PER_MESSAGE); // Keep first N
+  }
+  
+  // Queue remaining commands...
+}
+```
+
+**Configuration:** Via Theia preferences (`openspace.agent.maxCommandsPerMessage`)
+
+---
+
+### 17.7 GAP-3: Configurable Failure Notifications
+
+**Problem:** Silent command failures leave user unaware of issues.
+
+**Implementation Location:** `openspace-core/src/browser/command-notification-service.ts` (new file)
+
+**Severity Levels:**
+```typescript
+enum NotificationSeverity {
+  ERROR = 'error',    // Always show toast
+  WARNING = 'warning', // Show if user preference enabled
+  INFO = 'info'       // Log only
+}
+
+interface CommandFailureNotification {
+  commandId: string;
+  args: unknown;
+  error: string;
+  severity: NotificationSeverity;
+  timestamp: Date;
+}
+
+// Show toast based on severity and user preferences
+async function notify(failure: CommandFailureNotification): Promise<void> {
+  const userPreference = preferences.get('openspace.notifications.commandFailures');
+  
+  if (failure.severity === NotificationSeverity.ERROR) {
+    messageService.error(`Command failed: ${failure.error}`);
+  } else if (failure.severity === NotificationSeverity.WARNING && 
+             userPreference !== 'disabled') {
+    messageService.warn(`Command warning: ${failure.error}`);
+  }
+  // INFO severity: log only
+}
+```
+
+**Configuration:** Via Theia preferences (`openspace.notifications.commandFailures`: 'all' | 'errors' | 'disabled')
+
+---
+
+### 17.8 GAP-5: First-Run Consent Dialog
+
+**Problem:** User should explicitly consent to agent IDE control before first use.
+
+**Implementation Location:** `openspace-core/src/browser/consent-manager.ts` (new file)
+
+**Consent Check:**
+```typescript
+const CONSENT_KEY = 'openspace.agent.consentGiven';
+const CONSENT_VERSION = '1.0'; // Bump to re-prompt on feature changes
+
+async function checkConsent(): Promise<boolean> {
+  const storage = storageService.get(CONSENT_KEY);
+  const stored = storage ? JSON.parse(storage) : null;
+  
+  if (stored?.version === CONSENT_VERSION && stored?.granted) {
+    return true;
+  }
+  return false;
+}
+
+async function showConsentDialog(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const dialog = new ConfirmDialog({
+      title: 'Agent IDE Control',
+      msg: `The AI agent can now control your IDE:
+• Open and edit files
+• Create and manage terminals
+• Arrange panes and layouts
+• Run commands on your behalf
+
+Commands are validated and sandboxed to your workspace.`,
+      confirmButtonLabel: 'Allow',
+      cancelButtonLabel: 'Cancel'
+    });
+    
+    dialog.open().then(accepted => {
+      const result = accepted || false;
+      storageService.set(CONSENT_KEY, JSON.stringify({
+        version: CONSENT_VERSION,
+        granted: result,
+        timestamp: new Date().toISOString()
+      }));
+      resolve(result);
+    });
+  });
+}
+```
+
+**Trigger:** First time agent attempts to execute any `openspace.*` command in a session
+
+**Persistence:** Stored in Theia StorageService (persists across sessions)
+
+---
+
+### 17.9 (NEW) Terminal Output Sanitization
+
+**Problem:** Terminal output can contain ANSI escape sequences and control characters that could:
+- Manipulate terminal display (cursor movement, color codes)
+- Inject malicious commands
+- Crash the rendering component
+
+**Implementation Location:** `openspace-core/src/browser/terminal-output-sanitizer.ts` (new file)
+
+**Sanitization Algorithm:**
+```typescript
+/**
+ * Sanitize terminal output to prevent ANSI injection attacks.
+ * Removes escape sequences and control characters while preserving
+ * legitimate output (colors, basic formatting).
+ */
+export function sanitizeTerminalOutput(output: string): string {
+  // Step 1: Remove ANSI escape sequences (colors, cursor movement, etc.)
+  // Matches: \x1B[...letter (CSI sequences), \x1B]...BEL (OSC), etc.
+  let sanitized = output
+    // CSI sequences: ESC [ <params> <command>
+    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+    // OSC sequences: ESC ] <params> <ST|BEL>
+    .replace(/\x1B\][^\x07]*\x07/g, '')
+    // ESC followed by single character (other escape sequences)
+    .replace(/\x1B[A-Za-z]/g, '')
+    // Remove remaining ESC bytes
+    .replace(/\x1B/g, '');
+
+  // Step 2: Remove control characters (except legitimate ones)
+  // Keep: \n (newline), \r (carriage return), \t (tab)
+  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  // Step 3: Limit line length to prevent buffer overflow
+  const MAX_LINE_LENGTH = 10000;
+  sanitized = sanitized
+    .split('\n')
+    .map(line => line.slice(0, MAX_LINE_LENGTH))
+    .join('\n');
+
+  return sanitized;
+}
+
+/**
+ * Check if output contains suspicious patterns.
+ */
+export function containsSuspiciousPatterns(output: string): boolean {
+  const suspicious = [
+    /\x1B\[?.*h/gi,    // Hide cursor
+    /\x1B\[?.*l/gi,    // Show cursor (toggle off)
+    /\x1B\[?.*s/gi,    // Save cursor
+    /\x1B\[?.*u/gi,    // Restore cursor
+    /\x1B\[2J/gi,      // Clear screen
+    /\x1B\[H/gi,       // Cursor home
+  ];
+  return suspicious.some(pattern => pattern.test(output));
+}
+```
+
+**Usage in Terminal Commands:**
+```typescript
+// In terminal-command-contribution.ts or terminal-service
+async function readOutput(terminalId: string, lines: number): Promise<string[]> {
+  const rawOutput = this.ringBuffer.get(terminalId, lines);
+  
+  // Sanitize before returning to agent
+  const sanitized = rawOutput.map(line => sanitizeTerminalOutput(line));
+  
+  // Log if suspicious patterns detected
+  if (rawOutput.some(line => containsSuspiciousPatterns(line))) {
+    this.logger.warn('Suspicious ANSI patterns detected in terminal output', { terminalId });
+  }
+  
+  return sanitized;
+}
+```
+
+**Test Cases:**
+| Input | Expected Output |
+|---|---|
+| `\x1B[32mhello\x1B[0m` | `hello` (color codes removed) |
+| `\x1B[2J` | `` (clear screen removed) |
+| `hello\x00world` | `helloworld` (NULL removed) |
+| `hello\nworld` | `hello\nworld` (newline preserved) |
+| `hello\tworld` | `hello\tworld` (tab preserved) |
+| Long line (>10K chars) | Truncated to 10K |
+
+---
+
+### 17.10 Summary: Implementation Checklist
+
+| Gap | File | Key Method | Test Priority |
+|---|---|---|---|
+| GAP-1 | `file-commands.ts` | `validatePath()` | HIGH |
+| GAP-2 | `opencode-proxy.ts` | `shouldExtractBlock()` | HIGH |
+| GAP-3 | `command-notification-service.ts` | `notify()` | MEDIUM |
+| GAP-4 | `session-resource-manager.ts` | `cleanup()` | HIGH |
+| GAP-5 | `consent-manager.ts` | `showConsentDialog()` | HIGH |
+| GAP-6 | `opencode-sync-service.ts` | `handleAgentMessage()` | MEDIUM |
+| GAP-8 | `terminal-confirmation.ts` | `isDangerous()` | HIGH |
+| GAP-9 | `file-commands.ts` | `isSensitive()` | HIGH |
+
+---
+
+*End of Section 17: Phase 3 Security & UX Enhancements*
+
 
 ---
 
