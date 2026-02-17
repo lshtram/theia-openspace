@@ -405,10 +405,11 @@ task_id: TheiaOpenspaceWorkplan
 ### 2.2 — Multi-part prompt input
 | | |
 |---|---|
-| **What** | Upgrade the prompt input to support multiple parts: text (default), file attachments (drag-drop or button), image attachments, @agent mentions (typeahead). Port the multi-part input pattern from opencode client (`packages/app/src/components/prompt/`). Use Theia's `QuickInputService` for @mention typeahead. |
+| **What** | Upgrade the prompt input to support multiple parts: text (default), file attachments (drag-drop or button), image attachments, @agent mentions (typeahead). Port the multi-part input pattern from opencode client (`packages/app/src/components/prompt/`). |
 | **Acceptance** | Can compose a message with text + attached files + @mention. Parts are sent to opencode server correctly. |
 | **Dependencies** | Phase 1 complete |
-| **Status** | 🟡 |
+| **Status** | ✅ |
+| **Implementation** | All 5 phases complete: Phase 1 (core text input), Phase 2 (file attachments with drag-drop), Phase 3 (image attachments with paste), Phase 4 (@mention typeahead for agents), Phase 5 (keyboard navigation, polish). Files: `prompt-input.tsx`, `parse-from-dom.ts`, `build-request-parts.ts`, `types.ts`, `prompt-input.css`. |
 
 ### 2.3 — Message timeline with streaming
 | | |
