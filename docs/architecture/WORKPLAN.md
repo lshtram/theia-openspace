@@ -417,7 +417,8 @@ task_id: TheiaOpenspaceWorkplan
 | **What** | Replace the basic message list with a proper timeline. User messages right-aligned (or styled differently), assistant messages left-aligned. Streaming indicator (blinking cursor or progress bar) during response. Auto-scroll to bottom on new content, but respect user scrolling up (scroll spy). |
 | **Acceptance** | Conversation reads naturally. Streaming shows real-time text appearance. Scrolling up stops auto-scroll; scrolling to bottom resumes it. |
 | **Dependencies** | Phase 1 complete |
-| **Status** | ⬜ |
+| **Status** | ✅ |
+| **Implementation** | MessageBubble and MessageTimeline components created. User messages (blue, right), assistant messages (gray, left). Blinking cursor during streaming. Smart auto-scroll with 'New messages' indicator. Message grouping. Files: `message-bubble.tsx`, `message-timeline.tsx`, `message-timeline.css`. |
 
 ### 2.4 — Response renderers: code blocks
 | | |
