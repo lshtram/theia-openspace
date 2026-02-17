@@ -71,16 +71,27 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [inputValue, setInputValue] = React.useState('');
     const [providerInfo, setProviderInfo] = React.useState<Provider | undefined>(undefined);
+    const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
+    const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
     // Load sessions
     const loadSessions = React.useCallback(async () => {
+        setIsLoadingSessions(true);
+        setSessionLoadError(undefined);
+        const startTime = Date.now();
         try {
             const sessions = await sessionService.getSessions();
             setSessions(sessions);
         } catch (error) {
             console.error('[ChatWidget] Error loading sessions:', error);
+            setSessionLoadError(error instanceof Error ? error.message : String(error));
+        } finally {
+            // Minimum display time to prevent flicker
+            const elapsed = Date.now() - startTime;
+            const delay = Math.max(0, 100 - elapsed);
+            setTimeout(() => setIsLoadingSessions(false), delay);
         }
     }, [sessionService]);
 
@@ -124,8 +135,19 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             loadSessions();
         });
 
+        // Subscribe to project changes to reload list (FIX: Race condition)
+        const projectChangedDisposable = sessionService.onActiveProjectChanged(() => {
+            loadSessions();
+        });
+
         // Store disposables for cleanup
-        disposablesRef.current = [messagesDisposable, streamingDisposable, streamingStateDisposable, sessionChangedDisposable];
+        disposablesRef.current = [
+            messagesDisposable,
+            streamingDisposable,
+            streamingStateDisposable,
+            sessionChangedDisposable,
+            projectChangedDisposable
+        ];
 
         return () => {
             disposablesRef.current.forEach(d => { d.dispose(); });
@@ -265,7 +287,29 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                     
                     {showSessionList && (
                         <div className="session-list-dropdown">
-                            {sessions.map(session => (
+                            {isLoadingSessions && (
+                                <div className="session-list-loading">
+                                    <span className="spinner">⏳</span> Loading sessions...
+                                </div>
+                            )}
+                            {sessionLoadError && (
+                                <div className="session-list-error">
+                                    <div className="error-message">
+                                        <span className="error-icon">⚠️</span> {sessionLoadError}
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        className="retry-button" 
+                                        onClick={loadSessions}
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
+                            {!isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
+                                <div className="session-list-empty">No sessions yet. Click + to create one.</div>
+                            )}
+                            {!isLoadingSessions && !sessionLoadError && sessions.map(session => (
                                 <div 
                                     key={session.id}
                                     className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
@@ -283,9 +327,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                                     {session.id === activeSession?.id && <span className="active-indicator">●</span>}
                                 </div>
                             ))}
-                            {sessions.length === 0 && (
-                                <div className="session-list-empty">No sessions</div>
-                            )}
                         </div>
                     )}
                 </div>

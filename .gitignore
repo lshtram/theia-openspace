@@ -43,3 +43,22 @@ build/
 
 # Git worktrees
 .worktrees/
+
+# OpenCode
+.claude/
+
+# Build outputs
+browser-app/
+electron-app/
+
+# Build artifacts (screenshots, logs)
+*.png
+build-output.log
+
+# Internal docs (do not commit)
+PHASE-*.md
+PHASE-*.txt
+MANUAL_TESTING_*.md
+OPENCODE_*.md
+codereview-*.md
+test.txt

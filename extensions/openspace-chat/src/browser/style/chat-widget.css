@@ -120,6 +120,64 @@
     font-size: 12px;
 }
 
+/* Session List Loading State */
+.openspace-chat-widget .session-list-loading {
+    padding: 12px;
+    text-align: center;
+    color: var(--theia-descriptionForeground);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.openspace-chat-widget .session-list-loading .spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Session List Error State */
+.openspace-chat-widget .session-list-error {
+    padding: 12px;
+    background: var(--theia-inputValidation-errorBackground);
+    border: 1px solid var(--theia-inputValidation-errorBorder);
+    border-radius: 3px;
+    margin: 8px;
+}
+
+.openspace-chat-widget .session-list-error .error-message {
+    color: var(--theia-errorForeground);
+    font-size: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.openspace-chat-widget .session-list-error .error-icon {
+    font-size: 14px;
+}
+
+.openspace-chat-widget .session-list-error .retry-button {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--theia-button-background);
+    color: var(--theia-button-foreground);
+    border: 1px solid var(--theia-button-border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.openspace-chat-widget .session-list-error .retry-button:hover {
+    background: var(--theia-button-hoverBackground);
+}
+
 /* New Session Button */
 .openspace-chat-widget .new-session-button {
     padding: 6px 12px;
