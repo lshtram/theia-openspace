@@ -88,7 +88,7 @@ export class PresentationWidget extends ReactWidget {
      */
     static parseDeckContent(markdown: string): DeckData {
         const lines = markdown.split('\n');
-        let frontmatter: Record<string, string> = {};
+        const frontmatter: Record<string, string> = {};
         const slides: SlideData[] = [];
         
         // Parse YAML frontmatter
@@ -171,7 +171,7 @@ export class PresentationWidget extends ReactWidget {
             center: true
         });
 
-        this.revealDeck.initialize().catch(err => {
+        this.revealDeck.initialize().catch((err: Error) => {
             console.error('[PresentationWidget] Failed to initialize reveal.js:', err);
         });
     }

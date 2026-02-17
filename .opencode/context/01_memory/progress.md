@@ -61,6 +61,13 @@
   - [x] 1B1.6 Simplify BridgeContribution (remove SSE listener) ✅
   - [x] 1B1.7 Fix Hub URL prefix mismatch ✅
   - [x] 1B1.8 Integration verification — ✅ PASS (Janitor verified: 100 unit + 21 E2E tests)
+- [x] **Scout Research: OpenCode SDK** (2026-02-17) — RFC-002 FINAL
+  - [x] SDK discovery: `@opencode-ai/sdk` confirmed (v1.2.6, zero deps, auto-generated types)
+  - [x] VS Code extension analysis: thin terminal wrapper, doesn't use SDK
+  - [x] Plugin system analysis: `@opencode-ai/plugin` — alternative for agent commands
+  - [x] Gap analysis: 7 type mismatches, 11 missing event types, ~1,450 lines eliminable
+  - [x] RFC written: `docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`
+  - [x] Recommendation: STRONG ADOPT, 12-18 hours effort, before Phase 3 Task 3.7
 - [ ] Phase 2: Chat & Prompt System
 - [ ] Phase 3: Agent IDE Control — 🟡 IN PROGRESS
   - [x] Requirements document created (REQ-AGENT-IDE-CONTROL.md)
@@ -73,7 +80,12 @@
   - [x] Task 3.3: Editor Commands — ✅ COMPLETE (30 tests, 6 commands + security)
   - [x] Task 3.4: Terminal Commands — ✅ COMPLETE (51 tests, 5 commands + security)
   - [x] Task 3.5: File Commands — ✅ COMPLETE (23 tests, 4 commands + security)
-  - [ ] Task 3.6: Stream Interceptor Hardening — PENDING
+  - [x] Task 3.6: Stream Interceptor — ✅ COMPLETE (21+ tests, code fence detection)
+  - [ ] Task 3.7: Command Manifest — PENDING
+  - [ ] Task 3.8: System Prompt — PENDING
+  - [ ] Task 3.9: E2E Test — PENDING
+  - [ ] Task 3.10: Pane State Publishing — PENDING
+  - [ ] Task 3.11: Command Result Feedback — PENDING
 - [ ] Phase 4: Modality Surfaces
 - [ ] Phase 5: Polish & Desktop
 - [ ] Phase 6: Extended Features

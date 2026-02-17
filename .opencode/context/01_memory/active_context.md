@@ -8,6 +8,11 @@
 - **Completed (2026-02-17):**
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
+  - Scout research: OpenCode SDK — RFC-002 FINAL (`docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`)
+    - Official SDK exists: `@opencode-ai/sdk` (zero deps, auto-generated types)
+    - Recommendation: STRONG ADOPT — replace hand-rolled proxy with SDK client
+    - Estimated effort: 12-18 hours, ~80% code reduction (~1,450 lines eliminated)
+    - Timing: Before or during Phase 3 Task 3.7
   - Architecture refactor: C → B1 complete
   - Phase 3 requirements document created and audited
   - Multi-perspective audit (4 perspectives, 15 gaps identified)

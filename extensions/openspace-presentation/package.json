@@ -9,6 +9,7 @@
   ],
   "dependencies": {
     "@theia/core": "1.68.2",
+    "@theia/filesystem": "1.68.2",
     "reveal.js": "^5.2.1"
   },
   "devDependencies": {

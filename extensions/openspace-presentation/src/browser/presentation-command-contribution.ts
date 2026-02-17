@@ -1,0 +1,435 @@
+// *****************************************************************************
+// Copyright (C) 2024 OpenSpace contributors.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+// *****************************************************************************
+
+import { inject, injectable } from '@theia/core/shared/inversify';
+import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { URI } from '@theia/core/lib/common/uri';
+import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { WidgetManager } from '@theia/core/lib/browser';
+import { PresentationService, 
+    PresentationListArgs, 
+    PresentationReadArgs, 
+    PresentationCreateArgs,
+    PresentationUpdateSlideArgs,
+    PresentationOpenArgs,
+    PresentationNavigateArgs,
+    PresentationPlayArgs,
+    PresentationPauseArgs,
+    PresentationStopArgs
+} from './presentation-service';
+import { PresentationWidget, PresentationNavigationService } from './presentation-widget';
+
+/**
+ * Command IDs for presentation commands.
+ * These are used for manifest generation (argument schemas stored in command-manifest.ts).
+ */
+export const PresentationCommandIds = {
+    LIST: 'openspace.presentation.list',
+    READ: 'openspace.presentation.read',
+    CREATE: 'openspace.presentation.create',
+    UPDATE_SLIDE: 'openspace.presentation.update_slide',
+    OPEN: 'openspace.presentation.open',
+    NAVIGATE: 'openspace.presentation.navigate',
+    PLAY: 'openspace.presentation.play',
+    PAUSE: 'openspace.presentation.pause',
+    STOP: 'openspace.presentation.stop',
+} as const;
+
+/**
+ * Argument schemas for presentation commands.
+ * Used for manifest auto-generation in Phase 3.
+ */
+export const PresentationArgumentSchemas = {
+    list: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+    },
+    read: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Path to the presentation file'
+            }
+        },
+        required: ['path'],
+        additionalProperties: false
+    },
+    create: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Path for the new presentation file'
+            },
+            title: {
+                type: 'string',
+                description: 'Title of the presentation'
+            },
+            slides: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of slide contents'
+            },
+            theme: {
+                type: 'string',
+                description: 'Presentation theme (black, white, league, beige, sky, night, etc.)'
+            }
+        },
+        required: ['path', 'title'],
+        additionalProperties: false
+    },
+    update_slide: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Path to the presentation file'
+            },
+            slideIndex: {
+                type: 'number',
+                description: 'Zero-based slide index to update'
+            },
+            content: {
+                type: 'string',
+                description: 'New slide content (markdown)'
+            }
+        },
+        required: ['path', 'slideIndex', 'content'],
+        additionalProperties: false
+    },
+    open: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Path to the presentation file'
+            }
+        },
+        required: ['path'],
+        additionalProperties: false
+    },
+    navigate: {
+        type: 'object',
+        properties: {
+            direction: {
+                type: 'string',
+                enum: ['prev', 'next'],
+                description: 'Navigation direction'
+            },
+            slideIndex: {
+                type: 'number',
+                description: 'Specific slide index to navigate to (0-based)'
+            }
+        },
+        additionalProperties: false
+    },
+    play: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Optional path to presentation file'
+            }
+        },
+        additionalProperties: false
+    },
+    pause: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Optional path to presentation file'
+            }
+        },
+        additionalProperties: false
+    },
+    stop: {
+        type: 'object',
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Optional path to presentation file'
+            }
+        },
+        additionalProperties: false
+    }
+};
+
+/**
+ * Command contribution for presentation commands.
+ * Registers all openspace.presentation.* commands in Theia's CommandRegistry.
+ */
+@injectable()
+export class PresentationCommandContribution implements CommandContribution {
+
+    @inject(PresentationService)
+    protected readonly presentationService!: PresentationService;
+
+    @inject(FileService)
+    protected readonly fileService!: FileService;
+
+    @inject(WidgetManager)
+    protected readonly widgetManager!: WidgetManager;
+
+    @inject(PresentationNavigationService)
+    protected readonly navigationService!: PresentationNavigationService;
+
+    /**
+     * Register all presentation commands.
+     */
+    registerCommands(registry: CommandRegistry): void {
+        // openspace.presentation.list
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.LIST,
+                label: 'OpenSpace: List Presentations'
+            },
+            {
+                execute: async (args?: PresentationListArgs) => {
+                    console.log('[PresentationCommand] Listing presentations');
+                    return this.presentationService.listPresentations();
+                }
+            }
+        );
+
+        // openspace.presentation.read
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.READ,
+                label: 'OpenSpace: Read Presentation'
+            },
+            {
+                execute: async (args: PresentationReadArgs) => {
+                    console.log('[PresentationCommand] Reading presentation:', args.path);
+                    return this.presentationService.readPresentation(args.path);
+                }
+            }
+        );
+
+        // openspace.presentation.create
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.CREATE,
+                label: 'OpenSpace: Create Presentation'
+            },
+            {
+                execute: async (args: PresentationCreateArgs) => {
+                    console.log('[PresentationCommand] Creating presentation:', args.path);
+                    return this.presentationService.createPresentation(
+                        args.path,
+                        args.title,
+                        args.slides,
+                        args.theme ? { theme: args.theme } : undefined
+                    );
+                }
+            }
+        );
+
+        // openspace.presentation.update_slide
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.UPDATE_SLIDE,
+                label: 'OpenSpace: Update Slide'
+            },
+            {
+                execute: async (args: PresentationUpdateSlideArgs) => {
+                    console.log('[PresentationCommand] Updating slide:', args.slideIndex, 'in', args.path);
+                    return this.presentationService.updateSlide(args.path, args.slideIndex, args.content);
+                }
+            }
+        );
+
+        // openspace.presentation.open
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.OPEN,
+                label: 'OpenSpace: Open Presentation'
+            },
+            {
+                execute: async (args: PresentationOpenArgs) => {
+                    console.log('[PresentationCommand] Opening presentation:', args.path);
+                    return this.openPresentation(args.path);
+                }
+            }
+        );
+
+        // openspace.presentation.navigate
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.NAVIGATE,
+                label: 'OpenSpace: Navigate Presentation'
+            },
+            {
+                execute: async (args: PresentationNavigateArgs) => {
+                    console.log('[PresentationCommand] Navigating presentation:', args);
+                    return this.navigatePresentation(args);
+                }
+            }
+        );
+
+        // openspace.presentation.play
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.PLAY,
+                label: 'OpenSpace: Play Presentation'
+            },
+            {
+                execute: async (args?: PresentationPlayArgs) => {
+                    console.log('[PresentationCommand] Playing presentation');
+                    return this.playPresentation();
+                }
+            }
+        );
+
+        // openspace.presentation.pause
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.PAUSE,
+                label: 'OpenSpace: Pause Presentation'
+            },
+            {
+                execute: async (args?: PresentationPauseArgs) => {
+                    console.log('[PresentationCommand] Pausing presentation');
+                    return this.pausePresentation();
+                }
+            }
+        );
+
+        // openspace.presentation.stop
+        registry.registerCommand(
+            { 
+                id: PresentationCommandIds.STOP,
+                label: 'OpenSpace: Stop Presentation'
+            },
+            {
+                execute: async (args?: PresentationStopArgs) => {
+                    console.log('[PresentationCommand] Stopping presentation');
+                    return this.stopPresentation();
+                }
+            }
+        );
+    }
+
+    /**
+     * Open a presentation in a widget.
+     */
+    protected async openPresentation(path: string): Promise<PresentationWidget> {
+        const uri = new URI(path);
+        
+        // Read file content
+        const contentResult = await this.fileService.read(uri);
+        const content = contentResult.value;
+
+        // Get or create widget
+        const widget = await this.widgetManager.getOrCreateWidget(
+            PresentationWidget.ID,
+            { uri: path }
+        ) as PresentationWidget;
+
+        // Set content
+        widget.setContent(content);
+        
+        // Activate the widget
+        widget.activate();
+
+        // Update service state
+        this.presentationService.setActivePresentation(path);
+        
+        const state = this.presentationService.getPlaybackState();
+        this.presentationService.setPlaybackState({
+            ...state,
+            isPlaying: false,
+            isPaused: false,
+            currentSlide: 0,
+            totalSlides: PresentationWidget.parseDeckContent(content).slides.length
+        });
+
+        return widget;
+    }
+
+    /**
+     * Navigate the presentation.
+     */
+    protected async navigatePresentation(args: PresentationNavigateArgs): Promise<void> {
+        const state = this.presentationService.getPlaybackState();
+        
+        if (args.slideIndex !== undefined) {
+            // Navigate to specific slide
+            this.navigationService.slide(args.slideIndex);
+            this.presentationService.setPlaybackState({
+                ...state,
+                currentSlide: args.slideIndex
+            });
+        } else if (args.direction) {
+            // Navigate by direction
+            if (args.direction === 'next') {
+                this.navigationService.next();
+            } else if (args.direction === 'prev') {
+                this.navigationService.prev();
+            }
+        }
+    }
+
+    /**
+     * Start presentation playback.
+     */
+    protected async playPresentation(): Promise<void> {
+        const state = this.presentationService.getPlaybackState();
+        
+        // In fullscreen/presentation mode
+        this.navigationService.toggleFullscreen();
+        
+        this.presentationService.setPlaybackState({
+            ...state,
+            isPlaying: true,
+            isPaused: false
+        });
+    }
+
+    /**
+     * Pause presentation playback.
+     */
+    protected async pausePresentation(): Promise<void> {
+        const state = this.presentationService.getPlaybackState();
+        
+        this.presentationService.setPlaybackState({
+            ...state,
+            isPlaying: false,
+            isPaused: true
+        });
+    }
+
+    /**
+     * Stop presentation and exit.
+     */
+    protected async stopPresentation(): Promise<void> {
+        const state = this.presentationService.getPlaybackState();
+        
+        // Exit fullscreen if in presentation mode
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+        
+        this.presentationService.setPlaybackState({
+            ...state,
+            isPlaying: false,
+            isPaused: false,
+            currentSlide: 0
+        });
+    }
+}

@@ -4,7 +4,9 @@
     "outDir": "lib",
     "rootDir": "src",
     "composite": true,
-    "jsx": "react"
+    "jsx": "react",
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment"
   },
   "include": ["src"],
   "exclude": ["lib", "node_modules"]

@@ -1,6 +1,10 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
-import { WidgetFactory } from '@theia/core/lib/browser';
+import { WidgetFactory, OpenHandler } from '@theia/core/lib/browser';
+import { CommandContribution } from '@theia/core/lib/common/command';
 import { PresentationWidget, PresentationNavigationService } from './presentation-widget';
+import { PresentationOpenHandler } from './presentation-open-handler';
+import { PresentationService } from './presentation-service';
+import { PresentationCommandContribution } from './presentation-command-contribution';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
   // Register the Presentation Widget
@@ -14,6 +18,17 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
 
   // Register the Navigation Service
   bind(PresentationNavigationService).toSelf();
+
+  // Register the Open Handler for .deck.md files
+  bind(PresentationOpenHandler).toSelf();
+  bind(OpenHandler).toService(PresentationOpenHandler);
+
+  // Register the Presentation Service
+  bind(PresentationService).toSelf();
+
+  // Register the Command Contribution
+  bind(PresentationCommandContribution).toSelf();
+  bind(CommandContribution).toService(PresentationCommandContribution);
 
   console.log('[OpenSpacePresentation] Frontend module loaded');
 });

@@ -8,8 +8,9 @@
 import { chromium, FullConfig } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
-async function globalSetup(config: FullConfig) {
+async function globalSetup(_config: FullConfig) {
   console.log('[Global Setup] Initializing E2E test environment...');
   
   // Create a temporary directory for the demo project
@@ -26,7 +27,6 @@ async function globalSetup(config: FullConfig) {
   console.log(`[Global Setup] Created demo project directory: ${demoProjectPath}`);
   
   // Initialize git repo (OpenCode requires git)
-  const { execSync } = require('child_process');
   try {
     execSync('git init', { cwd: demoProjectPath, stdio: 'pipe' });
     execSync('git config user.email "test@example.com"', { cwd: demoProjectPath, stdio: 'pipe' });

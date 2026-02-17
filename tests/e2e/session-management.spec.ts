@@ -252,7 +252,6 @@ test('Scenario 2: Create new session', async ({ page }) => {
   const noSessionState = page.locator('.chat-no-session');
   if (await noSessionState.isVisible().catch(() => false)) {
     console.log('No active session - creating one');
-    // Use the correct button class .new-session-button
     const createButton = page.locator('.new-session-button');
     await expect(createButton).toBeVisible();
     await createButton.click();
@@ -500,7 +499,7 @@ test('Bonus: Handle empty session list gracefully', async ({ page }) => {
   await expect(noSessionMessage).toBeVisible();
   console.log('✓ No session message displayed');
   
-  // The "+ New" button has class .new-session-button
+  // The create button is always available in the session header
   const newButton = page.locator('.new-session-button');
   await expect(newButton).toBeVisible();
   console.log('✓ New session button available in empty state');
