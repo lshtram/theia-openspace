@@ -17,7 +17,27 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { CommandRegistry } from '@theia/core/lib/common/command';
-import { CommandManifest, CommandDefinition, AgentCommand } from '../common/command-manifest';
+import { CommandManifest, CommandDefinition, CommandArgumentSchema, AgentCommand } from '../common/command-manifest';
+import { PaneService, PaneStateSnapshot } from './pane-service';
+
+// Import command argument schemas for manifest auto-generation (FR-3.7)
+import { PaneCommands, PANE_OPEN_SCHEMA, PANE_CLOSE_SCHEMA, PANE_FOCUS_SCHEMA, PANE_LIST_SCHEMA, PANE_RESIZE_SCHEMA } from './pane-command-contribution';
+import { FileCommands, FILE_READ_SCHEMA, FILE_WRITE_SCHEMA, FILE_LIST_SCHEMA, FILE_SEARCH_SCHEMA } from './file-command-contribution';
+import { TerminalCommands, TERMINAL_CREATE_SCHEMA, TERMINAL_SEND_SCHEMA, TERMINAL_READ_OUTPUT_SCHEMA, TERMINAL_CLOSE_SCHEMA } from './terminal-command-contribution';
+import { EditorCommands, EDITOR_OPEN_SCHEMA, EDITOR_SCROLL_SCHEMA, EDITOR_HIGHLIGHT_SCHEMA, EDITOR_CLEAR_HIGHLIGHT_SCHEMA, EDITOR_READ_FILE_SCHEMA, EDITOR_CLOSE_SCHEMA } from './editor-command-contribution';
+
+/**
+ * Command result structure for feedback mechanism.
+ */
+export interface CommandResult {
+    cmd: string;
+    args: unknown;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    executionTime: number;
+    timestamp: string;
+}
 
 /**
  * OpenSpaceBridgeContribution - Frontend service that bridges Theia CommandRegistry with OpenSpace Hub.
@@ -45,11 +65,18 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     @inject(CommandRegistry)
     protected readonly commandRegistry!: CommandRegistry;
 
+    @inject(PaneService)
+    private readonly paneService!: PaneService;
+
     private eventSource?: EventSource;
     private reconnectAttempts = 0;
     private reconnectTimer?: number;
     private readonly maxReconnectDelay = 30000; // 30 seconds
     private readonly hubBaseUrl = 'http://localhost:3001'; // TODO: Phase 5.2 - make configurable via preferences
+    
+    // Throttling for state publishing (max 1 POST per second)
+    private lastPublishTime = 0;
+    private readonly throttleDelay = 1000; // 1 second
 
     /**
      * Called when the frontend application starts.
@@ -60,6 +87,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         
         // Publish command manifest
         await this.publishManifest();
+        
+        // Subscribe to pane state changes
+        this.subscribeToPaneState();
         
         // Establish SSE connection
         this.connectSSE();
@@ -118,6 +148,39 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     }
 
     /**
+     * Map of command IDs to their argument schemas for manifest auto-generation.
+     * Uses type assertion to handle JSON Schema literal types.
+     */
+    private readonly commandSchemaMap: Record<string, CommandArgumentSchema | undefined> = {
+        // Pane commands
+        [PaneCommands.OPEN]: PANE_OPEN_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.CLOSE]: PANE_CLOSE_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.FOCUS]: PANE_FOCUS_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.LIST]: PANE_LIST_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.RESIZE]: PANE_RESIZE_SCHEMA as CommandArgumentSchema,
+        
+        // File commands
+        [FileCommands.READ]: FILE_READ_SCHEMA as CommandArgumentSchema,
+        [FileCommands.WRITE]: FILE_WRITE_SCHEMA as CommandArgumentSchema,
+        [FileCommands.LIST]: FILE_LIST_SCHEMA as CommandArgumentSchema,
+        [FileCommands.SEARCH]: FILE_SEARCH_SCHEMA as CommandArgumentSchema,
+        
+        // Terminal commands
+        [TerminalCommands.CREATE]: TERMINAL_CREATE_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.SEND]: TERMINAL_SEND_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.READ_OUTPUT]: TERMINAL_READ_OUTPUT_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.CLOSE]: TERMINAL_CLOSE_SCHEMA as CommandArgumentSchema,
+        
+        // Editor commands
+        [EditorCommands.OPEN]: EDITOR_OPEN_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.SCROLL_TO]: EDITOR_SCROLL_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.HIGHLIGHT]: EDITOR_HIGHLIGHT_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.CLEAR_HIGHLIGHT]: EDITOR_CLEAR_HIGHLIGHT_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.READ_FILE]: EDITOR_READ_FILE_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.CLOSE]: EDITOR_CLOSE_SCHEMA as CommandArgumentSchema
+    };
+
+    /**
      * Collect all openspace.* commands from CommandRegistry.
      * 
      * @returns Array of CommandDefinition objects for commands starting with 'openspace.'
@@ -126,7 +189,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * - CommandRegistry.commands returns Command[] (array of Command objects)
      * - Each Command has id, label, and category properties
      * - Filters for commands starting with 'openspace.'
-     * - Extracts id, label (as name and description), and category
+     * - Extracts id, label (as name and description), category, and argument schema
      */
     private collectCommands(): CommandDefinition[] {
         const commands: CommandDefinition[] = [];
@@ -138,7 +201,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
                     id: command.id,
                     name: command.label || command.id,
                     description: command.label || command.id, // TODO: Phase 2 - improve description extraction
-                    category: command.category
+                    category: command.category,
+                    arguments_schema: this.commandSchemaMap[command.id],
+                    handler: command.id
                 });
             }
         }
@@ -231,6 +296,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * 1. Check if command exists in registry
      * 2. Convert args to array format if needed
      * 3. Execute via commandRegistry.executeCommand()
+     * 4. Capture result and POST to Hub
      * 
      * Error Handling:
      * - Command not found: log warning, skip execution
@@ -239,23 +305,79 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * @param agentCommand Command to execute with id and arguments
      */
     private async executeCommand(agentCommand: AgentCommand): Promise<void> {
+        const startTime = Date.now();
+        const { cmd, args } = agentCommand;
+        
         try {
-            const { cmd, args } = agentCommand;
-            
             // Check if command exists
             if (!this.commandRegistry.getCommand(cmd)) {
                 console.warn(`[BridgeContribution] Unknown command: ${cmd}`);
+                // Post failed result for unknown command
+                await this.postCommandResult({
+                    cmd,
+                    args,
+                    success: false,
+                    error: 'Unknown command',
+                    executionTime: Date.now() - startTime,
+                    timestamp: new Date().toISOString()
+                });
                 return;
             }
             
             // Execute command - convert args to array format
             // If args is an object, wrap in array; if array, use as-is; if undefined, use empty array
             const argsArray = args ? (Array.isArray(args) ? args : [args]) : [];
-            await this.commandRegistry.executeCommand(cmd, ...argsArray);
+            const output = await this.commandRegistry.executeCommand(cmd, ...argsArray);
             
             console.debug(`[BridgeContribution] Command executed: ${cmd}`);
+            
+            // Post successful result
+            await this.postCommandResult({
+                cmd,
+                args,
+                success: true,
+                output,
+                executionTime: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            });
         } catch (error: any) {
             console.error(`[BridgeContribution] Command execution failed:`, error);
+            
+            // Post failed result
+            await this.postCommandResult({
+                cmd,
+                args,
+                success: false,
+                error: error.message || String(error),
+                executionTime: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    /**
+     * Post command result to Hub.
+     * 
+     * @param result Command result to post
+     */
+    private async postCommandResult(result: CommandResult): Promise<void> {
+        try {
+            const response = await fetch(`${this.hubBaseUrl}/openspace/command-results`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(result)
+            });
+
+            if (!response.ok) {
+                console.warn(`[BridgeContribution] Failed to post command result: HTTP ${response.status}`);
+            }
+        } catch (error: any) {
+            // Graceful degradation - don't block command execution if Hub is unavailable
+            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+                console.debug('[BridgeContribution] Hub not available, command result not posted');
+            } else {
+                console.error('[BridgeContribution] Error posting command result:', error);
+            }
         }
     }
 
@@ -329,4 +451,65 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     // - Build PaneStateSnapshot
     // - POST to http://localhost:3001/openspace/state
     // - Support system prompt generation with IDE context
+
+    /**
+     * Subscribe to PaneService layout changes and publish state to Hub.
+     * 
+     * Implementation:
+     * 1. Subscribe to onPaneLayoutChanged event
+     * 2. On each change, call publishState with throttling
+     */
+    private subscribeToPaneState(): void {
+        console.info('[BridgeContribution] Subscribing to pane state changes...');
+        
+        this.paneService.onPaneLayoutChanged((snapshot: PaneStateSnapshot) => {
+            this.publishState(snapshot);
+        });
+    }
+
+    /**
+     * Publish pane state snapshot to Hub with throttling.
+     * 
+     * Throttling:
+     * - Max 1 POST per second to avoid flooding
+     * - Uses Date.now() for timing
+     * - Skips publish if within throttle window
+     * 
+     * Error Handling:
+     * - Hub unavailable: logs warning, continues
+     * - Network error: logs error, continues
+     * - Doesn't block subsequent attempts
+     * 
+     * @param state Pane state snapshot to publish
+     */
+    private async publishState(state: PaneStateSnapshot): Promise<void> {
+        const now = Date.now();
+        
+        // Throttle: skip if within throttle window
+        if (now - this.lastPublishTime < this.throttleDelay) {
+            return;
+        }
+        
+        this.lastPublishTime = now;
+        
+        try {
+            const response = await fetch(`${this.hubBaseUrl}/openspace/state`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            console.debug(`[BridgeContribution] Published pane state: ${state.panes.length} panes`);
+        } catch (error: any) {
+            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+                console.warn('[BridgeContribution] Warning: Hub not available, state not published');
+            } else {
+                console.error('[BridgeContribution] Error publishing state:', error);
+            }
+        }
+    }
 }
