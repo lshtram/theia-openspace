@@ -192,6 +192,10 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
 
     // Handle new session
     const handleNewSession = React.useCallback(async () => {
+        if (!sessionService.activeProject) {
+            alert('No project selected. Please open a project first.');
+            return;
+        }
         try {
             const title = `Session ${new Date().toLocaleString()}`;
             await sessionService.createSession(title);
@@ -273,13 +277,16 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     // Session Header component
     const SessionHeader: React.FC = () => {
         return (
-            <div className="session-header">
+            <div className="session-header" data-test-show-list={showSessionList.toString()}>
                 <div className="session-selector">
                     <button 
                         type="button"
-                        className="session-dropdown-button"
-                        onClick={() => setShowSessionList(!showSessionList)}
-                        disabled={!sessionService.activeProject}
+                        className="session-dropdown-button session-header-button"
+                        onClick={() => {
+                            console.log('[ChatWidget] Toggle dropdown, current state:', showSessionList, 'sessions:', sessions.length);
+                            setShowSessionList(!showSessionList);
+                        }}
+                        data-test-sessions-count={sessions.length}
                     >
                         {activeSession ? activeSession.title : 'No Session'}
                         <span className="dropdown-icon">▼</span>
@@ -287,12 +294,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                     
                     {showSessionList && (
                         <div className="session-list-dropdown">
-                            {isLoadingSessions && (
+                            {!sessionService.activeProject && (
+                                <div className="session-list-empty">
+                                    <span>⚠️</span> No project selected. Please open a project to see sessions.
+                                </div>
+                            )}
+                            {sessionService.activeProject && isLoadingSessions && (
                                 <div className="session-list-loading">
                                     <span className="spinner">⏳</span> Loading sessions...
                                 </div>
                             )}
-                            {sessionLoadError && (
+                            {sessionService.activeProject && sessionLoadError && (
                                 <div className="session-list-error">
                                     <div className="error-message">
                                         <span className="error-icon">⚠️</span> {sessionLoadError}
@@ -306,10 +318,10 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                                     </button>
                                 </div>
                             )}
-                            {!isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
+                            {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
                                 <div className="session-list-empty">No sessions yet. Click + to create one.</div>
                             )}
-                            {!isLoadingSessions && !sessionLoadError && sessions.map(session => (
+                            {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
                                 <div 
                                     key={session.id}
                                     className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
@@ -335,8 +347,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                     type="button"
                     className="new-session-button"
                     onClick={handleNewSession}
-                    disabled={!sessionService.activeProject}
-                    title="Create new session"
+                    title={sessionService.activeProject ? "Create new session" : "No project selected"}
                 >
                     + New
                 </button>
@@ -373,69 +384,64 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
 
     return (
         <div className="chat-container">
-            {!hasActiveSession ? (
-                <div className="chat-no-session">
-                    <p>No active session</p>
-                    <p className="chat-hint">Create or select a session to start chatting</p>
-                    <button 
-                        type="button"
-                        className="chat-create-session-button"
-                        onClick={handleNewSession}
-                    >
-                        + New Session
-                    </button>
-                </div>
-            ) : (
-                <div className="chat-active">
-                    <SessionHeader />
-                    <ModelProviderDisplay />
-                    <div className="chat-messages">{messages.length === 0 ? (
-                            <div className="chat-empty">
-                                <p>No messages yet</p>
-                                <p className="chat-hint">Type a message below to get started</p>
-                            </div>
-                        ) : (
-                            messages.map(message => {
-                                const messageText = renderMessageText(message);
-                                const streamingText = streamingData.get(message.id);
-                                const displayText = streamingText ? messageText + streamingText : messageText;
+            <div className="chat-active">
+                <SessionHeader />
+                {!hasActiveSession ? (
+                    <div className="chat-no-session">
+                        <p>No active session</p>
+                        <p className="chat-hint">Select a session above or create a new one to start chatting</p>
+                    </div>
+                ) : (
+                    <>
+                        <ModelProviderDisplay />
+                        <div className="chat-messages">{messages.length === 0 ? (
+                                <div className="chat-empty">
+                                    <p>No messages yet</p>
+                                    <p className="chat-hint">Type a message below to get started</p>
+                                </div>
+                            ) : (
+                                messages.map(message => {
+                                    const messageText = renderMessageText(message);
+                                    const streamingText = streamingData.get(message.id);
+                                    const displayText = streamingText ? messageText + streamingText : messageText;
 
-                                return (
-                                    <div key={message.id} className={`chat-message chat-message-${message.role}`}>
-                                        <div className="chat-message-role">
-                                            {message.role === 'user' ? 'You' : 'Assistant'}
+                                    return (
+                                        <div key={message.id} className={`chat-message chat-message-${message.role}`}>
+                                            <div className="chat-message-role">
+                                                {message.role === 'user' ? 'You' : 'Assistant'}
+                                            </div>
+                                            <div className="chat-message-content">
+                                                {displayText}
+                                                {streamingText && <span className="chat-streaming-indicator">▋</span>}
+                                            </div>
                                         </div>
-                                        <div className="chat-message-content">
-                                            {displayText}
-                                            {streamingText && <span className="chat-streaming-indicator">▋</span>}
-                                        </div>
-                                    </div>
-                                );
-                            })
-                        )}
-                        <div ref={messagesEndRef} />
-                    </div>
-                    <div className="chat-input-container">
-                        <textarea
-                            className="chat-input"
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
-                            disabled={isStreaming}
-                            rows={3}
-                        />
-                        <button
-                            type="button"
-                            className="chat-send-button"
-                            onClick={handleSend}
-                            disabled={isStreaming || !inputValue.trim()}
-                        >
-                            Send
-                        </button>
-                    </div>
-                </div>
-            )}
+                                    );
+                                })
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                        <div className="chat-input-container">
+                            <textarea
+                                className="chat-input"
+                                value={inputValue}
+                                onChange={e => setInputValue(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
+                                disabled={isStreaming}
+                                rows={3}
+                            />
+                            <button
+                                type="button"
+                                className="chat-send-button"
+                                onClick={handleSend}
+                                disabled={isStreaming || !inputValue.trim()}
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
         </div>
     );
 };

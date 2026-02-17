@@ -919,4 +919,45 @@ Phase 0 ✅                           Phase 1 (93% ✅)
 
 ---
 
+## Technical Debt (Parallel Tracks)
+
+These items represent known technical debt that is being addressed in parallel with main development. They do NOT block feature development but MUST be resolved before production release.
+
+### E2E Test Infrastructure Gap
+
+**Issue:** E2E tests written for Architecture B1 assume browser HTTP requests can be mocked with Playwright's `page.route()`, but Architecture B1 uses backend-side RPC (Node.js backend → Hub → OpenCode). Browser-level mocks cannot intercept server-side HTTP calls.
+
+**Impact:**
+- E2E tests for Task 2.0+ cannot properly mock backend data
+- Only smoke tests (no backend data required) can pass
+- Full E2E coverage requires infrastructure rebuild
+
+**Status:** 🔴 Blocked — needs dedicated investigation track
+
+**Solution Approaches:**
+1. **Option 1 (Recommended):** Use real backend (Hub + OpenCode) during E2E tests, create real test data via API
+2. **Option 2:** Mock at RPC layer (complex, fragile)
+3. **Option 3:** Mock Hub server (maintenance burden)
+
+**Estimated Effort:** 6-8 hours
+
+**Detailed Analysis:** See `docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md`
+
+**User Authorization:** User authorized parallel work on 2026-02-17:
+- **Main track:** Continue with Tasks 2.1+ using unit tests for validation
+- **Parallel track:** Fix E2E infrastructure separately
+- **Rationale:** "If you can't test, you don't know if you developed correctly" — but E2E infrastructure can be a separate engineering effort when there's a fundamental architecture mismatch
+
+**Current Test Status:**
+- `tests/e2e/session-list-autoload.spec.ts`: 1/1 passing (Test 4 — empty state)
+- Tests 1-3 removed (require backend data, blocked by infrastructure)
+- Test 5 skipped (requires manual profiling)
+
+**Exit Criteria:**
+- All E2E tests for Tasks 2.0–2.5 passing
+- E2E infrastructure documented for future test authors
+- CI pipeline includes full E2E suite
+
+---
+
 *End of WORKPLAN-THEIA-OPENSPACE*
