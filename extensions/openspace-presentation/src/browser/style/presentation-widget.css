@@ -1,0 +1,158 @@
+/* *****************************************************************************
+ * Copyright (C) 2024 OpenSpace contributors.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+/* Presentation Widget Styles */
+
+/* Scope all styles to widget container to avoid Theia conflicts */
+.openspace-presentation-widget .presentation-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #1a1a1a;
+}
+
+.openspace-presentation-widget .presentation-container .reveal {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    font-size: 1.2em;
+}
+
+.openspace-presentation-widget .presentation-container .reveal .slides {
+    text-align: left;
+}
+
+.openspace-presentation-widget .presentation-container .reveal .slides section {
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Slide content styling */
+.openspace-presentation-widget .presentation-container .slide-content {
+    color: #fff;
+    line-height: 1.6;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content h1 {
+    font-size: 2em;
+    margin-bottom: 0.5em;
+    color: #fff;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content h2 {
+    font-size: 1.5em;
+    margin-bottom: 0.5em;
+    color: #fff;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content h3 {
+    font-size: 1.2em;
+    margin-bottom: 0.5em;
+    color: #ddd;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content p {
+    margin-bottom: 0.5em;
+    color: #ccc;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content ul,
+.openspace-presentation-widget .presentation-container .slide-content ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+    color: #ccc;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content li {
+    margin-bottom: 0.25em;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content code {
+    background: #333;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9em;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content pre {
+    background: #333;
+    padding: 1em;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content a {
+    color: #61dafb;
+    text-decoration: none;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content a:hover {
+    text-decoration: underline;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content strong {
+    font-weight: bold;
+    color: #fff;
+}
+
+.openspace-presentation-widget .presentation-container .slide-content em {
+    font-style: italic;
+    color: #ddd;
+}
+
+/* Empty state */
+.openspace-presentation-widget .presentation-container .reveal .slides > section > .slide-content:only-child {
+    text-align: center;
+}
+
+.openspace-presentation-widget .presentation-container .reveal .slides > section > .slide-content:only-child pre {
+    text-align: left;
+    max-width: 600px;
+    margin: 1em auto;
+    font-size: 0.7em;
+}
+
+/* Reveal.js theme overrides for embedded mode */
+.openspace-presentation-widget .presentation-container .reveal {
+    /* Override reveal.js defaults for embedded mode */
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.openspace-presentation-widget .presentation-container .reveal > .slides > section {
+    /* Ensure slides don't overflow */
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Slide number position */
+.openspace-presentation-widget .presentation-container .reveal .slide-number {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 14px;
+    color: #666;
+    background: transparent;
+    padding: 5px 10px;
+    z-index: 10;
+}
+
+/* Focus mode - hide other slides when focused */
+.openspace-presentation-widget .presentation-container .reveal.focused .past,
+.openspace-presentation-widget .presentation-container .reveal.focused .future {
+    opacity: 0.3;
+}

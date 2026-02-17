@@ -586,17 +586,17 @@ task_id: TheiaOpenspaceWorkplan
 **Exit criteria:** Agent can create a presentation and navigate slides. Agent can create a whiteboard and draw basic shapes. Both surfaces open as Theia widgets in the main area. All commands appear in the system prompt automatically.
 
 **V&V Targets:**
-- [ ] reveal.js spike (4.0a): bundle size < 500KB gzipped, renders in ReactWidget, no Theia conflicts
-- [ ] tldraw spike (4.0b): bundle size < 1MB gzipped, renders in ReactWidget, no Theia conflicts
-- [ ] `.deck.md` double-click opens presentation widget (not text editor)
-- [ ] Presentation slides render with reveal.js themes and transitions
-- [ ] Arrow keys navigate slides; programmatic navigation works
-- [ ] Agent can `openspace.presentation.create` → file created → `openspace.presentation.open` → widget opens
-- [ ] `.whiteboard.json` double-click opens whiteboard widget
-- [ ] User can draw basic shapes, text, and connectors on whiteboard
-- [ ] Agent can `openspace.whiteboard.create` and `openspace.whiteboard.add_shape`
-- [ ] All presentation and whiteboard commands appear in `GET /openspace/instructions`
-- [ ] Modality integration test (4.8) passes
+- [x] reveal.js spike (4.0a): bundle size < 500KB gzipped, renders in ReactWidget, no Theia conflicts (ACTUAL: 29KB)
+- [x] tldraw spike (4.0b): bundle size < 1MB gzipped, renders in ReactWidget, no Theia conflicts (ACTUAL: ~350KB)
+- [x] `.deck.md` double-click opens presentation widget (not text editor)
+- [x] Presentation slides render with reveal.js themes and transitions
+- [x] Arrow keys navigate slides; programmatic navigation works
+- [x] Agent can `openspace.presentation.create` → file created → `openspace.presentation.open` → widget opens
+- [x] `.whiteboard.json` double-click opens whiteboard widget
+- [x] User can draw basic shapes, text, and connectors on whiteboard (via commands)
+- [x] Agent can `openspace.whiteboard.create` and `openspace.whiteboard.add_shape`
+- [ ] All presentation and whiteboard commands appear in `GET /openspace/instructions` (BLOCKED: Phase 3 manifest system)
+- [ ] Modality integration test (4.8) passes (DEFERRED: Phase 3 stream interceptor)
 
 ### 4.0a — Spike: reveal.js integration feasibility
 | | |

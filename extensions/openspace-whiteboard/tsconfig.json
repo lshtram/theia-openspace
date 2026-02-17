@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "lib",
     "rootDir": "src",
-    "composite": true
+    "composite": true,
+    "jsx": "react",
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment"
   },
   "include": ["src"],
   "exclude": ["lib", "node_modules"]
