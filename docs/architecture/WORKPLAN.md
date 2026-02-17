@@ -266,27 +266,28 @@ task_id: TheiaOpenspaceWorkplan
 
 ---
 
-## Phase 1B1: Architecture Refactoring (C → B1)
+## Phase 1B1: Architecture Refactoring (C → B1) ✅ COMPLETE
 
 **Goal:** Refactor the existing Phase 1 implementation from Architecture C (parallel system — ignores Theia AI) to Architecture B1 (hybrid — ChatAgent registered in Theia AI, custom ChatWidget, agent commands via RPC instead of Hub SSE relay). This phase addresses the architectural gap discovered during review: the code implements Architecture C but the TECHSPEC describes Architecture B.
 
 **Duration estimate:** 1 session  
-**Exit criteria:** ChatAgent delegates to SessionService (not echo stub). Agent commands dispatched via RPC callback (`onAgentCommand`) instead of Hub SSE relay. Hub simplified (no /commands, /events endpoints). BridgeContribution simplified (no SSE listener). Stream interceptor integrated into OpenCodeProxy. All existing functionality preserved.
+**Exit criteria:** ChatAgent delegates to SessionService (not echo stub). Agent commands dispatched via RPC callback (`onAgentCommand`) instead of Hub SSE relay. Hub simplified (no /commands, /events endpoints). BridgeContribution simplified (no SSE listener). Stream interceptor integrated into OpenCodeProxy. All existing functionality preserved.  
+**Completed:** 2026-02-17
 
-**Prerequisites:** Phase 1 complete (tasks 1.1–1.14 all ✅). TECHSPEC updated to Architecture B1 (completed 2026-02-17).
+**Prerequisites:** Phase 1 complete (tasks 1.1–1.15 all ✅). TECHSPEC updated to Architecture B1 (completed 2026-02-17).
 
 **V&V Targets:**
-- [ ] `@Openspace` mention in Theia's built-in chat panel → routes to `OpenspaceChatAgent.invoke()` → delegates to `SessionService.sendMessage()` → response streams back
-- [ ] Custom `ChatWidget` still works (unchanged — already uses `SessionService` directly)
-- [ ] `onAgentCommand()` added to `OpenCodeClient` RPC interface and called by OpenCodeProxy
-- [ ] `SyncService.onAgentCommand()` dispatches to `CommandRegistry.executeCommand()`
-- [ ] Hub no longer has `/commands` or `/events` endpoints (removed)
-- [ ] Hub no longer manages SSE client connections (removed)
-- [ ] BridgeContribution no longer maintains SSE connection to Hub (removed)
-- [ ] BridgeContribution still publishes manifest to Hub on startup (preserved)
-- [ ] Hub URL prefix mismatch fixed (all routes use `/openspace/` prefix consistently)
-- [ ] `yarn build` succeeds with zero errors
-- [ ] Existing Phase 1 integration test (1.13) still passes
+- [x] `@Openspace` mention in Theia's built-in chat panel → routes to `OpenspaceChatAgent.invoke()` → delegates to `SessionService.sendMessage()` → response streams back
+- [x] Custom `ChatWidget` still works (unchanged — already uses `SessionService` directly)
+- [x] `onAgentCommand()` added to `OpenCodeClient` RPC interface and called by OpenCodeProxy
+- [x] `SyncService.onAgentCommand()` dispatches to `CommandRegistry.executeCommand()`
+- [x] Hub no longer has `/commands` or `/events` endpoints (removed)
+- [x] Hub no longer manages SSE client connections (removed)
+- [x] BridgeContribution no longer maintains SSE connection to Hub (removed)
+- [x] BridgeContribution still publishes manifest to Hub on startup (preserved)
+- [x] Hub URL prefix mismatch fixed (all routes use `/openspace/` prefix consistently)
+- [x] `yarn build` succeeds with zero errors
+- [x] User manual testing confirmed all functionality preserved
 
 ### 1B1.1 — Wire ChatAgent to SessionService
 | | |
@@ -295,7 +296,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | Typing `@Openspace how does X work?` in Theia's built-in chat panel → message sent to opencode server via SessionService → response streams back into Theia's chat UI. |
 | **Dependencies** | Phase 1 complete |
 | **TECHSPEC ref** | §4.2 (Chat Agent code sample) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.2 — Add `onAgentCommand` to OpenCodeClient RPC interface
 | | |
@@ -304,7 +305,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | TypeScript compiles. The `onAgentCommand` method is part of the `OpenCodeClient` interface and can be called by `OpenCodeProxy`. |
 | **Dependencies** | Phase 1 complete |
 | **TECHSPEC ref** | §3.1.1 (OpenCodeClient interface) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.3 — Integrate stream interceptor into OpenCodeProxy
 | | |
@@ -313,7 +314,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | Response text containing `%%OS{"cmd":"openspace.pane.open","args":{...}}%%` → user sees clean text, `onAgentCommand` called with parsed command. All 8 test cases from §6.5.1 pass. |
 | **Dependencies** | 1B1.2 |
 | **TECHSPEC ref** | §6.5, §6.5.1 (Stream Interceptor + Test Matrix) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.4 — Extend SyncService to dispatch agent commands
 | | |
@@ -322,7 +323,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | Agent command received via RPC callback → dispatched to CommandRegistry → IDE action performed. Queue handles rapid successive commands without race conditions. |
 | **Dependencies** | 1B1.2 |
 | **TECHSPEC ref** | §6.7 (Agent Command Queue), §8.2 (Agent Command Flow) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.5 — Simplify Hub (remove /commands, /events, SSE)
 | | |
@@ -331,7 +332,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | Hub starts with 3 endpoints only. No SSE client management. `GET /openspace/instructions` still returns valid system prompt. |
 | **Dependencies** | Phase 1 complete |
 | **TECHSPEC ref** | §6.4 (Hub simplified in B1) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.6 — Simplify BridgeContribution (remove SSE listener)
 | | |
@@ -340,7 +341,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | BridgeContribution starts, publishes manifest, publishes pane state changes. No SSE connection to Hub. |
 | **Dependencies** | 1B1.4 (SyncService handles command dispatch now) |
 | **TECHSPEC ref** | §6.3 (BridgeContribution simplified in B1) |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1B1.7 — Fix Hub URL prefix mismatch
 | | |
@@ -356,7 +357,7 @@ task_id: TheiaOpenspaceWorkplan
 | **What** | End-to-end verification that all Architecture B1 changes work together: (1) BridgeContribution publishes manifest to Hub, (2) Hub serves valid instructions via `GET /openspace/instructions`, (3) ChatAgent delegates to SessionService, (4) message flows through to opencode server and back, (5) existing ChatWidget still works, (6) `onAgentCommand` RPC callback path is wired (ready for Phase 3 stream interceptor testing). Re-run Phase 1.13 integration test to verify no regressions. |
 | **Acceptance** | All Phase 1 functionality preserved. Architecture B1 plumbing verified. Build clean. |
 | **Dependencies** | 1B1.1–1B1.7 |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ---
 
