@@ -1,6 +1,8 @@
-import { injectable } from '@theia/core/shared/inversify';
+import { injectable, inject } from '@theia/core/shared/inversify';
 import { ChatAgent, ChatAgentLocation } from '@theia/ai-chat/lib/common/chat-agents';
 import { MutableChatRequestModel, TextChatResponseContentImpl } from '@theia/ai-chat/lib/common/chat-model';
+import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
+import { MessagePart } from 'openspace-core/lib/common/opencode-protocol';
 
 @injectable()
 export class OpenspaceChatAgent implements ChatAgent {
@@ -16,20 +18,25 @@ export class OpenspaceChatAgent implements ChatAgent {
   readonly agentSpecificVariables = [];
   readonly functions: string[] = [];
 
+  @inject(SessionService)
+  private sessionService!: SessionService;
+
   async invoke(request: MutableChatRequestModel): Promise<void> {
-    // Get the last user message
+    // Extract text
     let userMessage = request.request?.text || '';
-    
-    // Strip @agent mention if present
     userMessage = userMessage.replace(/^@\w+\s*/i, '').trim();
     
-    // Create echo response
-    const responseContent = new TextChatResponseContentImpl(`Echo: ${userMessage}`);
+    // Send via SessionService
+    const parts: MessagePart[] = [{ type: 'text', text: userMessage }];
+    await this.sessionService.sendMessage(parts);
     
-    // Add the response to the request (response.response gets the ChatResponseImpl)
-    request.response.response.addContent(responseContent);
-    
-    // Mark response as complete
-    request.response.complete();
+    // Subscribe to streaming updates
+    const disposable = this.sessionService.onMessageStreaming((update: StreamingUpdate) => {
+      request.response.response.addContent(new TextChatResponseContentImpl(update.delta));
+      if (update.isDone) {
+        request.response.complete();
+        disposable.dispose();
+      }
+    });
   }
 }

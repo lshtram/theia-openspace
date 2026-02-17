@@ -5,7 +5,7 @@ import { OpenCodeService, OpenCodeClient, openCodeServicePath } from '../common/
 import { OpenCodeProxy, OpenCodeServerUrl } from './opencode-proxy';
 import { OpenSpaceHub } from './hub';
 
-const DEFAULT_OPENCODE_URL = 'http://localhost:8080';
+const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || 'http://localhost:7890';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
   // Bind the OpenCode server URL
@@ -22,13 +22,6 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
       client => {
         const service = ctx.container.get<OpenCodeService>(OpenCodeService);
         service.setClient(client);
-        
-        // CRITICAL: Register disposal hook to clean up SSE connection
-        // when frontend disconnects (tab close, reload, etc.)
-        client.onDidCloseConnection(() => {
-          service.setClient(undefined);
-        });
-        
         return service;
       }
     )

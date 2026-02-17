@@ -19,7 +19,7 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
-import { Message, MessagePart, Session } from 'openspace-core/lib/common/opencode-protocol';
+import { Message, MessagePart, Session, OpenCodeService, Provider } from 'openspace-core/lib/common/opencode-protocol';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -31,6 +31,9 @@ export class ChatWidget extends ReactWidget {
 
     @inject(SessionService)
     protected readonly sessionService!: SessionService;
+
+    @inject(OpenCodeService)
+    protected readonly openCodeService!: OpenCodeService;
 
     constructor() {
         super();
@@ -48,24 +51,26 @@ export class ChatWidget extends ReactWidget {
     }
 
     protected render(): React.ReactNode {
-        return <ChatComponent sessionService={this.sessionService} />;
+        return <ChatComponent sessionService={this.sessionService} openCodeService={this.openCodeService} />;
     }
 }
 
 interface ChatComponentProps {
     sessionService: SessionService;
+    openCodeService: OpenCodeService;
 }
 
 /**
  * React component for chat interface.
  */
-const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService }) => {
+const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
     const [streamingData, setStreamingData] = React.useState<Map<string, string>>(new Map());
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [inputValue, setInputValue] = React.useState('');
+    const [providerInfo, setProviderInfo] = React.useState<Provider | undefined>(undefined);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
@@ -127,6 +132,23 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService }) => {
             disposablesRef.current = [];
         };
     }, [sessionService, loadSessions]);
+
+    // Load provider info when session changes
+    React.useEffect(() => {
+        if (sessionService.activeSession) {
+            openCodeService.getProvider()
+                .then(provider => {
+                    setProviderInfo(provider);
+                    console.debug('[ModelDisplay] Provider loaded:', provider);
+                })
+                .catch(err => {
+                    console.debug('[ModelDisplay] Failed to load provider:', err);
+                    setProviderInfo(undefined);
+                });
+        } else {
+            setProviderInfo(undefined);
+        }
+    }, [sessionService.activeSession, openCodeService]);
 
     // Auto-scroll to bottom on new messages
     React.useEffect(() => {
@@ -216,7 +238,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService }) => {
 
     // Render message text from parts
     const renderMessageText = (message: Message): string => {
-        return message.parts
+        return (message.parts || [])
             .filter(part => part.type === 'text')
             .map(part => (part as { text: string }).text)
             .join('');
@@ -292,16 +314,40 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService }) => {
         );
     };
 
+    // Model/Provider Display component
+    const ModelProviderDisplay: React.FC = () => {
+        if (!providerInfo) {
+            return null;
+        }
+
+        return (
+            <div className="model-provider-status">
+                <span className="model-provider-status-icon">🤖</span>
+                <span className="model-provider-status-text">
+                    {providerInfo.name} {providerInfo.model}
+                </span>
+            </div>
+        );
+    };
+
     return (
         <div className="chat-container">
             {!hasActiveSession ? (
                 <div className="chat-no-session">
                     <p>No active session</p>
                     <p className="chat-hint">Create or select a session to start chatting</p>
+                    <button 
+                        type="button"
+                        className="chat-create-session-button"
+                        onClick={handleNewSession}
+                    >
+                        + New Session
+                    </button>
                 </div>
             ) : (
                 <div className="chat-active">
                     <SessionHeader />
+                    <ModelProviderDisplay />
                     <div className="chat-messages">{messages.length === 0 ? (
                             <div className="chat-empty">
                                 <p>No messages yet</p>

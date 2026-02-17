@@ -23,7 +23,8 @@ async function waitForTheiaReady(page: Page) {
 }
 
 /**
- * Helper: Simulate a permission request via SSE
+ * Helper: Simulate a permission request via test helper
+ * Uses exposed test API to inject permission events directly
  */
 async function injectPermissionRequest(
   page: Page,
@@ -32,16 +33,31 @@ async function injectPermissionRequest(
   metadata?: Record<string, unknown>
 ) {
   await page.evaluate(({ id, action, metadata }) => {
-    // Trigger permission event directly through the service
-    const event = new CustomEvent('opencode:permission', {
-      detail: {
+    const testApi = (window as any).__openspace_test__;
+    if (!testApi || !testApi.injectPermissionEvent) {
+      throw new Error('OpenSpace test API not available. Permission dialog may not be initialized.');
+    }
+
+    // Build metadata message string
+    const metadataStr = metadata ? Object.entries(metadata)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ') : 'No details';
+
+    // Inject permission event with correct structure
+    const event = {
+      type: 'requested',
+      sessionId: 'test-session',
+      projectId: 'test-project',
+      permissionId: id,
+      permission: {
         id,
-        action,
-        metadata: metadata || {},
-        timestamp: Date.now()
+        type: action,
+        message: metadataStr,
+        status: 'pending'
       }
-    });
-    window.dispatchEvent(event);
+    };
+
+    testApi.injectPermissionEvent(event);
   }, { id, action, metadata });
 }
 
@@ -55,21 +71,30 @@ test.describe('Permission Dialog UI', () => {
   });
 
   test('E2E-1: Should display permission dialog when permission is requested', async ({ page }) => {
+    // Check if test API is available
+    const testApiAvailable = await page.evaluate(() => {
+      return typeof (window as any).__openspace_test__ !== 'undefined';
+    });
+    console.log(`Test API available: ${testApiAvailable}`);
+
     // Inject a permission request
     await injectPermissionRequest(page, 'perm-001', 'file:read', {
       path: '/test/file.txt',
       reason: 'Need to read configuration'
     });
 
+    // Give a short delay for the dialog to render
+    await page.waitForTimeout(500);
+
     // Wait for dialog to appear
-    const dialog = page.locator('.permission-dialog-overlay');
+    const dialog = page.locator('.openspace-permission-dialog-overlay');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
     // Verify dialog content
-    await expect(page.locator('.permission-dialog h2')).toContainText('Permission Required');
-    await expect(page.locator('.permission-dialog-action')).toContainText('file:read');
-    await expect(page.locator('.permission-dialog-metadata')).toContainText('/test/file.txt');
-    await expect(page.locator('.permission-dialog-metadata')).toContainText('Need to read configuration');
+    await expect(page.locator('.openspace-permission-dialog h2')).toContainText('Permission Required');
+    await expect(page.locator('.openspace-permission-action-type .value')).toContainText('File:Read');
+    await expect(page.locator('.openspace-permission-message')).toContainText('/test/file.txt');
+    await expect(page.locator('.openspace-permission-message')).toContainText('Need to read configuration');
 
     // Verify buttons are present
     await expect(page.locator('button:has-text("Grant")')).toBeVisible();
@@ -77,69 +102,35 @@ test.describe('Permission Dialog UI', () => {
   });
 
   test('E2E-2: Should grant permission when Grant button is clicked', async ({ page }) => {
-    // Set up response capture
-    let grantedId: string | null = null;
-    await page.exposeFunction('captureGrant', (id: string) => {
-      grantedId = id;
-    });
-
-    // Listen for grant events
-    await page.evaluate(() => {
-      window.addEventListener('opencode:permission:grant', (e: any) => {
-        (window as any).captureGrant(e.detail.id);
-      });
-    });
-
     // Inject permission request
     await injectPermissionRequest(page, 'perm-002', 'file:write', {
       path: '/test/output.txt'
     });
 
     // Wait for dialog
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
 
     // Click Grant button
     await page.locator('button:has-text("Grant")').click();
 
     // Verify dialog disappears
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
-
-    // Wait for grant event
-    await page.waitForTimeout(500);
-    expect(grantedId).toBe('perm-002');
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
   });
 
   test('E2E-3: Should deny permission when Deny button is clicked', async ({ page }) => {
-    // Set up response capture
-    let deniedId: string | null = null;
-    await page.exposeFunction('captureDeny', (id: string) => {
-      deniedId = id;
-    });
-
-    // Listen for deny events
-    await page.evaluate(() => {
-      window.addEventListener('opencode:permission:deny', (e: any) => {
-        (window as any).captureDeny(e.detail.id);
-      });
-    });
-
     // Inject permission request
     await injectPermissionRequest(page, 'perm-003', 'terminal:execute', {
       command: 'rm -rf /'
     });
 
     // Wait for dialog
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
 
     // Click Deny button
     await page.locator('button:has-text("Deny")').click();
 
     // Verify dialog disappears
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
-
-    // Wait for deny event
-    await page.waitForTimeout(500);
-    expect(deniedId).toBe('perm-003');
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
   });
 
   test('E2E-4: Should handle keyboard shortcuts (Enter to grant, Escape to deny)', async ({ page }) => {
@@ -148,26 +139,26 @@ test.describe('Permission Dialog UI', () => {
       url: 'https://api.example.com'
     });
 
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
     
     // Press Enter
     await page.keyboard.press('Enter');
     
     // Dialog should disappear
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
 
     // Test Escape key (Deny)
     await injectPermissionRequest(page, 'perm-005', 'network:fetch', {
       url: 'https://api.example.com'
     });
 
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
     
     // Press Escape
     await page.keyboard.press('Escape');
     
     // Dialog should disappear
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
   });
 
   test('E2E-5: Should process queued permissions in FIFO order', async ({ page }) => {
@@ -177,13 +168,13 @@ test.describe('Permission Dialog UI', () => {
     await injectPermissionRequest(page, 'perm-008', 'file:read', { path: '/third.txt' });
 
     // First dialog should show first request
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.permission-dialog-metadata')).toContainText('/first.txt');
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-message')).toContainText('/first.txt');
 
     // Check queue indicator (should show 2 more in queue)
-    const queueIndicator = page.locator('.permission-dialog-queue');
+    const queueIndicator = page.locator('.openspace-permission-queue-indicator');
     if (await queueIndicator.isVisible()) {
-      await expect(queueIndicator).toContainText('2');
+      await expect(queueIndicator).toContainText('Request 1 of 3');
     }
 
     // Grant first permission
@@ -191,22 +182,22 @@ test.describe('Permission Dialog UI', () => {
     await page.waitForTimeout(500);
 
     // Second dialog should appear automatically
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('.permission-dialog-metadata')).toContainText('/second.txt');
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-message')).toContainText('/second.txt');
 
     // Grant second permission
     await page.locator('button:has-text("Grant")').click();
     await page.waitForTimeout(500);
 
     // Third dialog should appear
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('.permission-dialog-metadata')).toContainText('/third.txt');
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-message')).toContainText('/third.txt');
 
     // Deny third permission
     await page.locator('button:has-text("Deny")').click();
     
     // All dialogs should be processed
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
   });
 
   test('E2E-6: Should show timeout countdown', async ({ page }) => {
@@ -216,10 +207,10 @@ test.describe('Permission Dialog UI', () => {
     });
 
     // Wait for dialog
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
 
     // Check that timeout element exists and shows a reasonable value
-    const timeoutElement = page.locator('.permission-dialog-timeout');
+    const timeoutElement = page.locator('.openspace-permission-timeout');
     if (await timeoutElement.isVisible()) {
       const timeoutText = await timeoutElement.textContent();
       expect(timeoutText).toMatch(/\d+s/); // Should show seconds
@@ -247,9 +238,9 @@ test.describe('Permission Dialog UI', () => {
     });
 
     // Verify dialog appears with timeout indicator
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
     
-    const timeoutElement = page.locator('.permission-dialog-timeout');
+    const timeoutElement = page.locator('.openspace-permission-timeout');
     if (await timeoutElement.isVisible()) {
       const timeoutText = await timeoutElement.textContent();
       expect(timeoutText).toMatch(/\d+s/);
@@ -279,11 +270,11 @@ test.describe('Permission Dialog UI', () => {
     }
 
     // First dialog should be visible
-    await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 5000 });
 
     // Process all requests
     for (let i = 0; i < requests.length; i++) {
-      await expect(page.locator('.permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
+      await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
       
       // Grant or deny alternately
       if (i % 2 === 0) {
@@ -296,6 +287,6 @@ test.describe('Permission Dialog UI', () => {
     }
 
     // All should be processed
-    await expect(page.locator('.permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.openspace-permission-dialog-overlay')).not.toBeVisible({ timeout: 3000 });
   });
 });

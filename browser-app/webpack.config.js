@@ -15,6 +15,25 @@ configs[0].module.rules.push({
     loader: require.resolve('@theia/application-manager/lib/expose-loader')
 }); */
 
+// Suppress known harmless warnings from Monaco Editor
+configs.forEach(config => {
+    config.ignoreWarnings = [
+        // Suppress Monaco Editor worker dynamic require warnings
+        /Critical dependency: the request of a dependency is an expression/,
+        // Suppress other known safe warnings
+        /Can't resolve 'node:.*'/,
+    ];
+    
+    // Reduce webpack stats output verbosity
+    config.stats = {
+        ...config.stats,
+        warnings: false,
+        warningsFilter: [
+            /Critical dependency: the request of a dependency is an expression/,
+        ],
+    };
+});
+
 module.exports = [
     ...configs,
     nodeConfig.config

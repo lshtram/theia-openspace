@@ -18,8 +18,8 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { Disposable } from '@theia/core';
-import * as React from 'react';
-import * as ReactDOM from 'react-dom/client';
+import * as React from '@theia/core/shared/react';
+import { createRoot } from '@theia/core/shared/react-dom/client';
 import { OpenCodeService } from '../common/opencode-protocol';
 import { OpenCodeSyncService } from './opencode-sync-service';
 import { PermissionDialogManager } from './permission-dialog-manager';
@@ -50,8 +50,8 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
 
     private manager: PermissionDialogManager | null = null;
     private dialogContainer: HTMLElement | null = null;
-    private reactRoot: ReactDOM.Root | null = null;
     private permissionEventDisposable: Disposable | null = null;
+    private root: any | null = null;
 
     @postConstruct()
     protected init(): void {
@@ -71,6 +71,9 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
 
         // Render dialog component into DOM
         this.renderDialog(app);
+
+        // Expose test helper (E2E test support)
+        this.exposeTestHelper();
 
         console.debug('[PermissionDialogContribution] Permission dialog system initialized');
     }
@@ -108,12 +111,35 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
         this.dialogContainer.id = 'openspace-permission-dialog-root';
         document.body.appendChild(this.dialogContainer);
 
-        // Render React component (React 18 API)
+        // Render React component
         const element = React.createElement(PermissionDialog, { manager: this.manager });
-        this.reactRoot = ReactDOM.createRoot(this.dialogContainer);
-        this.reactRoot.render(element);
+        this.root = createRoot(this.dialogContainer);
+        this.root.render(element);
 
         console.debug('[PermissionDialogContribution] Dialog component rendered');
+    }
+
+    /**
+     * Expose test helper for E2E tests.
+     * Allows tests to inject permission events directly.
+     */
+    private exposeTestHelper(): void {
+        (window as any).__openspace_test__ = {
+            injectPermissionEvent: (event: any) => {
+                if (this.manager) {
+                    this.manager.handlePermissionEvent(event);
+                }
+            }
+        };
+        console.debug('[PermissionDialogContribution] Test helper exposed on window.__openspace_test__');
+    }
+
+    /**
+     * Called when frontend application stops.
+     * Delegates to dispose for cleanup.
+     */
+    onStop(): void {
+        this.dispose();
     }
 
     /**
@@ -126,12 +152,11 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
             this.manager = null;
         }
 
-        // Unmount React component (React 18 API)
-        if (this.reactRoot) {
-            this.reactRoot.unmount();
-            this.reactRoot = null;
+        // Unmount React component
+        if (this.root) {
+            this.root.unmount();
+            this.root = null;
         }
-
         if (this.dialogContainer) {
             document.body.removeChild(this.dialogContainer);
             this.dialogContainer = null;

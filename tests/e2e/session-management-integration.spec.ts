@@ -65,8 +65,8 @@ test('Scenario 2: Backend API responds - Hub manifest endpoint', async () => {
   
   const apiContext = await request.newContext();
   
-  // Test: Hub manifest endpoint is accessible
-  const response = await apiContext.post(`${BASE_URL}/manifest`, {
+  // Test: Hub manifest endpoint is accessible (NEW ROUTE: /openspace/manifest)
+  const response = await apiContext.post(`${BASE_URL}/openspace/manifest`, {
     data: {
       commands: []
     },
@@ -75,7 +75,7 @@ test('Scenario 2: Backend API responds - Hub manifest endpoint', async () => {
   
   // We expect either success or a specific error (not 404)
   expect(response.status()).not.toBe(404);
-  console.log(`✓ Hub /manifest endpoint exists (status: ${response.status()})`);
+  console.log(`✓ Hub /openspace/manifest endpoint exists (status: ${response.status()})`);
   
   if (response.ok()) {
     console.log('✓ Manifest endpoint returned 200 - accepting command manifests');
@@ -247,7 +247,7 @@ test('Comprehensive: All core APIs are accessible', async () => {
   const endpoints = [
     { method: 'GET', url: '/', name: 'Application root' },
     { method: 'GET', url: '/bundle.js', name: 'JavaScript bundle' },
-    { method: 'POST', url: '/manifest', name: 'Hub manifest', data: { commands: [] } },
+    { method: 'POST', url: '/openspace/manifest', name: 'Hub manifest', data: { commands: [] } },
     { method: 'GET', url: '/openspace/instructions', name: 'Hub instructions' },
   ];
   

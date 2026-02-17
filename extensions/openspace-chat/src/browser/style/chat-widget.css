@@ -8,6 +8,26 @@
     color: var(--theia-editor-foreground);
 }
 
+/* Model/Provider Status Display */
+.openspace-chat-widget .model-provider-status {
+    padding: 4px 12px;
+    font-size: 0.85em;
+    color: var(--theia-descriptionForeground);
+    background-color: var(--theia-editor-background);
+    border-bottom: 1px solid var(--theia-panel-border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.openspace-chat-widget .model-provider-status-icon {
+    font-size: 14px;
+}
+
+.openspace-chat-widget .model-provider-status-text {
+    font-weight: 400;
+}
+
 /* Session Header */
 .openspace-chat-widget .session-header {
     display: flex;

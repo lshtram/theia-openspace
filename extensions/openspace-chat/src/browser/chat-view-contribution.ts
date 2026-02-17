@@ -17,15 +17,19 @@
 import { injectable } from '@theia/core/shared/inversify';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
-import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { ChatWidget } from './chat-widget';
+
+/**
+ * Command ID for toggling the OpenSpace chat widget.
+ */
+export const OPENSPACE_CHAT_TOGGLE_COMMAND_ID = 'openspace-chat:toggle';
 
 /**
  * View contribution for the Chat widget.
  * Registers the widget in the left panel and opens it on startup.
  */
 @injectable()
-export class ChatViewContribution extends AbstractViewContribution<ChatWidget> implements FrontendApplicationContribution {
+export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
 
     constructor() {
         super({
@@ -35,7 +39,7 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> i
                 area: 'left',
                 rank: 100
             },
-            toggleCommandId: 'openspace-chat:toggle'
+            toggleCommandId: OPENSPACE_CHAT_TOGGLE_COMMAND_ID
         });
     }
 
@@ -44,7 +48,8 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> i
      * Opens the chat widget by default.
      */
     async onStart(app: FrontendApplication): Promise<void> {
+        console.debug('[ChatViewContribution] onStart called, opening chat widget');
         // Open chat widget on startup
-        this.openView({ activate: false, reveal: true });
+        await this.openView({ activate: false, reveal: true });
     }
 }

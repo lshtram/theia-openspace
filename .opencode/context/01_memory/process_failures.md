@@ -1,0 +1,6 @@
+# Process Failures Log
+
+| Date | Agent | Failure | Proposed Mechanism |
+|---|---|---|---|
+| 2026-02-17 | oracle_e4b1 | Skipped re-validation after Builder fixes. Presented code to user without running Janitor → CodeReviewer → Librarian loop after Builder applied 2 critical fixes (onStop, createRoot). | **Mechanism 1**: Update Oracle.md Phase 4A/4B to state: "If Janitor reports FAIL and Builder fixes issues, loop back to Janitor validation (do NOT proceed to CodeReviewer until Janitor PASS)". **Mechanism 2**: Add validation checkpoint: After ANY Builder fix, Oracle MUST re-run Janitor before proceeding. **Mechanism 3**: Add to validation contract: "Full test suite (lint, typecheck, unit, E2E) must pass before Janitor approval". |
+| 2026-02-17 | oracle_e4b1 | E2E tests passed in prior session but app had system hang (infinite loading screen). E2E did not catch the browser freeze caused by circular DI and proxy-factory crash. | **Mechanism 4**: Update E2E test requirements: MUST include browser responsiveness checks (e.g., "wait for main menu to be clickable within 30s", "verify no infinite spinners", "check console for error loops"). **Mechanism 5**: Add E2E smoke test: "App loads → main UI elements render → can open file → can type in editor → can interact with chat" — if ANY step hangs for >30s, test FAILS. |

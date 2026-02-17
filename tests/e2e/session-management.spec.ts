@@ -248,7 +248,17 @@ test('Scenario 2: Create new session', async ({ page }) => {
   await waitForTheiaLoad(page);
   await openChatWidget(page);
   
-  // Find and click the "+ New" button
+  // First check if we're in "no session" state - if so, create a session first
+  const noSessionState = page.locator('.chat-no-session');
+  if (await noSessionState.isVisible().catch(() => false)) {
+    console.log('No active session - creating one');
+    const createButton = page.locator('.chat-create-session-button');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await page.waitForTimeout(1000);
+  }
+  
+  // Now the session should be active - find and click the "+ New" button
   const newButton = page.locator('.new-session-button');
   await expect(newButton).toBeVisible();
   console.log('✓ New session button found');
@@ -283,7 +293,17 @@ test('Scenario 3: Send message with mocked response', async ({ page }) => {
   await waitForTheiaLoad(page);
   await openChatWidget(page);
   
-  // Create a session first
+  // First check if we're in "no session" state - if so, create a session first
+  const noSessionState = page.locator('.chat-no-session');
+  if (await noSessionState.isVisible().catch(() => false)) {
+    console.log('No active session - creating one');
+    const createButton = page.locator('.chat-create-session-button');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await page.waitForTimeout(1000);
+  }
+  
+  // Create a session using the new session button
   await page.locator('.new-session-button').click();
   await page.waitForTimeout(1000);
   
@@ -330,6 +350,16 @@ test('Scenario 4: Switch between sessions', async ({ page }) => {
   await page.goto('/');
   await waitForTheiaLoad(page);
   await openChatWidget(page);
+  
+  // First check if we're in "no session" state - if so, create a session first
+  const noSessionState = page.locator('.chat-no-session');
+  if (await noSessionState.isVisible().catch(() => false)) {
+    console.log('No active session - creating one');
+    const createButton = page.locator('.chat-create-session-button');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await page.waitForTimeout(1000);
+  }
   
   // Create first session
   await page.locator('.new-session-button').click();
@@ -388,6 +418,16 @@ test('Scenario 5: Delete session with confirmation', async ({ page }) => {
   await page.goto('/');
   await waitForTheiaLoad(page);
   await openChatWidget(page);
+  
+  // First check if we're in "no session" state - if so, create a session first
+  const noSessionState = page.locator('.chat-no-session');
+  if (await noSessionState.isVisible().catch(() => false)) {
+    console.log('No active session - creating one');
+    const createButton = page.locator('.chat-create-session-button');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await page.waitForTimeout(1000);
+  }
   
   // Create a session to delete
   await page.locator('.new-session-button').click();
@@ -458,8 +498,8 @@ test('Bonus: Handle empty session list gracefully', async ({ page }) => {
   await expect(noSessionMessage).toBeVisible();
   console.log('✓ No session message displayed');
   
-  // Verify new session button is available
-  const newButton = page.locator('.new-session-button');
+  // In empty state, the button is .chat-create-session-button (not .new-session-button)
+  const newButton = page.locator('.chat-create-session-button');
   await expect(newButton).toBeVisible();
   console.log('✓ New session button available in empty state');
   

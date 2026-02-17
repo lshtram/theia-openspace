@@ -16,7 +16,6 @@
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ILogger } from '@theia/core/lib/common/logger';
-import { RequestService, RequestContext, RequestOptions } from '@theia/request';
 import * as http from 'http';
 import * as https from 'https';
 import { createParser, ParsedEvent, ParseEvent } from 'eventsource-parser';
@@ -27,6 +26,8 @@ import {
     Session,
     Message,
     MessageWithParts,
+    MessagePart,
+    TextMessagePart,
     FileStatus,
     FileContent,
     Agent,
@@ -43,11 +44,12 @@ import {
     FileEvent,
     PermissionEvent
 } from '../common/session-protocol';
+import { AgentCommand } from '../common/command-manifest';
 
 /**
  * Default OpenCode server URL.
  */
-export const DEFAULT_OPENCODE_URL = 'http://localhost:8080';
+export const DEFAULT_OPENCODE_URL = 'http://localhost:7890';
 
 /**
  * Symbol for configuring the OpenCode server URL.
@@ -63,9 +65,6 @@ export class OpenCodeProxy implements OpenCodeService {
 
     @inject(ILogger)
     protected readonly logger!: ILogger;
-
-    @inject(RequestService)
-    protected readonly requestService!: RequestService;
 
     @inject(OpenCodeServerUrl)
     protected readonly serverUrl!: string;
@@ -142,25 +141,55 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
+     * Make a raw HTTP/HTTPS request and return the response body as a string.
+     */
+    protected rawRequest(url: string, method: string, headers: Record<string, string>, body?: string): Promise<{ statusCode: number; body: string }> {
+        return new Promise((resolve, reject) => {
+            const parsedUrl = new URL(url);
+            const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+            const req = protocol.request({
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port,
+                path: parsedUrl.pathname + parsedUrl.search,
+                method,
+                headers
+            }, (res: http.IncomingMessage) => {
+                const chunks: Buffer[] = [];
+                res.on('data', (chunk: Buffer) => chunks.push(chunk));
+                res.on('end', () => {
+                    const responseBody = Buffer.concat(chunks).toString('utf-8');
+                    resolve({ statusCode: res.statusCode ?? 0, body: responseBody });
+                });
+                res.on('error', reject);
+            });
+
+            req.on('error', reject);
+
+            if (body !== undefined) {
+                req.write(body);
+            }
+            req.end();
+        });
+    }
+
+    /**
      * Make an HTTP request and return the parsed JSON response.
      */
-    protected async requestJson<T>(options: RequestOptions): Promise<T> {
-        const context = await this.requestService.request({
-            ...options,
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
+    protected async requestJson<T>(options: { url: string; type: string; data?: string; headers?: Record<string, string> }): Promise<T> {
+        const headers: Record<string, string> = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
 
-        if (!RequestContext.isSuccess(context)) {
-            const statusCode = context.res.statusCode ?? 'unknown';
-            const errorBody = RequestContext.asText(context);
-            throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${errorBody}`);
+        const { statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data);
+
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${body}`);
         }
 
-        return RequestContext.asJson<T>(context);
+        return JSON.parse(body) as T;
     }
 
     /**
@@ -191,11 +220,11 @@ export class OpenCodeProxy implements OpenCodeService {
     protected async delete(endpoint: string, queryParams?: Record<string, string | undefined>): Promise<void> {
         const url = this.buildUrl(endpoint, queryParams);
         this.logger.debug(`[OpenCodeProxy] DELETE ${url}`);
-        const context = await this.requestService.request({ url, type: 'DELETE' });
-        if (!RequestContext.isSuccess(context)) {
-            const statusCode = context.res.statusCode ?? 'unknown';
-            const errorBody = RequestContext.asText(context);
-            throw new Error(`OpenCodeProxy: HTTP ${statusCode} - DELETE failed: ${errorBody}`);
+        const { statusCode, body } = await this.rawRequest(url, 'DELETE', {
+            'Accept': 'application/json'
+        });
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new Error(`OpenCodeProxy: HTTP ${statusCode} - DELETE failed: ${body}`);
         }
     }
 
@@ -215,95 +244,113 @@ export class OpenCodeProxy implements OpenCodeService {
     // Session Methods
     // =========================================================================
 
-    async getSessions(projectId: string): Promise<Session[]> {
-        return this.get<Session[]>(`/project/${encodeURIComponent(projectId)}/session`);
+    async getSessions(_projectId: string): Promise<Session[]> {
+        // OpenCode API: GET /session - list all sessions
+        return this.get<Session[]>(`/session`);
     }
 
-    async getSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.get<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}`);
+    async getSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: GET /session/:id
+        return this.get<Session>(`/session/${encodeURIComponent(sessionId)}`);
     }
 
-    async createSession(projectId: string, session: Partial<Session>): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session`, session);
+    async createSession(_projectId: string, session: Partial<Session>): Promise<Session> {
+        // OpenCode API: POST /session - body: { parentID?, title? }
+        return this.post<Session>(`/session`, session);
     }
 
-    async deleteSession(projectId: string, sessionId: string): Promise<void> {
-        return this.delete(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}`);
+    async deleteSession(_projectId: string, sessionId: string): Promise<void> {
+        // OpenCode API: DELETE /session/:id
+        return this.delete(`/session/${encodeURIComponent(sessionId)}`);
     }
 
-    async initSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/init`);
+    async initSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/init
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/init`, {});
     }
 
-    async abortSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/abort`);
+    async abortSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/abort
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/abort`, {});
     }
 
-    async shareSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/share`);
+    async shareSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/share
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/share`, {});
     }
 
-    async unshareSession(projectId: string, sessionId: string): Promise<Session> {
-        await this.delete(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/share`);
+    async unshareSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: DELETE /session/:id/share
+        await this.delete(`/session/${encodeURIComponent(sessionId)}/share`);
         // Fetch actual session data after unsharing
-        return this.getSession(projectId, sessionId);
+        return this.getSession(_projectId, sessionId);
     }
 
-    async compactSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/compact`);
+    async compactSession(_projectId: string, sessionId: string): Promise<Session> {
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/compact`, {});
     }
 
-    async revertSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/revert`);
+    async revertSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/revert
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/revert`, {});
     }
 
-    async unrevertSession(projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/unrevert`);
+    async unrevertSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/unrevert
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/unrevert`, {});
     }
 
-    async grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session> {
-        return this.post<Session>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/permission/${encodeURIComponent(permissionId)}`);
+    async grantPermission(_projectId: string, sessionId: string, permissionId: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/permissions/:permissionID
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(permissionId)}`, {});
     }
 
     // =========================================================================
     // Message Methods
     // =========================================================================
 
-    async getMessages(projectId: string, sessionId: string): Promise<MessageWithParts[]> {
-        return this.get<MessageWithParts[]>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/message`);
+    async getMessages(_projectId: string, sessionId: string): Promise<MessageWithParts[]> {
+        // OpenCode API: GET /session/:id/message
+        return this.get<MessageWithParts[]>(`/session/${encodeURIComponent(sessionId)}/message`);
     }
 
-    async getMessage(projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts> {
-        return this.get<MessageWithParts>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`);
+    async getMessage(_projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts> {
+        // OpenCode API: GET /session/:id/message/:messageID
+        return this.get<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`);
     }
 
-    async createMessage(projectId: string, sessionId: string, message: Partial<Message>): Promise<MessageWithParts> {
-        return this.post<MessageWithParts>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/message`, message);
+    async createMessage(_projectId: string, sessionId: string, message: Partial<Message>): Promise<MessageWithParts> {
+        // OpenCode API: POST /session/:id/message
+        return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, message);
     }
 
     // =========================================================================
     // File Methods
     // =========================================================================
 
-    async findFiles(projectId: string, sessionId: string): Promise<string[]> {
-        return this.get<string[]>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/find/file`);
+    async findFiles(_projectId: string, sessionId: string): Promise<string[]> {
+        // OpenCode API: GET /session/:id/find/file
+        return this.get<string[]>(`/session/${encodeURIComponent(sessionId)}/find/file`);
     }
 
-    async getFile(projectId: string, sessionId: string): Promise<FileContent> {
-        return this.get<FileContent>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/file`);
+    async getFile(_projectId: string, sessionId: string): Promise<FileContent> {
+        // OpenCode API: GET /session/:id/file
+        return this.get<FileContent>(`/session/${encodeURIComponent(sessionId)}/file`);
     }
 
-    async getFileStatus(projectId: string, sessionId: string): Promise<FileStatus[]> {
-        return this.get<FileStatus[]>(`/project/${encodeURIComponent(projectId)}/session/${encodeURIComponent(sessionId)}/file/status`);
+    async getFileStatus(_projectId: string, sessionId: string): Promise<FileStatus[]> {
+        // OpenCode API: GET /session/:id/file/status
+        return this.get<FileStatus[]>(`/session/${encodeURIComponent(sessionId)}/file/status`);
     }
 
     // =========================================================================
     // Agent Methods
     // =========================================================================
 
-    async getAgent(projectId: string, directory?: string): Promise<Agent> {
+    async getAgent(_projectId: string, directory?: string): Promise<Agent> {
+        // OpenCode API: GET /agent?directory=...
         const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
-        return this.get<Agent>(`/project/${encodeURIComponent(projectId)}/agent`, queryParams);
+        return this.get<Agent>('/agent', queryParams);
     }
 
     // =========================================================================
@@ -381,7 +428,8 @@ export class OpenCodeProxy implements OpenCodeService {
             return;
         }
 
-        const endpoint = `/project/${encodeURIComponent(this.currentProjectId)}/session/${encodeURIComponent(this.currentSessionId)}/events`;
+        // OpenCode API: GET /session/:id/events (SSE)
+        const endpoint = `/session/${encodeURIComponent(this.currentSessionId)}/events`;
         const url = this.buildUrl(endpoint);
         const parsedUrl = new URL(url);
 
@@ -598,7 +646,8 @@ export class OpenCodeProxy implements OpenCodeService {
                 return;
             }
 
-            const notification: MessageNotification = {
+            // Intercept stream to extract agent commands before forwarding
+            let notification: MessageNotification = {
                 type,
                 sessionId: rawData.sessionId,
                 projectId: rawData.projectId,
@@ -606,11 +655,185 @@ export class OpenCodeProxy implements OpenCodeService {
                 data: rawData.data as MessageWithParts | undefined
             };
 
+            // If message has parts, intercept them for agent commands
+            if (notification.data && notification.data.parts) {
+                const { cleanParts, commands } = this.interceptStream(notification.data.parts);
+                
+                // Dispatch extracted commands via RPC callback
+                for (const command of commands) {
+                    try {
+                        this._client.onAgentCommand(command);
+                        this.logger.debug(`[OpenCodeProxy] Dispatched agent command: ${command.cmd}`);
+                    } catch (error) {
+                        this.logger.error(`[OpenCodeProxy] Error dispatching command: ${error}`);
+                    }
+                }
+                
+                // Update notification with cleaned parts (commands stripped)
+                notification = {
+                    ...notification,
+                    data: {
+                        ...notification.data,
+                        parts: cleanParts
+                    }
+                };
+            }
+
             this._client.onMessageEvent(notification);
             this.logger.debug(`[OpenCodeProxy] Forwarded message event: ${type}`);
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding message event: ${error}`);
         }
+    }
+
+    /**
+     * Intercept message stream to extract agent commands from %%OS{...}%% blocks.
+     * 
+     * Scans text parts for %%OS{...}%% blocks, extracts commands, and strips blocks from visible text.
+     * Uses a brace-counting state machine to correctly handle nested JSON objects.
+     * 
+     * @param parts Message parts from SSE event
+     * @returns Object with cleanParts (stripped text) and commands (extracted)
+     */
+    private interceptStream(parts: MessagePart[]): { cleanParts: MessagePart[], commands: AgentCommand[] } {
+        const commands: AgentCommand[] = [];
+        const cleanParts: MessagePart[] = [];
+
+        for (const part of parts) {
+            if (part.type !== 'text') {
+                cleanParts.push(part);
+                continue;
+            }
+
+            // Extract %%OS{...}%% blocks from text using state machine
+            const textPart = part as TextMessagePart;
+            const { commands: extractedCommands, cleanText } = this.extractAgentCommands(textPart.text);
+            
+            // Add extracted commands to result
+            commands.push(...extractedCommands);
+
+            // Add cleaned text part (only if non-empty)
+            if (cleanText) {
+                cleanParts.push({ type: 'text', text: cleanText });
+            }
+        }
+
+        return { cleanParts, commands };
+    }
+
+    /**
+     * Extract agent commands from text using brace-counting state machine.
+     * 
+     * This method correctly handles nested JSON objects by counting opening and closing braces
+     * instead of using a simple regex pattern. This prevents the regex issue where /%%OS(\{[^}]*\})%%/g
+     * would stop at the first `}` character, failing on nested objects like:
+     * {"cmd":"x","args":{"nested":"value"}}
+     * 
+     * @param text Input text potentially containing %%OS{...}%% command blocks
+     * @returns Object with extracted commands array and cleanText (text with command blocks removed)
+     */
+    private extractAgentCommands(text: string): { commands: AgentCommand[], cleanText: string } {
+        const commands: AgentCommand[] = [];
+        const cleanSegments: string[] = [];
+        
+        let pos = 0;
+        const marker = '%%OS{';
+        
+        while (pos < text.length) {
+            // Find next command marker
+            const markerIndex = text.indexOf(marker, pos);
+            
+            if (markerIndex === -1) {
+                // No more markers, append rest of text
+                cleanSegments.push(text.substring(pos));
+                break;
+            }
+            
+            // Append text before marker to clean segments
+            cleanSegments.push(text.substring(pos, markerIndex));
+            
+            // Start brace counting from the opening brace after %%OS
+            const jsonStartIndex = markerIndex + marker.length - 1; // -1 to include the {
+            let braceCount = 0;
+            let jsonEndIndex = -1;
+            let inString = false;
+            let escapeNext = false;
+            
+            // Count braces to find matching closing brace
+            for (let i = jsonStartIndex; i < text.length; i++) {
+                const char = text[i];
+                
+                // Handle string state (ignore braces inside strings)
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                
+                if (inString) {
+                    continue;
+                }
+                
+                // Count braces outside of strings
+                if (char === '{') {
+                    braceCount++;
+                } else if (char === '}') {
+                    braceCount--;
+                    
+                    // Found matching closing brace
+                    if (braceCount === 0) {
+                        jsonEndIndex = i;
+                        break;
+                    }
+                }
+            }
+            
+            // If we found a complete JSON block
+            if (jsonEndIndex !== -1) {
+                // Check if it's followed by %%
+                const potentialEndMarker = text.substring(jsonEndIndex + 1, jsonEndIndex + 3);
+                
+                if (potentialEndMarker === '%%') {
+                    // Extract JSON string (including braces)
+                    const jsonString = text.substring(jsonStartIndex, jsonEndIndex + 1);
+                    
+                    try {
+                        // Parse and validate command
+                        const command = JSON.parse(jsonString) as AgentCommand;
+                        commands.push(command);
+                        this.logger.debug(`[OpenCodeProxy] Extracted command: ${command.cmd || 'unknown'}`);
+                    } catch (error) {
+                        this.logger.warn(`[OpenCodeProxy] Malformed JSON in command block: ${jsonString}`, error);
+                        // Discard malformed block (don't show to user)
+                    }
+                    
+                    // Move position past the entire command block (including }%%)
+                    pos = jsonEndIndex + 3;
+                } else {
+                    // Malformed block (missing closing %%)
+                    this.logger.warn(`[OpenCodeProxy] Malformed command block (missing closing %%): ${text.substring(markerIndex, jsonEndIndex + 1)}`);
+                    // Skip the marker and continue
+                    pos = markerIndex + marker.length;
+                }
+            } else {
+                // Unclosed brace - malformed block
+                this.logger.warn(`[OpenCodeProxy] Malformed command block (unclosed braces): ${text.substring(markerIndex, Math.min(markerIndex + 100, text.length))}`);
+                // Skip the marker and continue
+                pos = markerIndex + marker.length;
+            }
+        }
+        
+        const cleanText = cleanSegments.join('');
+        return { commands, cleanText };
     }
 
     /**

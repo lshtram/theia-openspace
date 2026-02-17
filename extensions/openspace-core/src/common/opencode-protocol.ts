@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import { RpcServer } from '@theia/core/lib/common/messaging/proxy-factory';
+import { AgentCommand } from './command-manifest';
 
 /**
  * Path for the OpenCode service.
@@ -211,6 +212,7 @@ export interface OpenCodeClient {
     onMessageEvent(event: MessageNotification): void;
     onFileEvent(event: FileNotification): void;
     onPermissionEvent(event: PermissionNotification): void;
+    onAgentCommand(command: AgentCommand): void;
 }
 
 /**

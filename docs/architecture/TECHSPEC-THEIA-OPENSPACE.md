@@ -3,6 +3,7 @@ id: TECHSPEC-THEIA-OPENSPACE
 author: oracle_e3f7
 status: DRAFT
 date: 2026-02-16
+updated: 2026-02-17
 task_id: TheiOpenspaceArchitecture
 ---
 
@@ -34,99 +35,94 @@ Theia Openspace replaces the current opencode desktop/web client with a full IDE
 | Principle | Implication |
 |---|---|
 | **Theia-native** | Use Theia Extension APIs, DI, contribution points — don't fight the framework |
-| **Theia AI first** | Build on `@theia/ai-*` packages for chat, agents, tools, response rendering |
+| **Theia AI first** | Register `ChatAgent` in Theia AI for agent discoverability; use custom chat widget for full opencode feature support (Architecture B1 — see §2.1.1) |
 | **CommandRegistry as universal control plane** | Every OpenSpace action is a Theia command — agent, user, and keybindings all execute via `commandService.executeCommand()` |
 | **Modality surfaces as Widgets** | Presentations, whiteboards, editors are all Theia Widgets in the ApplicationShell |
 | **Automatic discovery** | New commands auto-register in the command manifest; the agent's system prompt regenerates from the live manifest — zero manual prompt engineering |
-| **Stream interceptor pattern** | Agent emits `%%OS{...}%%` blocks inline in its response; a stream interceptor strips them and dispatches to the Hub for execution — opencode stays unmodified |
+| **Stream interceptor pattern** | Agent emits `%%OS{...}%%` blocks inline in its response; stream interceptor in OpenCodeProxy strips them and dispatches to frontend via RPC callback — opencode stays unmodified |
 | **Compile-time extensions** | All custom code is Theia Extensions (not plugins) for full DI access |
 | **Opencode unmodified** | The only hook into opencode is its native `instructions` URL support — no forks, patches, or code changes to opencode |
-| **Hub as coordination layer** | A lightweight HTTP+SSE server caches command manifests, generates system prompts, and relays agent commands between the stream interceptor and the Theia frontend |
+| **RPC as the single transport** | All backend→frontend communication uses Theia's JSON-RPC channel (OpenCodeClient callbacks). No separate SSE relay between internal components. |
 
 ---
 
 ## 2. System Architecture
 
-### 2.1 High-Level Architecture
+### 2.1 High-Level Architecture (Architecture B1)
 
-The architecture has **five moving parts** and one config line:
+> **Architecture decision:** Architecture B1 — "Hybrid" approach. We register an `OpenspaceChatAgent` in Theia's AI agent registry for ecosystem integration (@mentions, config panel), but use a custom `ChatWidget` + `SessionService` for full opencode feature support (fork/revert/compact, permissions, multi-part prompts). See §15 for rationale and alternatives considered.
+
+The architecture has **four moving parts** and one config line:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          Theia Openspace Application                            │
-│                                                                                 │
-│  ┌───────────────────────────────────────────────────────────────────────────┐   │
-│  │                    Frontend (Browser/Electron)                            │   │
-│  │                                                                           │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────────┐               │   │
-│  │  │ Chat UI  │ │ Editor   │ │Presentation│ │  Whiteboard  │               │   │
-│  │  │ Widget   │ │(Monaco)  │ │  Widget    │ │   Widget     │               │   │
-│  │  └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬───────┘               │   │
-│  │       │             │             │              │                        │   │
-│  │  ┌────┴─────────────┴─────────────┴──────────────┴────────────────────┐  │   │
-│  │  │         ① Theia CommandRegistry (universal control plane)          │  │   │
-│  │  │   All OpenSpace actions registered as commands.                     │  │   │
-│  │  │   User keybinds, menus, AND agent commands all execute here.        │  │   │
-│  │  └────────────────────────┬───────────────────────────────────────────┘  │   │
-│  │                           │                                              │   │
-│  │  ┌────────────────────────┴───────────────────────────────────────────┐  │   │
-│  │  │  ② OpenSpaceBridgeContribution (frontend service)                  │  │   │
-│  │  │   • On startup: publishes command manifest to Hub                  │  │   │
-│  │  │   • Listens for SSE AGENT_COMMAND events from Hub                  │  │   │
-│  │  │   • Dispatches received commands → CommandRegistry                 │  │   │
-│  │  │   • Publishes pane/editor state changes back to Hub                │  │   │
-│  │  └────────────────────────┬───────────────────────────────────────────┘  │   │
-│  │                           │                                              │   │
-│  │  ┌────────────────────────┴───────────────────────────────────────────┐  │   │
-│  │  │              Frontend Services (DI Container)                      │  │   │
-│  │  │  SessionService │ PaneService │ SettingsService                    │  │   │
-│  │  │  FileService    │ TerminalSvc │ NotificationService                │  │   │
-│  │  └────────────────────────┬───────────────────────────────────────────┘  │   │
-│  └───────────────────────────┼──────────────────────────────────────────────┘   │
-│                              │ JSON-RPC over WebSocket                          │
-│  ┌───────────────────────────┼──────────────────────────────────────────────┐   │
-│  │                    Backend (Node.js)                                      │   │
-│  │  ┌────────────────────────┴───────────────────────────────────────────┐  │   │
-│  │  │              Backend Services (DI Container)                       │  │   │
-│  │  │  OpenCodeProxy  │ SessionBackend │ FileWatcher │ TerminalBackend   │  │   │
-│  │  └────────────────────────┬───────────────────────────────────────────┘  │   │
-│  └───────────────────────────┼──────────────────────────────────────────────┘   │
-│                              │                                                  │
-│  ┌───────────────────────────┼──────────────────────────────────────────────┐   │
-│  │                  ③ OpenSpace Hub (HTTP + SSE)                             │   │
-│  │   • Caches command manifest from BridgeContribution                      │   │
-│  │   • GET /openspace/instructions → generates system prompt from           │   │
-│  │     manifest + live pane state                                           │   │
-│  │   • POST /commands → receives stripped %%OS{...}%% blocks                │   │
-│  │   • SSE → broadcasts AGENT_COMMAND events to BridgeContribution          │   │
-│  └───────────────────────────┬──────────────────────────────────────────────┘   │
-│                              │                                                  │
-│  ┌───────────────────────────┼──────────────────────────────────────────────┐   │
-│  │         ④ Stream Interceptor (in opencode response pipeline)             │   │
-│  │   • Scans agent response stream for %%OS{...}%% blocks                   │   │
-│  │   • Strips them from visible output (user never sees them)               │   │
-│  │   • POSTs extracted commands to Hub /commands endpoint                    │   │
-│  └───────────────────────────┼──────────────────────────────────────────────┘   │
-│                              │ REST + SSE                                       │
-│  ┌───────────────────────────┼──────────────────────────────────────────────┐   │
-│  │                OpenCode Server (External Process — UNMODIFIED)            │   │
-│  │   Sessions │ Messages │ AI Execution │ MCP Servers │ Files               │   │
-│  │                                                                          │   │
-│  │   ⑤ opencode.json: "instructions": ["http://localhost:3001/openspace/    │   │
-│  │      instructions"] — single config line, native support                 │   │
-│  └──────────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                      Theia Openspace Application (Architecture B1)               │
+│                                                                                  │
+│  ┌────────────────────────────────────────────────────────────────────────────┐  │
+│  │                     Frontend (Browser/Electron)                             │  │
+│  │                                                                             │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐              │  │
+│  │  │ Chat     │  │ Editor   │  │Presentation│  │  Whiteboard  │              │  │
+│  │  │ Widget   │  │(Monaco)  │  │  Widget    │  │   Widget     │              │  │
+│  │  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────┬───────┘              │  │
+│  │       │              │              │               │                       │  │
+│  │  ┌────┴──────────────┴──────────────┴───────────────┴───────────────────┐  │  │
+│  │  │         ① Theia CommandRegistry (universal control plane)            │  │  │
+│  │  │   All OpenSpace actions registered as commands.                       │  │  │
+│  │  │   User keybinds, menus, AND agent commands all execute here.          │  │  │
+│  │  └──────────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                             │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │              Frontend Services (DI Container)                        │  │  │
+│  │  │                                                                      │  │  │
+│  │  │  SessionService        — session/message state, talks to backend     │  │  │
+│  │  │  SyncService           — receives RPC callbacks, updates state,      │  │  │
+│  │  │                          dispatches agent commands → CommandRegistry  │  │  │
+│  │  │  OpenspaceChatAgent    — registered in Theia AI, delegates to        │  │  │
+│  │  │                          SessionService (makes @Openspace work)      │  │  │
+│  │  │  BridgeContribution    — publishes command manifest + pane state     │  │  │
+│  │  │                          to Hub on startup                           │  │  │
+│  │  │  PaneService           — programmatic pane control                   │  │  │
+│  │  └──────────────────────────┬───────────────────────────────────────────┘  │  │
+│  └─────────────────────────────┼──────────────────────────────────────────────┘  │
+│                                │ JSON-RPC over WebSocket                         │
+│  ┌─────────────────────────────┼──────────────────────────────────────────────┐  │
+│  │                      Backend (Node.js)                                      │  │
+│  │  ┌─────────────────────────┴───────────────────────────────────────────┐   │  │
+│  │  │  ② OpenCodeProxy (HTTP client + SSE + stream interceptor)           │   │  │
+│  │  │   • HTTP calls to opencode server REST API                          │   │  │
+│  │  │   • SSE connection to opencode server event stream                  │   │  │
+│  │  │   • Stream interceptor: strips %%OS{...}%% blocks from messages,    │   │  │
+│  │  │     dispatches extracted commands via RPC callback (onAgentCommand)  │   │  │
+│  │  │   • Forwards clean events to frontend via OpenCodeClient callbacks  │   │  │
+│  │  └─────────────────────────────────────────────────────────────────────┘   │  │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐   │  │
+│  │  │  ③ OpenSpace Hub (HTTP only — no SSE)                               │   │  │
+│  │  │   • POST /openspace/manifest — receives manifest from Bridge        │   │  │
+│  │  │   • POST /openspace/state — receives pane state from Bridge         │   │  │
+│  │  │   • GET /openspace/instructions — generates system prompt from      │   │  │
+│  │  │     manifest + pane state (consumed by opencode)                     │   │  │
+│  │  └─────────────────────────────────────────────────────────────────────┘   │  │
+│  └────────────────────────────┬───────────────────────────────────────────────┘  │
+│                               │ REST + SSE                                       │
+│  ┌────────────────────────────┴───────────────────────────────────────────────┐  │
+│  │                 OpenCode Server (External Process — UNMODIFIED)             │  │
+│  │   Sessions │ Messages │ AI Execution │ MCP Servers │ Files                 │  │
+│  │                                                                            │  │
+│  │   ④ opencode.json: "instructions": ["http://localhost:3000/openspace/      │  │
+│  │      instructions"] — single config line, native support                   │  │
+│  └────────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1.1 The Five Moving Parts
+### 2.1.1 The Four Moving Parts
 
 | # | Component | Location | Role |
 |---|---|---|---|
 | ① | **Theia CommandRegistry** | Theia frontend (browser) | All OpenSpace actions (pane.open, editor.scroll, whiteboard.add_shape, etc.) are registered as real Theia commands. User keybindings, menus, and agent commands all go through `commandService.executeCommand()` |
-| ② | **OpenSpaceBridgeContribution** | Theia frontend service | (a) Publishes the command manifest to Hub on startup, (b) listens for SSE `AGENT_COMMAND` events, (c) dispatches them to CommandRegistry, (d) publishes pane state changes back to Hub |
-| ③ | **OpenSpace Hub** | Lightweight HTTP+SSE server (Node.js, co-located with Theia backend or standalone) | (a) Caches command manifest, (b) generates system prompt via `GET /openspace/instructions` from manifest + live pane state, (c) receives agent commands via `POST /commands`, (d) broadcasts them as SSE events |
-| ④ | **Stream Interceptor** | In the opencode response pipeline (middleware/hook) | Scans the agent's response stream for `%%OS{...}%%` blocks, strips them from visible output, and POSTs extracted commands to Hub |
-| ⑤ | **opencode.json** | OpenCode config file | Single line: `"instructions": ["http://localhost:3001/openspace/instructions"]` — opencode's native `instructions` URL support injects OpenSpace awareness into every agent session |
+| ② | **OpenCodeProxy + Stream Interceptor** | Theia backend (Node.js) | HTTP client to opencode server. Maintains SSE connection for event streaming. **Integrated stream interceptor** scans response stream for `%%OS{...}%%` blocks, strips them from visible output, and dispatches extracted commands to the frontend via `OpenCodeClient.onAgentCommand()` RPC callback |
+| ③ | **OpenSpace Hub** | HTTP server, co-located with Theia backend | (a) Caches command manifest from BridgeContribution, (b) caches pane state from BridgeContribution, (c) generates system prompt via `GET /openspace/instructions` from manifest + live pane state. **Note:** The Hub is a read/write cache with one public endpoint — it does NOT relay commands or maintain SSE connections |
+| ④ | **opencode.json** | OpenCode config file | Single line: `"instructions": ["http://localhost:3000/openspace/instructions"]` — opencode's native `instructions` URL support injects OpenSpace awareness into every agent session |
 
 ### 2.1.2 Key Insight: Automatic Discovery
 
@@ -136,6 +132,22 @@ When a new modality command is added as a Theia command (e.g., `openspace.whiteb
 3. The agent learns about the new command on its next session — **zero prompt engineering required**
 
 This means adding a new agent capability is just: register a Theia command → it automatically appears in the agent's instruction set.
+
+### 2.1.3 Architecture B1: Why This Design
+
+**Architecture B1** is a hybrid approach chosen after evaluating three alternatives:
+
+| Architecture | Approach | Verdict |
+|---|---|---|
+| **A: Native Theia AI** | Register `LanguageModel` wrapping opencode, use Theia's `ChatViewWidget` entirely | Rejected — impedance mismatch with opencode's stateful session model (fork/revert/compact/permissions). Theia's `LanguageModel.request()` is stateless. |
+| **B1: Hybrid (chosen)** | Register `ChatAgent` in Theia AI for discoverability, custom `ChatWidget` + `SessionService` for full opencode feature support | **Selected** — best balance of ecosystem integration and feature control |
+| **C: Parallel System** | Ignore Theia AI entirely, build separate system | Rejected — wastes `@theia/ai-*` dependency, no ecosystem integration, duplicate effort |
+
+**Key B1 decisions:**
+- `OpenspaceChatAgent` delegates to `SessionService` — making `@Openspace` mentions work in Theia's built-in chat
+- Custom `ChatWidget` for opencode-specific features (fork/revert, permissions, multi-part prompts)
+- Agent commands dispatched via existing RPC channel (not a separate SSE relay)
+- Hub serves only the `instructions` endpoint (no command relay)
 
 ### 2.2 Extension Package Structure
 
@@ -165,10 +177,9 @@ theia-openspace/
 │   │       │   └── pane-command-contribution.ts  # Pane commands → CommandRegistry
 │   │       └── node/               # Backend DI module
 │   │           ├── openspace-core-backend-module.ts
-│   │           ├── opencode-proxy.ts         # HTTP proxy to opencode server
+│   │           ├── opencode-proxy.ts         # HTTP proxy to opencode server + integrated stream interceptor
 │   │           ├── session-backend.ts        # Session management backend
-│   │           ├── hub.ts                    # ③ OpenSpace Hub (HTTP+SSE server)
-│   │           └── stream-interceptor.ts     # ④ %%OS{...}%% stream interceptor
+│   │           └── hub.ts                    # ③ OpenSpace Hub (HTTP-only, manifest cache + instructions)
 │   │
 │   ├── openspace-chat/             # Chat & conversation UI
 │   │   ├── package.json
@@ -341,7 +352,8 @@ Event types to forward:
 - `message.*` — message added/updated, parts streaming
 - `file.*` — file status changes
 - `permission.*` — permission requests
-- `agent.command` — agent UI commands (pane.open, editor.scroll, etc.)
+
+> **Note:** Agent commands (`%%OS{...}%%` blocks) are NOT separate SSE events. They are extracted from `message.*` event text by the stream interceptor integrated in OpenCodeProxy (§6.5) and dispatched via the `OpenCodeClient.onAgentCommand()` RPC callback.
 
 ### 3.2 Session Management
 
@@ -454,47 +466,57 @@ export interface TabInfo {
 
 ## 4. Chat & Conversation System
 
-### 4.1 Architecture Decision: Extend Theia AI vs. Custom
+### 4.1 Architecture Decision: Hybrid Theia AI Integration (B1)
 
-**Decision: Extend Theia AI Chat.**
+**Decision: Register agent in Theia AI, custom chat widget for UI.**
 
-Theia AI provides `@theia/ai-chat` and `@theia/ai-chat-ui` with:
-- Chat session management
-- Agent framework with `@agent` mentions
-- Tool function calling
-- Custom response renderers
-- Prompt template system
+Theia AI provides `@theia/ai-chat` and `@theia/ai-chat-ui` with chat session management, agent framework with `@agent` mentions, tool function calling, custom response renderers, and prompt template system.
 
-We extend rather than replace because:
-1. We get MCP tool integration for free
-2. The agent framework handles LLM provider abstraction
-3. Custom response renderers let us add rich UI to chat
-4. We can still customize the chat widget UI via ReactWidget override
+We use a **hybrid approach (Architecture B1)** because:
+1. **Agent registration** gives us `@Openspace` mention routing and Theia AI config panel for free
+2. **Custom chat widget** is needed for opencode-specific features that Theia's `ChatViewWidget` cannot support: session fork/revert/compact, permission dialogs, multi-part prompts with file attachments, token usage display
+3. The `ChatAgent.invoke()` method delegates to our `SessionService`, which proxies to the opencode server — no `LanguageModel` registration needed
 
 ### 4.2 Chat Agent
 
 **Location:** `openspace-chat/src/browser/chat-agent.ts`
 
-Our primary chat agent wraps the opencode server's AI capabilities:
+Our primary chat agent is a thin bridge between Theia AI and our `SessionService`:
 
 ```typescript
-export class OpenspaceChatAgent extends AbstractStreamParsingChatAgent {
+@injectable()
+export class OpenspaceChatAgent implements ChatAgent {
   id = 'openspace';
   name = 'Openspace';
   description = 'AI assistant with full IDE control';
+  locations = [ChatAgentLocation.Panel];
 
-  // Note: Agent IDE control is NOT via tool functions.
-  // The agent emits %%OS{...}%% blocks inline in its response,
-  // which are intercepted and dispatched to the CommandRegistry.
-  // Tool functions listed here are Theia AI tools for LLM-side use
-  // (e.g., context gathering), not IDE control.
+  @inject(SessionService)
+  private sessionService: SessionService;
+
+  async invoke(request: MutableChatRequestModel): Promise<void> {
+    // Extract user message, send via SessionService → OpenCodeProxy → opencode server
+    const text = request.request?.text;
+    const parts: MessagePart[] = [{ type: 'text', text }];
+    await this.sessionService.sendMessage(parts);
+
+    // Subscribe to streaming updates, push into Theia's response model
+    const disposable = this.sessionService.onMessageStreaming(update => {
+      request.response.response.addContent(new TextChatResponseContentImpl(update.delta));
+      if (update.isDone) {
+        request.response.complete();
+        disposable.dispose();
+      }
+    });
+  }
 }
 ```
 
-**Key difference from stock Theia AI:** Our agent doesn't call LLMs directly — it proxies to the opencode server which handles AI execution, tool calling, and context management. IDE control happens via the `%%OS{...}%%` stream interceptor pattern (§6), not via MCP tool calls. The agent's role is to:
-1. Translate user prompts into opencode API calls
-2. Stream responses back to the chat UI
-3. Execute agent commands (pane control, editor navigation) received from the server
+**Key design points:**
+- The agent does NOT call LLMs directly — it proxies to the opencode server via `SessionService`
+- IDE control happens via the `%%OS{...}%%` stream interceptor pattern (§6), not via MCP tool calls
+- The `invoke()` method makes `@Openspace` work from Theia's built-in chat panel
+- The primary user-facing chat experience is via our custom `ChatWidget`, which also uses `SessionService` directly
 
 ### 4.3 Chat Widget
 
@@ -776,21 +798,20 @@ The architecture is designed for new modalities to be added as independent Theia
 
 ---
 
-## 6. Agent Control System (CommandRegistry + Hub + Stream Interceptor)
+## 6. Agent Control System (CommandRegistry + Stream Interceptor)
 
 ### 6.1 Architecture Overview
 
 **Previous approach (SUPERSEDED):** MCP ToolProvider — agent calls tools via MCP protocol, tools execute UI actions.
 
-**Current approach:** CommandRegistry + Hub + `%%OS{...}%%` stream interceptor. This is more native, more elegant, and keeps opencode completely unmodified.
+**Current approach:** CommandRegistry + `%%OS{...}%%` stream interceptor via RPC. This is more native, more elegant, and keeps opencode completely unmodified.
 
 The agent controls the IDE through the same mechanism as the user — Theia's `CommandRegistry`. There are no special "agent tools" or MCP indirection layers. Instead:
 
 1. Every OpenSpace action is registered as a **real Theia command** (e.g., `openspace.pane.open`, `openspace.editor.scroll`, `openspace.whiteboard.add_shape`)
 2. The agent emits **`%%OS{...}%%` blocks** inline in its response stream
-3. A **stream interceptor** strips these blocks from visible output and POSTs them to the **Hub**
-4. The Hub broadcasts them as **SSE events** to the **BridgeContribution** in the Theia frontend
-5. The BridgeContribution dispatches them to the **CommandRegistry** — same path as user keybindings
+3. The **stream interceptor** (integrated in OpenCodeProxy) strips these blocks from visible output and dispatches extracted commands to the frontend via `OpenCodeClient.onAgentCommand()` **RPC callback**
+4. The **SyncService** receives the callback and dispatches to the **CommandRegistry** — same path as user keybindings
 
 ```
 Agent response stream:
@@ -800,8 +821,10 @@ User sees:
   "Here's the architecture diagram I've opened the whiteboard for you."
 
 What happened behind the scenes:
-  Stream interceptor → POST /commands → Hub → SSE AGENT_COMMAND → BridgeContribution → CommandRegistry → PaneService.openContent()
+  OpenCodeProxy (stream interceptor) → RPC onAgentCommand() → SyncService → CommandRegistry → PaneService.openContent()
 ```
+
+> **Note (Architecture B1 simplification):** Earlier designs routed commands through a Hub SSE relay: interceptor → POST /commands → Hub → SSE → BridgeContribution → CommandRegistry. This added three unnecessary hops. Since the backend already has a direct RPC channel to the frontend (`OpenCodeClient`), we use that channel for agent commands too.
 
 ### 6.2 Component: Theia Command Registration
 
@@ -847,9 +870,9 @@ export class OpenSpacePresentationCommandContribution implements CommandContribu
 }
 ```
 
-### 6.3 Component: OpenSpaceBridgeContribution
+### 6.3 Component: OpenSpaceBridgeContribution (Simplified in B1)
 
-A `FrontendApplicationContribution` that connects the Theia frontend to the Hub:
+A `FrontendApplicationContribution` that publishes the command manifest and pane state to the Hub. In Architecture B1, the BridgeContribution **no longer listens for SSE events** — agent command dispatch is handled by SyncService via RPC callbacks.
 
 ```typescript
 @injectable()
@@ -860,55 +883,49 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
   async onStart(app: FrontendApplication): Promise<void> {
     // 1. Build and publish command manifest to Hub
     const manifest = this.buildCommandManifest();
-    await fetch('http://localhost:3001/manifest', {
+    await fetch('/openspace/manifest', {
       method: 'POST',
       body: JSON.stringify(manifest)
     });
 
-    // 2. Listen for SSE AGENT_COMMAND events from Hub
-    const sse = new EventSource('http://localhost:3001/events');
-    sse.addEventListener('AGENT_COMMAND', (event) => {
-      const { cmd, args } = JSON.parse(event.data);
-      this.commandRegistry.executeCommand(cmd, args);
-    });
-
-    // 3. Publish pane state changes back to Hub
+    // 2. Publish pane state changes to Hub (for system prompt generation)
     this.paneService.onPaneLayoutChanged(layout => {
-      fetch('http://localhost:3001/state', {
+      fetch('/openspace/state', {
         method: 'POST',
         body: JSON.stringify(layout)
       });
     });
+
+    // NOTE: No SSE connection to Hub. Agent commands arrive via
+    // OpenCodeClient.onAgentCommand() RPC callback → SyncService.
   }
 
   private buildCommandManifest(): CommandManifest {
-    // Collect all commands with 'openspace.' prefix
     return this.commandRegistry.commands
       .filter(cmd => cmd.id.startsWith('openspace.'))
       .map(cmd => ({
         id: cmd.id,
         label: cmd.label,
         category: cmd.category,
-        // Argument schema inferred from registered metadata
         args: this.getCommandArgSchema(cmd.id)
       }));
   }
 }
 ```
 
-### 6.4 Component: OpenSpace Hub
+### 6.4 Component: OpenSpace Hub (Simplified in B1)
 
-A lightweight HTTP + SSE server. Can be co-located with the Theia backend (as a `BackendApplicationContribution`) or run standalone.
+A lightweight HTTP server co-located with the Theia backend (as a `BackendApplicationContribution`). In Architecture B1, the Hub is a **read/write cache** — it stores the command manifest and pane state, and serves the system prompt. It does NOT relay commands or maintain SSE connections.
 
 **Endpoints:**
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/manifest` | Receives command manifest from BridgeContribution |
+| `POST` | `/openspace/manifest` | Receives command manifest from BridgeContribution |
+| `POST` | `/openspace/state` | Receives pane/editor state updates from BridgeContribution |
 | `GET` | `/openspace/instructions` | Returns system prompt generated from manifest + live pane state (consumed by opencode via `instructions` URL) |
-| `POST` | `/commands` | Receives `%%OS{...}%%` blocks from stream interceptor |
-| `POST` | `/state` | Receives pane/editor state updates from BridgeContribution |
-| `GET` | `/events` | SSE endpoint — broadcasts `AGENT_COMMAND` events to BridgeContribution |
+
+> **Removed in B1:** `POST /commands` (agent commands now go via RPC), `GET /events` (no SSE relay needed).
 
 **System prompt generation (`GET /openspace/instructions`):**
 
@@ -935,14 +952,31 @@ Current IDE state:
 - Bottom panel: [terminal-1]
 ```
 
-### 6.5 Component: Stream Interceptor
+### 6.5 Component: Stream Interceptor (Integrated in OpenCodeProxy)
 
-Sits in the opencode response pipeline. Scans the agent's streaming text for `%%OS{...}%%` patterns, strips them from the output the user sees, and dispatches extracted commands to the Hub.
+The stream interceptor is **integrated into OpenCodeProxy** rather than being a separate component. It scans the agent's streaming response for `%%OS{...}%%` patterns as message events arrive from the opencode server's SSE stream. Matched blocks are stripped from the text forwarded to the frontend and dispatched as agent commands via the `OpenCodeClient.onAgentCommand()` RPC callback.
 
-**Implementation approach:** This is a middleware/hook in the response stream processing. The exact integration point depends on opencode's architecture — possibilities include:
-- A response stream transformer registered via opencode's extension/hook system
-- A proxy layer between the SSE stream and the chat UI
-- A post-processor in the backend's event forwarding pipeline
+**Implementation approach:** The interceptor is a method in `OpenCodeProxy` that processes message event data before calling `client.onMessageEvent()`. This is the natural integration point since OpenCodeProxy already receives and forwards all SSE events.
+
+```typescript
+// In OpenCodeProxy
+protected forwardMessageEvent(eventType: string, rawData: MessageEvent): void {
+  // ... existing logic ...
+
+  // Stream interceptor: strip %%OS{...}%% blocks before forwarding
+  if (rawData.data?.parts) {
+    const { cleanParts, commands } = this.interceptStream(rawData.data.parts);
+    rawData = { ...rawData, data: { ...rawData.data, parts: cleanParts } };
+
+    // Dispatch extracted commands via RPC callback
+    for (const command of commands) {
+      this._client?.onAgentCommand(command);
+    }
+  }
+
+  this._client?.onMessageEvent(notification);
+}
+```
 
 **`%%OS{...}%%` block format:**
 
@@ -1002,33 +1036,34 @@ The stream interceptor is the highest-risk component. LLMs can produce malformed
 
 **Solution:** The Hub maintains a per-session **command result log**. Results are included in the next system prompt via `GET /openspace/instructions`.
 
-**Flow:**
+**Flow (Architecture B1):**
 
 ```
 Agent emits %%OS{...}%%
-    → Interceptor → Hub → BridgeContribution → CommandRegistry.executeCommand()
-                                                       │
-                                                       ▼
-                                              Result: { success: true } or { success: false, error: "..." }
-                                                       │
-                                                       ▼
-                                              BridgeContribution POSTs result to Hub /command-results
-                                                       │
-                                                       ▼
-                                              Hub appends to session command log (ring buffer, last 20 results)
-                                                       │
-                                                       ▼
-                                              Next GET /openspace/instructions includes:
-                                              "Recent command results:
-                                               - openspace.editor.open {path: "x.ts"} → SUCCESS
-                                               - openspace.pane.resize {paneId: "p1"} → FAILED: pane not found"
+    → OpenCodeProxy (stream interceptor) → RPC onAgentCommand()
+    → SyncService → CommandRegistry.executeCommand()
+                           │
+                           ▼
+                  Result: { success: true } or { success: false, error: "..." }
+                           │
+                           ▼
+                  SyncService POSTs result to Hub /openspace/command-results
+                           │
+                           ▼
+                  Hub appends to session command log (ring buffer, last 20 results)
+                           │
+                           ▼
+                  Next GET /openspace/instructions includes:
+                  "Recent command results:
+                   - openspace.editor.open {path: "x.ts"} → SUCCESS
+                   - openspace.pane.resize {paneId: "p1"} → FAILED: pane not found"
 ```
 
-**Hub endpoint additions:**
+**Hub endpoint for results:**
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/command-results` | Receives command execution results from BridgeContribution |
+| `POST` | `/openspace/command-results` | Receives command execution results from SyncService |
 
 **Command result schema:**
 
@@ -1048,11 +1083,11 @@ export interface CommandResult {
 
 **Problem:** The agent can emit many `%%OS{...}%%` commands in rapid succession. Dispatching them all simultaneously to the CommandRegistry can cause race conditions (e.g., opening a file and scrolling to a line before the editor is ready) or overwhelm the ApplicationShell layout engine.
 
-**Solution:** The BridgeContribution maintains a **sequential command queue** with configurable inter-command delay.
+**Solution:** The SyncService maintains a **sequential command queue** with configurable inter-command delay.
 
 **Behavior:**
 
-1. When an `AGENT_COMMAND` SSE event arrives, it is added to a FIFO queue.
+1. When an `onAgentCommand()` RPC callback arrives, the command is added to a FIFO queue.
 2. Commands are dispatched one at a time. The next command is dispatched only after the previous command's Promise resolves (or rejects).
 3. A configurable **minimum inter-command delay** (default: 50ms) ensures the UI has time to settle between layout mutations.
 4. If the queue exceeds a **max depth** (default: 50), new commands are rejected with a warning log. This prevents runaway command floods.
@@ -1240,20 +1275,20 @@ When the agent wants to control the IDE (e.g., open a file at a specific line, s
 Agent generates response text with embedded %%OS{...}%% blocks
         │
         ▼
-Stream Interceptor scans response stream
+OpenCodeProxy receives message SSE event from opencode server
         │
-        ├──→ Visible text → displayed in Chat Widget (user sees clean text)
+        ▼
+Stream interceptor (in OpenCodeProxy) scans message text
+        │
+        ├──→ Clean text → forwarded via client.onMessageEvent() → Chat Widget
         │
         └──→ %%OS{"cmd":"openspace.editor.open","args":{"path":"src/index.ts","line":42}}%%
              │
              ▼
-        POST /commands → Hub receives command
+        client.onAgentCommand({ cmd, args }) — RPC callback to frontend
              │
              ▼
-        Hub broadcasts SSE event: { type: "AGENT_COMMAND", data: { cmd, args } }
-             │
-             ▼
-        OpenSpaceBridgeContribution (frontend) receives SSE event
+        SyncService receives callback → dispatches to CommandRegistry
              │
              ▼
         commandRegistry.executeCommand("openspace.editor.open", { path: "src/index.ts", line: 42 })
@@ -1262,14 +1297,17 @@ Stream Interceptor scans response stream
         EditorManager.open(uri, { selection }) → Monaco editor opens, scrolls, highlights
 ```
 
-**Key property:** The agent goes through the exact same `CommandRegistry` path as a user pressing a keybinding or clicking a menu item. There is no separate "agent tool" layer.
+**Key properties:**
+- The agent goes through the exact same `CommandRegistry` path as a user pressing a keybinding or clicking a menu item. There is no separate "agent tool" layer.
+- Agent commands travel over the same RPC channel as message events — no separate SSE relay.
 
-### 8.2.1 Comparison: Old (MCP) vs New (CommandRegistry + Stream Interceptor)
+### 8.2.1 Comparison: Old (MCP) vs Current (CommandRegistry + Stream Interceptor via RPC)
 
-| Aspect | Old: MCP ToolProvider | New: CommandRegistry + Stream Interceptor |
+| Aspect | Old: MCP ToolProvider | Current: CommandRegistry + Stream Interceptor |
 |---|---|---|
 | Agent interface | MCP tool call protocol | `%%OS{...}%%` inline in response stream |
 | Execution path | ToolProvider → custom handler | CommandRegistry.executeCommand() — same as user |
+| Command transport | MCP protocol | RPC callback (onAgentCommand) — same channel as message events |
 | Discovery | Manual tool registration | Automatic from command manifest |
 | opencode changes | Needed MCP server setup | Zero — uses native `instructions` URL |
 | Prompt engineering | Manual per tool | Auto-generated from live manifest |
@@ -1322,22 +1360,22 @@ onDidFilesChange event → triggers refresh in:
 
 ### Phase 1: Core Connection + Hub (Weeks 2–3)
 
-**Goal:** Connect to opencode server, set up Hub, manage sessions, send/receive messages.
+**Goal:** Connect to opencode server, set up Hub (manifest cache + instructions endpoint), manage sessions, send/receive messages. Architecture B1 — agent commands travel via RPC, not Hub SSE relay.
 
 | Task | Extension |
 |---|---|
 | Define RPC protocols | openspace-core/common |
 | Implement OpenCodeProxy backend | openspace-core/node |
 | Implement SSE event forwarding | openspace-core/node |
-| Implement OpenSpace Hub (HTTP+SSE) | openspace-core/node |
-| Implement BridgeContribution (frontend↔Hub) | openspace-core/browser |
+| Implement OpenSpace Hub (HTTP manifest cache + instructions) | openspace-core/node |
+| Implement BridgeContribution (manifest publishing) | openspace-core/browser |
 | Implement SessionService frontend | openspace-core/browser |
-| Implement SyncService (event handling) | openspace-core/browser |
+| Implement SyncService (event handling + agent command dispatch) | openspace-core/browser |
 | Basic chat widget (send message, see response) | openspace-chat |
 | Session create/delete/switch | openspace-core |
 | Configure opencode.json instructions URL | Config |
 
-**Exit criteria:** Can connect to opencode server, create session, send message, see streamed response. Hub serves `/openspace/instructions` with command manifest.
+**Exit criteria:** Can connect to opencode server, create session, send message, see streamed response. Hub serves `/openspace/instructions` with command manifest. Agent commands dispatched via RPC.
 
 ### Phase 2: Chat & Prompt System (Weeks 3–4)
 
@@ -1366,11 +1404,11 @@ onDidFilesChange event → triggers refresh in:
 | Register editor commands in CommandRegistry | openspace-core/browser |
 | Register terminal commands in CommandRegistry | openspace-core/browser |
 | Register file commands in CommandRegistry | openspace-core/browser |
-| Stream interceptor (%%OS{...}%% parsing + dispatch) | openspace-core/node |
+| Stream interceptor (integrated in OpenCodeProxy — %%OS{...}%% parsing + RPC dispatch) | openspace-core/node |
 | Command manifest auto-generation | openspace-core/browser |
 | System prompt generation from manifest + state | openspace-core/node (Hub) |
 
-**Exit criteria:** Agent can emit `%%OS{...}%%` blocks to open files at specific lines, highlight code ranges, split panes, create terminals — all via CommandRegistry. New commands auto-appear in agent's instruction set.
+**Exit criteria:** Agent can emit `%%OS{...}%%` blocks to open files at specific lines, highlight code ranges, split panes, create terminals — all via CommandRegistry. Agent commands dispatched via RPC callback, not SSE relay. New commands auto-appear in agent's instruction set.
 
 ### Phase 4: Modality Surfaces (Weeks 5–7)
 
@@ -1457,7 +1495,7 @@ Phase 3 and Phase 4 can partially overlap (agent tools for editor don't depend o
 | Presentation | reveal.js in ReactWidget | Proven slide framework, embeddable |
 | Whiteboard | tldraw in ReactWidget | Proven canvas framework, React-native |
 | Backend communication | JSON-RPC over WebSocket | Theia's native protocol |
-| Hub ↔ Frontend | HTTP + SSE | Lightweight, browser-native EventSource |
+| Hub ↔ Frontend | HTTP (one-way: Frontend → Hub only) | Hub receives manifest/state via POST from BridgeContribution; agent commands travel via RPC (not Hub) |
 | OpenCode integration | REST + SSE proxy + `instructions` URL | Compatible with existing opencode server, zero modifications |
 | Build system | Yarn workspaces + Theia CLI | Theia's standard build toolchain |
 | Package manager | Yarn (required by Theia) | Theia requires Yarn |
@@ -1477,8 +1515,8 @@ Phase 3 and Phase 4 can partially overlap (agent tools for editor don't depend o
 | reveal.js + tldraw bundle size | Slow initial load | Low | Code splitting, lazy widget loading, spike tasks to validate bundle size before full integration | §10 Phase 4 |
 | Monaco internal API changes | Editor commands break | Low | Use @theia/editor abstractions where possible | — |
 | OpenCode server API changes | Sync breaks | Medium | Protocol defined in common/, version checks, integration tests against live server | — |
-| Hub restart loses state | Manifest cache and pane state lost | Low | BridgeContribution re-publishes manifest on SSE reconnect, Hub is co-located in Theia backend (same process lifecycle) | §6.4 |
-| SSE connection drops | Bridge loses Hub events | Medium | Auto-reconnect with exponential backoff, re-publish manifest on reconnect, log missed event window | §6.4 |
+| Hub restart loses state | Manifest cache and pane state lost | Low | BridgeContribution re-publishes manifest on startup, Hub is co-located in Theia backend (same process lifecycle) | §6.4 |
+| SSE connection drops (OpenCode→Backend) | Backend loses opencode server events | Medium | Auto-reconnect with exponential backoff in OpenCodeProxy, re-subscribe to events, log missed event window | §3.1.2 |
 | FilterContribution class name matching breaks on Theia upgrade | Debug/SCM panels reappear | Medium | Verification test asserts expected class names exist, run before version upgrades (§15.3) | §15.3 |
 | Complex DI wiring | Hard to debug | Medium | Thorough logging (all modules log on load), DI container debugging tools | — |
 | Theia build times | Slow development cycle | Medium | `watch` mode, incremental compilation (`composite: true` in tsconfig) | — |
@@ -1547,12 +1585,12 @@ The architecture depends on `@theia/ai-*` packages (version 1.68.2, confirmed in
 
 | Theia AI Component | What We Use | What We Bypass |
 |---|---|---|
-| `@theia/ai-chat` | `ChatAgent` interface for agent registration | LLM provider abstraction (we proxy to opencode instead) |
-| `@theia/ai-chat-ui` | Chat panel widget, `@agent` mention routing | Built-in response rendering (we add custom renderers) |
+| `@theia/ai-chat` | `ChatAgent` interface for agent registration, `@agent` mention routing | LLM provider abstraction (we proxy to opencode instead), built-in chat session management |
+| `@theia/ai-chat-ui` | Agent discoverability in Theia's AI config panel | Built-in chat view widget (we use custom ChatWidget), response rendering pipeline |
 | `@theia/ai-core` | Agent registry, `LanguageModelRequirement` types | Direct LLM API calls, prompt template system |
 | `@theia/ai-ide` | IDE-level AI integrations (code completion hooks) | Most features — used sparingly |
 
-**Key insight:** We use Theia AI as a **UI framework and agent registry**, not as an AI execution pipeline. Our agent proxies to the opencode server for AI execution. This means our dependency surface is smaller than it appears.
+**Key insight (Architecture B1):** We register a `ChatAgent` for ecosystem integration (`@Openspace` mentions, AI config panel), but our primary chat experience is a custom `ChatWidget` backed by `SessionService`. The `ChatAgent.invoke()` delegates to `SessionService`, which proxies to the opencode server. This gives us full control over the UX while remaining discoverable in Theia's AI ecosystem.
 
 ### 15.2 Fallback Plan
 

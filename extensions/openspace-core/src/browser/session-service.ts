@@ -316,6 +316,30 @@ export class SessionServiceImpl implements SessionService {
     async createSession(title?: string): Promise<Session> {
         console.info(`[SessionService] Operation: createSession(${title || 'untitled'})`);
 
+        // If no active project, try to auto-select the first available project
+        if (!this._activeProject) {
+            console.debug('[SessionService] No active project, fetching available projects...');
+            try {
+                const projects = await this.openCodeService.getProjects();
+                if (projects.length > 0) {
+                    console.debug(`[SessionService] Auto-selecting first project: ${projects[0].id}`);
+                    await this.setActiveProject(projects[0].id);
+                } else {
+                    const errorMsg = 'No projects available on OpenCode server';
+                    console.error(`[SessionService] Error: ${errorMsg}`);
+                    this._lastError = errorMsg;
+                    this.onErrorChangedEmitter.fire(errorMsg);
+                    throw new Error(errorMsg);
+                }
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error(`[SessionService] Error getting projects: ${errorMsg}`);
+                this._lastError = errorMsg;
+                this.onErrorChangedEmitter.fire(errorMsg);
+                throw new Error(`No active project: ${errorMsg}`);
+            }
+        }
+
         // Require active project
         if (!this._activeProject) {
             const errorMsg = 'No active project';
@@ -420,16 +444,30 @@ export class SessionServiceImpl implements SessionService {
                 { parts }
             );
 
-            // Replace optimistic message with server response
+            // Replace optimistic message ID with real ID (if server returns updated user message)
+            // Then ADD the assistant response as a new message
+            // Note: OpenCode API returns { info: Message, parts: MessagePart[] } - need to combine them
+            const assistantMessage: Message = {
+                ...result.info,
+                parts: result.parts || []
+            };
+            
             const index = this._messages.findIndex(m => m.id === optimisticMsg.id);
             if (index >= 0) {
-                this._messages[index] = result.info;
+                // Update the user message with real ID from server (if available)
+                // The result.info is the ASSISTANT message, not the user message
+                const updatedUserMessage = { ...this._messages[index] };
+                // Keep the optimistic message as-is (or update ID if server provides it)
+                this._messages[index] = updatedUserMessage;
+                
+                // Add the assistant message as a NEW message (with parts!)
+                this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
-                console.debug(`[SessionService] Replaced optimistic message with server message: ${result.info.id}`);
+                console.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${assistantMessage.parts.length} parts`);
             } else {
                 // Optimistic message not found (shouldn't happen, but handle gracefully)
                 console.warn(`[SessionService] Optimistic message not found for replacement: ${optimisticMsg.id}`);
-                this._messages.push(result.info);
+                this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
             }
 
@@ -506,7 +544,7 @@ export class SessionServiceImpl implements SessionService {
         console.info('[SessionService] Operation: getSessions()');
         
         if (!this._activeProject) {
-            console.warn('[SessionService] No active project');
+            // No active project is normal on startup - don't log as warning
             return [];
         }
         

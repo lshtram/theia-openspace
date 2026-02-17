@@ -17,7 +17,7 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { CommandRegistry } from '@theia/core/lib/common/command';
-import { CommandManifest, CommandDefinition, AgentCommand } from '../common/command-manifest';
+import { CommandManifest, CommandDefinition } from '../common/command-manifest';
 
 /**
  * OpenSpaceBridgeContribution - Frontend service that bridges Theia CommandRegistry with OpenSpace Hub.
@@ -45,15 +45,11 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     @inject(CommandRegistry)
     protected readonly commandRegistry!: CommandRegistry;
 
-    private eventSource?: EventSource;
-    private reconnectAttempts = 0;
-    private reconnectTimer?: number;
-    private readonly maxReconnectDelay = 30000; // 30 seconds
-    private readonly hubBaseUrl = 'http://localhost:3001'; // TODO: Phase 5.2 - make configurable via preferences
+    private readonly hubBaseUrl = window.location.origin; // Uses same port as Theia backend
 
     /**
      * Called when the frontend application starts.
-     * Publishes command manifest and establishes SSE connection.
+     * Publishes command manifest.
      */
     async onStart(): Promise<void> {
         console.info('[BridgeContribution] Starting...');
@@ -61,17 +57,15 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         // Publish command manifest
         await this.publishManifest();
         
-        // Establish SSE connection
-        this.connectSSE();
+        // NOTE: Pane state publishing deferred to Phase 3.10
     }
 
     /**
      * Called when the frontend application stops.
-     * Closes SSE connection and cleans up resources.
      */
     onStop(): void {
         console.info('[BridgeContribution] Stopping...');
-        this.disconnectSSE();
+        // No resources to clean up
     }
 
     /**
@@ -146,187 +140,10 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         return commands;
     }
 
-    /**
-     * Establish SSE connection to Hub.
-     * 
-     * Connection Details:
-     * - URL: http://localhost:3001/openspace/events
-     * - Protocol: Server-Sent Events (EventSource)
-     * - Event Types: AGENT_COMMAND, ping
-     * - Auto-reconnect: exponential backoff on error
-     * 
-     * Event Handlers:
-     * - onopen: resets reconnect counter
-     * - onmessage: parses and dispatches commands
-     * - onerror: triggers reconnection
-     */
-    private connectSSE(): void {
-        console.info('[BridgeContribution] Connecting to Hub SSE...');
-        
-        this.eventSource = new EventSource(`${this.hubBaseUrl}/openspace/events`);
-        
-        this.eventSource.onopen = () => {
-            console.info('[BridgeContribution] SSE connection established');
-            this.reconnectAttempts = 0; // Reset reconnect counter on successful connection
-        };
-        
-        this.eventSource.onmessage = (event: MessageEvent) => {
-            this.handleSSEEvent(event);
-        };
-        
-        this.eventSource.onerror = () => {
-            console.warn('[BridgeContribution] SSE disconnected, reconnecting...');
-            this.reconnectSSE();
-        };
-    }
-
-    /**
-     * Handle incoming SSE events.
-     * 
-     * Event Format:
-     * {
-     *   "type": "AGENT_COMMAND",
-     *   "data": {
-     *     "cmd": "openspace.pane.open",
-     *     "args": { "type": "editor", "uri": "file:///path/to/file" }
-     *   }
-     * }
-     * 
-     * Processing Steps:
-     * 1. Parse JSON event data
-     * 2. Validate event type
-     * 3. Extract cmd and args
-     * 4. Execute command via CommandRegistry
-     * 
-     * Error Handling:
-     * - Parse error: log and skip
-     * - Unknown event type: log warning
-     * - Invalid event data: log error
-     */
-    private handleSSEEvent(event: MessageEvent): void {
-        try {
-            const parsedEvent = JSON.parse(event.data);
-            
-            if (parsedEvent.type === 'AGENT_COMMAND') {
-                const agentCommand: AgentCommand = parsedEvent.data;
-                console.info(`[BridgeContribution] Received command: ${agentCommand.cmd}`);
-                
-                // Execute command via CommandRegistry
-                this.executeCommand(agentCommand);
-            } else if (parsedEvent.type === 'ping') {
-                // Ignore keepalive pings
-                console.debug('[BridgeContribution] Received ping');
-            } else {
-                console.warn(`[BridgeContribution] Unknown event type: ${parsedEvent.type}`);
-            }
-        } catch (error: any) {
-            console.error('[BridgeContribution] Invalid event data:', error);
-        }
-    }
-
-    /**
-     * Execute agent command via CommandRegistry.
-     * 
-     * Steps:
-     * 1. Check if command exists in registry
-     * 2. Convert args to array format if needed
-     * 3. Execute via commandRegistry.executeCommand()
-     * 
-     * Error Handling:
-     * - Command not found: log warning, skip execution
-     * - Execution error: log error, continue (don't block subsequent commands)
-     * 
-     * @param agentCommand Command to execute with id and arguments
-     */
-    private async executeCommand(agentCommand: AgentCommand): Promise<void> {
-        try {
-            const { cmd, args } = agentCommand;
-            
-            // Check if command exists
-            if (!this.commandRegistry.getCommand(cmd)) {
-                console.warn(`[BridgeContribution] Unknown command: ${cmd}`);
-                return;
-            }
-            
-            // Execute command - convert args to array format
-            // If args is an object, wrap in array; if array, use as-is; if undefined, use empty array
-            const argsArray = args ? (Array.isArray(args) ? args : [args]) : [];
-            await this.commandRegistry.executeCommand(cmd, ...argsArray);
-            
-            console.debug(`[BridgeContribution] Command executed: ${cmd}`);
-        } catch (error: any) {
-            console.error(`[BridgeContribution] Command execution failed:`, error);
-        }
-    }
-
-    /**
-     * Disconnect SSE connection and clean up resources.
-     * 
-     * Cleanup Steps:
-     * 1. Close EventSource if exists
-     * 2. Clear reconnection timer if pending
-     * 3. Reset state variables
-     * 
-     * Memory Safety:
-     * - Ensures EventSource is properly closed
-     * - Clears timers to prevent memory leaks
-     */
-    private disconnectSSE(): void {
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = undefined;
-            console.debug('[BridgeContribution] SSE connection closed');
-        }
-        
-        if (this.reconnectTimer) {
-            clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = undefined;
-        }
-    }
-
-    /**
-     * Reconnect SSE with exponential backoff.
-     * 
-     * Backoff Strategy:
-     * - Initial delay: 1 second
-     * - Exponential: delay = 1s * 2^attempts
-     * - Formula: Math.min(1000 * 2^attempts, 30000)
-     * - Max delay: 30 seconds
-     * 
-     * Example Delays:
-     * - Attempt 0: 1s
-     * - Attempt 1: 2s
-     * - Attempt 2: 4s
-     * - Attempt 3: 8s
-     * - Attempt 4: 16s
-     * - Attempt 5+: 30s (max)
-     * 
-     * Implementation:
-     * 1. Disconnect existing connection
-     * 2. Calculate delay with exponential backoff
-     * 3. Schedule reconnection with setTimeout
-     * 4. Increment attempt counter
-     */
-    private reconnectSSE(): void {
-        this.disconnectSSE();
-        
-        const delay = Math.min(
-            1000 * Math.pow(2, this.reconnectAttempts),
-            this.maxReconnectDelay
-        );
-        
-        console.debug(`[BridgeContribution] Reconnecting in ${delay}ms...`);
-        
-        this.reconnectTimer = window.setTimeout(() => {
-            this.reconnectAttempts++;
-            this.connectSSE();
-        }, delay);
-    }
-
-    // NOTE: publishPaneState() method deferred to Phase 2
+    // NOTE: publishPaneState() method deferred to Phase 3.10
     // Future implementation will:
     // - Collect pane state from ApplicationShell
     // - Build PaneStateSnapshot
-    // - POST to http://localhost:3001/openspace/state
+    // - POST to http://localhost:3000/openspace/state
     // - Support system prompt generation with IDE context
 }

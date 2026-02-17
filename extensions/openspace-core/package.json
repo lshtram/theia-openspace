@@ -17,14 +17,18 @@
     "@theia/scm": "1.68.2",
     "@theia/terminal": "1.68.2",
     "@theia/workspace": "1.68.2",
-    "eventsource-parser": "^1.1.2"
+    "eventsource-parser": "^1.1.2",
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
     "rimraf": "^5.0.0",
     "typescript": "~5.4.5"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p lib/browser/style && cp src/browser/style/*.css lib/browser/style/",
     "clean": "rimraf lib tsconfig.tsbuildinfo",
     "watch": "tsc --watch"
   }

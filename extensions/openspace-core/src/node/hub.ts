@@ -18,7 +18,7 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
-import { CommandManifest, HubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
+import { CommandManifest, HubState, PaneStateSnapshot } from '../common/command-manifest';
 
 /**
  * OpenSpace Hub - HTTP + SSE server that bridges Theia frontend with opencode agent.
@@ -41,30 +41,18 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         lastStateUpdate: null
     };
 
-    private sseClients: Set<Response> = new Set();
-    private pingInterval: NodeJS.Timeout | undefined;
-
     /**
      * Configure Express routes for the Hub.
      */
     configure(app: Application): void {
-        // POST /manifest - Receive command manifest from frontend
-        app.post('/manifest', (req, res) => this.handleManifest(req, res));
+        // POST /openspace/manifest - Receive command manifest from frontend
+        app.post('/openspace/manifest', (req, res) => this.handleManifest(req, res));
 
         // GET /openspace/instructions - Generate system prompt
         app.get('/openspace/instructions', (req, res) => this.handleInstructions(req, res));
 
-        // POST /commands - Receive agent commands from stream interceptor
-        app.post('/commands', (req, res) => this.handleCommands(req, res));
-
-        // POST /state - Receive IDE state updates from frontend
-        app.post('/state', (req, res) => this.handleState(req, res));
-
-        // GET /events - SSE endpoint for broadcasting commands to frontend
-        app.get('/events', (req, res) => this.handleEvents(req, res));
-
-        // Start SSE ping interval
-        this.startPingInterval();
+        // POST /openspace/state - Receive IDE state updates from frontend
+        app.post('/openspace/state', (req, res) => this.handleState(req, res));
 
         this.logger.info('[Hub] OpenSpace Hub configured');
     }
@@ -73,10 +61,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
      * Cleanup on backend shutdown.
      */
     onStop(): void {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-        }
-        this.closeAllSSEConnections();
+        // Hub is stateless cache — no cleanup needed
         this.logger.info('[Hub] OpenSpace Hub stopped');
     }
 
@@ -122,45 +107,6 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     }
 
     /**
-     * Handle POST /commands - Receive agent commands and broadcast via SSE.
-     */
-    private handleCommands(req: Request, res: Response): void {
-        try {
-            const command = req.body as AgentCommand;
-
-            if (!command || !command.cmd) {
-                res.status(400).json({ error: 'Invalid command: missing cmd field' });
-                return;
-            }
-
-            // Validate command exists in manifest
-            if (this.state.manifest === null) {
-                res.status(503).json({ error: 'Manifest not initialized' });
-                return;
-            }
-
-            const commandExists = this.state.manifest.commands.some(c => c.id === command.cmd);
-            if (!commandExists) {
-                this.logger.warn(`[Hub] Unknown command: ${command.cmd}`);
-                res.status(400).json({ error: `Unknown command: ${command.cmd}` });
-                return;
-            }
-
-            // Broadcast command to all SSE clients
-            this.broadcastSSE('AGENT_COMMAND', {
-                cmd: command.cmd,
-                args: command.args
-            });
-
-            this.logger.info(`[Hub] Command received: ${command.cmd} with args ${JSON.stringify(command.args)}`);
-            res.status(202).json({ success: true, message: 'Command queued for broadcast' });
-        } catch (error) {
-            this.logger.error('[Hub] Error handling command:', error);
-            res.status(400).json({ error: 'Invalid JSON' });
-        }
-    }
-
-    /**
      * Handle POST /state - Update IDE state.
      */
     private handleState(req: Request, res: Response): void {
@@ -181,35 +127,6 @@ export class OpenSpaceHub implements BackendApplicationContribution {
             this.logger.error('[Hub] Error handling state:', error);
             res.status(400).json({ error: 'Invalid JSON' });
         }
-    }
-
-    /**
-     * Handle GET /events - SSE endpoint.
-     */
-    private handleEvents(req: Request, res: Response): void {
-        // Set SSE headers
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        });
-
-        // Add client to set
-        this.sseClients.add(res);
-        this.logger.info(`[Hub] SSE client connected (total: ${this.sseClients.size})`);
-
-        // Send initial ping
-        try {
-            res.write(`event: ping\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
-        } catch (error) {
-            this.logger.error('[Hub] Error sending initial ping:', error);
-        }
-
-        // Handle client disconnect
-        req.on('close', () => {
-            this.sseClients.delete(res);
-            this.logger.info(`[Hub] SSE client disconnected (total: ${this.sseClients.size})`);
-        });
     }
 
     /**
@@ -289,46 +206,5 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         instructions += `Commands are executed sequentially in order of appearance.\n`;
 
         return instructions;
-    }
-
-    /**
-     * Broadcast SSE event to all connected clients.
-     */
-    private broadcastSSE(event: string, data: unknown): void {
-        const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-
-        this.sseClients.forEach(client => {
-            try {
-                client.write(message);
-            } catch (err) {
-                this.logger.error('[Hub] Failed to write to SSE client:', err);
-                this.sseClients.delete(client);
-            }
-        });
-
-        this.logger.debug(`[Hub] Broadcasted ${event} to ${this.sseClients.size} clients`);
-    }
-
-    /**
-     * Start periodic ping to keep SSE connections alive.
-     */
-    private startPingInterval(): void {
-        this.pingInterval = setInterval(() => {
-            this.broadcastSSE('ping', { timestamp: new Date().toISOString() });
-        }, 30000); // 30 seconds
-    }
-
-    /**
-     * Close all SSE connections gracefully.
-     */
-    private closeAllSSEConnections(): void {
-        this.sseClients.forEach(client => {
-            try {
-                client.end();
-            } catch (err) {
-                // Ignore errors on close
-            }
-        });
-        this.sseClients.clear();
     }
 }
