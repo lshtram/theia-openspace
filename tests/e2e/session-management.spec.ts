@@ -252,7 +252,8 @@ test('Scenario 2: Create new session', async ({ page }) => {
   const noSessionState = page.locator('.chat-no-session');
   if (await noSessionState.isVisible().catch(() => false)) {
     console.log('No active session - creating one');
-    const createButton = page.locator('.chat-create-session-button');
+    // Use the correct button class .new-session-button
+    const createButton = page.locator('.new-session-button');
     await expect(createButton).toBeVisible();
     await createButton.click();
     await page.waitForTimeout(1000);
@@ -297,7 +298,7 @@ test('Scenario 3: Send message with mocked response', async ({ page }) => {
   const noSessionState = page.locator('.chat-no-session');
   if (await noSessionState.isVisible().catch(() => false)) {
     console.log('No active session - creating one');
-    const createButton = page.locator('.chat-create-session-button');
+    const createButton = page.locator('.new-session-button');
     await expect(createButton).toBeVisible();
     await createButton.click();
     await page.waitForTimeout(1000);
@@ -307,8 +308,8 @@ test('Scenario 3: Send message with mocked response', async ({ page }) => {
   await page.locator('.new-session-button').click();
   await page.waitForTimeout(1000);
   
-  // Find chat input
-  const chatInput = page.locator('.chat-input');
+  // Find chat input (contenteditable with role="textbox")
+  const chatInput = page.locator('[role="textbox"]');
   await expect(chatInput).toBeVisible();
   console.log('✓ Chat input found');
   
@@ -318,7 +319,7 @@ test('Scenario 3: Send message with mocked response', async ({ page }) => {
   console.log(`✓ Typed message: "${testMessage}"`);
   
   // Send message (click send button or press Enter)
-  const sendButton = page.locator('.chat-send-button');
+  const sendButton = page.locator('.prompt-input-send-button');
   if (await sendButton.isVisible({ timeout: 1000 }).catch(() => false)) {
     await sendButton.click();
   } else {
@@ -329,13 +330,14 @@ test('Scenario 3: Send message with mocked response', async ({ page }) => {
   // Wait for message to appear in chat
   await page.waitForTimeout(1000);
   
-  // Verify message container exists
-  const messagesContainer = page.locator('.chat-messages');
+  // Verify message timeline exists (replaces .chat-messages)
+  const messagesContainer = page.locator('.message-timeline');
   await expect(messagesContainer).toBeVisible();
   console.log('✓ Messages container visible');
   
-  // Verify input was cleared after sending
-  await expect(chatInput).toHaveValue('');
+  // Verify input was cleared after sending (check textContent for contenteditable)
+  const inputText = await chatInput.textContent();
+  expect(inputText).toBe('');
   console.log('✓ Input cleared after send');
 });
 
@@ -355,7 +357,7 @@ test('Scenario 4: Switch between sessions', async ({ page }) => {
   const noSessionState = page.locator('.chat-no-session');
   if (await noSessionState.isVisible().catch(() => false)) {
     console.log('No active session - creating one');
-    const createButton = page.locator('.chat-create-session-button');
+    const createButton = page.locator('.new-session-button');
     await expect(createButton).toBeVisible();
     await createButton.click();
     await page.waitForTimeout(1000);
@@ -423,7 +425,7 @@ test('Scenario 5: Delete session with confirmation', async ({ page }) => {
   const noSessionState = page.locator('.chat-no-session');
   if (await noSessionState.isVisible().catch(() => false)) {
     console.log('No active session - creating one');
-    const createButton = page.locator('.chat-create-session-button');
+    const createButton = page.locator('.new-session-button');
     await expect(createButton).toBeVisible();
     await createButton.click();
     await page.waitForTimeout(1000);
@@ -498,8 +500,8 @@ test('Bonus: Handle empty session list gracefully', async ({ page }) => {
   await expect(noSessionMessage).toBeVisible();
   console.log('✓ No session message displayed');
   
-  // In empty state, the button is .chat-create-session-button (not .new-session-button)
-  const newButton = page.locator('.chat-create-session-button');
+  // The "+ New" button has class .new-session-button
+  const newButton = page.locator('.new-session-button');
   await expect(newButton).toBeVisible();
   console.log('✓ New session button available in empty state');
   
