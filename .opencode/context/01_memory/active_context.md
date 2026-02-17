@@ -4,21 +4,36 @@
 **Last Updated:** 2026-02-17
 
 ## Current Focus
-- **Status:** PHASE 3 REQUIREMENTS ✅ APPROVED — Ready for implementation
+- **Status:** PHASE 2B (SDK ADOPTION) — Planning complete, ready for Builder delegation
 - **Completed (2026-02-17):**
+  - Phase 0: All tasks (0.1–0.8) ✅
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
+  - Phase 3: Tasks 3.1–3.6, 3.9 ✅
   - Scout research: OpenCode SDK — RFC-002 FINAL (`docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`)
-    - Official SDK exists: `@opencode-ai/sdk` (zero deps, auto-generated types)
-    - Recommendation: STRONG ADOPT — replace hand-rolled proxy with SDK client
-    - Estimated effort: 12-18 hours, ~80% code reduction (~1,450 lines eliminated)
-    - Timing: Before or during Phase 3 Task 3.7
-  - Architecture refactor: C → B1 complete
+  - Decision document: `docs/architecture/DECISION-SDK-ADOPTION.md` — Option A APPROVED
+  - Phase 2B added to WORKPLAN.md (6 tasks: 2B.1–2B.6, ~12–18 hours estimated)
   - Phase 3 requirements document created and audited
   - Multi-perspective audit (4 perspectives, 15 gaps identified)
   - User decision: All BLOCKING + RECOMMENDED gaps integrated into Phase 3 requirements
-  - Technical debt document created for OPTIONAL gaps
-- **Next:** Begin Phase 3 implementation in `.worktrees/phase-3-agent-control` worktree
+  - Architecture refactor: C → B1 complete
+- **Next:** Write `contract.md` for Phase 2B → Delegate to Builder
+
+## Phase 2B: SDK Adoption — Plan Summary
+| Task | What | Effort | Dependencies |
+|------|------|--------|-------------|
+| 2B.1 | Install `@opencode-ai/sdk`, create type bridge in `opencode-protocol.ts` | 1–2h | Phase 1B1 |
+| 2B.2 | Replace 24 HTTP calls in `OpenCodeProxy` with SDK client methods | 4–6h | 2B.1 |
+| 2B.3 | Replace SSE handling with SDK `event.subscribe()` async iterable | 3–5h | 2B.2 |
+| 2B.4 | Update all downstream consumers for field renames (`projectId`→`projectID`, etc.) | 2–3h | 2B.3 |
+| 2B.5 | Cleanup: remove hand-rolled types, remove `eventsource-parser` dependency | 1–2h | 2B.4 |
+| 2B.6 | Integration verification (full regression test) | 1–2h | 2B.5 |
+
+**Key decisions:**
+- SDK version pinned to exact (not range)
+- Stream interceptor moves from wire-level (raw SSE bytes) to semantic-level (message text parts)
+- `OpenCodeService` DI interface unchanged — callers don't need to change
+- Phase 2B blocks tasks 3.7–3.11 but NOT Phase 2 or Phase 4
 
 ## Architecture B1 Summary
 | Component | Before (Architecture C) | After (Architecture B1) |

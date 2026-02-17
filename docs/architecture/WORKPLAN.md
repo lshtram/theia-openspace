@@ -3,7 +3,7 @@ id: WORKPLAN-THEIA-OPENSPACE
 author: oracle_e3f7
 status: ACTIVE
 date: 2026-02-16
-updated: 2026-02-17
+updated: 2026-02-17-b
 task_id: TheiaOpenspaceWorkplan
 ---
 
@@ -358,6 +358,112 @@ task_id: TheiaOpenspaceWorkplan
 | **Acceptance** | All Phase 1 functionality preserved. Architecture B1 plumbing verified. Build clean. |
 | **Dependencies** | 1B1.1–1B1.7 |
 | **Status** | ✅ |
+
+---
+
+## Phase 2B: SDK Adoption (Migration)
+
+**Goal:** Replace ~1,450 lines of hand-rolled HTTP client code, custom type definitions, and SSE event handling with the official `@opencode-ai/sdk` package. This fixes 7 known field name mismatches, adds 9 missing message Part types, adds 11 missing SSE event types, and ensures forward compatibility as OpenCode evolves.
+
+**Duration estimate:** 1–2 sessions (~12–18 hours)  
+**Exit criteria:** All HTTP calls in `OpenCodeProxy` use SDK client methods. All custom type definitions replaced with SDK type re-exports. SSE handling uses SDK's `client.event.subscribe()` async iterable. `eventsource-parser` dependency removed. All existing tests pass. All downstream consumers updated for field renames. Build clean with zero TypeScript errors.
+
+**Prerequisites:** Phase 1B1 complete. Tasks 3.1–3.6 complete (they depend on current types but are self-contained).
+
+**Decision document:** `docs/architecture/DECISION-SDK-ADOPTION.md` (Option A — approved by user 2026-02-17)  
+**Research:** `docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md` (FINAL)
+
+**Why now (not later):**
+- Tasks 3.7–3.11 need rich Part types (tool, agent, step-start, etc.) that we currently don't have
+- Building more code on top of incorrect types (7 field mismatches) means exponentially more rework later
+- Clean break point: tasks 3.1–3.6 are done, 3.7 hasn't started
+- SDK adoption is isolated — only replaces the HTTP/type layer, doesn't change Architecture B1
+
+**What stays unchanged:**
+- Architecture B1 (hybrid ChatAgent + custom ChatWidget)
+- JSON-RPC bridge (Theia frontend ↔ backend)
+- Stream interceptor (`%%OS{...}%%` command extraction)
+- Hub server (instructions/manifest/state endpoints)
+- Command validation / security allowlisting
+- Permission dialog UI
+- Session state management (optimistic updates, event routing)
+- Agent command queue (SyncService)
+
+**V&V Targets:**
+- [ ] `@opencode-ai/sdk` installed in `extensions/openspace-core/package.json`
+- [ ] `yarn build` succeeds with zero TypeScript errors after SDK types adopted
+- [ ] All 24 REST API calls in `OpenCodeProxy` use SDK client methods (no raw `http`/`https`)
+- [ ] `opencode-protocol.ts` contains only SDK type re-exports + our RPC interface definitions (no hand-written API types)
+- [ ] SSE event subscription uses SDK's `client.event.subscribe()` async iterable
+- [ ] `eventsource-parser` dependency removed from `package.json`
+- [ ] Stream interceptor still works (operates on raw event data before SDK processing)
+- [ ] All field renames propagated: `projectId` → `projectID`, `sessionId` → `sessionID` in all consumers
+- [ ] All existing unit tests pass (100+ tests)
+- [ ] All existing E2E tests pass
+- [ ] SDK client instance is injectable via Theia DI (wrapped in `OpenCodeProxy`)
+- [ ] SDK version pinned (exact version, not range)
+
+### 2B.1 — Install SDK + create type bridge (Phase A)
+| | |
+|---|---|
+| **What** | Install `@opencode-ai/sdk` as a dependency in `extensions/openspace-core/package.json`. Pin to exact version (e.g., `"1.2.6"`, not `"^1.2.6"`). Create type aliases in `opencode-protocol.ts` that re-export SDK types under our current names, so all existing consumers continue to work unchanged. This is a **non-breaking** change — the type bridge allows gradual migration. Specifically: (a) `import { Session, Message, ... } from "@opencode-ai/sdk"`, (b) `export type { Session, Message, ... }`, (c) keep our `OpenCodeService` and `OpenCodeClient` RPC interfaces unchanged (these are Theia-specific and not in the SDK). |
+| **Acceptance** | `yarn build` succeeds with zero errors. SDK is listed in `package.json` dependencies with exact version. `opencode-protocol.ts` re-exports SDK types. All existing code compiles without changes. No runtime behavior changes. |
+| **Dependencies** | Phase 1B1 complete |
+| **Test requirements** | `yarn build` must pass. Run existing unit test suite — all 100+ tests must still pass. This validates the type bridge is compatible. |
+| **Estimated effort** | 1–2 hours |
+| **Status** | ⬜ |
+
+### 2B.2 — Replace HTTP calls in OpenCodeProxy (Phase B)
+| | |
+|---|---|
+| **What** | Rewrite `opencode-proxy.ts` to use the SDK client (`createOpencodeClient()`) instead of raw `http`/`https` module calls. Initialize SDK client in the constructor (or `@postConstruct`) with `baseUrl` from configuration. Replace each of the 24 REST API methods (`listProjects`, `createSession`, `listSessions`, `sendMessage`, `listMessages`, `getProviders`, `getConfig`, `deleteSession`, etc.) with the corresponding SDK namespace method (e.g., `this.client.session.list()`, `this.client.session.create(...)`, `this.client.session.prompt(...)`, `this.client.config.providers()`, etc.). **Preserve:** (a) the `OpenCodeService` DI interface (callers don't change), (b) error handling/logging, (c) stream interceptor integration, (d) `onAgentCommand` RPC callback path. **Remove:** all `httpGet()`, `httpPost()`, `httpDelete()`, `httpPatch()` helper methods and their `http`/`https` imports. |
+| **Acceptance** | All 24 API methods work via SDK client. `OpenCodeService` DI interface is unchanged. Callers (SessionService, SyncService, etc.) require zero changes. All existing unit tests pass with mocked SDK client. Manual testing: can list projects, create/delete sessions, send messages, get providers. |
+| **Dependencies** | 2B.1 |
+| **Test requirements** | Unit tests for `OpenCodeProxy` must be updated to mock the SDK client (instead of `http`/`https`). All existing functional tests must pass. **Recommended:** Add 3–5 new unit tests validating SDK client initialization, error propagation from SDK errors to RPC errors, and configuration (baseUrl) handling. |
+| **Estimated effort** | 4–6 hours |
+| **Risk** | Medium — the stream interceptor currently operates on raw HTTP response data; must verify it still works when SDK handles HTTP. The interceptor may need to operate at the SSE layer (Phase 2B.3) rather than HTTP layer. |
+| **Status** | ⬜ |
+
+### 2B.3 — Replace SSE handling with SDK event subscription (Phase C)
+| | |
+|---|---|
+| **What** | Replace the current SSE handling in `opencode-proxy.ts` (which uses `eventsource-parser` + raw HTTP to maintain an SSE connection to the OpenCode server) with the SDK's `client.event.subscribe()` async iterable. The SDK handles SSE connection management, reconnection, and event parsing. **Key concern:** The stream interceptor currently scans raw SSE text for `%%OS{...}%%` markers. With SDK event subscription, events arrive pre-parsed. The interceptor must now operate on the `text` field of `message.updated` events (inspect `event.properties.parts` where `part.type === "text"` → scan `part.text` for markers). This is architecturally cleaner — we intercept at the semantic level (message text) rather than the wire level (raw SSE bytes). **Update event type mappings:** Map all 13 SDK event types to our RPC callback methods. Currently we only handle 2 event types (`session.updated`, `message.updated`); the SDK provides 13. Add handling for new event types as needed (at minimum: `session.status`, `session.idle` for session state tracking). |
+| **Acceptance** | SSE events flow correctly: OpenCode server → SDK event subscription → OpenCodeProxy → RPC callbacks → SyncService → SessionService → UI. Stream interceptor extracts `%%OS{...}%%` from message text parts (not raw SSE). Reconnection works (SDK handles this). All 8 stream interceptor test cases from TECHSPEC §6.5.1 still pass. Event type coverage expanded from 2 to at least 5 types (session.updated, message.updated, session.status, session.idle, message.part.updated). |
+| **Dependencies** | 2B.2 |
+| **Test requirements** | Update stream interceptor tests to use SDK event format (typed `Part` objects instead of raw text). Add unit tests for new event type handling (session.status → SessionService state update, session.idle → streaming complete signal). Run full unit test suite — all must pass. **Critical test:** Verify chunk-boundary `%%OS{...}%%` splitting still works with SDK event format (it should be simpler since SDK delivers complete events, not raw chunks). |
+| **Estimated effort** | 3–5 hours |
+| **Risk** | Medium — the stream interceptor is the most delicate component. Must verify that SDK event delivery is compatible with our interception pattern. If SDK delivers events asynchronously (batched), interceptor timing may change. |
+| **Status** | ⬜ |
+
+### 2B.4 — Update downstream consumers for field renames (Phase D-1)
+| | |
+|---|---|
+| **What** | Propagate field name changes from SDK types to all downstream consumers. Known renames: `projectId` → `projectID` (Session), `sessionId` → `sessionID` (Message). Files that reference these fields: `session-service.ts` (~856 LOC), `chat-widget.tsx`, `opencode-sync-service.ts` (~555 LOC), any test files. Use TypeScript compiler errors as the guide — after removing type aliases from 2B.1, the compiler will flag every location that needs updating. Also update `MessagePart` consumers to handle the expanded Part union (12 types instead of 3). For Part types we don't yet render (e.g., `step-start`, `snapshot`, `patch`), add a default/fallback handler that renders them as raw text or ignores them gracefully. |
+| **Acceptance** | `yarn build` succeeds with zero TypeScript errors. All field accesses use SDK naming conventions. No runtime `undefined` errors from field mismatches. Chat widget correctly displays sessions and messages. Part type handling is exhaustive (TypeScript `switch` with `default` case or `exhaustiveCheck`). |
+| **Dependencies** | 2B.3 (all SDK integration complete before consumer updates) |
+| **Test requirements** | TypeScript compiler is the primary validator. Run full unit test suite after renames. Update any test assertions that reference old field names. **Recommended:** Add 2–3 unit tests for the expanded Part type handling (verify unknown Part types are handled gracefully, not crash). |
+| **Estimated effort** | 2–3 hours |
+| **Status** | ⬜ |
+
+### 2B.5 — Cleanup: remove hand-rolled code and dependencies (Phase D-2)
+| | |
+|---|---|
+| **What** | Final cleanup phase. Remove from `opencode-protocol.ts`: all hand-written API types that now come from the SDK (Session, Message, MessagePart, Provider, etc.). Keep only: `OpenCodeService` interface, `OpenCodeClient` interface, `OPENCODE_SERVICE_PATH` constant (these are Theia-specific RPC definitions, not API types). Remove `eventsource-parser` from `package.json` dependencies. Remove any dead `http`/`https` imports and helper methods. Remove unused type imports. Run `yarn build` to verify no lingering references. Document the migration in a brief note at the top of `opencode-protocol.ts` (e.g., "API types are re-exported from @opencode-ai/sdk. Only Theia RPC interfaces are defined here."). |
+| **Acceptance** | `opencode-protocol.ts` contains only RPC interfaces + SDK re-exports (target: ~50 lines, down from ~313). `eventsource-parser` removed from `package.json`. No dead code. `yarn build` clean. All unit and E2E tests pass. `opencode-proxy.ts` reduced from ~931 lines to ~200–300 lines. Total codebase reduction: ~1,200–1,450 lines. |
+| **Dependencies** | 2B.4 |
+| **Test requirements** | Full test suite (unit + E2E). `yarn build` clean. Manual smoke test: start Theia, connect to opencode server, create session, send message, receive streaming response, verify chat widget renders correctly. |
+| **Estimated effort** | 1–2 hours |
+| **Status** | ⬜ |
+
+### 2B.6 — Integration verification
+| | |
+|---|---|
+| **What** | End-to-end verification that the SDK migration preserves all existing functionality. Repeat the Phase 1.13 integration test protocol: (1) start Theia → connect to opencode server → create session → send message → receive streamed response → verify message appears in chat widget. Additionally verify: (2) permission dialog still works (permission event forwarded correctly via SDK events), (3) stream interceptor still strips `%%OS{...}%%` blocks and dispatches commands via `onAgentCommand` RPC callback, (4) Hub `GET /openspace/instructions` still returns valid system prompt, (5) session CRUD (create, list, switch, delete) all work through UI. |
+| **Acceptance** | All Phase 1 and Phase 1B1 functionality preserved. No regressions. Build clean. All unit tests pass. All E2E tests pass. Manual smoke test documented with results. |
+| **Dependencies** | 2B.5 |
+| **Test requirements** | Run complete test suite: `yarn build` (zero errors), `yarn test` (all units pass), E2E tests (batched per NSO protocol). Manual smoke test covering the 5 verification points above. Document test results in task `result.md`. |
+| **Estimated effort** | 1–2 hours |
+| **Status** | ⬜ |
 
 ---
 
@@ -851,7 +957,7 @@ These are not phases — they apply throughout development.
 ## Task Dependency Graph (Simplified)
 
 ```
-Phase 0 ✅                           Phase 1 (93% ✅)
+Phase 0 ✅                           Phase 1 ✅
 ┌──────┐                      ┌──────────────────────────────────────┐
 │ 0.1  │──→ 0.2 ──→ 0.3      │ 1.1 ──→ 1.2 ──→ 1.3 ──→ 1.4        │
 │      │          ──→ 0.4     │                    ──→ 1.5 (Hub)     │
@@ -863,7 +969,7 @@ Phase 0 ✅                           Phase 1 (93% ✅)
                               └──────────────────────────────────────┘
                                           │
                                           ▼
-                              Phase 1B1 (Architecture C→B1 Refactor)
+                              Phase 1B1 ✅ (Architecture C→B1 Refactor)
                               ┌──────────────────────────────────────┐
                               │ 1B1.1 (ChatAgent→SessionService)     │
                               │ 1B1.2 (onAgentCommand RPC iface)     │
@@ -877,20 +983,31 @@ Phase 0 ✅                           Phase 1 (93% ✅)
                               └──────────────────────────────────────┘
                                           │
                     ┌─────────────────────┼──────────────────────┐
+                    │                     │                      │
+                    │     Phase 2B (SDK Adoption) ◄── IMMEDIATE  │
+                    │     ┌──────────────────────────────┐       │
+                    │     │ 2B.1 (install + type bridge)  │       │
+                    │     │   ──→ 2B.2 (HTTP → SDK)       │       │
+                    │     │   ──→ 2B.3 (SSE → SDK)        │       │
+                    │     │   ──→ 2B.4 (field renames)     │       │
+                    │     │   ──→ 2B.5 (cleanup)           │       │
+                    │     │   ──→ 2B.6 (verification)      │       │
+                    │     └──────────────────────────────┘       │
+                    │                     │                      │
                     ▼                     ▼                      ▼
               Phase 2               Phase 3                Phase 4
          ┌──────────────┐     ┌──────────────────┐   ┌──────────────────┐
-         │ 2.1–2.8      │     │ 3.1 ──→ 3.2      │   │ 4.0a (reveal.js  │
-         │   ──→ 2.9    │     │ 3.3, 3.4, 3.5    │   │       spike)     │
-         └──────────────┘     │ 3.6 (hardening    │   │ 4.0b (tldraw     │
-                              │   depends 1B1.3)  │   │       spike)     │
-                              │   ──→ 3.7 ──→ 3.8│   │ 4.1 ──→ 4.2      │
-                              │   ──→ 3.9         │   │   ──→ 4.3        │
-                              │ 3.1 ──→ 3.10      │   │ 4.4 ──→ 4.5      │
-                              │ 3.9 ──→ 3.11      │   │   ──→ 4.6        │
-                              │   (result fbk,    │   │ 4.3+4.6 ──→ 4.8  │
-                              │   depends 1B1.4)  │   │ (4.7 → Phase 6)  │
-                              └──────────────────┘   └──────────────────┘
+         │ 2.1–2.8      │     │ 3.1–3.6 ✅        │   │ 4.0a (reveal.js  │
+         │   ──→ 2.9    │     │   ──→ 3.7 ──→ 3.8│   │       spike)     │
+         └──────────────┘     │   ──→ 3.9 ✅       │   │ 4.0b (tldraw     │
+                              │ 3.1 ──→ 3.10      │   │       spike)     │
+                              │ 3.9 ──→ 3.11      │   │ 4.1 ──→ 4.2      │
+                              │   (result fbk,    │   │   ──→ 4.3        │
+                              │   depends 1B1.4)  │   │ 4.4 ──→ 4.5      │
+                              └──────────────────┘   │   ──→ 4.6        │
+                                          │           │ 4.3+4.6 ──→ 4.8  │
+                                          │           │ (4.7 → Phase 6)  │
+                                          │           └──────────────────┘
                                           │                  │
                                           ▼                  ▼
                                     Phase 5 ◄────────────────┘
@@ -907,17 +1024,21 @@ Phase 0 ✅                           Phase 1 (93% ✅)
                                  └──────────────────┘
 ```
 
-**Critical path:** 0.1 → 0.2 → 0.3 → 0.4 → 1.1 → 1.2 → 1.4 → 1.5 → 1.7 → 1.9 → 1.10 → **1B1.2 → 1B1.3** → 3.6 → 3.7 → 3.8 → 3.9
+**Critical path:** 0.1 → ... → 1B1.8 → **2B.1 → 2B.2 → 2B.3 → 2B.4 → 2B.5 → 2B.6** → 3.7 → 3.8 → 3.9
+
+**Phase 2B sequencing:**
+- Phase 2B is **strictly sequential** internally (2B.1 → 2B.2 → 2B.3 → 2B.4 → 2B.5 → 2B.6) — each phase builds on the previous
+- Phase 2B must complete **before** tasks 3.7–3.11 (which need SDK types)
+- Tasks 3.1–3.6 and 3.9 are already complete and unaffected by Phase 2B
+- Phase 2 can run in parallel with Phase 2B (chat polish doesn't depend on SDK types)
 
 **Parallelizable:**
 - Phase 2 and Phase 3 can run in parallel (chat polish doesn't block agent commands)
-- Phase 4 spikes (4.0a, 4.0b) can run in parallel with Phase 2/3 after Phase 1B1 complete
+- Phase 2B and Phase 2 can run in parallel (SDK migration is backend-only, chat polish is frontend-only)
+- Phase 4 spikes (4.0a, 4.0b) can run in parallel with Phase 2/3/2B after Phase 1B1 complete
 - Phase 4 tasks 4.1–4.3 (presentation) and 4.4–4.6 (whiteboard) are independent
 - Phase 3 tasks 3.2, 3.3, 3.4, 3.5 are all independent (different command groups)
-- Task 1.14 (permission handling) can run in parallel with 1.7–1.13
 - Task 3.11 (command result feedback) follows 3.9 but is independent of Phase 4
-- Phase 1B1 tasks 1B1.1, 1B1.2, 1B1.5, 1B1.7 are all independent of each other
-- Phase 1B1 tasks 1B1.3 and 1B1.4 depend on 1B1.2 but are independent of each other
 - Phase 0 tasks 0.5, 0.6, 0.7, 0.8 are all independent
 
 ---

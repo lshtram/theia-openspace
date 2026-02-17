@@ -1,7 +1,7 @@
 ---
 id: DECISION-SDK-ADOPTION
 author: oracle_7f3a
-status: DRAFT
+status: APPROVED
 date: 2026-02-17
 task_id: SDK-Adoption-Analysis
 ---

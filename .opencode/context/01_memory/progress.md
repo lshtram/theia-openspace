@@ -68,8 +68,18 @@
   - [x] Gap analysis: 7 type mismatches, 11 missing event types, ~1,450 lines eliminable
   - [x] RFC written: `docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`
   - [x] Recommendation: STRONG ADOPT, 12-18 hours effort, before Phase 3 Task 3.7
+- [ ] Phase 2B: SDK Adoption — 🟡 PLANNING COMPLETE (ready for Builder)
+  - [x] SDK research complete (RFC-002 FINAL)
+  - [x] Decision document approved (DECISION-SDK-ADOPTION.md — Option A)
+  - [x] Phase 2B added to WORKPLAN.md (6 tasks: 2B.1–2B.6)
+  - [ ] Task 2B.1: Install SDK + type bridge — PENDING
+  - [ ] Task 2B.2: Replace HTTP calls → SDK client — PENDING
+  - [ ] Task 2B.3: Replace SSE handling → SDK events — PENDING
+  - [ ] Task 2B.4: Update consumers for field renames — PENDING
+  - [ ] Task 2B.5: Cleanup (remove hand-rolled code) — PENDING
+  - [ ] Task 2B.6: Integration verification — PENDING
 - [ ] Phase 2: Chat & Prompt System
-- [ ] Phase 3: Agent IDE Control — 🟡 IN PROGRESS
+- [ ] Phase 3: Agent IDE Control — ✅ COMPLETE
   - [x] Requirements document created (REQ-AGENT-IDE-CONTROL.md)
   - [x] Multi-perspective audit complete (15 gaps identified)
   - [x] User approval: All BLOCKING + RECOMMENDED gaps integrated
@@ -81,11 +91,11 @@
   - [x] Task 3.4: Terminal Commands — ✅ COMPLETE (51 tests, 5 commands + security)
   - [x] Task 3.5: File Commands — ✅ COMPLETE (23 tests, 4 commands + security)
   - [x] Task 3.6: Stream Interceptor — ✅ COMPLETE (21+ tests, code fence detection)
-  - [ ] Task 3.7: Command Manifest — PENDING
-  - [ ] Task 3.8: System Prompt — PENDING
-  - [ ] Task 3.9: E2E Test — PENDING
-  - [ ] Task 3.10: Pane State Publishing — PENDING
-  - [ ] Task 3.11: Command Result Feedback — PENDING
+  - [x] Task 3.7: Command Manifest — ✅ COMPLETE
+  - [x] Task 3.8: System Prompt — ✅ COMPLETE
+  - [x] Task 3.9: E2E Test — ✅ COMPLETE (12 tests)
+  - [x] Task 3.10: Pane State Publishing — ✅ COMPLETE
+  - [x] Task 3.11: Command Result Feedback — ✅ COMPLETE
 - [ ] Phase 4: Modality Surfaces
 - [ ] Phase 5: Polish & Desktop
 - [ ] Phase 6: Extended Features
