@@ -71,9 +71,9 @@
   - [x] Task 3.1: PaneService — ✅ COMPLETE (13 tests, 6 methods)
   - [x] Task 3.2: Pane Commands — ✅ COMPLETE (25 tests, 5 commands)
   - [x] Task 3.3: Editor Commands — ✅ COMPLETE (30 tests, 6 commands + security)
-  - [ ] Task 3.4: Terminal Commands — IN PROGRESS
-  - [ ] Task 3.5: File Commands — PENDING
-  - [ ] Task 3.6: Stream Interceptor — PENDING
+  - [x] Task 3.4: Terminal Commands — ✅ COMPLETE (51 tests, 5 commands + security)
+  - [x] Task 3.5: File Commands — ✅ COMPLETE (23 tests, 4 commands + security)
+  - [ ] Task 3.6: Stream Interceptor Hardening — PENDING
 - [ ] Phase 4: Modality Surfaces
 - [ ] Phase 5: Polish & Desktop
 - [ ] Phase 6: Extended Features

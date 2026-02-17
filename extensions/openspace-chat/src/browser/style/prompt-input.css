@@ -222,3 +222,121 @@
     opacity: 0.7;
     border-bottom: 1px solid var(--theia-dropdown-border);
 }
+
+/* File Attachments */
+.prompt-input-file-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    background: var(--theia-editor-background);
+    border-bottom: 1px solid var(--theia-input-border);
+}
+
+.prompt-input-file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--theia-badge-background);
+    color: var(--theia-badge-foreground);
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.prompt-input-file-item .file-icon {
+    font-size: 14px;
+}
+
+.prompt-input-file-item .file-name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.prompt-input-file-item .file-remove {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: inherit;
+    opacity: 0.7;
+}
+
+.prompt-input-file-item .file-remove:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Typeahead Dropdown */
+.prompt-input-typeahead {
+    position: absolute;
+    background: var(--theia-dropdown-background);
+    border: 1px solid var(--theia-dropdown-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.typeahead-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--theia-dropdown-border);
+}
+
+.typeahead-item:last-child {
+    border-bottom: none;
+}
+
+.typeahead-item:hover,
+.typeahead-item.selected {
+    background: var(--theia-list-activeSelectionBackground);
+    color: var(--theia-list-activeSelectionForeground);
+}
+
+.typeahead-icon {
+    font-size: 16px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.typeahead-icon.agent {
+    background: var(--theia-button-background);
+}
+
+.typeahead-icon.file {
+    background: var(--theia-textLink-activeForeground);
+}
+
+.typeahead-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.typeahead-name {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.typeahead-description {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-top: 2px;
+}
