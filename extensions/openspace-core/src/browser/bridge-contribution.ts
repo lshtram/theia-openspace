@@ -17,7 +17,27 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { CommandRegistry } from '@theia/core/lib/common/command';
-import { CommandManifest, CommandDefinition } from '../common/command-manifest';
+import { CommandManifest, CommandDefinition, CommandArgumentSchema, AgentCommand } from '../common/command-manifest';
+import { PaneService, PaneStateSnapshot } from './pane-service';
+
+// Import command argument schemas for manifest auto-generation (FR-3.7)
+import { PaneCommands, PANE_OPEN_SCHEMA, PANE_CLOSE_SCHEMA, PANE_FOCUS_SCHEMA, PANE_LIST_SCHEMA, PANE_RESIZE_SCHEMA } from './pane-command-contribution';
+import { FileCommands, FILE_READ_SCHEMA, FILE_WRITE_SCHEMA, FILE_LIST_SCHEMA, FILE_SEARCH_SCHEMA } from './file-command-contribution';
+import { TerminalCommands, TERMINAL_CREATE_SCHEMA, TERMINAL_SEND_SCHEMA, TERMINAL_READ_OUTPUT_SCHEMA, TERMINAL_CLOSE_SCHEMA } from './terminal-command-contribution';
+import { EditorCommands, EDITOR_OPEN_SCHEMA, EDITOR_SCROLL_SCHEMA, EDITOR_HIGHLIGHT_SCHEMA, EDITOR_CLEAR_HIGHLIGHT_SCHEMA, EDITOR_READ_FILE_SCHEMA, EDITOR_CLOSE_SCHEMA } from './editor-command-contribution';
+
+/**
+ * Command result structure for feedback mechanism.
+ */
+export interface CommandResult {
+    cmd: string;
+    args: unknown;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    executionTime: number;
+    timestamp: string;
+}
 
 /**
  * OpenSpaceBridgeContribution - Frontend service that bridges Theia CommandRegistry with OpenSpace Hub.
@@ -45,11 +65,22 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     @inject(CommandRegistry)
     protected readonly commandRegistry!: CommandRegistry;
 
-    private readonly hubBaseUrl = window.location.origin; // Uses same port as Theia backend
+    @inject(PaneService)
+    private readonly paneService!: PaneService;
+
+    private eventSource?: EventSource;
+    private reconnectAttempts = 0;
+    private reconnectTimer?: number;
+    private readonly maxReconnectDelay = 30000; // 30 seconds
+    private readonly hubBaseUrl = 'http://localhost:3001'; // TODO: Phase 5.2 - make configurable via preferences
+    
+    // Throttling for state publishing (max 1 POST per second)
+    private lastPublishTime = 0;
+    private readonly throttleDelay = 1000; // 1 second
 
     /**
      * Called when the frontend application starts.
-     * Publishes command manifest.
+     * Publishes command manifest and establishes SSE connection.
      */
     async onStart(): Promise<void> {
         console.info('[BridgeContribution] Starting...');
@@ -57,15 +88,20 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         // Publish command manifest
         await this.publishManifest();
         
-        // NOTE: Pane state publishing deferred to Phase 3.10
+        // Subscribe to pane state changes
+        this.subscribeToPaneState();
+        
+        // Establish SSE connection
+        this.connectSSE();
     }
 
     /**
      * Called when the frontend application stops.
+     * Closes SSE connection and cleans up resources.
      */
     onStop(): void {
         console.info('[BridgeContribution] Stopping...');
-        // No resources to clean up
+        this.disconnectSSE();
     }
 
     /**
@@ -112,6 +148,39 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     }
 
     /**
+     * Map of command IDs to their argument schemas for manifest auto-generation.
+     * Uses type assertion to handle JSON Schema literal types.
+     */
+    private readonly commandSchemaMap: Record<string, CommandArgumentSchema | undefined> = {
+        // Pane commands
+        [PaneCommands.OPEN]: PANE_OPEN_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.CLOSE]: PANE_CLOSE_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.FOCUS]: PANE_FOCUS_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.LIST]: PANE_LIST_SCHEMA as CommandArgumentSchema,
+        [PaneCommands.RESIZE]: PANE_RESIZE_SCHEMA as CommandArgumentSchema,
+        
+        // File commands
+        [FileCommands.READ]: FILE_READ_SCHEMA as CommandArgumentSchema,
+        [FileCommands.WRITE]: FILE_WRITE_SCHEMA as CommandArgumentSchema,
+        [FileCommands.LIST]: FILE_LIST_SCHEMA as CommandArgumentSchema,
+        [FileCommands.SEARCH]: FILE_SEARCH_SCHEMA as CommandArgumentSchema,
+        
+        // Terminal commands
+        [TerminalCommands.CREATE]: TERMINAL_CREATE_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.SEND]: TERMINAL_SEND_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.READ_OUTPUT]: TERMINAL_READ_OUTPUT_SCHEMA as CommandArgumentSchema,
+        [TerminalCommands.CLOSE]: TERMINAL_CLOSE_SCHEMA as CommandArgumentSchema,
+        
+        // Editor commands
+        [EditorCommands.OPEN]: EDITOR_OPEN_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.SCROLL_TO]: EDITOR_SCROLL_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.HIGHLIGHT]: EDITOR_HIGHLIGHT_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.CLEAR_HIGHLIGHT]: EDITOR_CLEAR_HIGHLIGHT_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.READ_FILE]: EDITOR_READ_FILE_SCHEMA as CommandArgumentSchema,
+        [EditorCommands.CLOSE]: EDITOR_CLOSE_SCHEMA as CommandArgumentSchema
+    };
+
+    /**
      * Collect all openspace.* commands from CommandRegistry.
      * 
      * @returns Array of CommandDefinition objects for commands starting with 'openspace.'
@@ -120,7 +189,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * - CommandRegistry.commands returns Command[] (array of Command objects)
      * - Each Command has id, label, and category properties
      * - Filters for commands starting with 'openspace.'
-     * - Extracts id, label (as name and description), and category
+     * - Extracts id, label (as name and description), category, and argument schema
      */
     private collectCommands(): CommandDefinition[] {
         const commands: CommandDefinition[] = [];
@@ -132,7 +201,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
                     id: command.id,
                     name: command.label || command.id,
                     description: command.label || command.id, // TODO: Phase 2 - improve description extraction
-                    category: command.category
+                    category: command.category,
+                    arguments_schema: this.commandSchemaMap[command.id],
+                    handler: command.id
                 });
             }
         }
@@ -140,10 +211,305 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         return commands;
     }
 
-    // NOTE: publishPaneState() method deferred to Phase 3.10
+    /**
+     * Establish SSE connection to Hub.
+     * 
+     * Connection Details:
+     * - URL: http://localhost:3001/openspace/events
+     * - Protocol: Server-Sent Events (EventSource)
+     * - Event Types: AGENT_COMMAND, ping
+     * - Auto-reconnect: exponential backoff on error
+     * 
+     * Event Handlers:
+     * - onopen: resets reconnect counter
+     * - onmessage: parses and dispatches commands
+     * - onerror: triggers reconnection
+     */
+    private connectSSE(): void {
+        console.info('[BridgeContribution] Connecting to Hub SSE...');
+        
+        this.eventSource = new EventSource(`${this.hubBaseUrl}/openspace/events`);
+        
+        this.eventSource.onopen = () => {
+            console.info('[BridgeContribution] SSE connection established');
+            this.reconnectAttempts = 0; // Reset reconnect counter on successful connection
+        };
+        
+        this.eventSource.onmessage = (event: MessageEvent) => {
+            this.handleSSEEvent(event);
+        };
+        
+        this.eventSource.onerror = () => {
+            console.warn('[BridgeContribution] SSE disconnected, reconnecting...');
+            this.reconnectSSE();
+        };
+    }
+
+    /**
+     * Handle incoming SSE events.
+     * 
+     * Event Format:
+     * {
+     *   "type": "AGENT_COMMAND",
+     *   "data": {
+     *     "cmd": "openspace.pane.open",
+     *     "args": { "type": "editor", "uri": "file:///path/to/file" }
+     *   }
+     * }
+     * 
+     * Processing Steps:
+     * 1. Parse JSON event data
+     * 2. Validate event type
+     * 3. Extract cmd and args
+     * 4. Execute command via CommandRegistry
+     * 
+     * Error Handling:
+     * - Parse error: log and skip
+     * - Unknown event type: log warning
+     * - Invalid event data: log error
+     */
+    private handleSSEEvent(event: MessageEvent): void {
+        try {
+            const parsedEvent = JSON.parse(event.data);
+            
+            if (parsedEvent.type === 'AGENT_COMMAND') {
+                const agentCommand: AgentCommand = parsedEvent.data;
+                console.info(`[BridgeContribution] Received command: ${agentCommand.cmd}`);
+                
+                // Execute command via CommandRegistry
+                this.executeCommand(agentCommand);
+            } else if (parsedEvent.type === 'ping') {
+                // Ignore keepalive pings
+                console.debug('[BridgeContribution] Received ping');
+            } else {
+                console.warn(`[BridgeContribution] Unknown event type: ${parsedEvent.type}`);
+            }
+        } catch (error: any) {
+            console.error('[BridgeContribution] Invalid event data:', error);
+        }
+    }
+
+    /**
+     * Execute agent command via CommandRegistry.
+     * 
+     * Steps:
+     * 1. Check if command exists in registry
+     * 2. Convert args to array format if needed
+     * 3. Execute via commandRegistry.executeCommand()
+     * 4. Capture result and POST to Hub
+     * 
+     * Error Handling:
+     * - Command not found: log warning, skip execution
+     * - Execution error: log error, continue (don't block subsequent commands)
+     * 
+     * @param agentCommand Command to execute with id and arguments
+     */
+    private async executeCommand(agentCommand: AgentCommand): Promise<void> {
+        const startTime = Date.now();
+        const { cmd, args } = agentCommand;
+        
+        try {
+            // Check if command exists
+            if (!this.commandRegistry.getCommand(cmd)) {
+                console.warn(`[BridgeContribution] Unknown command: ${cmd}`);
+                // Post failed result for unknown command
+                await this.postCommandResult({
+                    cmd,
+                    args,
+                    success: false,
+                    error: 'Unknown command',
+                    executionTime: Date.now() - startTime,
+                    timestamp: new Date().toISOString()
+                });
+                return;
+            }
+            
+            // Execute command - convert args to array format
+            // If args is an object, wrap in array; if array, use as-is; if undefined, use empty array
+            const argsArray = args ? (Array.isArray(args) ? args : [args]) : [];
+            const output = await this.commandRegistry.executeCommand(cmd, ...argsArray);
+            
+            console.debug(`[BridgeContribution] Command executed: ${cmd}`);
+            
+            // Post successful result
+            await this.postCommandResult({
+                cmd,
+                args,
+                success: true,
+                output,
+                executionTime: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error: any) {
+            console.error(`[BridgeContribution] Command execution failed:`, error);
+            
+            // Post failed result
+            await this.postCommandResult({
+                cmd,
+                args,
+                success: false,
+                error: error.message || String(error),
+                executionTime: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    /**
+     * Post command result to Hub.
+     * 
+     * @param result Command result to post
+     */
+    private async postCommandResult(result: CommandResult): Promise<void> {
+        try {
+            const response = await fetch(`${this.hubBaseUrl}/openspace/command-results`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(result)
+            });
+
+            if (!response.ok) {
+                console.warn(`[BridgeContribution] Failed to post command result: HTTP ${response.status}`);
+            }
+        } catch (error: any) {
+            // Graceful degradation - don't block command execution if Hub is unavailable
+            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+                console.debug('[BridgeContribution] Hub not available, command result not posted');
+            } else {
+                console.error('[BridgeContribution] Error posting command result:', error);
+            }
+        }
+    }
+
+    /**
+     * Disconnect SSE connection and clean up resources.
+     * 
+     * Cleanup Steps:
+     * 1. Close EventSource if exists
+     * 2. Clear reconnection timer if pending
+     * 3. Reset state variables
+     * 
+     * Memory Safety:
+     * - Ensures EventSource is properly closed
+     * - Clears timers to prevent memory leaks
+     */
+    private disconnectSSE(): void {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = undefined;
+            console.debug('[BridgeContribution] SSE connection closed');
+        }
+        
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = undefined;
+        }
+    }
+
+    /**
+     * Reconnect SSE with exponential backoff.
+     * 
+     * Backoff Strategy:
+     * - Initial delay: 1 second
+     * - Exponential: delay = 1s * 2^attempts
+     * - Formula: Math.min(1000 * 2^attempts, 30000)
+     * - Max delay: 30 seconds
+     * 
+     * Example Delays:
+     * - Attempt 0: 1s
+     * - Attempt 1: 2s
+     * - Attempt 2: 4s
+     * - Attempt 3: 8s
+     * - Attempt 4: 16s
+     * - Attempt 5+: 30s (max)
+     * 
+     * Implementation:
+     * 1. Disconnect existing connection
+     * 2. Calculate delay with exponential backoff
+     * 3. Schedule reconnection with setTimeout
+     * 4. Increment attempt counter
+     */
+    private reconnectSSE(): void {
+        this.disconnectSSE();
+        
+        const delay = Math.min(
+            1000 * Math.pow(2, this.reconnectAttempts),
+            this.maxReconnectDelay
+        );
+        
+        console.debug(`[BridgeContribution] Reconnecting in ${delay}ms...`);
+        
+        this.reconnectTimer = window.setTimeout(() => {
+            this.reconnectAttempts++;
+            this.connectSSE();
+        }, delay);
+    }
+
+    // NOTE: publishPaneState() method deferred to Phase 2
     // Future implementation will:
     // - Collect pane state from ApplicationShell
     // - Build PaneStateSnapshot
-    // - POST to http://localhost:3000/openspace/state
+    // - POST to http://localhost:3001/openspace/state
     // - Support system prompt generation with IDE context
+
+    /**
+     * Subscribe to PaneService layout changes and publish state to Hub.
+     * 
+     * Implementation:
+     * 1. Subscribe to onPaneLayoutChanged event
+     * 2. On each change, call publishState with throttling
+     */
+    private subscribeToPaneState(): void {
+        console.info('[BridgeContribution] Subscribing to pane state changes...');
+        
+        this.paneService.onPaneLayoutChanged((snapshot: PaneStateSnapshot) => {
+            this.publishState(snapshot);
+        });
+    }
+
+    /**
+     * Publish pane state snapshot to Hub with throttling.
+     * 
+     * Throttling:
+     * - Max 1 POST per second to avoid flooding
+     * - Uses Date.now() for timing
+     * - Skips publish if within throttle window
+     * 
+     * Error Handling:
+     * - Hub unavailable: logs warning, continues
+     * - Network error: logs error, continues
+     * - Doesn't block subsequent attempts
+     * 
+     * @param state Pane state snapshot to publish
+     */
+    private async publishState(state: PaneStateSnapshot): Promise<void> {
+        const now = Date.now();
+        
+        // Throttle: skip if within throttle window
+        if (now - this.lastPublishTime < this.throttleDelay) {
+            return;
+        }
+        
+        this.lastPublishTime = now;
+        
+        try {
+            const response = await fetch(`${this.hubBaseUrl}/openspace/state`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            console.debug(`[BridgeContribution] Published pane state: ${state.panes.length} panes`);
+        } catch (error: any) {
+            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+                console.warn('[BridgeContribution] Warning: Hub not available, state not published');
+            } else {
+                console.error('[BridgeContribution] Error publishing state:', error);
+            }
+        }
+    }
 }
