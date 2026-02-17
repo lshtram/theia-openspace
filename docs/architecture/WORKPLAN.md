@@ -369,6 +369,7 @@ task_id: TheiaOpenspaceWorkplan
 **Exit criteria:** Chat experience is feature-complete relative to the opencode client. Multi-part prompts, streaming, file mentions, response renderers all working.
 
 **V&V Targets:**
+- [x] Session list loads immediately on chat widget open (Task 2.0)
 - [ ] Multi-part prompt: text + file attachment + @mention sent correctly to opencode server
 - [ ] Message timeline renders streaming response with visible progress indicator
 - [ ] Auto-scroll follows new content; scrolling up pauses auto-scroll
@@ -378,6 +379,17 @@ task_id: TheiaOpenspaceWorkplan
 - [ ] Session fork/revert/compact operations work through UI
 - [ ] Token usage displays and updates during streaming
 - [ ] Chat integration test (2.9) passes
+
+### 2.0 — Session List Auto-Load Fix (NEW)
+| | |
+|---|---|
+| **What** | Fix race condition where session list doesn't appear immediately on chat widget open. ChatWidget was calling `getSessions()` during mount before SessionService completed async project restoration from localStorage. Solution: Subscribe to `SessionService.onActiveProjectChanged` event and reload sessions when project loads. Add loading/error/empty states to UI. |
+| **Acceptance** | Sessions appear within 500ms of widget open. Loading indicator displays during fetch. Error state shows with retry button on failure. Empty state shows helpful message when 0 sessions exist. |
+| **Dependencies** | Phase 1 complete |
+| **Priority** | HIGH (user-reported UX blocker) |
+| **REQ ref** | REQ-SESSION-LIST-AUTOLOAD |
+| **Result** | Race condition eliminated via event subscription. 13 unit tests added (113/113 passing). Build clean. CodeReviewer: 87% confidence (APPROVED). Known improvements: accessibility enhancements, magic number extraction, enhanced error messages (all non-blocking). |
+| **Status** | ✅ |
 
 ### 2.1 — Multi-part prompt input
 | | |

@@ -9,43 +9,38 @@
 ### 🔴 Issue #1: Session List Not Visible on Chat Widget Open
 **Reported**: 2026-02-17 (User manual testing)  
 **Phase**: Phase 1B1 (discovered), should fix in Phase 2  
-**Priority**: HIGH (UX blocker)
+**Priority**: HIGH (UX blocker)  
+**Requirements**: [REQ-SESSION-LIST-AUTOLOAD](../../docs/requirements/REQ-SESSION-LIST-AUTOLOAD.md)
 
 #### Symptoms
 - When chat widget opens, only "+ New Session" button is visible
 - Existing sessions are not displayed in the session list
 - User must manually trigger refresh or reload to see sessions
 
-#### Expected Behavior
-- Chat widget should display existing session list immediately on open
-- If sessions exist, they should be visible alongside "+ New Session" button
-- Session list should load automatically on widget initialization
+#### Root Cause (CONFIRMED)
+**Race condition between ChatWidget mount and SessionService initialization:**
 
-#### Suspected Causes
-1. **Race condition**: ChatWidget mounts before SessionService.listSessions() completes
-2. **Missing auto-load**: Sessions not fetched automatically on widget init
-3. **State sync issue**: SessionService has sessions but ChatWidget doesn't react to initial state
+1. ChatWidget mounts → calls `loadSessions()` immediately (line 91 in chat-widget.tsx)
+2. SessionService.getSessions() checks if `_activeProject` exists (line 546 in session-service.ts)
+3. **BUT** SessionService.init() is async and still restoring project from localStorage (lines 159-180)
+4. Result: `getSessions()` returns empty array `[]` before project loads
+5. ChatWidget subscribes to `onActiveSessionChanged` (line 123) but **NOT** `onActiveProjectChanged`
+6. When project finally loads, no re-fetch is triggered → UI stays empty
 
-#### Impact
-- User cannot see or switch to existing sessions without manual action
-- Poor first-run experience (appears broken)
-- Workaround exists but shouldn't be necessary
+#### Confirmed Fix (Phase 2)
+1. **Primary**: Subscribe ChatWidget to `SessionService.onActiveProjectChanged` event
+2. **Secondary**: Add loading state UI (spinner/skeleton) while sessions load
+3. **Tertiary**: Add error state UI with retry button for failed loads
+4. **Quaternary**: Debounce rapid project changes to prevent duplicate fetches
 
-#### Files Involved
-- `extensions/openspace-chat/src/browser/chat-widget.tsx` (session list rendering)
-- `extensions/openspace-core/src/browser/session-service.ts` (session loading)
-
-#### Proposed Fix (Phase 2)
-1. Add `useEffect` hook in ChatWidget to call `sessionService.listSessions()` on mount
-2. Ensure SessionService emits `onSessionsChanged` event after loading
-3. Add loading state UI (spinner/skeleton) while sessions load
-4. Add error handling for failed session list fetch
-
-#### Test Cases Needed
-- [ ] Open chat widget with 0 sessions → shows only "+ New Session"
-- [ ] Open chat widget with 1+ sessions → shows session list immediately
-- [ ] Session list loads within 500ms of widget mount
-- [ ] Error fetching sessions → shows error message, allows retry
+#### Implementation Status
+- [ ] REQ document drafted: [REQ-SESSION-LIST-AUTOLOAD](../../docs/requirements/REQ-SESSION-LIST-AUTOLOAD.md)
+- [ ] Oracle approved technical approach
+- [ ] Builder implemented ChatWidget changes
+- [ ] Builder implemented loading/error states
+- [ ] Janitor wrote E2E tests (race condition, error handling)
+- [ ] CodeReviewer approved implementation
+- [ ] Deployed and verified in production
 
 ---
 
