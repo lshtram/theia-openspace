@@ -147,39 +147,26 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         lastMessageCountRef.current = messages.length;
 
         if (messageCountChanged) {
-            // Check if we're near bottom
-            const { scrollTop, scrollHeight, clientHeight } = container;
-            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-            const isNearBottom = distanceFromBottom < AUTO_SCROLL_THRESHOLD;
-
-            if (isNearBottom && !isUserScrollingRef.current) {
-                // Auto-scroll to show new message (with delay to ensure content is rendered)
+            if (!isUserScrollingRef.current) {
+                // Always scroll to show new message — user sent it or agent replied.
                 const timer = setTimeout(() => {
                     scrollToBottom('smooth');
-                }, 100);
+                }, 50);
                 return () => clearTimeout(timer);
-            } else if (isScrolledUp) {
-                // User is scrolled up, show new messages indicator
+            } else {
+                // User is actively scrolling; show indicator instead.
                 setHasNewMessages(true);
             }
         }
         return undefined;
-    }, [messages, isScrolledUp, scrollToBottom]);
+    }, [messages, scrollToBottom]);
 
-    // Auto-scroll during streaming
+    // Auto-scroll during streaming — fire after paint so scrollHeight is current
     React.useEffect(() => {
-        if (!isStreaming) return;
-
-        const container = containerRef.current;
-        if (!container) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-        const isNearBottom = distanceFromBottom < AUTO_SCROLL_THRESHOLD;
-
-        if (isNearBottom && !isUserScrollingRef.current) {
+        if (!isStreaming || isUserScrollingRef.current) return;
+        requestAnimationFrame(() => {
             bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        }
+        });
     }, [streamingData, isStreaming]);
 
     // Scroll to bottom on initial mount so the most recent messages are visible
