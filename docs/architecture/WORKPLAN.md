@@ -641,6 +641,26 @@ These are independent post-MVP features that can be done in any order.
 
 **Status:** 🔶 DONE-NOT-VALIDATED — revisit during Phase 5.7 (E2E test suite)
 
+### MCP Read-Tool Latency: Push-Based Pane Cache
+
+**Issue:** All MCP read tools (`pane.list`, `editor.read_file`, etc.) incur a full bridge round-trip: MCP HTTP → Hub → RPC WebSocket → browser → response. This adds 200–500ms per call regardless of how cheap the underlying browser-side operation is.
+
+**Root cause:** The browser is the sole source of truth for IDE state (widget list, open files, etc.), so every read requires a round-trip from the Node hub to the browser and back.
+
+**Recommended solution (push-based cache):**
+- `PaneService.onPaneLayoutChanged` already emits a full `PaneStateSnapshot` on every layout change (pane open/close/focus/resize).
+- The Hub should subscribe to these events over the bridge (push path) and store the last snapshot in memory.
+- `pane.list` then returns the cached snapshot synchronously — no round-trip, <5ms latency.
+- Same pattern can be applied to any other read-heavy tool (editor open files, terminal list, etc.).
+
+**Scope:** Affects ALL MCP read tools. Implementing for `pane.list` alone is a 1–2 hour task; a general push-cache for all read tools is ~4 hours.
+
+**Status:** ⬜ NOT STARTED  
+**Estimated effort:** 1–4 hours (pane.list only → all read tools)  
+**Dependencies:** Phase T3 complete (already done)
+
+---
+
 ### Phase 2B.6 — SDK Type Drift Detection (CI)
 
 **Issue:** No automated check that extracted SDK types stay in sync with `@opencode-ai/sdk` updates.

@@ -41,6 +41,10 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
       client => {
         const service = ctx.container.get<OpenCodeService>(OpenCodeService);
         service.setClient(client);
+        // Wire the RPC client into the Hub's MCP bridge so that agent commands
+        // dispatched via MCP tools are forwarded to the browser frontend.
+        const hub = ctx.container.get<OpenSpaceHub>(OpenSpaceHub);
+        hub.setClientCallback(command => client.onAgentCommand(command));
         return service;
       }
     )

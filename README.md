@@ -1,5 +1,7 @@
 # Theia Openspace
 
+<!-- Working with user via OpenCode MCP -->
+
 A customized Theia IDE environment for OpenSpace collaboration.
 
 ## Prerequisites
