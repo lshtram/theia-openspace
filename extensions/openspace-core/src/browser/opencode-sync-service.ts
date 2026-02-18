@@ -91,15 +91,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             console.debug('[SyncService] Streaming messages cleared on session change');
         });
 
-        // T3-test: Expose test helpers for E2E testing (always in browser context)
-        // Creates or extends window.__openspace_test__ unconditionally.
-        // Note: PermissionDialogContribution.onStart() may not have run yet (timing race),
-        // so we cannot rely on __openspace_test__ already existing — we create it if needed.
-        // Note: process is not reliable in webpack lazy-loaded chunks; guard removed.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (typeof window !== 'undefined') {
-            // Create __openspace_test__ if it doesn't exist yet, then merge in SyncService hooks
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // T2-15: Only expose test hooks in non-production builds.
+        // process.env.NODE_ENV is replaced by webpack DefinePlugin at build time,
+        // which also dead-code eliminates the entire block in production bundles.
+        if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
             if (typeof (window as any).__openspace_test__ === 'undefined') {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).__openspace_test__ = {};
@@ -114,7 +109,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     this.onMessageEvent(event);
                 }
             });
-            console.info('[SyncService] E2E test helpers exposed');
+            console.info('[SyncService] E2E test helpers exposed (non-production)');
         }
     }
 
