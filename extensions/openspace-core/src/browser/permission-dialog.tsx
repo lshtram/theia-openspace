@@ -119,32 +119,45 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
         }
 
         const handleTabKey = (event: KeyboardEvent) => {
-            if (event.key === 'Tab') {
-                const focusableElements = dialogRef.current!.querySelectorAll<HTMLElement>(
-                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), ' +
-                    'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-                );
-                const elements = Array.from(focusableElements);
-                if (elements.length === 0) {
-                    return;
+            if (event.key !== 'Tab') {
+                return;
+            }
+            if (!dialogRef.current) {
+                return;  // guard against stale closure after unmount
+            }
+
+            const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), ' +
+                'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            const elements = Array.from(focusableElements);
+            if (elements.length === 0) {
+                return;
+            }
+
+            const first = elements[0];
+            const last = elements[elements.length - 1];
+            const active = document.activeElement as HTMLElement;
+
+            const idx = elements.indexOf(active);
+            if (idx === -1) {
+                // focus is outside the dialog — pull it back
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus();
+                return;
+            }
+
+            if (event.shiftKey) {
+                // Shift+Tab: wrap from first to last
+                if (active === first) {
+                    event.preventDefault();
+                    last.focus();
                 }
-
-                const first = elements[0];
-                const last = elements[elements.length - 1];
-                const active = document.activeElement as HTMLElement;
-
-                if (event.shiftKey) {
-                    // Shift+Tab: wrap from first to last
-                    if (active === first) {
-                        event.preventDefault();
-                        last.focus();
-                    }
-                } else {
-                    // Tab: wrap from last to first
-                    if (active === last) {
-                        event.preventDefault();
-                        first.focus();
-                    }
+            } else {
+                // Tab: wrap from last to first
+                if (active === last) {
+                    event.preventDefault();
+                    first.focus();
                 }
             }
         };

@@ -25,18 +25,20 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Derive __dirname equivalent from import.meta.url via URL pathname
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore TS1343
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
+
 describe('PermissionDialog - Focus Trap (T2-18)', () => {
     it('focus trap cycles Tab within dialog elements', () => {
-        // Structural test: verify the Tab cycling code is present in source
-        // Use process.cwd() (repo root) since __dirname is unavailable in ESM context
+        // Structural test: verify the Tab cycling code is present in source.
+        // Path is computed relative to this spec file's location, not process.cwd().
         const src = fs.readFileSync(
-            path.join(
-                process.cwd(),
-                'extensions/openspace-core/src/browser/permission-dialog.tsx'
-            ),
+            path.join(__dirname, '../permission-dialog.tsx'),
             'utf-8'
         );
-        expect(src).to.include("key === 'Tab'");
+        expect(src).to.include("key !== 'Tab'");
         expect(src).to.include('focusableElements');
     });
 });
