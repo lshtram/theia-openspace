@@ -145,6 +145,7 @@ export interface PaneService extends Disposable {
  * - Open, close, focus, list, and resize panes
  * - Track agent-created panes for cleanup (GAP-4)
  * - Emit layout change events for state synchronization
+ * - T2-8: Properly dispose event subscriptions on service shutdown
  */
 @injectable()
 export class PaneServiceImpl implements PaneService {
@@ -154,6 +155,9 @@ export class PaneServiceImpl implements PaneService {
 
     // Event emitters
     private readonly _onPaneLayoutChanged = new Emitter<PaneStateSnapshot>();
+    
+    // T2-8: Track all disposables for cleanup
+    private readonly disposables: Disposable[] = [];
     
     // Agent pane tracking for GAP-4 cleanup
     private readonly agentPanes: Map<string, AgentPaneInfo> = new Map();
@@ -167,25 +171,29 @@ export class PaneServiceImpl implements PaneService {
 
     /**
      * Initialize the service - subscribe to shell events.
+     * T2-8: Track subscriptions for later disposal
      */
     @postConstruct()
     protected init(): void {
         console.info('[PaneService] Initializing...');
 
         // Subscribe to active widget changes
-        this.shell.onDidChangeActiveWidget(() => {
+        const activeWidgetDisposable = this.shell.onDidChangeActiveWidget(() => {
             this.emitLayoutChange();
         });
+        this.disposables.push(activeWidgetDisposable);
 
         // Subscribe to widget additions
-        this.shell.onDidAddWidget(() => {
+        const addWidgetDisposable = this.shell.onDidAddWidget(() => {
             this.emitLayoutChange();
         });
+        this.disposables.push(addWidgetDisposable);
 
         // Subscribe to widget removals
-        this.shell.onDidRemoveWidget(() => {
+        const removeWidgetDisposable = this.shell.onDidRemoveWidget(() => {
             this.emitLayoutChange();
         });
+        this.disposables.push(removeWidgetDisposable);
 
         console.info('[PaneService] Initialized');
     }
@@ -383,9 +391,16 @@ export class PaneServiceImpl implements PaneService {
 
     /**
      * Dispose the service.
+     * T2-8: Clean up all event subscriptions
      */
     dispose(): void {
         console.info('[PaneService] Disposing...');
+        
+        // T2-8: Dispose all tracked subscriptions
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
+        this.disposables.length = 0;
         
         this._onPaneLayoutChanged.dispose();
         this.agentPanes.clear();

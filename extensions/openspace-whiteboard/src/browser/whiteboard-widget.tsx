@@ -50,6 +50,9 @@ export class WhiteboardWidget extends ReactWidget {
     protected autoSaveEnabled: boolean = true;
     protected containerRef: React.RefObject<HTMLDivElement>;
 
+    // T2-22: Expose URI for findByUri comparison (public property)
+    public uri: string = '';
+
     constructor() {
         super();
         this.id = WhiteboardWidget.ID;
@@ -199,9 +202,21 @@ const WhiteboardIframe: React.FC<WhiteboardIframeProps> = ({ initialData, onData
         console.log('[WhiteboardIframe] Initialized with data:', initialData);
     }, [initialData]);
 
-    // Listen for messages from iframe
+    // Listen for messages from iframe with origin validation (T2-21)
     React.useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
+            // T2-21: Validate origin to prevent postMessage from untrusted sources
+            const allowedOrigins = [
+                window.location.origin,  // Same origin
+                'http://localhost:3000',
+                'http://localhost:3001',
+            ];
+
+            if (!allowedOrigins.includes(event.origin)) {
+                console.warn('[WhiteboardWidget] Rejected postMessage from untrusted origin:', event.origin);
+                return;
+            }
+
             if (event.data?.type === 'whiteboard-update') {
                 onDataChange(event.data.data);
             }

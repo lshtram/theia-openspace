@@ -19,8 +19,10 @@ describe('SessionService', () => {
 
     const mockProject: Project = {
         id: 'proj-1',
-        name: 'Test Project',
-        path: '/test/project'
+        worktree: '/test/project',
+        time: {
+            created: Date.now()
+        }
     };
 
     const mockSession: Session = {
@@ -57,7 +59,8 @@ describe('SessionService', () => {
             deleteSession: sinon.stub(),
             getMessages: sinon.stub(),
             createMessage: sinon.stub(),
-            abortSession: sinon.stub()
+            abortSession: sinon.stub(),
+            connectToProject: sinon.stub().resolves()
         } as any;
 
         // Mock localStorage

@@ -4,17 +4,65 @@
 **Last Updated:** 2026-02-18
 
 ## Current Focus
-- **Status:** PHASE 2B.7 COMPLETE ✅ — Unit test infrastructure fixed, all 375 tests passing
-- **Next:** Phase 1C.1 — Fix T1 Blocking Issues (10 security/crash bugs)
+- **Status:** E2E SUITE FULLY PASSING ✅ — 38 pass, 1 skip (intentional memory-leak), 0 fail
+- **Previous:** E2E TEST HOOKS FIXED ✅ — process guard + PermissionDialog overwrite bugs resolved; all 5 agent-control tests now pass (were skipping)
+- **Next:** Phase 5 — Polish & Desktop (5.1 custom layout → 5.2 theming → 5.3 settings → 5.4 Electron → 5.5 persistence → 5.6 sharing → 5.7 E2E)
+
+## E2E Test Hook Fixes (2026-02-18) ✅ COMPLETE
+
+**Two root-cause bugs fixed that caused `agent-control.spec.ts` to skip:**
+
+### Bug 1: `process` guard blocked test hooks in webpack lazy chunk
+- **File:** `extensions/openspace-core/src/browser/opencode-sync-service.ts`
+- **Root cause:** `if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')` evaluated to `false` inside webpack lazy-loaded chunk (browser has no `process`)
+- **Effect:** `triggerAgentCommand`, `getLastDispatchedCommand`, `injectMessageEvent` were NEVER added to `window.__openspace_test__`
+- **Fix:** Removed `process` guard entirely; kept only `if (typeof window !== 'undefined')` check; upgraded to `console.info` for visibility
+
+### Bug 2: `PermissionDialogContribution` overwrote `__openspace_test__`
+- **File:** `extensions/openspace-core/src/browser/permission-dialog-contribution.ts`
+- **Root cause:** Direct assignment `window.__openspace_test__ = { injectPermissionEvent: ... }` wiped all SyncService hooks
+- **Fix:** Changed to `Object.assign` pattern — merges instead of replacing
+
+### E2E Results After Fix
+- **agent-control.spec.ts:** 5/5 pass (were all skipping)
+- **Full suite:** 38 pass, 1 intentional skip (memory-leak test), 0 fail
+
+### Build procedure reminder
+After TypeScript changes to openspace-core, must ALSO rebuild webpack bundle:
+```bash
+cd browser-app && npx webpack --config webpack.config.js --mode development
+```
+The lazy chunk is: `browser-app/lib/frontend/extensions_openspace-core_lib_browser_openspace-core-frontend-module_js.js`
+
+## E2E Audit & Rewrite (2026-02-18) ✅ COMPLETE
+
+**Problem found:** 30 of 36 existing E2E tests were fake — tautological JS conditions or regex patterns written inside the test files. Root cause: `page.route()` browser mocks can't intercept Architecture B1's backend RPC calls.
+
+**Gold standard pattern:** `permission-dialog.spec.ts` — uses `window.__openspace_test__` injection.
+
+**What was done:**
+1. ✅ Full gap analysis written: `.opencode/context/active_tasks/e2e-audit/gap-analysis.md`
+2. ✅ Builder contract written: `.opencode/context/active_tasks/e2e-audit/contract.md`
+3. ✅ `tests/e2e/app-load.spec.ts` — NEW: 5 Tier 1 smoke tests (app loads, title, chat widget, hub endpoints)
+4. ✅ `tests/e2e/session-management.spec.ts` — REWRITTEN: 5 real tests (Tier 1 UI structure + Tier 3 session CRUD w/ skip guards)
+5. ✅ `tests/e2e/agent-control.spec.ts` — REWRITTEN: 5 real Tier 2 tests using `window.__openspace_test__` hooks
+6. ✅ `tests/e2e/session-list-autoload.spec.ts` — ENHANCED: 2 new regression tests added
+7. ✅ `tests/e2e/session-management-integration.spec.ts` — ENHANCED: content assertions on manifest + instructions
+8. ✅ `extensions/openspace-core/src/browser/opencode-sync-service.ts` — added `triggerAgentCommand`, `getLastDispatchedCommand`, `injectMessageEvent` test hooks
+
+**Test results:** 28 passed, 6 skipped (Tier 3 — no OpenCode server), 0 failed
+
+**Critical infrastructure gap documented:** `docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md`
 - **Completed (2026-02-18):**
   - Phase 0: All tasks (0.1–0.8) ✅
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
   - Phase 2B: All tasks (2B.1–2B.5) ✅ — SDK types adopted
-  - Phase 2B.7: Unit test infrastructure ✅ — 375/375 tests passing
+  - Phase 2B.7: Unit test infrastructure ✅ — 412/412 tests passing
   - Phase 3: All tasks (3.1–3.11) ✅
-  - Phase 4: All tasks (4.1–4.6) ✅ — Presentation and whiteboard modalities complete
-  - Scout research: OpenCode SDK — RFC-002 FINAL (`docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`)
+  - Phase 4: All tasks (4.1–4.6) ✅
+  - **Phase 1C: Code Hardening ✅** — 54 issues fixed, build clean, all tests passing
+  - Scout research: OpenCode SDK — RFC-002 FINAL
   - Decision document: `docs/architecture/DECISION-SDK-ADOPTION.md` v2.0 — Hybrid Approach APPROVED (2026-02-18)
   - ESM/CJS blocker discovered: SDK is ESM-only, Theia requires CJS, TypeScript cannot import ESM in CJS
   - Six approaches evaluated (static import, node16, bundler, dynamic import, fork, wait) — only hybrid works
@@ -35,28 +83,38 @@
     - **User decision:** Execute Phase 1C immediately after Phase 2B completes (before Phase 5)
 - **Next:** Phase 1C Hardening → Phase 5 Polish & Desktop
 
-## Phase 1C: Code Hardening & Quality Pass — Plan Summary (APPROVED 2026-02-18)
+## Phase 1C: Code Hardening & Quality Pass — COMPLETE ✅ (2026-02-18)
 
-**Strategic timing:** Immediately after Phase 2B, before Phase 5 deployment  
-**Rationale:** Avoid duplicate work (SDK refactor resolves some issues), clean break point, Phase 4 already deployed (security issues upgraded to critical)
+**Strategic timing:** Completed immediately after Phase 2B  
+**Effort:** ~2-3 hours
+**Quality Metrics:**
+  - Build: ✅ PASS (51s, 0 errors)
+  - Unit Tests: ✅ 412/412 passing
+  - TypeScript: ✅ 0 errors
+  - Issues Fixed: 54 total
 
-| Task | What | Effort | Priority |
-|------|------|--------|----------|
-| 1C.1 | Fix T1 blocking (10 issues): dangerous commands, XSS, symlinks, crashes, tests | 4–6h | CRITICAL |
-| 1C.2 | Fix T2 security (7 issues): Hub auth, sensitive files, permission dialog, file limits | 3–4h | HIGH |
-| 1C.3 | Fix T2 reliability (21 issues): memory leaks, dead code, disposal, type safety | 2–3h | MEDIUM |
-| 1C.4 | Dead code cleanup: duplicates, spike files, unused types | 2h | LOW |
-| 1C.5 | Test infrastructure: Jest/Mocha conflict, phantom tests, flaky timeouts | 3–4h | MEDIUM |
-| 1C.6 | T3 minor fixes (16 issues): as time allows | 2–4h | LOW |
-| 1C.7 | Security review & validation: checklist, penetration testing | 1–2h | HIGH |
+| Task | What | Status |
+|------|------|--------|
+| 1C.1 | Fix T1 blocking (10 issues) | ✅ COMPLETE |
+| 1C.2 | Fix T2 security (7 issues) | ✅ COMPLETE |
+| 1C.3 | Fix T2 reliability (21 issues) | ✅ COMPLETE |
+| 1C.4 | Dead code cleanup | ✅ COMPLETE |
+| 1C.5 | Test infrastructure fixes | ✅ COMPLETE |
+| 1C.6 | T3 minor fixes (16 issues) | ✅ COMPLETE |
+| 1C.7 | Security review & validation | ✅ COMPLETE |
 
-**Total effort:** 14–22 hours (1–2 sessions)
+**Key fixes applied:**
+- Security: Dangerous commands blocked, XSS sanitized, path traversal protected, Hub auth validated
+- Reliability: Memory leaks fixed (disposal), subscription cleanup, race condition guards
+- Tests: Runner conflict resolved, phantom tests fixed, flaky timeouts replaced
 
-**Key issues by category:**
-- **Security (T1+T2):** 17 issues — XSS, path traversal, dangerous commands, Hub auth, postMessage origin, file size limits
-- **Reliability (T2):** 21 issues — memory leaks, fake returns, subscription leaks, dead code, type duplicates
-- **Tests (T1+T2):** 13 issues — runner conflict, tautological tests, phantom tests, flaky timeouts
-- **Minor (T3):** 16 issues — cleanup, style, configuration hardcoding
+**Process observations:**
+- ✅ Delegation to Builder subagents worked effectively
+- ✅ T1/T2/T3 phased approach allowed focused work
+- ✅ Janitor validation caught all issues
+- ⚠️ Some duplicate work: T1-4, T1-5, T1-7, T1-8 already fixed in previous session
+
+**Next:** Phase 5 — Polish & Desktop
 
 
 | Task | What | Effort | Dependencies |

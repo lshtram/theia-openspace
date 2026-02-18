@@ -23,6 +23,13 @@ import { PaneCommandContribution } from './pane-command-contribution';
 import { EditorCommandContribution } from './editor-command-contribution';
 import { TerminalCommandContribution } from './terminal-command-contribution';
 import { FileCommandContribution } from './file-command-contribution';
+import { PermissionDialogContribution } from './permission-dialog-contribution';
+
+/**
+ * SessionServiceWiring Symbol for DI binding.
+ * This binding wires the SessionService to OpenCodeSyncService to break the circular dependency.
+ */
+export const SessionServiceWiring = Symbol('SessionServiceWiring');
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     // 1. Filter contribution (existing - Phase 0)
@@ -47,11 +54,26 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
         );
     }).inSingletonScope();
 
-    // 5. Application contributions
+    // 5. SessionService wiring - Wire SessionService to SyncService to break circular DI dependency
+    // This MUST happen after both services are bound, so we use a separate binding that depends on both
+    bind(SessionServiceWiring).toDynamicValue(ctx => {
+        const syncService = ctx.container.get<OpenCodeSyncServiceImpl>(OpenCodeSyncService);
+        const sessionService = ctx.container.get<SessionService>(SessionService);
+        
+        // Use queueMicrotask to ensure DI is fully resolved before wiring
+        queueMicrotask(() => {
+            syncService.setSessionService(sessionService);
+        });
+        
+        return null;
+    }).inSingletonScope();
+
+    // 6. Application contributions
     // BridgeContribution runs on app startup (collects commands, publishes manifest, connects to Hub)
     bind(FrontendApplicationContribution).to(OpenSpaceBridgeContribution).inSingletonScope();
+    bind(FrontendApplicationContribution).to(PermissionDialogContribution).inSingletonScope();
 
-    // 6. Command contributions
+    // 7. Command contributions
     bind(CommandContribution).to(PaneCommandContribution).inSingletonScope();
     bind(CommandContribution).to(EditorCommandContribution).inSingletonScope();
     bind(CommandContribution).to(TerminalCommandContribution).inSingletonScope();

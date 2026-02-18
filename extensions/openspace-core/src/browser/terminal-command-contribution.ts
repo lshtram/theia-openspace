@@ -16,9 +16,47 @@
 
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { Disposable } from '@theia/core/lib/common/disposable';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
 import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { TerminalRingBuffer, sanitizeOutput, isDangerous } from './terminal-ring-buffer';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import * as path from 'path';
+
+/**
+ * Allowlist of permitted shell executables.
+ * Only shells in this list can be used for terminal creation.
+ * Note: User's default shell is added dynamically at runtime.
+ */
+const ALLOWED_SHELLS = [
+    '/bin/bash',
+    '/bin/zsh',
+    '/bin/sh',
+    '/usr/bin/bash',
+    '/usr/bin/zsh',
+    '/usr/bin/sh'
+].filter((shell): shell is string => typeof shell === 'string' && shell.length > 0);
+
+/**
+ * Get the allowed shells including the user's default shell.
+ * This is called at runtime when a terminal is created, not at module load time.
+ */
+function getAllowedShells(): string[] {
+    // Only include user's shell if available and not already in list
+    let userShell: string | undefined;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        userShell = typeof process !== 'undefined' ? (process as any).env?.SHELL : undefined;
+    } catch {
+        // process not available in browser
+    }
+    
+    const shells = [...ALLOWED_SHELLS];
+    if (userShell && !shells.includes(userShell)) {
+        shells.push(userShell);
+    }
+    return shells;
+}
 
 /**
  * Arguments for openspace.terminal.create command.
@@ -154,6 +192,9 @@ export const TerminalCommands = {
  * - openspace.terminal.close: Close a terminal
  * 
  * Security per §17.3 (dangerous commands) and §17.9 (output sanitization).
+ * 
+ * T1-1: Dangerous commands are BLOCKED (not just detected)
+ * T1-2: shellPath and cwd are validated against allowlists
  */
 @injectable()
 export class TerminalCommandContribution implements CommandContribution {
@@ -161,12 +202,18 @@ export class TerminalCommandContribution implements CommandContribution {
     @inject(TerminalService)
     private readonly terminalService!: TerminalService;
 
+    @inject(WorkspaceService)
+    private readonly workspaceService!: WorkspaceService;
+
     private readonly ringBuffer: TerminalRingBuffer;
 
     /**
      * Map of terminal IDs to their widgets for tracking.
      */
     private terminalWidgets: Map<string, TerminalWidget> = new Map();
+    
+    // T2-16: Track onData listeners per terminal to prevent duplicates
+    private terminalListeners: Map<string, Disposable> = new Map();
 
     constructor() {
         this.ringBuffer = new TerminalRingBuffer(10000);
@@ -177,14 +224,6 @@ export class TerminalCommandContribution implements CommandContribution {
         // Listen for terminal creation events
         this.terminalService.onDidCreateTerminal((widget: TerminalWidget) => {
             this.trackTerminal(widget);
-            // Listen for output data
-            widget.onData((data: string) => {
-                this.ringBuffer.append(widget.id, data);
-            });
-            // Listen for terminal dispose/close
-            widget.onDidDispose(() => {
-                this.untrackTerminal(widget.id);
-            });
         });
 
         // Track existing terminals
@@ -195,23 +234,35 @@ export class TerminalCommandContribution implements CommandContribution {
 
     /**
      * Track a terminal widget.
+     * T2-16: Prevents duplicate onData listeners
      */
     private trackTerminal(widget: TerminalWidget): void {
         this.terminalWidgets.set(widget.id, widget);
-        // Also track by title for easier identification
-        if (widget.title?.label) {
-            // Listen for output to capture in ring buffer
-            widget.onData((data: string) => {
-                this.ringBuffer.append(widget.id, data);
-            });
-        }
+        
+        // T2-16: Dispose existing listener if any (prevent duplicates)
+        this.terminalListeners.get(widget.id)?.dispose();
+        
+        // Listen for output to capture in ring buffer
+        const listener = widget.onData((data: string) => {
+            this.ringBuffer.append(widget.id, data);
+        });
+        
+        this.terminalListeners.set(widget.id, listener);
+        
+        // Listen for terminal dispose/close
+        widget.onDidDispose(() => {
+            this.untrackTerminal(widget.id);
+        });
     }
 
     /**
      * Untrack a terminal by ID.
+     * T2-16: Clean up listener on dispose
      */
     private untrackTerminal(terminalId: string): void {
         this.terminalWidgets.delete(terminalId);
+        this.terminalListeners.get(terminalId)?.dispose();
+        this.terminalListeners.delete(terminalId);
         this.ringBuffer.clear(terminalId);
     }
 
@@ -287,19 +338,60 @@ export class TerminalCommandContribution implements CommandContribution {
 
     /**
      * Create a new terminal.
+     * 
+     * T1-2: Validates shellPath against allowlist and cwd within workspace.
      */
-    private async createTerminal(args: TerminalCreateArgs): Promise<{ success: boolean; terminalId: string }> {
+    private async createTerminal(args: TerminalCreateArgs): Promise<{ success: boolean; terminalId: string; error?: string }> {
         try {
+            const allowedShells = getAllowedShells();
+            
+            // T1-2: Validate shellPath against allowlist
+            if (args.shellPath) {
+                const normalizedShellPath = path.normalize(args.shellPath);
+                if (!allowedShells.some(allowed => path.normalize(allowed) === normalizedShellPath)) {
+                    console.warn(`[TerminalCommand] Shell not allowed: ${args.shellPath}`);
+                    return {
+                        success: false,
+                        terminalId: '',
+                        error: `Shell not allowed: ${args.shellPath}. Allowed shells: ${allowedShells.join(', ')}`
+                    };
+                }
+            }
+
+            // T1-2: Validate cwd is within workspace
+            if (args.cwd) {
+                const workspaceRoots = this.workspaceService.tryGetRoots();
+                if (workspaceRoots.length > 0) {
+                    const workspaceRoot = workspaceRoots[0].resource.path.fsPath();
+                    
+                    // Normalize and resolve the cwd path
+                    const normalizedCwd = path.normalize(args.cwd);
+                    
+                    // Check if cwd is within workspace root
+                    // Note: In browser context, we can't use fs.realpath(), so we do basic path check
+                    if (!normalizedCwd.startsWith(workspaceRoot) && 
+                        !normalizedCwd.replace(/[\\/]/g, '/').startsWith(workspaceRoot.replace(/[\\/]/g, '/'))) {
+                        console.warn(`[TerminalCommand] Working directory outside workspace: ${args.cwd}`);
+                        return {
+                            success: false,
+                            terminalId: '',
+                            error: `Working directory must be within workspace: ${args.cwd}`
+                        };
+                    }
+                }
+            }
+
             const options: any = {
                 title: args.title || 'OpenSpace Terminal',
             };
 
             if (args.cwd) {
-                options.cwd = args.cwd;
+                options.cwd = path.normalize(args.cwd);
             }
 
+            // Use validated shellPath or default
             if (args.shellPath) {
-                options.shellPath = args.shellPath;
+                options.shellPath = path.normalize(args.shellPath);
             }
 
             const widget = await this.terminalService.newTerminal(options);
@@ -316,7 +408,8 @@ export class TerminalCommandContribution implements CommandContribution {
             console.error('[TerminalCommand] Error creating terminal:', error);
             return {
                 success: false,
-                terminalId: ''
+                terminalId: '',
+                error: error instanceof Error ? error.message : String(error)
             };
         }
     }
@@ -324,9 +417,10 @@ export class TerminalCommandContribution implements CommandContribution {
     /**
      * Send text to a terminal.
      * 
-     * Per §17.3: Checks for dangerous commands and returns confirmation flag.
+     * Per §17.3: Checks for dangerous commands and BLOCKS execution if dangerous.
+     * T1-1: Dangerous commands are rejected (not just flagged).
      */
-    private async sendToTerminal(args: TerminalSendArgs): Promise<{ success: boolean; dangerous?: boolean }> {
+    private async sendToTerminal(args: TerminalSendArgs): Promise<{ success: boolean; dangerous?: boolean; error?: string }> {
         try {
             const widget = this.terminalWidgets.get(args.terminalId);
             if (!widget) {
@@ -337,16 +431,29 @@ export class TerminalCommandContribution implements CommandContribution {
             // Check for dangerous commands per §17.3
             const dangerous = isDangerous(args.text);
 
-            // Send the text to the terminal
+            // T1-1: BLOCK execution of dangerous commands
+            if (dangerous) {
+                console.warn(`[TerminalCommand] Dangerous command blocked: ${args.text.substring(0, 50)}...`);
+                return {
+                    success: false,
+                    dangerous: true,
+                    error: `Dangerous command blocked: ${args.text.substring(0, 30)}... Agent must request user confirmation before executing.`
+                };
+            }
+
+            // Send the text to the terminal (only if not dangerous)
             widget.sendText(args.text + '\r');
 
             return {
                 success: true,
-                dangerous
+                dangerous: false
             };
         } catch (error) {
             console.error('[TerminalCommand] Error sending to terminal:', error);
-            return { success: false };
+            return { 
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
         }
     }
 

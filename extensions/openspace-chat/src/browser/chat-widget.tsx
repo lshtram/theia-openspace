@@ -18,6 +18,8 @@ import * as React from '@theia/core/shared/react';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
+import { MessageService } from '@theia/core/lib/common/message-service';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
 import { Message, MessagePartInput, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from './prompt-input/prompt-input';
@@ -39,6 +41,12 @@ export class ChatWidget extends ReactWidget {
     @inject(OpenCodeService)
     protected readonly openCodeService!: OpenCodeService;
 
+    @inject(WorkspaceService)
+    protected readonly workspaceService!: WorkspaceService;
+
+    @inject(MessageService)
+    protected readonly messageService!: MessageService;
+
     constructor() {
         super();
         this.id = ChatWidget.ID;
@@ -52,22 +60,183 @@ export class ChatWidget extends ReactWidget {
     @postConstruct()
     protected init(): void {
         this.update();
+        // T3-9: If workspace not yet available at mount time, wait for it async
+        this.workspaceService.roots.then(roots => {
+            if (roots.length > 0) {
+                this.update();
+            }
+        });
+    }
+
+    protected override onAfterAttach(msg: any): void {
+        super.onAfterAttach(msg);
+        // T3-9: Re-render when workspace changes (resolves asynchronously after attach)
+        const listener = this.workspaceService.onWorkspaceChanged(() => {
+            this.update();
+        });
+        this.toDisposeOnDetach.push(Disposable.create(() => listener.dispose()));
+    }
+
+    /**
+     * Handle widget activation - focus the input element
+     */
+    protected onActivateRequest(msg: any): void {
+        super.onActivateRequest(msg);
+        // Focus will be handled by the React component
+        // The widget itself doesn't need to do anything special
+    }
+
+    // T3-9: Get workspace root path
+    protected getWorkspaceRoot(): string {
+        const roots = this.workspaceService.tryGetRoots();
+        if (roots.length > 0) {
+            return roots[0].resource.path.toString();
+        }
+        return '';
     }
 
     protected render(): React.ReactNode {
-        return <ChatComponent sessionService={this.sessionService} openCodeService={this.openCodeService} />;
+        return <ChatComponent 
+            sessionService={this.sessionService} 
+            openCodeService={this.openCodeService}
+            workspaceRoot={this.getWorkspaceRoot()}
+            messageService={this.messageService}
+        />;
     }
 }
 
 interface ChatComponentProps {
     sessionService: SessionService;
     openCodeService: OpenCodeService;
+    workspaceRoot: string;
+    messageService: MessageService;
 }
+
+// T2-13: SessionHeader moved to module scope to prevent recreation on every render
+interface SessionHeaderProps {
+    showSessionList: boolean;
+    sessions: Session[];
+    activeSession: Session | undefined;
+    sessionService: SessionService;
+    isLoadingSessions: boolean;
+    sessionLoadError: string | undefined;
+    onLoadSessions: () => void;
+    onSessionSwitch: (sessionId: string) => void;
+    onNewSession: () => void;
+    onDeleteSession: () => void;
+    onToggleDropdown: () => void;
+}
+
+const SessionHeader: React.FC<SessionHeaderProps> = ({
+    showSessionList,
+    sessions,
+    activeSession,
+    sessionService,
+    isLoadingSessions,
+    sessionLoadError,
+    onLoadSessions,
+    onSessionSwitch,
+    onNewSession,
+    onDeleteSession,
+    onToggleDropdown
+}) => {
+    return (
+        <div className="session-header" data-test-show-list={showSessionList.toString()}>
+            <div className="session-selector">
+                <button 
+                    type="button"
+                    className="session-dropdown-button session-header-button"
+                    onClick={onToggleDropdown}
+                    data-test-sessions-count={sessions.length}
+                    aria-label="Select session"
+                    aria-haspopup="listbox"
+                    aria-expanded={showSessionList}
+                >
+                    {activeSession ? activeSession.title : 'No Session'}
+                    <span className="dropdown-icon" aria-hidden="true">▼</span>
+                </button>
+                
+                {showSessionList && (
+                    <div className="session-list-dropdown" role="listbox" aria-label="Session list">
+                        {!sessionService.activeProject && (
+                            <div className="session-list-empty">
+                                <span>⚠️</span> No project selected. Please open a project to see sessions.
+                            </div>
+                        )}
+                        {sessionService.activeProject && isLoadingSessions && (
+                            <div className="session-list-loading">
+                                <span className="spinner">⏳</span> Loading sessions...
+                            </div>
+                        )}
+                        {sessionService.activeProject && sessionLoadError && (
+                            <div className="session-list-error">
+                                <div className="error-message">
+                                    <span className="error-icon">⚠️</span> {sessionLoadError}
+                                </div>
+                                <button 
+                                    type="button"
+                                    className="retry-button" 
+                                    onClick={onLoadSessions}
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        )}
+                        {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
+                            <div className="session-list-empty">No sessions yet. Click + to create one.</div>
+                        )}
+                        {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
+                            <div 
+                                key={session.id}
+                                className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
+                                onClick={() => onSessionSwitch(session.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onSessionSwitch(session.id);
+                                    }
+                                }}
+                                role="option"
+                                tabIndex={0}
+                                aria-selected={session.id === activeSession?.id}
+                            >
+                                {session.title}
+                                {session.id === activeSession?.id && <span className="active-indicator"> ●</span>}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+            
+            <button 
+                type="button"
+                className="new-session-button"
+                onClick={onNewSession}
+                title={sessionService.activeProject ? "Create new session" : "No project selected"}
+            >
+                + New
+            </button>
+            
+            {activeSession && (
+                <button 
+                    type="button"
+                    className="delete-session-button"
+                    onClick={onDeleteSession}
+                    title="Delete current session"
+                >
+                    🗑️
+                </button>
+            )}
+        </div>
+    );
+};
 
 /**
  * React component for chat interface.
+ * T3-9: Added workspaceRoot prop
+ * T3-10: Added messageService prop for dialogs
  */
-const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService }) => {
+const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
@@ -103,6 +272,27 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             setTimeout(() => setIsLoadingSessions(false), delay);
         }
     }, [sessionService]);
+
+    // Auto-select project based on workspace on initial load (run only once)
+    const hasAutoSelectedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (workspaceRoot && !sessionService.activeProject && !hasAutoSelectedRef.current) {
+            hasAutoSelectedRef.current = true;
+            console.debug('[ChatWidget] Auto-selecting project for workspace:', workspaceRoot);
+            sessionService.autoSelectProjectByWorkspace(workspaceRoot)
+                .then(success => {
+                    if (success) {
+                        console.debug('[ChatWidget] Project auto-selected successfully');
+                        loadSessions();
+                    } else {
+                        console.warn('[ChatWidget] Could not auto-select project for workspace:', workspaceRoot);
+                    }
+                })
+                .catch(err => {
+                    console.error('[ChatWidget] Error auto-selecting project:', err);
+                });
+        }
+    }, [workspaceRoot]); // Only depend on workspaceRoot
 
     // Subscribe to message updates and load sessions
     React.useEffect(() => {
@@ -178,11 +368,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     }, []);
 
     // Handle new session
+    // T3-10: Use MessageService instead of alert()
+    // Note: createSession() will auto-select a project if none is active
     const handleNewSession = React.useCallback(async () => {
-        if (!sessionService.activeProject) {
-            alert('No project selected. Please open a project first.');
-            return;
-        }
         try {
             const title = `Session ${new Date().toLocaleString()}`;
             await sessionService.createSession(title);
@@ -190,9 +378,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             setShowSessionList(false);
         } catch (error) {
             console.error('[ChatWidget] Error creating session:', error);
-            alert(`Failed to create session: ${error}`);
+            messageService.error(`Failed to create session: ${error}`);
         }
-    }, [sessionService, loadSessions]);
+    }, [sessionService, loadSessions, messageService]);
 
     // Handle session switch
     const handleSessionSwitch = React.useCallback(async (sessionId: string) => {
@@ -201,9 +389,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             setShowSessionList(false);
         } catch (error) {
             console.error('[ChatWidget] Error switching session:', error);
-            alert(`Failed to switch session: ${error}`);
+            messageService.error(`Failed to switch session: ${error}`);
         }
-    }, [sessionService]);
+    }, [sessionService, messageService]);
 
     // Handle delete session
     const handleDeleteSession = React.useCallback(async () => {
@@ -218,9 +406,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             await loadSessions();
         } catch (error) {
             console.error('[ChatWidget] Error deleting session:', error);
-            alert(`Failed to delete session: ${error}`);
+            messageService.error(`Failed to delete session: ${error}`);
         }
-    }, [sessionService, loadSessions]);
+    }, [sessionService, loadSessions, messageService]);
 
     // Handle send message (updated for multi-part input and model selection)
     const handleSend = React.useCallback(async (parts: PromptMessagePart[]) => {
@@ -231,9 +419,12 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
         try {
             // Get selected model and pass it separately (not in parts metadata)
             // OpenCode API expects model as top-level parameter: { providerID, modelID }
+            // T3-12: Handle multi-slash model IDs correctly (e.g., "provider/model/version")
             const activeModel = sessionService.activeModel;
             const model = activeModel ? (() => {
-                const [providerID, modelID] = activeModel.split('/');
+                const parts = activeModel.split('/');
+                const providerID = parts[0];
+                const modelID = parts.slice(1).join('/');
                 return { providerID, modelID };
             })() : undefined;
 
@@ -252,104 +443,28 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     const hasActiveSession = sessionService.activeSession !== undefined;
     const activeSession = sessionService.activeSession;
 
-    // Session Header component
-    const SessionHeader: React.FC = () => {
-        return (
-            <div className="session-header" data-test-show-list={showSessionList.toString()}>
-                <div className="session-selector">
-                    <button 
-                        type="button"
-                        className="session-dropdown-button session-header-button"
-                        onClick={() => {
-                            console.log('[ChatWidget] Toggle dropdown, current state:', showSessionList, 'sessions:', sessions.length);
-                            setShowSessionList(!showSessionList);
-                        }}
-                        data-test-sessions-count={sessions.length}
-                    >
-                        {activeSession ? activeSession.title : 'No Session'}
-                        <span className="dropdown-icon">▼</span>
-                    </button>
-                    
-                    {showSessionList && (
-                        <div className="session-list-dropdown">
-                            {!sessionService.activeProject && (
-                                <div className="session-list-empty">
-                                    <span>⚠️</span> No project selected. Please open a project to see sessions.
-                                </div>
-                            )}
-                            {sessionService.activeProject && isLoadingSessions && (
-                                <div className="session-list-loading">
-                                    <span className="spinner">⏳</span> Loading sessions...
-                                </div>
-                            )}
-                            {sessionService.activeProject && sessionLoadError && (
-                                <div className="session-list-error">
-                                    <div className="error-message">
-                                        <span className="error-icon">⚠️</span> {sessionLoadError}
-                                    </div>
-                                    <button 
-                                        type="button"
-                                        className="retry-button" 
-                                        onClick={loadSessions}
-                                    >
-                                        Retry
-                                    </button>
-                                </div>
-                            )}
-                            {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
-                                <div className="session-list-empty">No sessions yet. Click + to create one.</div>
-                            )}
-                            {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
-                                <div 
-                                    key={session.id}
-                                    className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
-                                    onClick={() => handleSessionSwitch(session.id)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                            e.preventDefault();
-                                            handleSessionSwitch(session.id);
-                                        }
-                                    }}
-                                    role="button"
-                                    tabIndex={0}
-                                >
-                                    {session.title}
-                                    {session.id === activeSession?.id && <span className="active-indicator">●</span>}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                
-                <button 
-                    type="button"
-                    className="new-session-button"
-                    onClick={handleNewSession}
-                    title={sessionService.activeProject ? "Create new session" : "No project selected"}
-                >
-                    + New
-                </button>
-                
-                {activeSession && (
-                    <button 
-                        type="button"
-                        className="delete-session-button"
-                        onClick={handleDeleteSession}
-                        title="Delete current session"
-                    >
-                        🗑️
-                    </button>
-                )}
-            </div>
-        );
-    };
+    // Toggle session dropdown
+    const handleToggleDropdown = React.useCallback(() => {
+        setShowSessionList(prev => !prev);
+    }, []);
 
-
-
+    // T2-13: Use module-level SessionHeader with props
     return (
         <div className="chat-container">
             <div className="chat-active">
-                <SessionHeader />
+                <SessionHeader 
+                    showSessionList={showSessionList}
+                    sessions={sessions}
+                    activeSession={activeSession}
+                    sessionService={sessionService}
+                    isLoadingSessions={isLoadingSessions}
+                    sessionLoadError={sessionLoadError}
+                    onLoadSessions={loadSessions}
+                    onSessionSwitch={handleSessionSwitch}
+                    onNewSession={handleNewSession}
+                    onDeleteSession={handleDeleteSession}
+                    onToggleDropdown={handleToggleDropdown}
+                />
                 {!hasActiveSession ? (
                     <div className="chat-no-session">
                         <p>No active session</p>
@@ -372,6 +487,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
                             onSend={handleSend}
                             disabled={isStreaming}
                             placeholder="Type your message, @mention files/agents, or attach images..."
+                            workspaceRoot={workspaceRoot}
                         />
                     </>
                 )}

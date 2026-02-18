@@ -121,17 +121,40 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
 
     /**
      * Expose test helper for E2E tests.
-     * Allows tests to inject permission events directly.
+     * T2-15: Only exposed in test/development mode, not production.
      */
     private exposeTestHelper(): void {
-        (window as any).__openspace_test__ = {
-            injectPermissionEvent: (event: any) => {
-                if (this.manager) {
-                    this.manager.handlePermissionEvent(event);
-                }
+        // T2-15: Guard with environment check - always expose in dev/test, check NODE_ENV in prod
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let isDevMode = true;
+        
+        // Check if we're in production mode
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof process !== 'undefined' && typeof (process as any).env !== 'undefined') {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const nodeEnv = (process as any).env.NODE_ENV;
+            if (nodeEnv === 'production') {
+                isDevMode = false;
             }
-        };
-        console.debug('[PermissionDialogContribution] Test helper exposed on window.__openspace_test__');
+        }
+        
+        if (isDevMode) {
+            // Use Object.assign to MERGE into existing __openspace_test__ (preserve SyncService hooks)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof (window as any).__openspace_test__ === 'undefined') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (window as any).__openspace_test__ = {};
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            Object.assign((window as any).__openspace_test__, {
+                injectPermissionEvent: (event: any) => {
+                    if (this.manager) {
+                        this.manager.handlePermissionEvent(event);
+                    }
+                }
+            });
+            console.info('[PermissionDialogContribution] Test helper exposed on window.__openspace_test__');
+        }
     }
 
     /**

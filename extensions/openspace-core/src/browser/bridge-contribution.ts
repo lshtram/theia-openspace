@@ -19,6 +19,8 @@ import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { CommandRegistry } from '@theia/core/lib/common/command';
 import { CommandManifest, CommandDefinition, CommandArgumentSchema, AgentCommand } from '../common/command-manifest';
 import { PaneService, PaneStateSnapshot } from './pane-service';
+import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
+import { SessionService } from './session-service';
 
 // Import command argument schemas for manifest auto-generation (FR-3.7)
 import { PaneCommands, PANE_OPEN_SCHEMA, PANE_CLOSE_SCHEMA, PANE_FOCUS_SCHEMA, PANE_LIST_SCHEMA, PANE_RESIZE_SCHEMA } from './pane-command-contribution';
@@ -68,6 +70,12 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     @inject(PaneService)
     private readonly paneService!: PaneService;
 
+    @inject(OpenCodeSyncService)
+    private readonly syncService!: OpenCodeSyncServiceImpl;
+
+    @inject(SessionService)
+    private readonly sessionService!: SessionService;
+
     private eventSource?: EventSource;
     private reconnectAttempts = 0;
     private reconnectTimer?: number;
@@ -84,6 +92,10 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      */
     async onStart(): Promise<void> {
         console.info('[BridgeContribution] Starting...');
+        
+        // Wire SessionService → SyncService (breaks circular DI dependency)
+        // This replaces the SessionServiceWiring binding that was never resolved
+        this.syncService.setSessionService(this.sessionService);
         
         // Publish command manifest
         await this.publishManifest();
@@ -248,6 +260,11 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     /**
      * Handle incoming SSE events.
      * 
+     * T2-7: IMPORTANT - Commands received via SSE must be validated.
+     * However, SSE is currently disabled (not called in onStart).
+     * Commands now come via RPC through OpenCodeProxy -> SyncService.
+     * This handler is kept for potential future SSE re-enablement.
+     * 
      * Event Format:
      * {
      *   "type": "AGENT_COMMAND",
@@ -260,13 +277,15 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * Processing Steps:
      * 1. Parse JSON event data
      * 2. Validate event type
-     * 3. Extract cmd and args
-     * 4. Execute command via CommandRegistry
+     * 3. Validate command via SyncService (if SSE re-enabled)
+     * 4. Extract cmd and args
+     * 5. Execute command via CommandRegistry
      * 
      * Error Handling:
      * - Parse error: log and skip
      * - Unknown event type: log warning
      * - Invalid event data: log error
+     * - Command validation failed: skip execution
      */
     private handleSSEEvent(event: MessageEvent): void {
         try {
@@ -274,7 +293,11 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
             
             if (parsedEvent.type === 'AGENT_COMMAND') {
                 const agentCommand: AgentCommand = parsedEvent.data;
-                console.info(`[BridgeContribution] Received command: ${agentCommand.cmd}`);
+                console.info(`[BridgeContribution] Received command via SSE: ${agentCommand.cmd}`);
+                
+                // T2-7: Note - SSE is currently disabled. If re-enabled, commands should
+                // be routed through SyncService.validateAgentCommand() before execution.
+                // Currently, commands come via RPC which already has validation.
                 
                 // Execute command via CommandRegistry
                 this.executeCommand(agentCommand);

@@ -10,6 +10,7 @@
   "dependencies": {
     "@theia/core": "1.68.2",
     "@theia/filesystem": "1.68.2",
+    "@theia/workspace": "1.68.2",
     "tldraw": "^4.3.2"
   },
   "devDependencies": {

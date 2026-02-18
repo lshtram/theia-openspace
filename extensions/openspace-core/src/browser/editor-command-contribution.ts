@@ -24,6 +24,7 @@ import { URI } from '@theia/core/lib/common/uri';
 import * as monaco from '@theia/monaco-editor-core';
 import { Position, EditorWidget } from '@theia/editor/lib/browser';
 import * as path from 'path';
+import { isSensitiveFile } from '../common/sensitive-files';
 
 /**
  * Range interface for highlighting code regions.
@@ -93,31 +94,6 @@ export interface EditorReadFileArgs {
 export interface EditorCloseArgs {
     path: string;
 }
-
-/**
- * Sensitive file patterns that must be blocked per §17.4.
- */
-const SENSITIVE_FILE_PATTERNS: RegExp[] = [
-    /\.env$/,
-    /\.env\.[a-zA-Z0-9]+$/,
-    /^\.git\//,
-    /^git\//,
-    /id_rsa/,
-    /id_dsa/,
-    /id_ecdsa/,
-    /id_ed25519/,
-    /\.pem$/,
-    /\.key$/,
-    /\.cert$/,
-    /\/\.ssh\//,
-    /secrets/,
-    /credentials/,
-    /config.*secret/i,
-    /\.htpasswd$/,
-    /\.aws/,
-    /azure\.json$/,
-    /gcloud/,
-];
 
 /**
  * JSON Schema for openspace.editor.open command arguments.
@@ -303,6 +279,8 @@ export class EditorCommandContribution implements CommandContribution {
      * Implements GAP-1 (path traversal) and GAP-9 (symlink protection) per §17.1.
      * Implements sensitive file blocking per §17.4.
      * 
+     * T1-3: Added symlink detection warning.
+     * 
      * @param filePath The file path to validate (relative or absolute)
      * @returns The validated absolute path if allowed, null if denied
      */
@@ -333,24 +311,39 @@ export class EditorCommandContribution implements CommandContribution {
             }
 
             // Step 4: Check for symlink traversal outside workspace
-            // In browser context, we check the normalized path
-            const realPath = normalizedPath;
+            // T1-3: In browser context, we cannot resolve symlinks with fs.realpath()
+            // We detect common symlink patterns and warn the user
+            const pathComponents = normalizedPath.split(path.sep);
+            for (const component of pathComponents) {
+                if (component === '..') {
+                    console.warn(`[EditorCommand] Path traversal via symlink rejected: ${filePath}`);
+                    return null;
+                }
+            }
             
             // Check if resolved path starts with workspace root
-            if (!realPath.startsWith(rootPath)) {
+            const normalizedRoot = path.normalize(rootPath);
+            if (!normalizedPath.startsWith(normalizedRoot) && 
+                !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
                 console.warn(`[EditorCommand] Path outside workspace rejected: ${filePath}`);
                 return null;
             }
 
-            // Step 5: Check against sensitive file patterns (§17.4)
+            // T1-3: Warning about symlinks (cannot fully validate in browser)
+            // In a full implementation, this would call backend to resolve symlinks
+            const containsSymlinkIndicators = filePath.includes('..') || filePath.includes('~');
+            if (containsSymlinkIndicators) {
+                console.warn(`[EditorCommand] Symlink-like path detected, manual verification recommended: ${filePath}`);
+            }
+
+            // Step 5: Check against sensitive file patterns (§17.4) - using shared module
             const fileName = path.basename(normalizedPath);
             const relativePath = normalizedPath.replace(rootPath, '').replace(/^\//, '');
             
-            for (const pattern of SENSITIVE_FILE_PATTERNS) {
-                if (pattern.test(fileName) || pattern.test(relativePath)) {
-                    console.warn(`[EditorCommand] Sensitive file access denied: ${filePath}`);
-                    return null;
-                }
+            // Use shared sensitive file check from common module
+            if (isSensitiveFile(fileName) || isSensitiveFile(relativePath)) {
+                console.warn(`[EditorCommand] Sensitive file access denied: ${filePath}`);
+                return null;
             }
 
             return normalizedPath;

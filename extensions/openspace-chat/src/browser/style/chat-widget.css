@@ -668,3 +668,163 @@
     color: var(--theia-list-activeSelectionForeground);
     opacity: 0.9;
 }
+
+/* ============================================================================
+   Message Part Styles (MVP rendering for SDK Part types)
+   ============================================================================ */
+
+/* Text part — basic pre-wrap text rendering */
+.message-bubble .part-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+/* Tool part — collapsible block with name and input/output */
+.message-bubble .part-tool {
+    margin: 4px 0;
+    border: 1px solid var(--theia-panel-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.message-bubble .part-tool-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+    background: var(--theia-editor-background);
+    user-select: none;
+}
+
+.message-bubble .part-tool-summary:hover {
+    background: var(--theia-list-hoverBackground);
+}
+
+.message-bubble .part-tool-icon {
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.message-bubble .part-tool-name {
+    font-weight: 600;
+    font-family: var(--theia-code-font-family);
+    color: var(--theia-foreground);
+}
+
+.message-bubble .part-tool-state {
+    font-size: 11px;
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.message-bubble .part-tool-io {
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family);
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    border-top: 1px solid var(--theia-panel-border);
+    background: var(--theia-editor-background);
+    color: var(--theia-editor-foreground);
+}
+
+/* Reasoning part — italic/dimmed thinking indicator */
+.message-bubble .part-reasoning {
+    margin: 4px 0;
+    padding: 6px 10px;
+    border-left: 3px solid var(--theia-descriptionForeground);
+    opacity: 0.7;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+}
+
+.message-bubble .part-reasoning-label {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.message-bubble .part-reasoning-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+/* Step parts — progress indicators */
+.message-bubble .part-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+}
+
+.message-bubble .part-step-icon {
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.message-bubble .part-step-label {
+    font-weight: 500;
+}
+
+.message-bubble .part-step-finish {
+    opacity: 0.6;
+}
+
+/* File part — file path reference */
+.message-bubble .part-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    margin: 2px 0;
+    background: var(--theia-editor-background);
+    border: 1px solid var(--theia-panel-border);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: var(--theia-code-font-family);
+}
+
+.message-bubble .part-file-icon {
+    font-weight: bold;
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+.message-bubble .part-file-path {
+    color: var(--theia-textLink-foreground);
+}
+
+/* Fallback part — small info badge for unhandled types */
+.message-bubble .part-fallback {
+    display: inline-flex;
+    padding: 2px 6px;
+    margin: 2px 0;
+    background: var(--theia-badge-background);
+    color: var(--theia-badge-foreground);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+

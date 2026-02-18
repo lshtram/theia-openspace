@@ -37,13 +37,9 @@ import {
     FileNotification,
     PermissionNotification
 } from '../common/opencode-protocol';
-import {
-    SessionEvent,
-    MessageEvent,
-    FileEvent,
-    PermissionEvent
-} from '../common/session-protocol';
+import * as SDKTypes from '../common/opencode-sdk-types';
 import { AgentCommand } from '../common/command-manifest';
+import { StreamInterceptor } from './stream-interceptor';
 
 /**
  * Default OpenCode server URL.
@@ -77,9 +73,11 @@ export class OpenCodeProxy implements OpenCodeService {
     protected reconnectAttempts: number = 0;
     protected readonly maxReconnectDelay: number = 30000; // 30 seconds
     protected readonly initialReconnectDelay: number = 1000; // 1 second
-    protected currentProjectId: string | undefined;
-    protected currentSessionId: string | undefined;
+    protected currentDirectory: string | undefined;
     protected isDisposed: boolean = false;
+
+    // Stream interceptor for extracting %%OS{...}%% blocks from text
+    protected readonly streamInterceptor: StreamInterceptor = new StreamInterceptor();
 
     constructor() {
         // Constructor body empty - dependencies injected via @inject
@@ -320,8 +318,15 @@ export class OpenCodeProxy implements OpenCodeService {
 
     async createMessage(_projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts> {
         // OpenCode API: POST /session/:id/message
-        // Model is passed as top-level parameter, not in message metadata
-        const body = model ? { ...message, model } : message;
+        // API expects: { parts: Array<PartInput>, model?: { providerID, modelID } }
+        // Extract only the fields the API expects — don't spread SDK Message fields (id, sessionID, role, time, etc.)
+        const body: Record<string, unknown> = {};
+        if (message.parts) {
+            body.parts = message.parts;
+        }
+        if (model) {
+            body.model = model;
+        }
         return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, body);
     }
 
@@ -383,11 +388,11 @@ export class OpenCodeProxy implements OpenCodeService {
     // =========================================================================
 
     /**
-     * Connect to SSE event stream for a session.
-     * @param projectId The project ID
-     * @param sessionId The session ID
+     * Connect to SSE event stream for a project directory.
+     * Called from the frontend after setting an active project.
+     * @param directory The project worktree directory
      */
-    connectSSE(projectId: string, sessionId: string): void {
+    async connectToProject(directory: string): Promise<void> {
         if (this.isDisposed) {
             this.logger.warn('[OpenCodeProxy] Cannot connect SSE: proxy is disposed');
             return;
@@ -396,10 +401,9 @@ export class OpenCodeProxy implements OpenCodeService {
         // Disconnect existing connection if any
         this.disconnectSSE();
 
-        this.currentProjectId = projectId;
-        this.currentSessionId = sessionId;
+        this.currentDirectory = directory;
 
-        this.logger.info(`[OpenCodeProxy] Connecting SSE for project ${projectId}, session ${sessionId}`);
+        this.logger.info(`[OpenCodeProxy] Connecting SSE for directory ${directory}`);
         this.establishSSEConnection();
     }
 
@@ -421,8 +425,7 @@ export class OpenCodeProxy implements OpenCodeService {
 
         this.sseConnected = false;
         this.reconnectAttempts = 0;
-        this.currentProjectId = undefined;
-        this.currentSessionId = undefined;
+        this.currentDirectory = undefined;
 
         this.logger.debug('[OpenCodeProxy] SSE disconnected');
     }
@@ -431,13 +434,13 @@ export class OpenCodeProxy implements OpenCodeService {
      * Establish SSE connection to opencode server.
      */
     protected establishSSEConnection(): void {
-        if (this.isDisposed || !this.currentProjectId || !this.currentSessionId) {
+        if (this.isDisposed || !this.currentDirectory) {
             return;
         }
 
-        // OpenCode API: GET /session/:id/events (SSE)
-        const endpoint = `/session/${encodeURIComponent(this.currentSessionId)}/events`;
-        const url = this.buildUrl(endpoint);
+        // OpenCode API: GET /event?directory=... (SSE)
+        const endpoint = `/event`;
+        const url = this.buildUrl(endpoint, { directory: this.currentDirectory });
         const parsedUrl = new URL(url);
 
         this.logger.debug(`[OpenCodeProxy] Establishing SSE connection to ${url}`);
@@ -554,17 +557,15 @@ export class OpenCodeProxy implements OpenCodeService {
 
         this.logger.info(`[OpenCodeProxy] Scheduling SSE reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
-        // Capture current project/session IDs to prevent race condition
-        // If user switches sessions while timer is pending, we don't want to reconnect to stale session
-        const capturedProjectId = this.currentProjectId;
-        const capturedSessionId = this.currentSessionId;
+        // Capture current directory to prevent race condition
+        // If user switches projects while timer is pending, we don't want to reconnect to stale project
+        const capturedDirectory = this.currentDirectory;
 
         this.sseReconnectTimer = setTimeout(() => {
             this.sseReconnectTimer = undefined;
-            // Only reconnect if we're not disposed AND session hasn't changed
+            // Only reconnect if we're not disposed AND directory hasn't changed
             if (!this.isDisposed && 
-                this.currentProjectId === capturedProjectId && 
-                this.currentSessionId === capturedSessionId) {
+                this.currentDirectory === capturedDirectory) {
                 this.establishSSEConnection();
             }
         }, delay);
@@ -572,6 +573,7 @@ export class OpenCodeProxy implements OpenCodeService {
 
     /**
      * Handle incoming SSE event.
+     * OpenCode SSE sends GlobalEvent { directory, payload: Event } where Event has a `type` field.
      */
     protected handleSSEEvent(event: ParsedEvent): void {
         if (!this._client) {
@@ -579,23 +581,32 @@ export class OpenCodeProxy implements OpenCodeService {
             return;
         }
 
-        this.logger.debug(`[OpenCodeProxy] SSE event: ${event.event || 'message'}`);
-
         try {
-            const eventType = event.event || 'message';
-            const data = JSON.parse(event.data);
+            const parsed = JSON.parse(event.data);
+            // OpenCode server may send events as direct Event objects (no wrapper)
+            // OR as GlobalEvent { directory, payload: Event }. Handle both.
+            const innerEvent: SDKTypes.Event = (parsed.payload !== undefined)
+                ? parsed.payload
+                : parsed;
+            if (!innerEvent || typeof innerEvent.type !== 'string') {
+                this.logger.debug(`[OpenCodeProxy] Ignoring SSE event with no type: ${event.data}`);
+                return;
+            }
+            const eventType = innerEvent.type;
 
-            // Route event to appropriate client callback based on event type prefix
+            this.logger.debug(`[OpenCodeProxy] SSE event: ${eventType}`);
+
+            // Route event by type prefix
             if (eventType.startsWith('session.')) {
-                this.forwardSessionEvent(eventType, data);
+                this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError);
             } else if (eventType.startsWith('message.')) {
-                this.forwardMessageEvent(eventType, data);
+                this.forwardMessageEvent(innerEvent as SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved);
             } else if (eventType.startsWith('file.')) {
-                this.forwardFileEvent(eventType, data);
+                this.forwardFileEvent(innerEvent as SDKTypes.EventFileEdited | SDKTypes.EventFileWatcherUpdated);
             } else if (eventType.startsWith('permission.')) {
-                this.forwardPermissionEvent(eventType, data);
+                this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied);
             } else {
-                this.logger.warn(`[OpenCodeProxy] Unknown SSE event type: ${eventType}`);
+                this.logger.debug(`[OpenCodeProxy] Unhandled SSE event type: ${eventType}`);
             }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error handling SSE event: ${error}`);
@@ -605,20 +616,31 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Forward session event to client.
      */
-    protected forwardSessionEvent(eventType: string, rawData: SessionEvent): void {
+    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError): void {
         if (!this._client) {
             return;
         }
 
         try {
-            // Map SSE event type to notification type
-            const type = eventType.replace('session.', '') as SessionNotification['type'];
+            // Map SDK event type to notification type
+            let type: SessionNotification['type'];
+            switch (event.type) {
+                case 'session.created': type = 'created'; break;
+                case 'session.updated': type = 'updated'; break;
+                case 'session.deleted': type = 'deleted'; break;
+                default:
+                    this.logger.debug(`[OpenCodeProxy] Unhandled session event type: ${event.type}`);
+                    return;
+            }
+
+            // Extract session info from properties
+            const sessionInfo = 'info' in event.properties ? event.properties.info : undefined;
 
             const notification: SessionNotification = {
                 type,
-                sessionId: rawData.sessionId,
-                projectId: rawData.projectId,
-                data: rawData.data as Session | undefined
+                sessionId: sessionInfo?.id || '',
+                projectId: sessionInfo?.projectID || '',
+                data: sessionInfo as Session | undefined
             };
 
             this._client.onSessionEvent(notification);
@@ -630,64 +652,91 @@ export class OpenCodeProxy implements OpenCodeService {
 
     /**
      * Forward message event to client.
+     * SDK events: message.updated (full message), message.part.updated (streaming part with delta)
      */
-    protected forwardMessageEvent(eventType: string, rawData: MessageEvent): void {
+    protected forwardMessageEvent(event: SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved): void {
         if (!this._client) {
             return;
         }
 
         try {
-            // Map SSE event type to notification type
-            let type: MessageNotification['type'];
-            const sseType = eventType.replace('message.', '');
-
-            // Map event types: created->created, streaming/part_added->partial, completed->completed
-            if (sseType === 'created') {
-                type = 'created';
-            } else if (sseType === 'streaming' || sseType === 'part_added') {
-                type = 'partial';
-            } else if (sseType === 'completed') {
-                type = 'completed';
-            } else {
-                this.logger.warn(`[OpenCodeProxy] Unknown message event type: ${sseType}`);
-                return;
-            }
-
-            // Intercept stream to extract agent commands before forwarding
-            let notification: MessageNotification = {
-                type,
-                sessionId: rawData.sessionId,
-                projectId: rawData.projectId,
-                messageId: rawData.messageId,
-                data: rawData.data as MessageWithParts | undefined
-            };
-
-            // If message has parts, intercept them for agent commands
-            if (notification.data && notification.data.parts) {
-                const { cleanParts, commands } = this.interceptStream(notification.data.parts);
+            if (event.type === 'message.updated') {
+                // Full message update — map to 'completed' or 'created'
+                const msgInfo = event.properties.info;
                 
-                // Dispatch extracted commands via RPC callback
-                for (const command of commands) {
-                    try {
-                        this._client.onAgentCommand(command);
-                        this.logger.debug(`[OpenCodeProxy] Dispatched agent command: ${command.cmd}`);
-                    } catch (error) {
-                        this.logger.error(`[OpenCodeProxy] Error dispatching command: ${error}`);
-                    }
-                }
-                
-                // Update notification with cleaned parts (commands stripped)
-                notification = {
-                    ...notification,
-                    data: {
-                        ...notification.data,
-                        parts: cleanParts
-                    }
+                // Build MessageWithParts from the message info
+                const data: MessageWithParts = {
+                    info: msgInfo,
+                    parts: [] // Parts come separately via message.part.updated events
                 };
-            }
 
-            this._client.onMessageEvent(notification);
-            this.logger.debug(`[OpenCodeProxy] Forwarded message event: ${type}`);
+                const notification: MessageNotification = {
+                    type: 'completed',
+                    sessionId: msgInfo.sessionID,
+                    projectId: '',
+                    messageId: msgInfo.id,
+                    data
+                };
+
+                // Intercept stream for agent commands
+                this._client.onMessageEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.updated: ${msgInfo.id}`);
+
+            } else if (event.type === 'message.part.updated') {
+                // Streaming part update — map to 'partial'
+                const part = event.properties.part;
+                const delta = event.properties.delta;
+
+                // Build notification with the part and delta
+                const data: MessageWithParts = {
+                    info: {
+                        id: part.messageID,
+                        sessionID: part.sessionID,
+                        role: 'assistant',
+                        time: { created: Date.now() }
+                    } as Message,
+                    parts: [part]
+                };
+
+                // Intercept stream for agent commands in text parts
+                let notification: MessageNotification = {
+                    type: 'partial',
+                    sessionId: part.sessionID,
+                    projectId: '',
+                    messageId: part.messageID,
+                    data,
+                    delta: delta
+                };
+
+                // If message has text parts, intercept them for agent commands
+                if (data.parts) {
+                    const { cleanParts, commands } = this.interceptStream(data.parts);
+                    
+                    // Dispatch extracted commands
+                    for (const command of commands) {
+                        try {
+                            this._client.onAgentCommand(command);
+                            this.logger.debug(`[OpenCodeProxy] Dispatched agent command: ${command.cmd}`);
+                        } catch (cmdError) {
+                            this.logger.error(`[OpenCodeProxy] Error dispatching command: ${cmdError}`);
+                        }
+                    }
+                    
+                    // Update notification with cleaned parts
+                    notification = {
+                        ...notification,
+                        data: { ...data, parts: cleanParts }
+                    };
+                }
+
+                this._client.onMessageEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.part.updated: ${part.messageID}, delta=${delta ? delta.length : 0} chars`);
+
+            } else if (event.type === 'message.removed') {
+                this.logger.debug(`[OpenCodeProxy] Message removed: ${event.properties.messageID}`);
+            } else if (event.type === 'message.part.removed') {
+                this.logger.debug(`[OpenCodeProxy] Message part removed: ${event.properties.partID}`);
+            }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding message event: ${error}`);
         }
@@ -695,12 +744,6 @@ export class OpenCodeProxy implements OpenCodeService {
 
     /**
      * Intercept message stream to extract agent commands from %%OS{...}%% blocks.
-     * 
-     * Scans text parts for %%OS{...}%% blocks, extracts commands, and strips blocks from visible text.
-     * Uses a brace-counting state machine to correctly handle nested JSON objects.
-     * 
-     * @param parts Message parts from SSE event
-     * @returns Object with cleanParts (stripped text) and commands (extracted)
      */
     private interceptStream(parts: MessagePart[]): { cleanParts: MessagePart[], commands: AgentCommand[] } {
         const commands: AgentCommand[] = [];
@@ -712,15 +755,9 @@ export class OpenCodeProxy implements OpenCodeService {
                 continue;
             }
 
-            // Extract %%OS{...}%% blocks from text using state machine
-            // Check if part has 'text' property (SDK TextPart type)
             if ('text' in part && typeof part.text === 'string') {
                 const { commands: extractedCommands, cleanText } = this.extractAgentCommands(part.text);
-                
-                // Add extracted commands to result
                 commands.push(...extractedCommands);
-
-                // Add cleaned text part (only if non-empty)
                 if (cleanText) {
                     cleanParts.push({ ...part, text: cleanText });
                 }
@@ -731,154 +768,47 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
-     * Extract agent commands from text using brace-counting state machine.
-     * 
-     * This method correctly handles nested JSON objects by counting opening and closing braces
-     * instead of using a simple regex pattern. This prevents the regex issue where /%%OS(\{[^}]*\})%%/g
-     * would stop at the first `}` character, failing on nested objects like:
-     * {"cmd":"x","args":{"nested":"value"}}
-     * 
-     * @param text Input text potentially containing %%OS{...}%% command blocks
-     * @returns Object with extracted commands array and cleanText (text with command blocks removed)
+     * Extract agent commands from text using the StreamInterceptor.
+     * Returns cleaned text (with command blocks removed) and extracted commands.
      */
     private extractAgentCommands(text: string): { commands: AgentCommand[], cleanText: string } {
-        const commands: AgentCommand[] = [];
-        const cleanSegments: string[] = [];
-        
-        let pos = 0;
-        const marker = '%%OS{';
-        
-        while (pos < text.length) {
-            // Find next command marker
-            const markerIndex = text.indexOf(marker, pos);
-            
-            if (markerIndex === -1) {
-                // No more markers, append rest of text
-                cleanSegments.push(text.substring(pos));
-                break;
-            }
-            
-            // Append text before marker to clean segments
-            cleanSegments.push(text.substring(pos, markerIndex));
-            
-            // Start brace counting from the opening brace after %%OS
-            const jsonStartIndex = markerIndex + marker.length - 1; // -1 to include the {
-            let braceCount = 0;
-            let jsonEndIndex = -1;
-            let inString = false;
-            let escapeNext = false;
-            
-            // Count braces to find matching closing brace
-            for (let i = jsonStartIndex; i < text.length; i++) {
-                const char = text[i];
-                
-                // Handle string state (ignore braces inside strings)
-                if (escapeNext) {
-                    escapeNext = false;
-                    continue;
-                }
-                
-                if (char === '\\') {
-                    escapeNext = true;
-                    continue;
-                }
-                
-                if (char === '"') {
-                    inString = !inString;
-                    continue;
-                }
-                
-                if (inString) {
-                    continue;
-                }
-                
-                // Count braces outside of strings
-                if (char === '{') {
-                    braceCount++;
-                } else if (char === '}') {
-                    braceCount--;
-                    
-                    // Found matching closing brace
-                    if (braceCount === 0) {
-                        jsonEndIndex = i;
-                        break;
-                    }
-                }
-            }
-            
-            // If we found a complete JSON block
-            if (jsonEndIndex !== -1) {
-                // Check if it's followed by %%
-                const potentialEndMarker = text.substring(jsonEndIndex + 1, jsonEndIndex + 3);
-                
-                if (potentialEndMarker === '%%') {
-                    // Extract JSON string (including braces)
-                    const jsonString = text.substring(jsonStartIndex, jsonEndIndex + 1);
-                    
-                    try {
-                        // Parse and validate command
-                        const command = JSON.parse(jsonString) as AgentCommand;
-                        commands.push(command);
-                        this.logger.debug(`[OpenCodeProxy] Extracted command: ${command.cmd || 'unknown'}`);
-                    } catch (error) {
-                        this.logger.warn(`[OpenCodeProxy] Malformed JSON in command block: ${jsonString}`, error);
-                        // Discard malformed block (don't show to user)
-                    }
-                    
-                    // Move position past the entire command block (including }%%)
-                    pos = jsonEndIndex + 3;
-                } else {
-                    // Malformed block (missing closing %%)
-                    this.logger.warn(`[OpenCodeProxy] Malformed command block (missing closing %%): ${text.substring(markerIndex, jsonEndIndex + 1)}`);
-                    // Skip the marker and continue
-                    pos = markerIndex + marker.length;
-                }
-            } else {
-                // Unclosed brace - malformed block
-                this.logger.warn(`[OpenCodeProxy] Malformed command block (unclosed braces): ${text.substring(markerIndex, Math.min(markerIndex + 100, text.length))}`);
-                // Skip the marker and continue
-                pos = markerIndex + marker.length;
-            }
-        }
-        
-        const cleanText = cleanSegments.join('');
-        return { commands, cleanText };
+        const result = this.streamInterceptor.processChunk(text);
+        const commands: AgentCommand[] = result.blocks.map(block => ({
+            cmd: block.cmd,
+            args: block.args
+        }));
+        return { commands, cleanText: result.text };
     }
 
     /**
      * Forward file event to client.
      */
-    protected forwardFileEvent(eventType: string, rawData: FileEvent): void {
+    protected forwardFileEvent(event: SDKTypes.EventFileEdited | SDKTypes.EventFileWatcherUpdated): void {
         if (!this._client) {
             return;
         }
 
         try {
-            // Map SSE event type to notification type
-            let type: FileNotification['type'];
-            const sseType = eventType.replace('file.', '');
-
-            // Map event types: changed/created/modified->changed, saved->saved, reset->reset
-            if (sseType === 'changed' || sseType === 'created' || sseType === 'modified') {
-                type = 'changed';
-            } else if (sseType === 'saved') {
-                type = 'saved';
-            } else if (sseType === 'reset') {
-                type = 'reset';
+            let filePath: string | undefined;
+            
+            if (event.type === 'file.edited') {
+                filePath = event.properties.file;
+            } else if (event.type === 'file.watcher.updated') {
+                filePath = event.properties.file;
             } else {
-                this.logger.warn(`[OpenCodeProxy] Unknown file event type: ${sseType}`);
+                this.logger.debug(`[OpenCodeProxy] Unhandled file event type: ${(event as any).type}`);
                 return;
             }
 
             const notification: FileNotification = {
-                type,
-                sessionId: rawData.sessionId,
-                projectId: rawData.projectId,
-                path: rawData.path
+                type: 'changed',
+                sessionId: '',
+                projectId: '',
+                path: filePath
             };
 
             this._client.onFileEvent(notification);
-            this.logger.debug(`[OpenCodeProxy] Forwarded file event: ${type}`);
+            this.logger.debug(`[OpenCodeProxy] Forwarded file event: ${filePath}`);
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding file event: ${error}`);
         }
@@ -887,43 +817,45 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Forward permission event to client.
      */
-    protected forwardPermissionEvent(eventType: string, rawData: PermissionEvent): void {
+    protected forwardPermissionEvent(event: SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied): void {
         if (!this._client) {
             return;
         }
 
         try {
-            // Map SSE event type to notification type
-            let type: PermissionNotification['type'];
-            const sseType = eventType.replace('permission.', '');
+            if (event.type === 'permission.updated') {
+                // SDK Permission is flat in properties (not wrapped)
+                const perm = event.properties;
+                
+                const notification: PermissionNotification = {
+                    type: 'requested',
+                    sessionId: perm.sessionID,
+                    projectId: '',
+                    permissionId: perm.id,
+                    permission: {
+                        id: perm.id,
+                        type: perm.type,
+                        message: perm.title,
+                        status: 'pending'
+                    }
+                };
 
-            // Map event types: request->requested, granted->granted, denied->denied
-            if (sseType === 'request') {
-                type = 'requested';
-            } else if (sseType === 'granted') {
-                type = 'granted';
-            } else if (sseType === 'denied') {
-                type = 'denied';
-            } else {
-                this.logger.warn(`[OpenCodeProxy] Unknown permission event type: ${sseType}`);
-                return;
+                this._client.onPermissionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded permission.updated: ${perm.id}`);
+
+            } else if (event.type === 'permission.replied') {
+                const props = event.properties;
+                
+                const notification: PermissionNotification = {
+                    type: props.response === 'granted' ? 'granted' : 'denied',
+                    sessionId: props.sessionID,
+                    projectId: '',
+                    permissionId: props.permissionID
+                };
+
+                this._client.onPermissionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded permission.replied: ${props.permissionID}`);
             }
-
-            const notification: PermissionNotification = {
-                type,
-                sessionId: rawData.sessionId,
-                projectId: rawData.projectId,
-                permissionId: rawData.permissionId,
-                permission: rawData.permission ? {
-                    id: rawData.permission.id,
-                    type: rawData.permission.type,
-                    message: rawData.permission.message,
-                    status: rawData.permission.status
-                } : undefined
-            };
-
-            this._client.onPermissionEvent(notification);
-            this.logger.debug(`[OpenCodeProxy] Forwarded permission event: ${type}`);
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding permission event: ${error}`);
         }

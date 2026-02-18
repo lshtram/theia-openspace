@@ -73,6 +73,9 @@ export class WhiteboardOpenHandler implements OpenHandler {
             { uri: uri.toString() }
         ) as WhiteboardWidget;
 
+        // T2-22: Store URI on widget for findByUri comparison
+        widget.uri = uri.toString();
+
         // Read file content and set it on the widget
         try {
             const content = await this.readFileContent(uri);
@@ -92,14 +95,17 @@ export class WhiteboardOpenHandler implements OpenHandler {
 
     /**
      * Find an existing widget for the given URI.
+     * T2-22: Compare widget URI against requested URI
      * @param uri The URI to search for
      * @returns The widget if found, undefined otherwise
      */
     async findByUri(uri: URI): Promise<WhiteboardWidget | undefined> {
-        // For now, we don't track widgets by URI
-        // The WidgetManager handles widget instances
         const widgets = await this.widgetManager.getWidgets(WhiteboardWidget.ID);
-        return widgets.find(w => true) as WhiteboardWidget | undefined;
+        return widgets.find(w => {
+            const widget = w as WhiteboardWidget;
+            // T2-22: Compare URIs properly
+            return widget.uri === uri.toString();
+        }) as WhiteboardWidget | undefined;
     }
 
     /**

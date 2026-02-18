@@ -7,6 +7,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   
+  /* Global setup - ensure OpenCode server is running */
+  globalSetup: require.resolve('./scripts/global-setup-opencode'),
+  
   /* Maximum time one test can run for */
   timeout: 60 * 1000,
   

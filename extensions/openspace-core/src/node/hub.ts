@@ -18,7 +18,7 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
-import { CommandManifest, HubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
+import { CommandManifest, MutableHubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
 
 /**
  * OpenSpace Hub - HTTP + SSE server that bridges Theia frontend with opencode agent.
@@ -47,7 +47,8 @@ interface CommandResultEntry {
 export class OpenSpaceHub implements BackendApplicationContribution {
     @inject(ILogger) protected readonly logger!: ILogger;
 
-    private state: HubState = {
+    // T3-3: Internal mutable state for updates, exposed as readonly via HubState
+    private state: MutableHubState = {
         manifest: null,
         paneState: null,
         lastManifestUpdate: null,
@@ -62,9 +63,56 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     private pingInterval: NodeJS.Timeout | undefined;
 
     /**
+     * Allowed origins for CORS and origin validation.
+     * T2-5: Restrict to Theia origins to prevent unauthorized access.
+     */
+    private readonly allowedOrigins: string[] = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+    ];
+
+    /**
+     * Validate request origin and set CORS headers.
+     * T2-5: Middleware to restrict access to Theia origins.
+     */
+    private validateOrigin(req: Request, res: Response, next: () => void): void {
+        const origin = req.headers.origin || req.headers.referer || '';
+        
+        // Check if origin is allowed
+        const isAllowed = this.allowedOrigins.some(allowed => 
+            origin.startsWith(allowed) || origin === ''
+        );
+
+        if (!isAllowed && origin !== '') {
+            this.logger.warn(`[Hub] Rejected request from invalid origin: ${origin}`);
+            res.status(403).json({ error: 'Forbidden: Invalid origin' });
+            return;
+        }
+
+        // Set CORS headers
+        const allowedOrigin = origin || this.allowedOrigins[0];
+        res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        
+        // Handle preflight
+        if (req.method === 'OPTIONS') {
+            res.status(200).end();
+            return;
+        }
+
+        next();
+    }
+
+    /**
      * Configure Express routes for the Hub.
      */
     configure(app: Application): void {
+        // Apply origin validation middleware to all /openspace/* routes
+        app.use('/openspace/*', (req, res, next) => this.validateOrigin(req, res, next));
+
         // POST /openspace/manifest - Receive command manifest from frontend (FR-3.7)
         app.post('/openspace/manifest', (req, res) => this.handleManifest(req, res));
 
@@ -92,7 +140,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         // Start SSE ping interval
         this.startPingInterval();
 
-        this.logger.info('[Hub] OpenSpace Hub configured');
+        this.logger.info('[Hub] OpenSpace Hub configured with origin validation');
     }
 
     /**

@@ -9,7 +9,8 @@
  * - Keyboard navigation and polish (Phase 5)
  */
 
-import * as React from 'react';
+// T2-14: Use Theia's shared React import
+import * as React from '@theia/core/shared/react';
 import { parseFromDOM } from './parse-from-dom';
 import { buildRequestParts } from './build-request-parts';
 import type { PromptInputProps, Prompt, ImagePart, FilePart } from './types';
@@ -29,7 +30,8 @@ const AVAILABLE_AGENTS = [
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
     disabled = false,
-    placeholder = 'Type your message, @mention files/agents, or attach images...'
+    placeholder = 'Type your message, @mention files/agents, or attach images...',
+    workspaceRoot: workspaceRootProp
 }) => {
     const editorRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -219,6 +221,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
     /**
      * Handle send button click.
+     * T3-9: Use workspaceRoot prop instead of hardcoded '/workspace'
      */
     const handleSendClick = () => {
         if (disabled) return;
@@ -230,7 +233,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
         if (!hasText && !hasAttachments) return;
 
-        const workspaceRoot = '/workspace';
+        // Use prop or fallback to empty string (buildRequestParts handles it)
+        const workspaceRoot = workspaceRootProp ?? '';
         const parts = buildRequestParts(prompt, workspaceRoot);
 
         onSend(parts);

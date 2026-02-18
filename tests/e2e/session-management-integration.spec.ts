@@ -66,21 +66,27 @@ test('Scenario 2: Backend API responds - Hub manifest endpoint', async () => {
   const apiContext = await request.newContext();
   
   // Test: Hub manifest endpoint is accessible (NEW ROUTE: /openspace/manifest)
-  const response = await apiContext.post(`${BASE_URL}/openspace/manifest`, {
+  const manifestResponse = await apiContext.post(`${BASE_URL}/openspace/manifest`, {
     data: {
-      commands: []
+      commands: [
+        { id: 'openspace.editor.open', name: 'Open Editor', description: 'Open a file in editor' },
+        { id: 'openspace.terminal.create', name: 'Create Terminal', description: 'Create terminal' }
+      ]
     },
     failOnStatusCode: false
   });
   
   // We expect either success or a specific error (not 404)
-  expect(response.status()).not.toBe(404);
-  console.log(`✓ Hub /openspace/manifest endpoint exists (status: ${response.status()})`);
+  expect(manifestResponse.status()).not.toBe(404);
+  console.log(`✓ Hub /openspace/manifest endpoint exists (status: ${manifestResponse.status()})`);
   
-  if (response.ok()) {
-    console.log('✓ Manifest endpoint returned 200 - accepting command manifests');
+  if (manifestResponse.ok()) {
+    const manifestBody = await manifestResponse.json();
+    // Must return success:true when a valid manifest (with commands array) is posted
+    expect(manifestBody).toHaveProperty('success');
+    console.log('✓ Manifest endpoint returned 200 with success response');
   } else {
-    console.log(`✓ Endpoint exists (status ${response.status()}) - may require auth or specific format`);
+    console.log(`✓ Endpoint exists (status ${manifestResponse.status()}) - may require auth or specific format`);
   }
   
   console.log('✓ Scenario 2 complete: Backend Hub accessible');
@@ -96,18 +102,25 @@ test('Scenario 3: Hub instructions endpoint exists', async () => {
   const apiContext = await request.newContext();
   
   // Test: Instructions endpoint
-  const response = await apiContext.get(`${BASE_URL}/openspace/instructions`, {
+  const instructionsResponse = await apiContext.get(`${BASE_URL}/openspace/instructions`, {
     failOnStatusCode: false
   });
   
   // Endpoint should exist (not 404)
-  expect(response.status()).not.toBe(404);
-  console.log(`✓ Instructions endpoint exists (status: ${response.status()})`);
+  expect(instructionsResponse.status()).not.toBe(404);
+  console.log(`✓ Instructions endpoint exists (status: ${instructionsResponse.status()})`);
   
-  if (response.ok()) {
-    const instructions = await response.text();
-    console.log(`✓ Instructions returned (length: ${instructions.length} chars)`);
-    expect(instructions.length).toBeGreaterThan(0);
+  if (instructionsResponse.ok()) {
+    const instructionsText = await instructionsResponse.text();
+    console.log(`✓ Instructions returned (length: ${instructionsText.length} chars)`);
+
+    // Non-trivial content assertion
+    expect(instructionsText.length).toBeGreaterThan(100);
+    console.log('✓ Instructions content is non-trivial (>100 chars)');
+
+    // Must contain the OpenSpace command syntax marker
+    expect(instructionsText).toContain('%%OS');
+    console.log('✓ Instructions contain %%OS command syntax');
   } else {
     console.log('✓ Endpoint exists but may require specific parameters');
   }

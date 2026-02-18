@@ -92,9 +92,11 @@ export interface ImageMessagePart {
 
 /**
  * Props for the PromptInput component.
+ * T3-9: Added workspaceRoot prop to avoid hardcoded path.
  */
 export interface PromptInputProps {
     onSend: (parts: MessagePart[]) => void | Promise<void>;
     disabled?: boolean;
     placeholder?: string;
+    workspaceRoot?: string;
 }

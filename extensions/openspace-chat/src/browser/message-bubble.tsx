@@ -36,28 +36,128 @@ export interface MessageBubbleProps {
 }
 
 /**
- * Extract text content from message parts.
- * SDK Part types: TextPart has 'text' field, others don't.
+ * Render a single message part based on its type.
+ * SDK Part types: text, tool, reasoning, step-start, step-finish, file,
+ * agent, snapshot, patch, retry, compaction, subtask.
  */
-function extractTextFromParts(parts: MessagePart[]): string {
-    return parts
-        .filter((part): boolean => part.type === 'text')
-        .map((part: any) => part.text as string)
-        .filter(Boolean)
-        .join('');
+function renderPart(part: MessagePart, index: number): React.ReactNode {
+    switch (part.type) {
+        case 'text':
+            return renderTextPart(part, index);
+        case 'tool':
+            return renderToolPart(part, index);
+        case 'reasoning':
+            return renderReasoningPart(part, index);
+        case 'step-start':
+            return renderStepStartPart(part, index);
+        case 'step-finish':
+            return renderStepFinishPart(part, index);
+        case 'file':
+            return renderFilePart(part, index);
+        default:
+            return renderFallbackPart(part, index);
+    }
+}
+
+/** Render text part — preserves whitespace, code blocks rendered as <pre>. */
+function renderTextPart(part: any, index: number): React.ReactNode {
+    const text: string = part.text || '';
+    if (!text) {
+        return null;
+    }
+    return (
+        <div key={`text-${index}`} className="part-text">
+            {text}
+        </div>
+    );
+}
+
+/** Render tool part — shows tool name, input, and output in a collapsible block. */
+function renderToolPart(part: any, index: number): React.ReactNode {
+    const name: string = part.name || part.tool || 'tool';
+    const state: string = part.state || '';
+    const stateLabel = state === 'running' ? ' (running...)' : state === 'error' ? ' (error)' : '';
+    return (
+        <details key={`tool-${index}`} className="part-tool">
+            <summary className="part-tool-summary">
+                <span className="part-tool-icon">{'>'}</span>
+                <span className="part-tool-name">{name}</span>
+                {stateLabel && <span className="part-tool-state">{stateLabel}</span>}
+            </summary>
+            {part.input && (
+                <pre className="part-tool-io part-tool-input">{typeof part.input === 'string' ? part.input : JSON.stringify(part.input, null, 2)}</pre>
+            )}
+            {part.output && (
+                <pre className="part-tool-io part-tool-output">{typeof part.output === 'string' ? part.output : JSON.stringify(part.output, null, 2)}</pre>
+            )}
+        </details>
+    );
+}
+
+/** Render reasoning part — italic/dimmed thinking indicator. */
+function renderReasoningPart(part: any, index: number): React.ReactNode {
+    const text: string = part.text || part.reasoning || '';
+    return (
+        <div key={`reasoning-${index}`} className="part-reasoning">
+            <span className="part-reasoning-label">Thinking</span>
+            {text && <div className="part-reasoning-text">{text}</div>}
+        </div>
+    );
+}
+
+/** Render step-start part — progress indicator for a named step. */
+function renderStepStartPart(part: any, index: number): React.ReactNode {
+    const name: string = part.name || 'Step';
+    return (
+        <div key={`step-start-${index}`} className="part-step part-step-start">
+            <span className="part-step-icon">{'>'}</span>
+            <span className="part-step-label">{name}</span>
+        </div>
+    );
+}
+
+/** Render step-finish part — completion indicator. */
+function renderStepFinishPart(part: any, index: number): React.ReactNode {
+    return (
+        <div key={`step-finish-${index}`} className="part-step part-step-finish">
+            <span className="part-step-icon">{'>'}</span>
+            <span className="part-step-label">Step completed</span>
+        </div>
+    );
+}
+
+/** Render file part — file path as a clickable-looking reference. */
+function renderFilePart(part: any, index: number): React.ReactNode {
+    const filePath: string = part.filename || part.file || part.url || 'unknown file';
+    return (
+        <div key={`file-${index}`} className="part-file">
+            <span className="part-file-icon">F</span>
+            <span className="part-file-path">{filePath}</span>
+        </div>
+    );
+}
+
+/** Render fallback for unhandled part types — small info badge. */
+function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
+    return (
+        <div key={`other-${index}`} className="part-fallback">
+            <span className="part-fallback-type">{part.type}</span>
+        </div>
+    );
 }
 
 /**
  * Format a timestamp for display.
  */
 function formatTimestamp(date: Date | string | number | undefined): string {
-    if (!date) return '';
+    if (!date) { return ''; }
     const d = new Date(date);
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 /**
  * MessageBubble - Individual message component with distinct user/assistant styling.
+ * Renders all SDK Part types (text, tool, reasoning, step-start/finish, file, etc.).
  */
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
     message,
@@ -67,10 +167,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     isFirstInGroup = true,
     isLastInGroup = true,
 }) => {
-    const baseText = extractTextFromParts(message.parts || []);
-    const displayText = streamingText ? baseText + streamingText : baseText;
+    const parts = message.parts || [];
     // SDK messages use time.created (number timestamp in ms)
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
+
+    // Check if there are any renderable parts (non-empty)
+    const hasParts = parts.length > 0;
 
     return (
         <article
@@ -90,12 +192,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <span className="message-bubble-role">
                         {isUser ? (
                             <>
-                                <span className="message-bubble-icon">👤</span>
+                                <span className="message-bubble-icon">&#x1F464;</span>
                                 You
                             </>
                         ) : (
                             <>
-                                <span className="message-bubble-icon">🤖</span>
+                                <span className="message-bubble-icon">&#x1F916;</span>
                                 Assistant
                             </>
                         )}
@@ -106,10 +208,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </div>
             )}
             <div className="message-bubble-content">
-                {displayText || '\u00A0'}
+                {hasParts
+                    ? parts.map((part, i) => renderPart(part, i))
+                    : '\u00A0'
+                }
+                {streamingText && (
+                    <div className="part-text">{streamingText}</div>
+                )}
                 {isStreaming && (
                     <span className="message-streaming-cursor" aria-hidden="true">
-                        ▋
+                        &#x258B;
                     </span>
                 )}
             </div>

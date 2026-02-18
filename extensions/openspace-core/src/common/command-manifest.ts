@@ -88,8 +88,19 @@ export interface AgentCommandRequest {
 /**
  * Hub state interface for OpenSpace Hub internal state.
  * Tracks command manifest and IDE pane state.
+ * T3-3: All fields are readonly for immutability.
  */
 export interface HubState {
+    readonly manifest: CommandManifest | null;
+    readonly paneState: PaneStateSnapshot | null;
+    readonly lastManifestUpdate: string | null;
+    readonly lastStateUpdate: string | null;
+}
+
+/**
+ * Internal mutable Hub state (used internally by Hub implementation).
+ */
+export interface MutableHubState {
     manifest: CommandManifest | null;
     paneState: PaneStateSnapshot | null;
     lastManifestUpdate: string | null;

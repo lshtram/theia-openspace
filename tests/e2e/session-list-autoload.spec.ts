@@ -26,8 +26,8 @@ async function waitForTheiaLoad(page: Page) {
   await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
   console.log('✓ Found Theia element: #theia-app-shell');
   
-  // Give Theia a moment to initialize
-  await page.waitForTimeout(1000);
+  // Wait for Theia to be attached using proper selector waiting
+  await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
   console.log('✓ Theia initialization wait complete');
 }
 
@@ -137,7 +137,11 @@ async function openChatWidget(page: Page) {
 // TEST 4: Empty State - No sessions shows helpful message
 // ============================================================================
 
-test('Test 4: Empty state shows helpful message when no sessions exist', async ({ page }) => {
+test.skip('Test 4: Empty state shows helpful message when no sessions exist', async ({ page }) => {
+  // SKIPPED: Architecture B1 uses RPC over WebSocket; page.route() mocks cannot intercept
+  // backend calls. A real empty-state test requires either: (a) a window.__openspace_test__
+  // hook that forces SessionService to return 0 sessions, or (b) an environment where no
+  // OpenCode server is running. Tracked as technical debt in docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md.
   console.log('\n=== Test 4: Empty State ===');
   
   // Setup: Mock backend with 0 sessions
@@ -155,8 +159,8 @@ test('Test 4: Empty state shows helpful message when no sessions exist', async (
   await sessionDropdownToggle.click({ timeout: 1000 });
   console.log('✓ Session dropdown opened');
   
-  // Wait for loading to complete
-  await page.waitForTimeout(500);
+  // Wait for loading to complete using proper selector waiting
+  await page.locator('.session-list-container, .session-list').first().waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
   
   // Assert: Empty state message visible (AC-4)
   const emptyState = page.locator('.session-list-empty, text=/No sessions/i, text=/Create.*to start/i');
@@ -192,4 +196,82 @@ test.skip('Test 5: Event listeners cleaned up when widget closes (no memory leak
   // SKIPPED: Memory leak detection requires browser DevTools profiling
   // Event listener cleanup is already tested in unit tests (useEffect cleanup)
   console.log('⊘ Test 5 skipped - memory leak detection requires manual profiling');
+});
+
+// ============================================================================
+// TEST 6: Loading state visible during session fetch (regression guard)
+// ============================================================================
+
+test('Test 6: Chat widget renders without JS errors on open', async ({ page }) => {
+  console.log('\n=== Test 6: Chat widget loading state ===');
+
+  // Collect any JS errors during navigation
+  const jsErrors: string[] = [];
+  page.on('pageerror', err => jsErrors.push(err.message));
+
+  // Navigate to Theia
+  await page.goto('/');
+  await waitForTheiaLoad(page);
+
+  // Open chat widget immediately (before session data may have loaded)
+  await openChatWidget(page);
+
+  // Assert the widget is present and structurally intact
+  const chatWidget = page.locator('.openspace-chat-widget');
+  await expect(chatWidget).toBeVisible();
+  console.log('✓ Chat widget visible');
+
+  // Assert session header elements are present (rendered before sessions load)
+  const sessionHeader = page.locator('.session-header');
+  await expect(sessionHeader).toBeVisible();
+  console.log('✓ Session header visible immediately');
+
+  // The new-session-button is always rendered (does not depend on loaded sessions)
+  const newSessionBtn = page.locator('.new-session-button');
+  await expect(newSessionBtn).toBeVisible();
+  console.log('✓ New session button visible');
+
+  // No uncaught JS errors during loading
+  const criticalErrors = jsErrors.filter(e =>
+    e.includes('TypeError') || e.includes('ReferenceError') || e.includes('Cannot read')
+  );
+  expect(criticalErrors).toHaveLength(0);
+  console.log('✓ No critical JS errors during widget load');
+});
+
+// ============================================================================
+// TEST 7: Session list renders after project initializes (race condition regression)
+// ============================================================================
+
+test('Test 7: Session list renders after project initializes (race condition regression)', async ({ page }) => {
+  console.log('\n=== Test 7: Race condition regression ===');
+
+  // Navigate and wait for FULL Theia initialization
+  await page.goto('/');
+  await waitForTheiaLoad(page);
+
+  // Extra settle time to allow project/session auto-loading to complete
+  // This is the regression test for the race condition in session-service.ts
+  // where sessions loaded before widget was mounted were lost.
+  await page.waitForTimeout(2000);
+  console.log('✓ Theia fully settled (2s after shell load)');
+
+  // Open chat widget
+  await openChatWidget(page);
+
+  // Wait for the dropdown button to be present — it always renders even with 0 sessions
+  const dropdownBtn = page.locator('.session-dropdown-button');
+  await expect(dropdownBtn).toBeVisible({ timeout: 5000 });
+  console.log('✓ Session dropdown button present');
+
+  // No session-load-error state should be visible
+  const errorState = page.locator('.session-list-error, .session-load-error');
+  await expect(errorState).not.toBeVisible();
+  console.log('✓ No error state after initialization');
+
+  // The data-test-sessions-count attribute must be present (indicates widget rendered)
+  const countAttr = await dropdownBtn.getAttribute('data-test-sessions-count');
+  // If null the attribute was not rendered — that's a regression
+  expect(countAttr).not.toBeNull();
+  console.log(`✓ data-test-sessions-count attribute present: ${countAttr}`);
 });

@@ -83,14 +83,47 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
     setSessionService(sessionService: SessionService): void {
         this._sessionService = sessionService;
-        console.debug('[SyncService] SessionService wired successfully');
+        console.info('[SyncService] SessionService wired successfully');
+
+        // T3-7: Subscribe to session changes to clear streaming messages
+        sessionService.onActiveSessionChanged(() => {
+            this.streamingMessages.clear();
+            console.debug('[SyncService] Streaming messages cleared on session change');
+        });
+
+        // T3-test: Expose test helpers for E2E testing (always in browser context)
+        // Creates or extends window.__openspace_test__ unconditionally.
+        // Note: PermissionDialogContribution.onStart() may not have run yet (timing race),
+        // so we cannot rely on __openspace_test__ already existing — we create it if needed.
+        // Note: process is not reliable in webpack lazy-loaded chunks; guard removed.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof window !== 'undefined') {
+            // Create __openspace_test__ if it doesn't exist yet, then merge in SyncService hooks
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof (window as any).__openspace_test__ === 'undefined') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (window as any).__openspace_test__ = {};
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            Object.assign((window as any).__openspace_test__, {
+                triggerAgentCommand: (cmd: AgentCommand) => {
+                    this.onAgentCommand(cmd);
+                },
+                getLastDispatchedCommand: () => this._lastDispatchedCommand,
+                injectMessageEvent: (event: MessageNotification) => {
+                    this.onMessageEvent(event);
+                }
+            });
+            console.info('[SyncService] E2E test helpers exposed');
+        }
     }
 
     protected get sessionService(): SessionService {
         if (!this._sessionService) {
-            // This should never happen in practice — RPC events arrive after DI init
-            console.warn('[SyncService] SessionService accessed before initialization');
-            return undefined as unknown as SessionService;
+            throw new Error(
+                'SessionService not initialized. setSessionService() must be called during DI wiring. ' +
+                'This is a bug in openspace-core-frontend-module.ts'
+            );
         }
         return this._sessionService;
     }
@@ -106,6 +139,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     private commandQueue: AgentCommand[] = [];
     private isProcessingQueue = false;
+
+    /**
+     * Tracks the last command dispatched to CommandRegistry.
+     * Used by E2E test hooks to verify command dispatch.
+     */
+    private _lastDispatchedCommand: AgentCommand | null = null;
 
     /**
      * Emitter for permission requested events.
@@ -153,6 +192,8 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
                 case 'deleted':
                     this.sessionService.notifySessionDeleted(event.sessionId);
+                    // T3-7: Clear streaming messages when session is deleted
+                    this.streamingMessages.clear();
                     break;
 
                 case 'init_started':
@@ -258,6 +299,8 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
     /**
      * Handle message.partial event - incremental text delta.
+     * SDK sends message.part.updated with a `delta` field for incremental text.
+     * We use the delta directly rather than extracting text from parts.
      */
     private handleMessagePartial(event: MessageNotification): void {
         if (!event.data) {
@@ -265,19 +308,27 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
-        // Extract text delta from parts
-        const delta = this.extractTextDelta(event.data.parts);
+        // Prefer the explicit delta field from the SDK event (set by opencode-proxy from message.part.updated).
+        // Fall back to extracting text from parts for backward compatibility.
+        const delta = event.delta || this.extractTextDelta(event.data.parts);
 
         if (!delta) {
             console.debug('[SyncService] No text delta in partial event');
             return;
         }
 
-        // Get existing streaming message
-        const stream = this.streamingMessages.get(event.messageId);
+        // Get or create streaming message tracker
+        let stream = this.streamingMessages.get(event.messageId);
         if (!stream) {
-            console.warn(`[SyncService] Received partial event before created: ${event.messageId}`);
-            return; // Ignore out-of-order event
+            // Received partial before created — auto-initialize tracking
+            console.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
+            stream = { text: '' };
+            this.streamingMessages.set(event.messageId, stream);
+
+            // Also ensure the message exists in SessionService (append a stub if missing)
+            if (event.data.info) {
+                this.sessionService.appendMessage(event.data.info);
+            }
         }
 
         // Append delta to accumulated text
@@ -535,6 +586,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
                 // Execute command
                 const argsArray = command.args ? (Array.isArray(command.args) ? command.args : [command.args]) : [];
+                this._lastDispatchedCommand = command;
                 await this.commandRegistry.executeCommand(command.cmd, ...argsArray);
 
                 console.debug(`[SyncService] Command executed: ${command.cmd}`);

@@ -16,6 +16,7 @@
 
 import { injectable } from '@theia/core/shared/inversify';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
+import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { ChatWidget } from './chat-widget';
 
@@ -26,7 +27,7 @@ export const OPENSPACE_CHAT_TOGGLE_COMMAND_ID = 'openspace-chat:toggle';
 
 /**
  * View contribution for the Chat widget.
- * Registers the widget in the left panel and opens it on startup.
+ * Registers the widget in the main panel and opens it on startup.
  */
 @injectable()
 export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
@@ -36,8 +37,7 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
             widgetId: ChatWidget.ID,
             widgetName: ChatWidget.LABEL,
             defaultWidgetOptions: {
-                area: 'left',
-                rank: 100
+                area: 'main'
             },
             toggleCommandId: OPENSPACE_CHAT_TOGGLE_COMMAND_ID
         });
@@ -45,11 +45,24 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
 
     /**
      * Called when the application starts.
-     * Opens the chat widget by default.
+     * Ensures the chat widget is in the main area and opens it.
      */
     async onStart(app: FrontendApplication): Promise<void> {
         console.debug('[ChatViewContribution] onStart called, opening chat widget');
-        // Open chat widget on startup
+        // Open chat widget on startup — defaultWidgetOptions has area:'main'
+        // so first-time placement goes to main area.
+        // If stale layout stored it in 'left', we detect and move it after shell is ready.
         await this.openView({ activate: false, reveal: true });
+        const shell = app.shell as ApplicationShell;
+        const widget = this.tryGetWidget();
+        if (widget) {
+            const currentArea = shell.getAreaFor(widget);
+            if (currentArea && currentArea !== 'main') {
+                console.debug(`[ChatViewContribution] Widget in '${currentArea}', moving to 'main'`);
+                await shell.closeWidget(ChatWidget.ID);
+                await shell.addWidget(widget, { area: 'main' });
+                await shell.revealWidget(ChatWidget.ID);
+            }
+        }
     }
 }

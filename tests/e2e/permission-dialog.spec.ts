@@ -12,14 +12,14 @@ import { test, expect, Page } from '@playwright/test';
 
 /**
  * Helper: Wait for Theia to be fully initialized
- */
+  */
 async function waitForTheiaReady(page: Page) {
   // Wait for Theia shell to be present
   await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
   await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
   
-  // Give extra time for all services to initialize
-  await page.waitForTimeout(2000);
+  // Wait for Theia app shell to be attached using proper waiting
+  await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
 }
 
 /**
@@ -83,10 +83,7 @@ test.describe('Permission Dialog UI', () => {
       reason: 'Need to read configuration'
     });
 
-    // Give a short delay for the dialog to render
-    await page.waitForTimeout(500);
-
-    // Wait for dialog to appear
+    // Wait for dialog to appear (the expect timeout handles waiting)
     const dialog = page.locator('.openspace-permission-dialog-overlay');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
@@ -179,17 +176,15 @@ test.describe('Permission Dialog UI', () => {
 
     // Grant first permission
     await page.locator('button:has-text("Grant")').click();
-    await page.waitForTimeout(500);
 
-    // Second dialog should appear automatically
+    // Second dialog should appear automatically (expect handles waiting)
     await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
     await expect(page.locator('.openspace-permission-message')).toContainText('/second.txt');
 
     // Grant second permission
     await page.locator('button:has-text("Grant")').click();
-    await page.waitForTimeout(500);
 
-    // Third dialog should appear
+    // Third dialog should appear (expect handles waiting)
     await expect(page.locator('.openspace-permission-dialog-overlay')).toBeVisible({ timeout: 3000 });
     await expect(page.locator('.openspace-permission-message')).toContainText('/third.txt');
 
@@ -215,13 +210,18 @@ test.describe('Permission Dialog UI', () => {
       const timeoutText = await timeoutElement.textContent();
       expect(timeoutText).toMatch(/\d+s/); // Should show seconds
       
-      // Verify countdown is working (wait 2 seconds and check it decreased)
+      // Verify countdown is working (poll instead of fixed wait)
       const initialSeconds = parseInt(timeoutText?.match(/(\d+)s/)?.[1] || '0');
-      await page.waitForTimeout(2000);
-      const updatedText = await timeoutElement.textContent();
-      const updatedSeconds = parseInt(updatedText?.match(/(\d+)s/)?.[1] || '0');
-      
-      expect(updatedSeconds).toBeLessThan(initialSeconds);
+      await page.waitForFunction(
+        (initial) => {
+          const el = document.querySelector('.openspace-permission-timeout');
+          const text = el?.textContent || '';
+          const match = text.match(/(\d+)s/);
+          return match && parseInt(match[1]) < initial;
+        },
+        initialSeconds,
+        { timeout: 5000 }
+      );
     }
 
     // Clean up
@@ -266,7 +266,8 @@ test.describe('Permission Dialog UI', () => {
     // Fire all requests
     for (const req of requests) {
       await injectPermissionRequest(page, req.id, req.action, req.metadata);
-      await page.waitForTimeout(50); // Small delay to simulate SSE timing
+      // Small delay to simulate SSE timing - use minimal wait
+      await page.waitForFunction(() => document.body !== null);
     }
 
     // First dialog should be visible
@@ -283,7 +284,8 @@ test.describe('Permission Dialog UI', () => {
         await page.locator('button:has-text("Deny")').click();
       }
       
-      await page.waitForTimeout(300);
+      // Wait for dialog to close/process next
+      await page.locator('.openspace-permission-dialog-overlay').waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
     }
 
     // All should be processed

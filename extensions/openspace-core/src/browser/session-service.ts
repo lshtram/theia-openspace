@@ -80,6 +80,7 @@ export interface SessionService extends Disposable {
     getSessions(): Promise<Session[]>;
     getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
+    autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
 
     // State update methods (for SyncService integration)
     appendMessage(message: Message): void;
@@ -91,6 +92,7 @@ export interface SessionService extends Disposable {
 
 /**
  * SessionService implementation.
+ * T2-11: Uses counter instead of boolean for isLoading to support nesting.
  */
 @injectable()
 export class SessionServiceImpl implements SessionService {
@@ -103,7 +105,8 @@ export class SessionServiceImpl implements SessionService {
     private _activeSession: Session | undefined;
     private _activeModel: string | undefined;
     private _messages: Message[] = [];
-    private _isLoading = false;
+    // T2-11: Use counter instead of boolean for nested loading support
+    private _loadingCounter = 0;
     private _lastError: string | undefined;
     private _isStreaming = false;
     private sessionLoadAbortController?: AbortController;
@@ -145,8 +148,9 @@ export class SessionServiceImpl implements SessionService {
         return this._messages;
     }
 
+    // T2-11: isLoading returns true if counter > 0 (supports nested operations)
     get isLoading(): boolean {
-        return this._isLoading;
+        return this._loadingCounter > 0;
     }
 
     get lastError(): string | undefined {
@@ -155,6 +159,22 @@ export class SessionServiceImpl implements SessionService {
 
     get isStreaming(): boolean {
         return this._isStreaming;
+    }
+
+    // T2-11: Increment loading counter
+    private incrementLoading(): void {
+        this._loadingCounter++;
+        if (this._loadingCounter === 1) {
+            this.onIsLoadingChangedEmitter.fire(true);
+        }
+    }
+
+    // T2-11: Decrement loading counter
+    private decrementLoading(): void {
+        this._loadingCounter = Math.max(0, this._loadingCounter - 1);
+        if (this._loadingCounter === 0) {
+            this.onIsLoadingChangedEmitter.fire(false);
+        }
     }
 
     /**
@@ -207,9 +227,8 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = undefined;
         this.onErrorChangedEmitter.fire(undefined);
 
-        // Set loading state
-        this._isLoading = true;
-        this.onIsLoadingChangedEmitter.fire(true);
+        // T2-11: Set loading state using counter
+        this.incrementLoading();
 
         try {
             // Verify project exists by fetching all projects
@@ -225,7 +244,17 @@ export class SessionServiceImpl implements SessionService {
             window.localStorage.setItem('openspace.activeProjectId', projectId);
             this.onActiveProjectChangedEmitter.fire(project);
 
-            console.debug(`[SessionService] State: project=${project.id} (${project.name})`);
+            console.debug(`[SessionService] State: project=${project.id} (${project.worktree})`);
+
+            // Connect SSE for the project's directory
+            if (project.worktree) {
+                try {
+                    await this.openCodeService.connectToProject(project.worktree);
+                    console.debug(`[SessionService] SSE connected for directory: ${project.worktree}`);
+                } catch (sseError) {
+                    console.warn('[SessionService] Failed to connect SSE (non-fatal):', sseError);
+                }
+            }
 
             // Clear active session if it belonged to a different project
             if (this._activeSession && this._activeSession.projectID !== projectId) {
@@ -243,8 +272,54 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            this._isLoading = false;
-            this.onIsLoadingChangedEmitter.fire(false);
+            // T2-11: Clear loading state using counter
+            this.decrementLoading();
+        }
+    }
+
+    /**
+     * Auto-select project based on workspace path.
+     * Finds the project whose path matches or contains the workspace path.
+     * 
+     * @param workspacePath - The workspace root path
+     * @returns true if a project was selected, false otherwise
+     */
+    async autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean> {
+        console.info(`[SessionService] Auto-selecting project for workspace: ${workspacePath}`);
+        
+        if (!workspacePath) {
+            console.warn('[SessionService] No workspace path provided');
+            return false;
+        }
+
+        try {
+            const projects = await this.openCodeService.getProjects();
+            
+            // Find project that matches the workspace path
+            // SDK Project uses 'worktree' field
+            const matchingProject = projects.find(p => {
+                const projectPath = p.worktree;
+                if (!projectPath) return false;
+                // Check if project path matches or contains workspace path
+                return workspacePath.includes(projectPath) || projectPath.includes(workspacePath);
+            });
+
+            if (matchingProject) {
+                console.info(`[SessionService] Found matching project: ${matchingProject.id} (${matchingProject.worktree})`);
+                await this.setActiveProject(matchingProject.id);
+                return true;
+            } else {
+                // No existing project matches — register the workspace as a new project
+                console.info(`[SessionService] No existing project matches workspace. Registering: ${workspacePath}`);
+                console.debug('[SessionService] Available projects:', projects.map(p => ({ id: p.id, worktree: p.worktree })));
+                const newProject = await this.openCodeService.initProject(workspacePath);
+                console.info(`[SessionService] Registered new project: ${newProject.id} (${newProject.worktree})`);
+                await this.setActiveProject(newProject.id);
+                return true;
+            }
+        } catch (error) {
+            console.error('[SessionService] Error auto-selecting project:', error);
+            return false;
         }
     }
 
@@ -276,9 +351,8 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = undefined;
         this.onErrorChangedEmitter.fire(undefined);
 
-        // Set loading state
-        this._isLoading = true;
-        this.onIsLoadingChangedEmitter.fire(true);
+        // T2-11: Set loading state using counter
+        this.incrementLoading();
 
         try {
             // Fetch session
@@ -312,8 +386,8 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(this._lastError);
             throw error;
         } finally {
-            this._isLoading = false;
-            this.onIsLoadingChangedEmitter.fire(false);
+            // T2-11: Clear loading state using counter
+            this.decrementLoading();
         }
     }
 
@@ -340,7 +414,7 @@ export class SessionServiceImpl implements SessionService {
         console.info('[SessionService] Operation: getAvailableModels()');
         
         try {
-            const directory = this._activeProject?.path;
+            const directory = this._activeProject?.worktree;
             const providers = await this.openCodeService.getAvailableModels(directory);
             console.debug(`[SessionService] Found ${providers.length} providers`);
             return providers;
@@ -401,9 +475,8 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = undefined;
         this.onErrorChangedEmitter.fire(undefined);
 
-        // Set loading state
-        this._isLoading = true;
-        this.onIsLoadingChangedEmitter.fire(true);
+        // T2-11: Set loading state using counter
+        this.incrementLoading();
 
         try {
             // Create session via backend
@@ -422,8 +495,8 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            this._isLoading = false;
-            this.onIsLoadingChangedEmitter.fire(false);
+            // T2-11: Clear loading state using counter
+            this.decrementLoading();
         }
     }
 
@@ -467,8 +540,9 @@ export class SessionServiceImpl implements SessionService {
 
         // Create optimistic message (SDK UserMessage type)
         // Note: parts are input types (without IDs), server will return full Part types
+        // T3-6: Use crypto.randomUUID() instead of Date.now() to avoid ID collisions
         const optimisticMsg: Message = {
-            id: `temp-${Date.now()}`,
+            id: `temp-${crypto.randomUUID()}`,
             sessionID: this._activeSession.id,
             role: 'user',
             time: {
@@ -637,8 +711,8 @@ export class SessionServiceImpl implements SessionService {
             throw new Error(errorMsg);
         }
         
-        this._isLoading = true;
-        this.onIsLoadingChangedEmitter.fire(true);
+        // T2-11: Set loading state using counter
+        this.incrementLoading();
         
         try {
             // Delete via backend
@@ -662,8 +736,8 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            this._isLoading = false;
-            this.onIsLoadingChangedEmitter.fire(false);
+            // T2-11: Clear loading state using counter
+            this.decrementLoading();
         }
     }
 
@@ -678,8 +752,8 @@ export class SessionServiceImpl implements SessionService {
 
         console.debug(`[SessionService] Loading messages for session: ${this._activeSession.id}`);
 
-        this._isLoading = true;
-        this.onIsLoadingChangedEmitter.fire(true);
+        // T2-11: Set loading state using counter
+        this.incrementLoading();
 
         try {
             // Fetch messages from backend
@@ -688,8 +762,11 @@ export class SessionServiceImpl implements SessionService {
                 this._activeSession.id
             );
 
-            // Convert MessageWithParts[] to Message[] (extract info)
-            this._messages = messagesWithParts.map(m => m.info);
+            // Convert MessageWithParts[] to Message[] (combine info + parts)
+            this._messages = messagesWithParts.map(m => ({
+                ...m.info,
+                parts: m.parts || []
+            }));
             this.onMessagesChangedEmitter.fire([...this._messages]);
 
             console.debug(`[SessionService] Loaded ${this._messages.length} messages`);
@@ -701,8 +778,8 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             // Don't throw - loading messages is not critical enough to fail the session change
         } finally {
-            this._isLoading = false;
-            this.onIsLoadingChangedEmitter.fire(false);
+            // T2-11: Clear loading state using counter
+            this.decrementLoading();
         }
     }
 
@@ -852,8 +929,10 @@ export class SessionServiceImpl implements SessionService {
         this.sessionLoadAbortController?.abort();
 
         // Dispose all emitters
+        // T3-4: Also dispose onActiveModelChangedEmitter
         this.onActiveProjectChangedEmitter.dispose();
         this.onActiveSessionChangedEmitter.dispose();
+        this.onActiveModelChangedEmitter.dispose();
         this.onMessagesChangedEmitter.dispose();
         this.onMessageStreamingEmitter.dispose();
         this.onIsLoadingChangedEmitter.dispose();
@@ -864,7 +943,8 @@ export class SessionServiceImpl implements SessionService {
         this._activeProject = undefined;
         this._activeSession = undefined;
         this._messages = [];
-        this._isLoading = false;
+        // T2-11: Reset loading counter
+        this._loadingCounter = 0;
         this._lastError = undefined;
         this._isStreaming = false;
 

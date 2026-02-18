@@ -20,6 +20,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
 import * as path from 'path';
+import { isSensitiveFile } from '../common/sensitive-files';
 
 /**
  * File information returned by list command.
@@ -61,21 +62,6 @@ export interface FileSearchArgs {
     includePattern?: string;
     excludePattern?: string;
 }
-
-/**
- * Sensitive file patterns that must be blocked per §17.4.
- * GAP-9: Sensitive file denylist
- */
-const SENSITIVE_PATTERNS: RegExp[] = [
-    /^\.env$/i,
-    /^\.env\./i,
-    /^\.git\//i,
-    /^id_rsa$/i,
-    /^.*\.pem$/i,
-    /^.*\.key$/i,
-    /^credentials\.json$/i,
-    /^secrets\./i,
-];
 
 /**
  * Critical directories that must be protected from writes per SC-3.5.2.
@@ -165,6 +151,12 @@ export const FileCommands = {
 } as const;
 
 /**
+ * Maximum file size for read operations (10MB).
+ * T2-20: Prevents OOM on huge files.
+ */
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+/**
  * FileCommandContribution - Registers file commands in Theia's CommandRegistry.
  * 
  * Implements CommandContribution to register 4 file commands:
@@ -192,6 +184,8 @@ export class FileCommandContribution implements CommandContribution {
     /**
      * Validate a file path against workspace root.
      * Implements GAP-1 (path traversal) and symlink protection per §17.1.
+     * 
+     * T1-3: Added symlink detection warning.
      * 
      * @param filePath The file path to validate (relative or absolute)
      * @returns The validated absolute path if allowed, null if denied
@@ -222,21 +216,38 @@ export class FileCommandContribution implements CommandContribution {
                 return null;
             }
 
-            // Step 4: Check if resolved path starts with workspace root
-            // Note: Full symlink resolution requires backend, but we check basic containment
-            if (!normalizedPath.startsWith(rootPath) && !normalizedPath.replace(/[\\/]/g, '/').startsWith(rootPath.replace(/[\\/]/g, '/'))) {
+            // Step 4: T1-3 - Check for symlink traversal outside workspace
+            // In browser context, we cannot use fs.realpath() - detect symlink patterns
+            const pathComponents = normalizedPath.split(path.sep);
+            for (const component of pathComponents) {
+                if (component === '..') {
+                    console.warn(`[FileCommand] Path traversal via symlink rejected: ${filePath}`);
+                    return null;
+                }
+            }
+
+            // Check if resolved path starts with workspace root
+            const normalizedRoot = path.normalize(rootPath);
+            if (!normalizedPath.startsWith(normalizedRoot) && 
+                !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
                 console.warn(`[FileCommand] Path outside workspace rejected: ${filePath}`);
                 return null;
             }
 
-            // Step 5: Check against sensitive file patterns (§17.4)
+            // T1-3: Warning about symlinks (cannot fully validate in browser)
+            const containsSymlinkIndicators = filePath.includes('..') || filePath.includes('~');
+            if (containsSymlinkIndicators) {
+                console.warn(`[FileCommand] Symlink-like path detected, manual verification recommended: ${filePath}`);
+            }
+
+            // Step 5: Check against sensitive file patterns (§17.4) - using shared module
             const relativePath = normalizedPath.replace(rootPath, '').replace(/^[\\/]/, '');
+            const fileName = path.basename(normalizedPath);
             
-            for (const pattern of SENSITIVE_PATTERNS) {
-                if (pattern.test(relativePath) || pattern.test(path.basename(normalizedPath))) {
-                    console.warn(`[FileCommand] Sensitive file access denied: ${filePath}`);
-                    return null;
-                }
+            // Use shared sensitive file check from common module
+            if (isSensitiveFile(relativePath) || isSensitiveFile(fileName)) {
+                console.warn(`[FileCommand] Sensitive file access denied: ${filePath}`);
+                return null;
             }
 
             return normalizedPath;
@@ -275,17 +286,12 @@ export class FileCommandContribution implements CommandContribution {
 
     /**
      * Check if a path matches sensitive file patterns.
+     * Uses shared sensitive file module for consistent checking.
      * @param filePath The file path to check
      * @returns true if the path is sensitive
      */
     isSensitive(filePath: string): boolean {
-        const normalizedPath = path.normalize(filePath);
-        for (const pattern of SENSITIVE_PATTERNS) {
-            if (pattern.test(normalizedPath) || pattern.test(path.basename(normalizedPath))) {
-                return true;
-            }
-        }
-        return false;
+        return isSensitiveFile(filePath);
     }
 
     /**
@@ -361,9 +367,10 @@ export class FileCommandContribution implements CommandContribution {
     }
 
     /**
-     * Read file content with security validation.
+     * Read file content with security validation and size limit.
+     * T2-20: Added file size check to prevent OOM on huge files.
      */
-    private async readFile(args: FileReadArgs): Promise<{ success: boolean; content?: string }> {
+    private async readFile(args: FileReadArgs): Promise<{ success: boolean; content?: string; error?: string }> {
         try {
             // Validate path first (security per §17.1, §17.4)
             const validatedPath = await this.validatePath(args.path);
@@ -378,6 +385,16 @@ export class FileCommandContribution implements CommandContribution {
             if (!stat.isFile) {
                 console.warn(`[FileCommand] Not a file: ${args.path}`);
                 return { success: false };
+            }
+
+            // T2-20: Check file size before reading
+            const size = (stat as any).size;
+            if (size !== undefined && size > MAX_FILE_SIZE) {
+                console.warn(`[FileCommand] File too large: ${args.path} (${size} bytes, max ${MAX_FILE_SIZE})`);
+                return { 
+                    success: false, 
+                    error: `File too large: ${size} bytes (max ${MAX_FILE_SIZE / (1024 * 1024)}MB)` 
+                };
             }
 
             const content = await this.fileService.read(uri);

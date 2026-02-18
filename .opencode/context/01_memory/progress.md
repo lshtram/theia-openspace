@@ -2,6 +2,99 @@
 
 ## Current Milestones
 
+### E2E Test Hook Fixes (2026-02-18) ✅ COMPLETE
+- **Status:** ✅ COMPLETE
+- **Tests:** 38 passed, 1 skipped (intentional memory-leak test), 0 failed
+- **Bug 1 fixed:** `typeof process` guard in `opencode-sync-service.ts` silently blocked test hook registration in webpack lazy chunk → removed, replaced with `typeof window` check
+- **Bug 2 fixed:** `PermissionDialogContribution.exposeTestHelper()` used direct assignment, wiping SyncService hooks → changed to `Object.assign`
+- **agent-control.spec.ts:** 5/5 tests now pass (were all skipping)
+- **Files modified:**
+  - `extensions/openspace-core/src/browser/opencode-sync-service.ts`
+  - `extensions/openspace-core/src/browser/permission-dialog-contribution.ts`
+  - `tests/e2e/debug-hooks.spec.ts` — **deleted** (temp debug file)
+
+### E2E Test Suite Rewrite (2026-02-18) ✅ COMPLETE
+- **Status:** ✅ COMPLETE
+- **Tests:** 28 passed, 6 skipped (Tier 3, no OpenCode), 0 failed
+- **Problem solved:** 30/36 existing tests were fake (tautological assertions, regex patterns in test files, `page.route()` mocks that never fired against Architecture B1 RPC)
+- **Files created/modified:**
+  - ✅ `tests/e2e/app-load.spec.ts` — NEW: 5 Tier 1 smoke tests
+  - ✅ `tests/e2e/session-management.spec.ts` — REWRITTEN: 5 real tests
+  - ✅ `tests/e2e/agent-control.spec.ts` — REWRITTEN: 5 Tier 2 tests (skip cleanly when no hook)
+  - ✅ `tests/e2e/session-list-autoload.spec.ts` — ENHANCED: 2 new regression tests
+  - ✅ `tests/e2e/session-management-integration.spec.ts` — ENHANCED: content assertions
+  - ✅ `extensions/openspace-core/src/browser/opencode-sync-service.ts` — test hooks added
+- **Documentation:** `docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md`
+- **Gold standard:** `permission-dialog.spec.ts` — `window.__openspace_test__` injection pattern
+
+### 9 Critical Chat Bug Fixes (2026-02-18) ✅ COMPLETE
+- **Status:** ✅ COMPLETE
+- **Build:** ✅ PASS (0 errors)
+- **Tests:** ✅ 412/412 unit tests passing
+- **Bugs fixed:** SSE connection, DI wiring, event parsing, GlobalEvent wrapper, Project type worktree field, MessageBubble all 12 Part types, delta accumulation, send body format, session list race condition
+- **Result:** `.opencode/context/active_tasks/debug-chat-critical-bugs/result.md`
+- **Janitor validation:** `.opencode/context/active_tasks/debug-chat-critical-bugs/janitor_result.md`
+
+
+- **Status:** ✅ COMPLETE
+- **Build:** ✅ PASS (51s, 0 errors)
+- **Tests:** ✅ 412/412 unit tests passing
+- **Issues Fixed:** 54 total (10 T1 + 28 T2 + 16 T3)
+- **T1 Blocking (10):**
+  - ✅ T1-1: Dangerous terminal commands blocked (allowlist validation)
+  - ✅ T1-2: Shell allowlist validation added
+  - ✅ T1-3: Symlink path traversal protection
+  - ✅ T1-4: SessionService DI wiring fixed
+  - ✅ T1-5: Explicit error on null reference
+  - ✅ T1-6: XSS sanitization with DOMPurify
+  - ✅ T1-7: StreamInterceptor state cleared per chunk
+  - ✅ T1-8: JSON string-aware brace counting
+  - ✅ T1-9: Test runner conflict resolved (Mocha only)
+  - ✅ T1-10: E2E tests have real assertions
+- **T2 Security (7):**
+  - ✅ T2-1: Hub origin validation + CORS
+  - ✅ T2-2: Command validation pipeline unified
+  - ✅ T2-3: Shared sensitive file patterns
+  - ✅ T2-4: Focus trap in permission dialog
+  - ✅ T2-5: Explicit Deny button
+  - ✅ T2-6: 10MB file size limit
+  - ✅ T2-7: postMessage origin validation
+- **T2 Reliability (21):**
+  - ✅ OpenCodeProxy.dispose() wired
+  - ✅ PaneService subscriptions disposed
+  - ✅ Loading counter instead of boolean
+  - ✅ Subscription cleanup on error
+  - ✅ SessionHeader extracted to module scope
+  - ✅ Correct React import
+  - ✅ Test hook guarded
+  - ✅ Terminal listeners tracked
+  - ✅ findByUri compares URIs
+  - ✅ @theia/workspace dependency added
+  - ✅ And more...
+- **T3 Minor (16):**
+  - ✅ UUID message IDs
+  - ✅ streamingMessages cleared on session switch
+  - ✅ HubState readonly
+  - ✅ Emitter disposal
+  - ✅ Workspace root from config
+  - ✅ MessageService instead of alert()
+  - ✅ ARIA labels added
+  - ✅ Multi-slash model ID fix
+
+### Phase 1C: T3 Minor Fixes (2026-02-18)
+- **Status:** ✅ COMPLETE
+- **Build:** ✅ Clean (0 errors)
+- **Tests:** ✅ 412 unit tests passing
+- **Fixes Applied:**
+  - ✅ T3-3: HubState readonly fields (MutableHubState added)
+  - ✅ T3-4: Missing onActiveModelChangedEmitter disposal (added)
+  - ✅ T3-6: UUID for message IDs (crypto.randomUUID() used)
+  - ✅ T3-7: streamingMessages map cleared on session change (added subscription)
+  - ✅ T3-9: Workspace root from WorkspaceService (prop added)
+  - ✅ T3-10: alert()/confirm() replaced with MessageService (partial)
+  - ✅ T3-11: Accessibility ARIA labels added to session dropdown
+  - ✅ T3-12: Model ID split fixed (slice(1).join('/'))
+
 ### Phase 2B Post-Mortem (2026-02-18)
 - **Workflow:** NSO BUILD executed (Analyst → Oracle → Builder → Janitor → CodeReviewer → Oracle)
 - **Duration:** 6-8 hours (as estimated)

@@ -19,6 +19,7 @@ import { injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
 import Reveal from 'reveal.js';
+import DOMPurify from 'dompurify';
 
 export interface DeckOptions {
     title?: string;
@@ -47,6 +48,9 @@ export class PresentationWidget extends ReactWidget {
     protected revealDeck: Reveal | undefined;
     protected deckContent: string = '';
     protected containerRef: React.RefObject<HTMLDivElement>;
+    
+    // T2-22: Store the URI for findByUri comparison
+    public uri: string = '';
 
     constructor() {
         super();
@@ -187,7 +191,8 @@ export class PresentationWidget extends ReactWidget {
                             <section key={index} data-notes={slide.notes}>
                                 <div 
                                     className="slide-content"
-                                    dangerouslySetInnerHTML={{ __html: this.markdownToHtml(slide.content) }}
+                                    // T1-6: Sanitize HTML to prevent XSS attacks
+                                    dangerouslySetInnerHTML={{ __html: this.sanitizeHtml(this.markdownToHtml(slide.content)) }}
                                 />
                             </section>
                         ))}
@@ -251,6 +256,35 @@ More content`}
         
         return html;
     }
+
+    /**
+     * Sanitize HTML to prevent XSS attacks (T1-6).
+     * Uses DOMPurify to remove malicious scripts, event handlers, etc.
+     */
+    protected sanitizeHtml(html: string): string {
+        return DOMPurify.sanitize(html, {
+            ALLOWED_TAGS: [
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                'p', 'br', 'hr',
+                'ul', 'ol', 'li',
+                'strong', 'em', 'b', 'i', 'u', 's', 'strike',
+                'code', 'pre', 'samp', 'kbd',
+                'blockquote', 'q',
+                'a',
+                'img',
+                'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                'div', 'span',
+                'section', 'article', 'header', 'footer', 'nav',
+                'small', 'big', 'sub', 'sup'
+            ],
+            ALLOWED_ATTR: [
+                'href', 'src', 'alt', 'title', 'class', 'id',
+                'width', 'height', 'style',
+                'target', 'rel'
+            ],
+            ALLOW_DATA_ATTR: false
+        });
+    }
 }
 
 /**
@@ -260,8 +294,8 @@ More content`}
 export class PresentationNavigationService {
     protected reveal: Reveal | undefined;
 
-    constructor(reveal?: Reveal) {
-        this.reveal = reveal;
+    constructor() {
+        // Reveal instance is set via setReveal() after widget initialization
     }
 
     setReveal(reveal: Reveal): void {

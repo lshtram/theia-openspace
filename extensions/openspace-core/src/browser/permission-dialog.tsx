@@ -32,7 +32,8 @@ export interface PermissionDialogProps {
  * 
  * Features:
  * - Modal overlay with centered dialog
- * - Grant (Enter) / Deny (Escape) keyboard shortcuts
+ * - Focus trap: Enter/Escape only work when dialog has focus
+ * - Grant (Enter) / Deny (Escape) keyboard shortcuts (when focused)
  * - Queue indicator for multiple requests
  * - Action details formatting
  * - Theia dark theme styling
@@ -41,6 +42,8 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
     const [isOpen, setIsOpen] = React.useState(manager.isOpen);
     const [currentRequest, setCurrentRequest] = React.useState(manager.currentRequest);
     const [queueLength, setQueueLength] = React.useState(manager.queueLength);
+    const dialogRef = React.useRef<HTMLDivElement>(null);
+    const [hasFocus, setHasFocus] = React.useState(false);
 
     // Subscribe to manager state changes
     React.useEffect(() => {
@@ -54,13 +57,48 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
         return () => subscription.dispose();
     }, [manager]);
 
-    // Keyboard event handlers
+    // Focus the dialog when it opens and track focus state
+    React.useEffect(() => {
+        if (isOpen && dialogRef.current) {
+            // Focus the dialog when it appears
+            dialogRef.current.focus();
+            setHasFocus(true);
+        } else {
+            setHasFocus(false);
+        }
+    }, [isOpen]);
+
+    // Track focus state for focus trap
+    React.useEffect(() => {
+        if (!isOpen || !dialogRef.current) {
+            return;
+        }
+
+        const handleFocusIn = (event: FocusEvent) => {
+            if (dialogRef.current?.contains(event.target as Node)) {
+                setHasFocus(true);
+            } else {
+                setHasFocus(false);
+            }
+        };
+
+        document.addEventListener('focusin', handleFocusIn);
+        return () => document.removeEventListener('focusin', handleFocusIn);
+    }, [isOpen]);
+
+    // Keyboard event handlers - only work when dialog has focus (T2-18 focus trap)
     React.useEffect(() => {
         if (!isOpen) {
             return;
         }
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            // T2-18: Only handle Enter/Escape when dialog has focus
+            // This prevents accidental permission grants when user is typing elsewhere
+            if (!hasFocus) {
+                return;
+            }
+
             if (event.key === 'Enter') {
                 event.preventDefault();
                 manager.grant();
@@ -72,7 +110,7 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, manager]);
+    }, [isOpen, manager, hasFocus]);
 
     if (!isOpen || !currentRequest) {
         return null; // Dialog closed
@@ -113,7 +151,16 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
 
     return (
         <div className="openspace-permission-dialog-overlay">
-            <div className="openspace-permission-dialog" role="dialog" aria-labelledby="permission-dialog-title" aria-modal="true">
+            <div 
+                className={`openspace-permission-dialog ${hasFocus ? 'has-focus' : ''}`}
+                role="dialog" 
+                aria-labelledby="permission-dialog-title" 
+                aria-modal="true"
+                ref={dialogRef}
+                tabIndex={-1}
+                onFocus={() => setHasFocus(true)}
+                onBlur={() => setHasFocus(false)}
+            >
                 <div className="openspace-permission-header">
                     <h2 id="permission-dialog-title">Permission Required</h2>
                 </div>

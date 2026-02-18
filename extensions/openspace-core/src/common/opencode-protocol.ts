@@ -63,13 +63,10 @@ export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput;
 export const openCodeServicePath = '/services/opencode';
 
 /**
- * Project interface (Theia-specific, not in SDK).
+ * Project type - directly from SDK.
+ * SDK uses: id, worktree (not path/name), vcsDir?, vcs?, time.
  */
-export interface Project {
-    readonly id: string;
-    readonly name: string;
-    readonly path: string;
-}
+export type Project = SDKTypes.Project;
 
 /**
  * Session type - directly from SDK.
@@ -173,6 +170,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     getProjects(): Promise<Project[]>;
     initProject(directory: string): Promise<Project>;
 
+    // SSE connection methods
+    connectToProject(directory: string): Promise<void>;
+
     // Session methods
     getSessions(projectId: string): Promise<Session[]>;
     getSession(projectId: string, sessionId: string): Promise<Session>;
@@ -253,6 +253,8 @@ export interface MessageNotification {
     readonly projectId: string;
     readonly messageId: string;
     readonly data?: MessageWithParts;
+    /** Incremental text delta for streaming (message.part.updated events). */
+    readonly delta?: string;
 }
 
 export type MessageEventType = 'created' | 'partial' | 'completed';

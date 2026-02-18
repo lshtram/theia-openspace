@@ -54,6 +54,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     streamingMessageId,
 }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const bottomSentinelRef = React.useRef<HTMLDivElement>(null);
     const [isScrolledUp, setIsScrolledUp] = React.useState(false);
     const [hasNewMessages, setHasNewMessages] = React.useState(false);
     const lastMessageCountRef = React.useRef(messages.length);
@@ -102,17 +103,18 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
 
     /**
      * Smooth scroll to bottom of the timeline.
+     * Uses sentinel element scrollIntoView for reliable cross-layout behaviour.
      */
     const scrollToBottom = React.useCallback((behavior: ScrollBehavior = 'smooth') => {
-        const container = containerRef.current;
-        if (!container) return;
+        const sentinel = bottomSentinelRef.current;
+        if (!sentinel) return;
 
-        container.scrollTo({
-            top: container.scrollHeight,
-            behavior,
+        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        requestAnimationFrame(() => {
+            sentinel.scrollIntoView({ behavior, block: 'end' });
+            setHasNewMessages(false);
+            setIsScrolledUp(false);
         });
-        setHasNewMessages(false);
-        setIsScrolledUp(false);
     }, []);
 
     /**
@@ -139,7 +141,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     // Auto-scroll logic for new messages
     React.useEffect(() => {
         const container = containerRef.current;
-        if (!container) return;
+        if (!container) return undefined;
 
         const messageCountChanged = messages.length !== lastMessageCountRef.current;
         lastMessageCountRef.current = messages.length;
@@ -151,13 +153,17 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
             const isNearBottom = distanceFromBottom < AUTO_SCROLL_THRESHOLD;
 
             if (isNearBottom && !isUserScrollingRef.current) {
-                // Auto-scroll to show new message
-                scrollToBottom('smooth');
+                // Auto-scroll to show new message (with delay to ensure content is rendered)
+                const timer = setTimeout(() => {
+                    scrollToBottom('smooth');
+                }, 100);
+                return () => clearTimeout(timer);
             } else if (isScrolledUp) {
                 // User is scrolled up, show new messages indicator
                 setHasNewMessages(true);
             }
         }
+        return undefined;
     }, [messages, isScrolledUp, scrollToBottom]);
 
     // Auto-scroll during streaming
@@ -172,27 +178,16 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         const isNearBottom = distanceFromBottom < AUTO_SCROLL_THRESHOLD;
 
         if (isNearBottom && !isUserScrollingRef.current) {
-            container.scrollTo({
-                top: container.scrollHeight,
-                behavior: 'auto', // Use 'auto' for streaming to keep it smooth
-            });
+            bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
         }
     }, [streamingData, isStreaming]);
 
-    // Empty state
-    if (messages.length === 0) {
-        return (
-            <div className="message-timeline message-timeline-empty">
-                <div className="message-timeline-empty-content">
-                    <div className="message-timeline-empty-icon">💬</div>
-                    <p className="message-timeline-empty-title">No messages yet</p>
-                    <p className="message-timeline-empty-hint">
-                        Type a message below to start the conversation
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    // Scroll to bottom on initial mount so the most recent messages are visible
+    React.useEffect(() => {
+        bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        // Only run once on mount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Determine message groups
     const getMessageGroupInfo = (index: number): { isFirst: boolean; isLast: boolean } => {
@@ -217,25 +212,39 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                 aria-label="Message timeline"
             >
                 <div className="message-timeline-content">
-                    {messages.map((message, index) => {
-                        const isUser = message.role === 'user';
-                        const streamingText = streamingData.get(message.id);
-                        const isMessageStreaming = isStreaming &&
-                            streamingMessageId === message.id;
-                        const { isFirst, isLast } = getMessageGroupInfo(index);
+                    {messages.length === 0 ? (
+                        /* Empty state — rendered inside the scroll container so the
+                           container and sentinel are always present in the DOM */
+                        <div className="message-timeline-empty-content">
+                            <div className="message-timeline-empty-icon">💬</div>
+                            <p className="message-timeline-empty-title">No messages yet</p>
+                            <p className="message-timeline-empty-hint">
+                                Type a message below to start the conversation
+                            </p>
+                        </div>
+                    ) : (
+                        messages.map((message, index) => {
+                            const isUser = message.role === 'user';
+                            const streamingText = streamingData.get(message.id);
+                            const isMessageStreaming = isStreaming &&
+                                streamingMessageId === message.id;
+                            const { isFirst, isLast } = getMessageGroupInfo(index);
 
-                        return (
-                            <MessageBubble
-                                key={message.id}
-                                message={message}
-                                isUser={isUser}
-                                isStreaming={isMessageStreaming}
-                                streamingText={streamingText}
-                                isFirstInGroup={isFirst}
-                                isLastInGroup={isLast}
-                            />
-                        );
-                    })}
+                            return (
+                                <MessageBubble
+                                    key={message.id}
+                                    message={message}
+                                    isUser={isUser}
+                                    isStreaming={isMessageStreaming}
+                                    streamingText={streamingText}
+                                    isFirstInGroup={isFirst}
+                                    isLastInGroup={isLast}
+                                />
+                            );
+                        })
+                    )}
+                    {/* Sentinel element - scroll target for auto-scroll, always rendered */}
+                    <div ref={bottomSentinelRef} className="message-timeline-bottom-sentinel" aria-hidden="true" />
                 </div>
             </div>
 
