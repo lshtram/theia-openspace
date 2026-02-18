@@ -17,6 +17,7 @@
 import * as React from '@theia/core/shared/react';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
+import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
@@ -31,7 +32,7 @@ import type { MessagePart as PromptMessagePart } from './prompt-input/types';
  * Chat Widget - displays messages from active session and allows sending new messages.
  */
 @injectable()
-export class ChatWidget extends ReactWidget {
+export class ChatWidget extends ReactWidget implements ExtractableWidget {
     static readonly ID = 'openspace-chat-widget';
     static readonly LABEL = 'Chat';
 
@@ -56,6 +57,10 @@ export class ChatWidget extends ReactWidget {
         this.title.iconClass = 'fa fa-comments';
         this.addClass('openspace-chat-widget');
     }
+
+    // ExtractableWidget — allows the user to pop the chat into a floating OS window
+    readonly isExtractable: boolean = true;
+    secondaryWindow: Window | undefined = undefined;
 
     @postConstruct()
     protected init(): void {
