@@ -268,8 +268,8 @@ describe('EditorCommandContribution', () => {
             expect(result).to.not.be.null;
             expect(mockOpenCodeService.validatePathCalls).to.have.length(1);
             const call = mockOpenCodeService.validatePathCalls[0];
-            expect(call.filePath).to.include('src/index.ts');
-            expect(call.workspaceRoot).to.include('/workspace/test-project');
+            expect(call.filePath).to.equal('/workspace/test-project/src/index.ts');
+            expect(call.workspaceRoot).to.equal('/workspace/test-project');
         });
 
         it('should return null when openCodeService.validatePath returns invalid', async () => {

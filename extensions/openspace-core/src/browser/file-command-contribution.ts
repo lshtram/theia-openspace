@@ -214,7 +214,7 @@ export class FileCommandContribution implements CommandContribution {
             }
 
             // Step 3: Check for path traversal (..)
-            const normalizedPath = path.normalize(resolvedPath);
+            let normalizedPath = path.normalize(resolvedPath);
             if (normalizedPath.includes('..')) {
                 console.warn(`[FileCommand] Path traversal attempt rejected: ${filePath}`);
                 return null;
@@ -245,8 +245,8 @@ export class FileCommandContribution implements CommandContribution {
                     console.warn(`[FileCommand] Path rejected by symlink check: ${result.error}`);
                     return null;
                 }
-                // Use the canonically resolved path going forward
-                return result.resolvedPath || normalizedPath;
+                // Update to the canonically resolved path before further checks
+                normalizedPath = result.resolvedPath || normalizedPath;
             }
 
             // Step 5: Check against sensitive file patterns (§17.4) - using shared module

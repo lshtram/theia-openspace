@@ -18,6 +18,8 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { ILogger } from '@theia/core/lib/common/logger';
 import * as http from 'http';
 import * as https from 'https';
+import * as path from 'path';
+import * as fs from 'fs';
 import { createParser, ParsedEvent, ParseEvent } from 'eventsource-parser';
 import {
     OpenCodeService,
@@ -803,9 +805,6 @@ export class OpenCodeProxy implements OpenCodeService {
      * Returns the canonically-resolved path if it is within the workspace root.
      */
     async validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> {
-        const path = require('path') as typeof import('path');
-        const fs = require('fs') as typeof import('fs');
-        
         try {
             // Attempt to resolve symlinks on the real filesystem
             let resolvedPath: string;
@@ -837,7 +836,7 @@ export class OpenCodeProxy implements OpenCodeService {
                 };
             }
 
-            return { valid: true, resolvedPath };
+            return { valid: true, resolvedPath: normalizedResolved };
         } catch (err) {
             return {
                 valid: false,
