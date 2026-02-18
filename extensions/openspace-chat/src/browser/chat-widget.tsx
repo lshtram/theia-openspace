@@ -19,10 +19,11 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
-import { Message, MessagePart, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
+import { Message, MessagePartInput, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
 import { MessageTimeline } from './message-timeline';
+import type { MessagePart as PromptMessagePart } from './prompt-input/types';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -222,7 +223,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
     }, [sessionService, loadSessions]);
 
     // Handle send message (updated for multi-part input and model selection)
-    const handleSend = React.useCallback(async (parts: MessagePart[]) => {
+    const handleSend = React.useCallback(async (parts: PromptMessagePart[]) => {
         if (parts.length === 0) {
             return;
         }
@@ -237,7 +238,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeS
             })() : undefined;
 
             console.log('[ChatWidget] Sending message with model:', model || 'default');
-            await sessionService.sendMessage(parts, model);
+            // PromptInput MessagePart types are compatible with MessagePartInput
+            await sessionService.sendMessage(parts as any as MessagePartInput[], model);
         } catch (error) {
             console.error('[ChatWidget] Error sending message:', error);
             // TODO: Show error to user

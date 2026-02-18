@@ -49,17 +49,29 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
     const mockSessions = [
         {
             id: 'sess-1',
-            projectId: 'proj-1',
+            projectID: 'proj-1',
             title: 'Session 1',
-            createdAt: Date.now(),
-            updatedAt: Date.now()
+            time: {
+                created: Date.now(),
+                updated: Date.now()
+            },
+            directory: '/test',
+            version: 1,
+            agent: 'test-agent',
+            model: { providerID: 'test', modelID: 'test-model' }
         },
         {
             id: 'sess-2',
-            projectId: 'proj-1',
+            projectID: 'proj-1',
             title: 'Session 2',
-            createdAt: Date.now(),
-            updatedAt: Date.now()
+            time: {
+                created: Date.now(),
+                updated: Date.now()
+            },
+            directory: '/test',
+            version: 1,
+            agent: 'test-agent',
+            model: { providerID: 'test', modelID: 'test-model' }
         }
     ];
 

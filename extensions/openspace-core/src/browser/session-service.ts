@@ -22,7 +22,7 @@ import {
     Project,
     Session,
     Message,
-    MessagePart,
+    MessagePartInput,
     ProviderWithModels
 } from '../common/opencode-protocol';
 
@@ -75,7 +75,7 @@ export interface SessionService extends Disposable {
     setActiveSession(sessionId: string): Promise<void>;
     setActiveModel(model: string): void;
     createSession(title?: string): Promise<Session>;
-    sendMessage(parts: MessagePart[], model?: { providerID: string; modelID: string }): Promise<void>;
+    sendMessage(parts: MessagePartInput[], model?: { providerID: string; modelID: string }): Promise<void>;
     abort(): Promise<void>;
     getSessions(): Promise<Session[]>;
     getAvailableModels(): Promise<ProviderWithModels[]>;
@@ -228,7 +228,7 @@ export class SessionServiceImpl implements SessionService {
             console.debug(`[SessionService] State: project=${project.id} (${project.name})`);
 
             // Clear active session if it belonged to a different project
-            if (this._activeSession && this._activeSession.projectId !== projectId) {
+            if (this._activeSession && this._activeSession.projectID !== projectId) {
                 console.debug(`[SessionService] Clearing session from different project`);
                 this._activeSession = undefined;
                 this._messages = [];
@@ -441,7 +441,7 @@ export class SessionServiceImpl implements SessionService {
      * @param parts - Message parts (text, file, image, etc.)
      * @throws Error if no active project or session
      */
-    async sendMessage(parts: MessagePart[], model?: { providerID: string; modelID: string }): Promise<void> {
+    async sendMessage(parts: MessagePartInput[], model?: { providerID: string; modelID: string }): Promise<void> {
         console.info(`[SessionService] Operation: sendMessage(${parts.length} parts, model: ${model ? `${model.providerID}/${model.modelID}` : 'none'})`);
 
         // Require active project and session
@@ -465,14 +465,22 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = undefined;
         this.onErrorChangedEmitter.fire(undefined);
 
-        // Create optimistic message
+        // Create optimistic message (SDK UserMessage type)
+        // Note: parts are input types (without IDs), server will return full Part types
         const optimisticMsg: Message = {
             id: `temp-${Date.now()}`,
-            sessionId: this._activeSession.id,
+            sessionID: this._activeSession.id,
             role: 'user',
-            parts,
-            metadata: { optimistic: true, ...(model && { model }) }
-        };
+            time: {
+                created: Date.now()
+            },
+            agent: model?.providerID || 'unknown',
+            model: {
+                providerID: model?.providerID || 'unknown',
+                modelID: model?.modelID || 'unknown'
+            },
+            parts: parts as any // Input parts will be converted to full parts by server
+        } as Message;
 
         // Add optimistic message immediately (UI updates)
         this._messages.push(optimisticMsg);
@@ -487,10 +495,11 @@ export class SessionServiceImpl implements SessionService {
         try {
             // Call backend to create message
             // Model is passed as top-level parameter (not in message metadata)
+            // Note: parts are input types, server accepts them and returns full Part types
             const result = await this.openCodeService.createMessage(
                 this._activeProject.id,
                 this._activeSession.id,
-                { parts },
+                { parts: parts as any },
                 model
             );
 
@@ -513,7 +522,8 @@ export class SessionServiceImpl implements SessionService {
                 // Add the assistant message as a NEW message (with parts!)
                 this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
-                console.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${assistantMessage.parts.length} parts`);
+                const partsCount = assistantMessage.parts?.length || 0;
+                console.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${partsCount} parts`);
             } else {
                 // Optimistic message not found (shouldn't happen, but handle gracefully)
                 console.warn(`[SessionService] Optimistic message not found for replacement: ${optimisticMsg.id}`);
@@ -741,15 +751,23 @@ export class SessionServiceImpl implements SessionService {
 
         // Append delta to the last text part
         const message = this._messages[index];
-        const parts = [...message.parts];
+        const parts = [...(message.parts || [])];
 
         if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
             // Append to existing text part
-            const lastPart = parts[parts.length - 1] as import('../common/opencode-protocol').TextMessagePart;
-            parts[parts.length - 1] = { type: 'text', text: lastPart.text + delta };
+            const lastPart = parts[parts.length - 1] as any;
+            if ('text' in lastPart) {
+                parts[parts.length - 1] = { ...lastPart, text: lastPart.text + delta };
+            }
         } else {
-            // Create new text part
-            parts.push({ type: 'text', text: delta });
+            // Create new text part (with required SDK fields if available)
+            parts.push({ 
+                type: 'text', 
+                text: delta,
+                id: `temp-part-${Date.now()}`,
+                sessionID: message.sessionID,
+                messageID: message.id
+            } as any);
         }
 
         // Update message with new parts

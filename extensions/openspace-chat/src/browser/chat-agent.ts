@@ -2,7 +2,7 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { ChatAgent, ChatAgentLocation } from '@theia/ai-chat/lib/common/chat-agents';
 import { MutableChatRequestModel, TextChatResponseContentImpl } from '@theia/ai-chat/lib/common/chat-model';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
-import { MessagePart } from 'openspace-core/lib/common/opencode-protocol';
+import { MessagePartInput } from 'openspace-core/lib/common/opencode-protocol';
 
 @injectable()
 export class OpenspaceChatAgent implements ChatAgent {
@@ -26,8 +26,8 @@ export class OpenspaceChatAgent implements ChatAgent {
     let userMessage = request.request?.text || '';
     userMessage = userMessage.replace(/^@\w+\s*/i, '').trim();
     
-    // Send via SessionService
-    const parts: MessagePart[] = [{ type: 'text', text: userMessage }];
+    // Send via SessionService - use MessagePartInput for creating new parts
+    const parts: MessagePartInput[] = [{ type: 'text', text: userMessage }];
     await this.sessionService.sendMessage(parts);
     
     // Subscribe to streaming updates

@@ -22,6 +22,7 @@
     "react-dom": "^18"
   },
   "devDependencies": {
+    "@opencode-ai/sdk": "1.2.6",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "rimraf": "^5.0.0",
@@ -30,6 +31,7 @@
   "scripts": {
     "build": "tsc && mkdir -p lib/browser/style && cp src/browser/style/*.css lib/browser/style/",
     "clean": "rimraf lib tsconfig.tsbuildinfo",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "extract-sdk-types": "cp ../../node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts src/common/opencode-sdk-types.ts"
   }
 }

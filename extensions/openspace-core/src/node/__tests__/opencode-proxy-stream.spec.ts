@@ -17,7 +17,6 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { OpenCodeProxy } from '../opencode-proxy';
-import { MessagePart, TextMessagePart } from '../../common/opencode-protocol';
 import { ILogger } from '@theia/core/lib/common/logger';
 
 /**
@@ -76,11 +75,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
      */
     describe('Issue #1: Nested JSON Objects', () => {
         it('should extract command with nested object in args', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'Before %%OS{"cmd":"openspace.test","args":{"nested":{"deep":"value"}}}%% After'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -89,15 +88,15 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
             expect(result.commands[0].cmd).to.equal('openspace.test');
             expect(result.commands[0].args).to.deep.equal({ nested: { deep: 'value' } });
             expect(result.cleanParts).to.have.lengthOf(1);
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('Before  After');
+            expect((result.cleanParts[0]).text).to.equal('Before  After');
         });
 
         it('should extract command with deeply nested structures', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: '%%OS{"cmd":"openspace.complex","args":{"a":{"b":{"c":{"d":"value"}}}}}%%'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -108,11 +107,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
         });
 
         it('should extract command with array of objects', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: '%%OS{"cmd":"openspace.array","args":[{"id":1},{"id":2}]}%%'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -130,11 +129,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
      */
     describe('Issue #2: Multiple Commands in One Message', () => {
         it('should extract all commands from text with multiple blocks', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'First %%OS{"cmd":"openspace.cmd1"}%% middle %%OS{"cmd":"openspace.cmd2"}%% end'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -142,15 +141,15 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
             expect(result.commands).to.have.lengthOf(2);
             expect(result.commands[0].cmd).to.equal('openspace.cmd1');
             expect(result.commands[1].cmd).to.equal('openspace.cmd2');
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('First  middle  end');
+            expect((result.cleanParts[0]).text).to.equal('First  middle  end');
         });
 
         it('should extract commands from consecutive blocks', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: '%%OS{"cmd":"openspace.a"}%%%%OS{"cmd":"openspace.b"}%%%%OS{"cmd":"openspace.c"}%%'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -163,17 +162,17 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
         });
 
         it('should handle interleaved text and commands', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'A %%OS{"cmd":"openspace.1"}%% B %%OS{"cmd":"openspace.2"}%% C %%OS{"cmd":"openspace.3"}%% D'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
 
             expect(result.commands).to.have.lengthOf(3);
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('A  B  C  D');
+            expect((result.cleanParts[0]).text).to.equal('A  B  C  D');
         });
     });
 
@@ -182,26 +181,26 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
      */
     describe('Malformed JSON and Edge Cases', () => {
         it('should discard malformed JSON blocks', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'Before %%OS{invalid json}%% After'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
 
             expect(result.commands).to.have.lengthOf(0);
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('Before  After');
+            expect((result.cleanParts[0]).text).to.equal('Before  After');
             expect(mockLogger.warn.called).to.be.true;
         });
 
         it('should handle unclosed brace blocks', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'Before %%OS{"cmd":"test" After'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -211,11 +210,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
         });
 
         it('should handle missing closing %%', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'Before %%OS{"cmd":"test"} After'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -225,11 +224,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
         });
 
         it('should handle empty blocks', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: 'Text %%OS{}%% More'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -237,15 +236,15 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
             // Empty object {} is valid JSON but likely not a valid command
             // It will be parsed successfully but may fail validation elsewhere
             expect(result.commands).to.have.lengthOf(1);
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('Text  More');
+            expect((result.cleanParts[0]).text).to.equal('Text  More');
         });
 
         it('should handle strings containing braces', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: '%%OS{"cmd":"openspace.test","msg":"has {braces} in string"}%%'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -256,11 +255,11 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
         });
 
         it('should handle escaped quotes in strings', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 {
                     type: 'text',
                     text: '%%OS{"cmd":"openspace.test","msg":"has \\"quotes\\""}%%'
-                } as TextMessagePart
+                }
             ];
 
             const result = (proxy as any).interceptStream(parts);
@@ -275,9 +274,9 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
      */
     describe('Non-Text Parts', () => {
         it('should pass through non-text parts unchanged', () => {
-            const parts: MessagePart[] = [
+            const parts = [
                 { type: 'image', url: 'http://example.com/image.png' } as any,
-                { type: 'text', text: '%%OS{"cmd":"openspace.test"}%%' } as TextMessagePart,
+                { type: 'text', text: '%%OS{"cmd":"openspace.test"}%%' },
                 { type: 'code', content: 'console.log("test");' } as any
             ];
 
@@ -295,15 +294,15 @@ describe('OpenCodeProxy - Stream Interceptor', () => {
      */
     describe('No Commands', () => {
         it('should return text unchanged when no commands present', () => {
-            const parts: MessagePart[] = [
-                { type: 'text', text: 'This is just normal text with no commands.' } as TextMessagePart
+            const parts = [
+                { type: 'text', text: 'This is just normal text with no commands.' }
             ];
 
             const result = (proxy as any).interceptStream(parts);
 
             expect(result.commands).to.have.lengthOf(0);
             expect(result.cleanParts).to.have.lengthOf(1);
-            expect((result.cleanParts[0] as TextMessagePart).text).to.equal('This is just normal text with no commands.');
+            expect((result.cleanParts[0]).text).to.equal('This is just normal text with no commands.');
         });
     });
 });

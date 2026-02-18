@@ -33,20 +33,30 @@ describe('ChatWidget - Session Management', () => {
 
     const mockSession1 = {
         id: 'session-1',
-        projectId: 'proj-1',
+        projectID: 'proj-1',
         title: 'Test Session 1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        directory: '/test'
+        time: {
+            created: Date.now(),
+            updated: Date.now()
+        },
+        directory: '/test',
+        version: 1,
+        agent: 'test-agent',
+        model: { providerID: 'test', modelID: 'test-model' }
     };
 
     const mockSession2 = {
         id: 'session-2',
-        projectId: 'proj-1',
+        projectID: 'proj-1',
         title: 'Test Session 2',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        directory: '/test'
+        time: {
+            created: Date.now(),
+            updated: Date.now()
+        },
+        directory: '/test',
+        version: 1,
+        agent: 'test-agent',
+        model: { providerID: 'test', modelID: 'test-model' }
     };
 
     const mockProject = {

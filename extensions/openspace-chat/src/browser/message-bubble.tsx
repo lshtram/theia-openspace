@@ -37,11 +37,13 @@ export interface MessageBubbleProps {
 
 /**
  * Extract text content from message parts.
+ * SDK Part types: TextPart has 'text' field, others don't.
  */
 function extractTextFromParts(parts: MessagePart[]): string {
     return parts
-        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-        .map(part => part.text)
+        .filter((part): boolean => part.type === 'text')
+        .map((part: any) => part.text as string)
+        .filter(Boolean)
         .join('');
 }
 
@@ -65,9 +67,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     isFirstInGroup = true,
     isLastInGroup = true,
 }) => {
-    const baseText = extractTextFromParts(message.parts);
+    const baseText = extractTextFromParts(message.parts || []);
     const displayText = streamingText ? baseText + streamingText : baseText;
-    const timestamp = formatTimestamp(message.metadata?.timestamp as string | number);
+    // SDK messages use time.created (number timestamp in ms)
+    const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
     return (
         <article

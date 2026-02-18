@@ -17,13 +17,53 @@
 import { RpcServer } from '@theia/core/lib/common/messaging/proxy-factory';
 import { AgentCommand } from './command-manifest';
 
+// ============================================================================
+// SDK Type Bridge (Task 2B.2)
+// Import SDK types and create aliases for backward compatibility
+// ============================================================================
+import * as SDKTypes from './opencode-sdk-types';
+
+// Re-export SDK types under our current names for backward compatibility
+export type SDKSession = SDKTypes.Session;
+export type SDKUserMessage = SDKTypes.UserMessage;
+export type SDKAssistantMessage = SDKTypes.AssistantMessage;
+export type SDKMessage = SDKTypes.UserMessage | SDKTypes.AssistantMessage;
+export type SDKPart = SDKTypes.Part;
+export type SDKProvider = SDKTypes.Provider;
+export type SDKModel = SDKTypes.Model;
+export type SDKProject = SDKTypes.Project;
+export type SDKPermission = SDKTypes.Permission;
+
+// Part types (expanded from 3 to 12+ variants)
+export type SDKTextPart = SDKTypes.TextPart;
+export type SDKFilePart = SDKTypes.FilePart;
+export type SDKToolPart = SDKTypes.ToolPart;
+export type SDKAgentPart = SDKTypes.AgentPart;
+export type SDKStepStartPart = SDKTypes.StepStartPart;
+export type SDKStepFinishPart = SDKTypes.StepFinishPart;
+export type SDKSnapshotPart = SDKTypes.SnapshotPart;
+export type SDKPatchPart = SDKTypes.PatchPart;
+export type SDKReasoningPart = SDKTypes.ReasoningPart;
+export type SDKRetryPart = SDKTypes.RetryPart;
+export type SDKCompactionPart = SDKTypes.CompactionPart;
+
+// Input types (for creating parts without IDs - SDK provides these)
+export type SDKTextPartInput = SDKTypes.TextPartInput;
+export type SDKFilePartInput = SDKTypes.FilePartInput;
+export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput;
+
+// ============================================================================
+// Application Types (SDK-based)
+// Using @opencode-ai/sdk types as the source of truth
+// ============================================================================
+
 /**
  * Path for the OpenCode service.
  */
 export const openCodeServicePath = '/services/opencode';
 
 /**
- * Core Project interface matching opencode REST API.
+ * Project interface (Theia-specific, not in SDK).
  */
 export interface Project {
     readonly id: string;
@@ -32,17 +72,10 @@ export interface Project {
 }
 
 /**
- * Session interface matching opencode REST API.
+ * Session type - directly from SDK.
+ * SDK uses: projectID (not projectId), time.created/updated (numbers, not string dates)
  */
-export interface Session {
-    readonly id: string;
-    readonly projectId: string;
-    readonly title: string;
-    readonly createdAt: string;
-    readonly updatedAt: string;
-    readonly directory: string;
-    readonly parentID?: string;
-}
+export type Session = SDKTypes.Session;
 
 /**
  * Message role types.
@@ -50,63 +83,23 @@ export interface Session {
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 /**
- * Message part types - discriminated union for different content types.
+ * Message part type - directly from SDK.
+ * SDK has 12+ part variants: text, file, tool, agent, step-start, step-finish,
+ * snapshot, patch, reasoning, retry, compaction, subtask.
  */
-export type MessagePart =
-    | TextMessagePart
-    | ToolUseMessagePart
-    | ToolResultMessagePart
-    | FileMessagePart
-    | ImageMessagePart;
-
-export interface TextMessagePart {
-    readonly type: 'text';
-    readonly text: string;
-    readonly metadata?: {
-        providerID?: string;
-        modelID?: string;
-    };
-}
-
-export interface ToolUseMessagePart {
-    readonly type: 'tool_use';
-    readonly id: string;
-    readonly name: string;
-    readonly input: Record<string, unknown>;
-}
-
-export interface ToolResultMessagePart {
-    readonly type: 'tool_result';
-    readonly tool_use_id: string;
-    readonly content: string;
-    readonly is_error?: boolean;
-}
-
-export interface FileMessagePart {
-    readonly type: 'file';
-    readonly path: string;
-    readonly content?: string;
-}
-
-export interface ImageMessagePart {
-    readonly type: 'image';
-    readonly path: string;
-    readonly mime_type?: string;
-}
+export type MessagePart = SDKTypes.Part;
 
 /**
- * Message with parts interface.
+ * Message type - HYBRID: SDK types + optional parts field.
+ * SDK separates UserMessage and AssistantMessage. Our architecture includes
+ * parts inline for convenience, but SDK doesn't. This hybrid maintains compatibility.
  */
-export interface Message {
-    readonly id: string;
-    readonly sessionId: string;
-    readonly role: MessageRole;
-    readonly parts: MessagePart[];
-    readonly metadata?: Record<string, unknown>;
-}
+export type Message = (SDKTypes.UserMessage | SDKTypes.AssistantMessage) & {
+    readonly parts?: MessagePart[];
+};
 
 /**
- * Message with parts (for API responses).
+ * Message with parts (API response wrapper).
  */
 export interface MessageWithParts {
     readonly info: Message;
@@ -114,7 +107,7 @@ export interface MessageWithParts {
 }
 
 /**
- * File status interface.
+ * File status (API response).
  */
 export interface FileStatus {
     readonly path: string;
@@ -122,7 +115,7 @@ export interface FileStatus {
 }
 
 /**
- * File content interface.
+ * File content (API response).
  */
 export interface FileContent {
     readonly type: 'raw' | 'patch';
@@ -130,34 +123,22 @@ export interface FileContent {
 }
 
 /**
- * Provider interface.
+ * Provider type - directly from SDK.
  */
-export interface Provider {
-    readonly id: string;
-    readonly name: string;
-    readonly model: string;
-}
+export type Provider = SDKTypes.Provider;
 
 /**
- * Model interface with metadata.
- */
-export interface Model {
-    readonly id: string;
-    readonly name: string;
-    readonly limit?: { context: number; output: number };
-}
-
-/**
- * Provider with models interface.
+ * Provider with models (API response format).
+ * Note: SDK has Provider and Model types, but API returns them grouped.
  */
 export interface ProviderWithModels {
     readonly id: string;
     readonly name: string;
-    readonly models: Record<string, Model>;
+    readonly models: Record<string, SDKTypes.Model>;
 }
 
 /**
- * Agent interface.
+ * Agent (API response).
  */
 export interface Agent {
     readonly id: string;
@@ -166,7 +147,7 @@ export interface Agent {
 }
 
 /**
- * Application configuration interface.
+ * Application configuration (API response).
  */
 export interface AppConfig {
     readonly model: string;
@@ -302,7 +283,9 @@ export interface PermissionNotification {
 export type PermissionEventType = 'requested' | 'granted' | 'denied';
 
 /**
- * Permission interface.
+ * Permission interface (SSE event format).
+ * Note: This is different from SDK Permission which has title/metadata fields.
+ * SSE events use this simpler format.
  */
 export interface Permission {
     readonly id: string;
@@ -310,3 +293,4 @@ export interface Permission {
     readonly message: string;
     readonly status: 'pending' | 'granted' | 'denied';
 }
+
