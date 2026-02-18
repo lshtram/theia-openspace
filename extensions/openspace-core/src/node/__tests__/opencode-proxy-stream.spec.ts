@@ -14,309 +14,214 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+/**
+ * OpenCodeProxy unit tests.
+ *
+ * Tests the OpenCodeProxy class for correct behavior of its:
+ *   - URL construction (buildUrl)
+ *   - State management (setClient, dispose)
+ *   - HTTP error handling (requestJson error path)
+ *   - Phase T3 contract: no stream interceptor methods
+ */
+
 import { expect } from 'chai';
-import * as sinon from 'sinon';
-import { OpenCodeProxy } from '../opencode-proxy';
-import { ILogger } from '@theia/core/lib/common/logger';
+import { OpenCodeProxy, DEFAULT_OPENCODE_URL } from '../opencode-proxy';
+import { OpenCodeClient } from '../../common/opencode-protocol';
 
 /**
- * Test suite for OpenCodeProxy stream interceptor functionality.
- * 
- * Tests the brace-counting state machine that extracts agent commands
- * from %%OS{...}%% blocks in message streams.
- * 
- * Critical test cases:
- * 1. Nested JSON objects (Issue #1)
- * 2. Multiple commands in one message (Issue #2)
- * 3. Malformed JSON handling
- * 4. Edge cases (empty blocks, unclosed braces, etc.)
+ * Testable subclass that exposes protected methods and allows HTTP mocking.
  */
-describe('OpenCodeProxy - Stream Interceptor', () => {
-    let proxy: OpenCodeProxy;
-    let mockLogger: sinon.SinonStubbedInstance<ILogger>;
+class TestableProxy extends OpenCodeProxy {
+    constructor(url = 'http://localhost:7890') {
+        super();
+        // Inject dependencies directly for testing (bypassing Theia DI)
+        (this as any).serverUrl = url;
+        (this as any).logger = {
+            info: () => {},
+            debug: () => {},
+            warn: () => {},
+            error: () => {}
+        };
+    }
 
-    beforeEach(() => {
-        // Create mock logger
-        mockLogger = {
-            debug: sinon.stub(),
-            info: sinon.stub(),
-            warn: sinon.stub(),
-            error: sinon.stub(),
-            log: sinon.stub(),
-            isEnabled: sinon.stub().returns(true),
-            ifEnabled: sinon.stub(),
-            isDebug: sinon.stub().returns(false),
-            ifDebug: sinon.stub(),
-            isInfo: sinon.stub().returns(false),
-            ifInfo: sinon.stub(),
-            isWarn: sinon.stub().returns(false),
-            ifWarn: sinon.stub(),
-            isError: sinon.stub().returns(false),
-            ifError: sinon.stub(),
-            isFatal: sinon.stub().returns(false),
-            ifFatal: sinon.stub(),
-            isTrace: sinon.stub().returns(false),
-            ifTrace: sinon.stub(),
-            child: sinon.stub()
-        } as any;
+    /** Expose protected buildUrl for testing */
+    public testBuildUrl(endpoint: string, queryParams?: Record<string, string | undefined>): string {
+        return this.buildUrl(endpoint, queryParams);
+    }
 
-        // Create proxy instance
-        proxy = new OpenCodeProxy();
-        (proxy as any).logger = mockLogger;
-        (proxy as any).serverUrl = 'http://localhost:7890';
-        (proxy as any).init();
-    });
+    /** Expose protected requestJson for testing via mock */
+    public testRequestJson<T>(options: { url: string; type: string; data?: string }): Promise<T> {
+        return this.requestJson<T>(options);
+    }
 
-    /**
-     * Issue #1: Nested JSON objects fail with simple regex.
-     * 
-     * The original regex /%%OS(\{[^}]*\})%%/g stops at the first }
-     * and fails on nested structures like {"args":{"nested":"value"}}.
-     */
-    describe('Issue #1: Nested JSON Objects', () => {
-        it('should extract command with nested object in args', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'Before %%OS{"cmd":"openspace.test","args":{"nested":{"deep":"value"}}}%% After'
-                }
-            ];
+    /** Override rawRequest to simulate HTTP responses without a real server */
+    public mockRawRequest?: (url: string, method: string) => { statusCode: number; body: string };
 
-            const result = (proxy as any).interceptStream(parts);
+    protected override rawRequest(url: string, method: string, _headers: Record<string, string>, _body?: string): Promise<{ statusCode: number; body: string }> {
+        if (this.mockRawRequest) {
+            return Promise.resolve(this.mockRawRequest(url, method));
+        }
+        return super.rawRequest(url, method, _headers, _body);
+    }
+}
 
-            expect(result.commands).to.have.lengthOf(1);
-            expect(result.commands[0].cmd).to.equal('openspace.test');
-            expect(result.commands[0].args).to.deep.equal({ nested: { deep: 'value' } });
-            expect(result.cleanParts).to.have.lengthOf(1);
-            expect((result.cleanParts[0]).text).to.equal('Before  After');
-        });
+describe('OpenCodeProxy', () => {
 
-        it('should extract command with deeply nested structures', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: '%%OS{"cmd":"openspace.complex","args":{"a":{"b":{"c":{"d":"value"}}}}}%%'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(1);
-            expect(result.commands[0].cmd).to.equal('openspace.complex');
-            expect(result.commands[0].args).to.deep.equal({ a: { b: { c: { d: 'value' } } } });
-        });
-
-        it('should extract command with array of objects', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: '%%OS{"cmd":"openspace.array","args":[{"id":1},{"id":2}]}%%'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(1);
-            expect(result.commands[0].args).to.deep.equal([{ id: 1 }, { id: 2 }]);
+    describe('DEFAULT_OPENCODE_URL constant', () => {
+        it('should point to localhost:7890', () => {
+            expect(DEFAULT_OPENCODE_URL).to.equal('http://localhost:7890');
         });
     });
 
-    /**
-     * Issue #2: Multiple commands in one message may not all be extracted.
-     * 
-     * The original implementation used regex.exec() on the original text
-     * but performed replacements on a copy, causing index misalignment.
-     */
-    describe('Issue #2: Multiple Commands in One Message', () => {
-        it('should extract all commands from text with multiple blocks', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'First %%OS{"cmd":"openspace.cmd1"}%% middle %%OS{"cmd":"openspace.cmd2"}%% end'
-                }
-            ];
+    describe('buildUrl()', () => {
+        let proxy: TestableProxy;
 
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(2);
-            expect(result.commands[0].cmd).to.equal('openspace.cmd1');
-            expect(result.commands[1].cmd).to.equal('openspace.cmd2');
-            expect((result.cleanParts[0]).text).to.equal('First  middle  end');
+        beforeEach(() => {
+            proxy = new TestableProxy('http://localhost:7890');
         });
 
-        it('should extract commands from consecutive blocks', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: '%%OS{"cmd":"openspace.a"}%%%%OS{"cmd":"openspace.b"}%%%%OS{"cmd":"openspace.c"}%%'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(3);
-            expect(result.commands[0].cmd).to.equal('openspace.a');
-            expect(result.commands[1].cmd).to.equal('openspace.b');
-            expect(result.commands[2].cmd).to.equal('openspace.c');
-            expect(result.cleanParts).to.have.lengthOf(0); // All command blocks, no text left
+        it('should build URL for simple endpoint', () => {
+            const url = proxy.testBuildUrl('/session');
+            expect(url).to.equal('http://localhost:7890/session');
         });
 
-        it('should handle interleaved text and commands', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'A %%OS{"cmd":"openspace.1"}%% B %%OS{"cmd":"openspace.2"}%% C %%OS{"cmd":"openspace.3"}%% D'
-                }
-            ];
+        it('should build URL with single query parameter', () => {
+            const url = proxy.testBuildUrl('/session', { foo: 'bar' });
+            expect(url).to.equal('http://localhost:7890/session?foo=bar');
+        });
 
-            const result = (proxy as any).interceptStream(parts);
+        it('should build URL with multiple query parameters', () => {
+            const url = proxy.testBuildUrl('/project', { a: '1', b: '2' });
+            const parsed = new URL(url);
+            expect(parsed.pathname).to.equal('/project');
+            expect(parsed.searchParams.get('a')).to.equal('1');
+            expect(parsed.searchParams.get('b')).to.equal('2');
+        });
 
-            expect(result.commands).to.have.lengthOf(3);
-            expect((result.cleanParts[0]).text).to.equal('A  B  C  D');
+        it('should omit undefined query parameters', () => {
+            const url = proxy.testBuildUrl('/session', { present: 'yes', missing: undefined });
+            const parsed = new URL(url);
+            expect(parsed.searchParams.get('present')).to.equal('yes');
+            expect(parsed.searchParams.has('missing')).to.be.false;
+        });
+
+        it('should work with a custom base URL', () => {
+            const customProxy = new TestableProxy('http://example.com:8080');
+            const url = customProxy.testBuildUrl('/test');
+            expect(url).to.equal('http://example.com:8080/test');
+        });
+
+        it('should URL-encode query parameter values with spaces', () => {
+            const url = proxy.testBuildUrl('/search', { q: 'hello world' });
+            expect(url).to.match(/q=hello(%20|\+)world/);
         });
     });
 
-    /**
-     * Malformed JSON and edge cases.
-     * 
-     * Note: StreamInterceptor (the canonical implementation) handles these cases differently:
-     * - Malformed/incomplete blocks are kept in text (not cleaned) since they can't be parsed
-     * - Empty blocks without 'cmd' field are not extracted (more secure)
-     * - Additional fields in args are preserved at top level for backward compatibility
-     */
-    describe('Malformed JSON and Edge Cases', () => {
-        it('should discard malformed JSON blocks', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'Before %%OS{invalid json}%% After'
-                }
-            ];
+    describe('setClient() / dispose() — state management', () => {
+        let proxy: TestableProxy;
 
-            const result = (proxy as any).interceptStream(parts);
-
-            // StreamInterceptor doesn't extract malformed blocks (no valid cmd)
-            expect(result.commands).to.have.lengthOf(0);
-            // Malformed blocks remain in text since they can't be parsed
-            expect((result.cleanParts[0]).text).to.equal('Before %%OS{invalid json}%% After');
+        beforeEach(() => {
+            proxy = new TestableProxy();
         });
 
-        it('should handle unclosed brace blocks', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'Before %%OS{"cmd":"test" After'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            // Unclosed brace - block is pending (kept for next chunk)
-            // StreamInterceptor saves incomplete blocks as pending text
-            expect(result.commands).to.have.lengthOf(0);
-            // The text is cleaned - incomplete block is treated as pending and not included in clean text
-            expect((result.cleanParts[0]).text).to.equal('Before ');
+        it('should start with no client', () => {
+            expect(proxy.client).to.be.undefined;
         });
 
-        it('should handle missing closing %%', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'Before %%OS{"cmd":"test"} After'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            // Missing closing %% - block is incomplete, not extracted
-            // StreamInterceptor treats this as pending text
-            expect(result.commands).to.have.lengthOf(0);
-            // The text is cleaned - incomplete block is treated as pending
-            expect((result.cleanParts[0]).text).to.equal('Before ');
+        it('should accept a client via setClient()', () => {
+            const mockClient = {} as OpenCodeClient;
+            proxy.setClient(mockClient);
+            expect(proxy.client).to.equal(mockClient);
         });
 
-        it('should handle empty blocks', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: 'Text %%OS{}%% More'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            // StreamInterceptor requires 'cmd' field - empty block is not a valid command
-            expect(result.commands).to.have.lengthOf(0);
-            // Empty block remains in text since it can't be executed
-            expect((result.cleanParts[0]).text).to.equal('Text %%OS{}%% More');
+        it('should clear the client when setClient(undefined) is called', () => {
+            const mockClient = {} as OpenCodeClient;
+            proxy.setClient(mockClient);
+            proxy.setClient(undefined);
+            expect(proxy.client).to.be.undefined;
         });
 
-        it('should handle strings containing braces', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: '%%OS{"cmd":"openspace.test","msg":"has {braces} in string"}%%'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(1);
-            expect(result.commands[0].cmd).to.equal('openspace.test');
-            // Fields from args are preserved at top level for backward compatibility
-            expect((result.commands[0] as any).args).to.have.property('msg', 'has {braces} in string');
+        it('should clear the client on dispose()', () => {
+            const mockClient = {} as OpenCodeClient;
+            proxy.setClient(mockClient);
+            proxy.dispose();
+            expect(proxy.client).to.be.undefined;
         });
 
-        it('should handle escaped quotes in strings', () => {
-            const parts = [
-                {
-                    type: 'text',
-                    text: '%%OS{"cmd":"openspace.test","msg":"has \\"quotes\\""}%%'
-                }
-            ];
-
-            const result = (proxy as any).interceptStream(parts);
-
-            expect(result.commands).to.have.lengthOf(1);
-            // Fields from args are preserved at top level for backward compatibility
-            expect((result.commands[0] as any).args).to.have.property('msg', 'has "quotes"');
+        it('should set isDisposed after dispose()', () => {
+            proxy.dispose();
+            expect((proxy as any).isDisposed).to.be.true;
         });
     });
 
-    /**
-     * Non-text parts should pass through unchanged.
-     */
-    describe('Non-Text Parts', () => {
-        it('should pass through non-text parts unchanged', () => {
-            const parts = [
-                { type: 'image', url: 'http://example.com/image.png' } as any,
-                { type: 'text', text: '%%OS{"cmd":"openspace.test"}%%' },
-                { type: 'code', content: 'console.log("test");' } as any
-            ];
+    describe('requestJson() — HTTP error handling', () => {
+        let proxy: TestableProxy;
 
-            const result = (proxy as any).interceptStream(parts);
+        beforeEach(() => {
+            proxy = new TestableProxy();
+        });
 
-            expect(result.commands).to.have.lengthOf(1);
-            expect(result.cleanParts).to.have.lengthOf(2); // image + code (text was all command)
-            expect(result.cleanParts[0].type).to.equal('image');
-            expect(result.cleanParts[1].type).to.equal('code');
+        it('should throw on HTTP 404', async () => {
+            proxy.mockRawRequest = () => ({ statusCode: 404, body: 'Not Found' });
+            try {
+                await proxy.testRequestJson({ url: 'http://localhost/test', type: 'GET' });
+                expect.fail('should have thrown');
+            } catch (e: any) {
+                expect(e.message).to.include('404');
+            }
+        });
+
+        it('should throw on HTTP 500', async () => {
+            proxy.mockRawRequest = () => ({ statusCode: 500, body: 'Internal Server Error' });
+            try {
+                await proxy.testRequestJson({ url: 'http://localhost/test', type: 'GET' });
+                expect.fail('should have thrown');
+            } catch (e: any) {
+                expect(e.message).to.include('500');
+            }
+        });
+
+        it('should return parsed JSON on HTTP 200', async () => {
+            proxy.mockRawRequest = () => ({ statusCode: 200, body: '{"id":"abc","title":"test"}' });
+            const result = await proxy.testRequestJson<{ id: string; title: string }>({ url: 'http://localhost/test', type: 'GET' });
+            expect(result.id).to.equal('abc');
+            expect(result.title).to.equal('test');
+        });
+
+        it('should accept HTTP 201 as success', async () => {
+            proxy.mockRawRequest = () => ({ statusCode: 201, body: '{"id":"new"}' });
+            const result = await proxy.testRequestJson<{ id: string }>({ url: 'http://localhost/test', type: 'POST' });
+            expect(result.id).to.equal('new');
+        });
+
+        it('should include response body in error message on failure', async () => {
+            proxy.mockRawRequest = () => ({ statusCode: 403, body: 'Access denied to /secret' });
+            try {
+                await proxy.testRequestJson({ url: 'http://localhost/test', type: 'GET' });
+                expect.fail('should have thrown');
+            } catch (e: any) {
+                expect(e.message).to.include('Access denied to /secret');
+            }
         });
     });
 
-    /**
-     * Text-only (no commands) should return unchanged.
-     */
-    describe('No Commands', () => {
-        it('should return text unchanged when no commands present', () => {
-            const parts = [
-                { type: 'text', text: 'This is just normal text with no commands.' }
-            ];
+    describe('Phase T3 contract: no stream interceptor', () => {
+        it('should not expose interceptStream method (removed in Phase T3)', () => {
+            const proxy = new TestableProxy();
+            expect((proxy as any).interceptStream).to.be.undefined;
+        });
 
-            const result = (proxy as any).interceptStream(parts);
+        it('should not expose extractAgentCommands method (removed in Phase T3)', () => {
+            const proxy = new TestableProxy();
+            expect((proxy as any).extractAgentCommands).to.be.undefined;
+        });
 
-            expect(result.commands).to.have.lengthOf(0);
-            expect(result.cleanParts).to.have.lengthOf(1);
-            expect((result.cleanParts[0]).text).to.equal('This is just normal text with no commands.');
+        it('should not have any method name containing "intercept"', () => {
+            const proxy = new TestableProxy();
+            const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(proxy));
+            const interceptMethods = methodNames.filter(m => m.toLowerCase().includes('intercept'));
+            expect(interceptMethods).to.be.empty;
         });
     });
+
 });

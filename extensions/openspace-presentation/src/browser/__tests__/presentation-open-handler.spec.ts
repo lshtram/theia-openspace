@@ -16,64 +16,55 @@
 
 /**
  * Tests for PresentationOpenHandler canHandle logic.
- * These tests verify the file extension matching logic.
+ * These tests verify the file extension matching logic using the real class.
  */
 
-// Simple path checker mimicking the canHandle logic
-function canHandleDeckMd(path: string): number {
-    const DECK_EXTENSION = '.deck.md';
-    if (path.endsWith(DECK_EXTENSION)) {
-        return 200;
-    }
-    return 0;
-}
+import { expect } from 'chai';
+import { URI } from '@theia/core/lib/common/uri';
+import { PresentationOpenHandler } from '../presentation-open-handler';
 
 describe('PresentationOpenHandler canHandle logic', () => {
+    let handler: PresentationOpenHandler;
+
+    beforeEach(() => {
+        // PresentationOpenHandler uses @inject for widgetManager and fileService,
+        // but canHandle() only calls uri.path.toString() — no services needed.
+        handler = new PresentationOpenHandler();
+    });
+
     it('should return priority 200 for .deck.md files', () => {
-        const path = '/test/project/arch.deck.md';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 200) {
-            throw new Error(`Expected 200, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/arch.deck.md');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(200);
     });
 
     it('should return priority 200 for .deck.md files in subdirectories', () => {
-        const path = '/test/project/docs/intro.deck.md';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 200) {
-            throw new Error(`Expected 200, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/docs/intro.deck.md');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(200);
     });
 
     it('should return 0 for .md files without .deck prefix', () => {
-        const path = '/test/project/readme.md';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 0) {
-            throw new Error(`Expected 0, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/readme.md');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(0);
     });
 
     it('should return 0 for .json files', () => {
-        const path = '/test/project/data.json';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 0) {
-            throw new Error(`Expected 0, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/data.json');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(0);
     });
 
     it('should return 0 for .whiteboard.json files', () => {
-        const path = '/test/project/diagram.whiteboard.json';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 0) {
-            throw new Error(`Expected 0, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/diagram.whiteboard.json');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(0);
     });
 
     it('should return 0 for .txt files', () => {
-        const path = '/test/project/notes.txt';
-        const priority = canHandleDeckMd(path);
-        if (priority !== 0) {
-            throw new Error(`Expected 0, got ${priority}`);
-        }
+        const uri = new URI('file:///test/project/notes.txt');
+        const priority = handler.canHandle(uri);
+        expect(priority).to.equal(0);
     });
 });

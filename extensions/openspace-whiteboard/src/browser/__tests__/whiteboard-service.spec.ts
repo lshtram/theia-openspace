@@ -5,10 +5,6 @@
 // terms of the Eclipse Public License v. 2.0 which is available at
 // http://www.eclipse.org/legal/epl-2.0.
 //
-// This Source Code may also be made available under the terms of the Eclipse
-// Public License v. 2.0 which is available at
-// http://www.eclipse.org/legal/epl-2.0.
-//
 // This Source Code may also be made available under the following Secondary
 // Licenses when the conditions for such availability set forth in the Eclipse
 // Public License v. 2.0 are satisfied: GNU General Public License, version 2
@@ -22,112 +18,60 @@
  * Tests for WhiteboardService methods.
  */
 
-// Whiteboard data types
-interface WhiteboardData {
-    schema: { version: number };
-    records: WhiteboardRecord[];
-}
-
-interface WhiteboardRecord {
-    id: string;
-    type: string;
-    [key: string]: unknown;
-}
-
-// Helper functions mimicking whiteboard widget utils
-function createEmpty(): WhiteboardData {
-    return {
-        schema: { version: 1 },
-        records: []
-    };
-}
-
-function validate(data: unknown): data is WhiteboardData {
-    if (!data || typeof data !== 'object') return false;
-    
-    const d = data as WhiteboardData;
-    if (!d.schema || typeof d.schema.version !== 'number') return false;
-    if (!Array.isArray(d.records)) return false;
-    
-    return true;
-}
-
-function addShape(data: WhiteboardData, shape: WhiteboardRecord): WhiteboardData {
-    return {
-        ...data,
-        records: [...data.records, shape]
-    };
-}
-
-function removeShape(data: WhiteboardData, shapeId: string): WhiteboardData {
-    return {
-        ...data,
-        records: data.records.filter(r => r.id !== shapeId)
-    };
-}
-
-function updateShape(data: WhiteboardData, shapeId: string, updates: Partial<WhiteboardRecord>): WhiteboardData {
-    return {
-        ...data,
-        records: data.records.map(r => 
-            r.id === shapeId ? { ...r, ...updates } : r
-        )
-    };
-}
+import { expect } from 'chai';
+import { WhiteboardService } from '../whiteboard-service';
+import { WhiteboardUtils, WhiteboardData, WhiteboardRecord } from '../whiteboard-widget';
 
 describe('WhiteboardService', () => {
+    let service: WhiteboardService;
+
+    beforeEach(() => {
+        service = new WhiteboardService();
+        // Inject stub fileService and workspaceService — unused by tested methods
+        (service as any).fileService = {};
+        (service as any).workspaceService = {};
+    });
+
     describe('getFileExtension', () => {
         it('should return .whiteboard.json', () => {
-            const ext = '.whiteboard.json';
-            if (ext !== '.whiteboard.json') {
-                throw new Error(`Expected .whiteboard.json, got ${ext}`);
-            }
+            const ext = service.getFileExtension();
+            expect(ext).to.equal('.whiteboard.json');
         });
     });
 
     describe('createEmpty', () => {
         it('should create empty whiteboard data', () => {
-            const data = createEmpty();
-            
-            if (data.schema.version !== 1) {
-                throw new Error('Schema version should be 1');
-            }
-            if (!Array.isArray(data.records) || data.records.length !== 0) {
-                throw new Error('Records should be empty array');
-            }
+            const data = WhiteboardUtils.createEmpty();
+
+            expect(data.schema.version).to.equal(1);
+            expect(data.records).to.be.an('array').that.is.empty;
         });
     });
 
     describe('validate', () => {
         it('should validate correct data', () => {
-            const data = {
+            const data: WhiteboardData = {
                 schema: { version: 1 },
                 records: []
             };
-            
-            if (!validate(data)) {
-                throw new Error('Should be valid');
-            }
+
+            expect(WhiteboardUtils.validate(data)).to.be.true;
         });
 
         it('should reject missing schema', () => {
             const data = {
                 records: []
             };
-            
-            if (validate(data)) {
-                throw new Error('Should be invalid - missing schema');
-            }
+
+            expect(WhiteboardUtils.validate(data)).to.be.false;
         });
 
         it('should reject missing records', () => {
             const data = {
                 schema: { version: 1 }
             };
-            
-            if (validate(data)) {
-                throw new Error('Should be invalid - missing records');
-            }
+
+            expect(WhiteboardUtils.validate(data)).to.be.false;
         });
 
         it('should reject invalid schema version', () => {
@@ -135,37 +79,29 @@ describe('WhiteboardService', () => {
                 schema: { version: '1' },
                 records: []
             };
-            
-            if (validate(data)) {
-                throw new Error('Should be invalid - version not number');
-            }
+
+            expect(WhiteboardUtils.validate(data)).to.be.false;
         });
     });
 
     describe('addShape', () => {
         it('should add shape to empty whiteboard', () => {
-            const data = createEmpty();
+            const data = WhiteboardUtils.createEmpty();
             const shape: WhiteboardRecord = { id: 'shape-1', type: 'rectangle', x: 100, y: 200 };
-            
-            const updated = addShape(data, shape);
-            
-            if (updated.records.length !== 1) {
-                throw new Error(`Expected 1 record, got ${updated.records.length}`);
-            }
-            if (updated.records[0].id !== 'shape-1') {
-                throw new Error('Shape should have correct ID');
-            }
+
+            const updated = WhiteboardUtils.addShape(data, shape);
+
+            expect(updated.records).to.have.lengthOf(1);
+            expect(updated.records[0].id).to.equal('shape-1');
         });
 
         it('should not modify original data', () => {
-            const data = createEmpty();
+            const data = WhiteboardUtils.createEmpty();
             const shape: WhiteboardRecord = { id: 'shape-1', type: 'rectangle', x: 100, y: 200 };
-            
-            addShape(data, shape);
-            
-            if (data.records.length !== 0) {
-                throw new Error('Original data should not be modified');
-            }
+
+            WhiteboardUtils.addShape(data, shape);
+
+            expect(data.records).to.have.lengthOf(0);
         });
 
         it('should preserve existing shapes when adding', () => {
@@ -174,15 +110,11 @@ describe('WhiteboardService', () => {
                 records: [{ id: 'shape-1', type: 'rectangle', x: 0, y: 0 }]
             };
             const shape: WhiteboardRecord = { id: 'shape-2', type: 'ellipse', x: 100, y: 100 };
-            
-            const updated = addShape(data, shape);
-            
-            if (updated.records.length !== 2) {
-                throw new Error(`Expected 2 records, got ${updated.records.length}`);
-            }
-            if (updated.records[0].id !== 'shape-1') {
-                throw new Error('First shape should be preserved');
-            }
+
+            const updated = WhiteboardUtils.addShape(data, shape);
+
+            expect(updated.records).to.have.lengthOf(2);
+            expect(updated.records[0].id).to.equal('shape-1');
         });
     });
 
@@ -195,15 +127,11 @@ describe('WhiteboardService', () => {
                     { id: 'shape-2', type: 'ellipse', x: 100, y: 100 }
                 ]
             };
-            
-            const updated = removeShape(data, 'shape-1');
-            
-            if (updated.records.length !== 1) {
-                throw new Error(`Expected 1 record, got ${updated.records.length}`);
-            }
-            if (updated.records[0].id !== 'shape-2') {
-                throw new Error('Wrong shape removed');
-            }
+
+            const updated = WhiteboardUtils.removeShape(data, 'shape-1');
+
+            expect(updated.records).to.have.lengthOf(1);
+            expect(updated.records[0].id).to.equal('shape-2');
         });
 
         it('should handle non-existent shape ID', () => {
@@ -211,12 +139,10 @@ describe('WhiteboardService', () => {
                 schema: { version: 1 },
                 records: [{ id: 'shape-1', type: 'rectangle', x: 0, y: 0 }]
             };
-            
-            const updated = removeShape(data, 'non-existent');
-            
-            if (updated.records.length !== 1) {
-                throw new Error('Should not remove any shapes');
-            }
+
+            const updated = WhiteboardUtils.removeShape(data, 'non-existent');
+
+            expect(updated.records).to.have.lengthOf(1);
         });
     });
 
@@ -226,19 +152,13 @@ describe('WhiteboardService', () => {
                 schema: { version: 1 },
                 records: [{ id: 'shape-1', type: 'rectangle', x: 0, y: 0 }]
             };
-            
-            const updated = updateShape(data, 'shape-1', { x: 50, y: 100 });
-            
-            if (updated.records[0].x !== 50) {
-                throw new Error('x should be updated');
-            }
-            if (updated.records[0].y !== 100) {
-                throw new Error('y should be updated');
-            }
+
+            const updated = WhiteboardUtils.updateShape(data, 'shape-1', { x: 50, y: 100 });
+
+            expect(updated.records[0].x).to.equal(50);
+            expect(updated.records[0].y).to.equal(100);
             // Original properties should be preserved
-            if (updated.records[0].type !== 'rectangle') {
-                throw new Error('type should be preserved');
-            }
+            expect(updated.records[0].type).to.equal('rectangle');
         });
 
         it('should handle non-existent shape', () => {
@@ -246,29 +166,22 @@ describe('WhiteboardService', () => {
                 schema: { version: 1 },
                 records: [{ id: 'shape-1', type: 'rectangle', x: 0, y: 0 }]
             };
-            
-            const updated = updateShape(data, 'non-existent', { x: 50 });
-            
+
+            const updated = WhiteboardUtils.updateShape(data, 'non-existent', { x: 50 });
+
             // Should not throw, just return unchanged data
-            if (updated.records[0].x !== 0) {
-                throw new Error('Non-existent shape should not be updated');
-            }
+            expect(updated.records[0].x).to.equal(0);
         });
     });
 
     describe('camera state', () => {
         it('should store camera state', () => {
-            const cameraState = { x: 100, y: 200, zoom: 1.5 };
-            
-            if (cameraState.x !== 100) {
-                throw new Error('x should be stored');
-            }
-            if (cameraState.y !== 200) {
-                throw new Error('y should be stored');
-            }
-            if (cameraState.zoom !== 1.5) {
-                throw new Error('zoom should be stored');
-            }
+            service.setCameraState({ x: 100, y: 200, zoom: 1.5 });
+            const cameraState = service.getCameraState();
+
+            expect(cameraState.x).to.equal(100);
+            expect(cameraState.y).to.equal(200);
+            expect(cameraState.zoom).to.equal(1.5);
         });
 
         it('should fit camera to shapes', () => {
@@ -276,30 +189,26 @@ describe('WhiteboardService', () => {
                 { id: '1', type: 'rect', x: 0, y: 0, width: 100, height: 100 },
                 { id: '2', type: 'rect', x: 200, y: 200, width: 50, height: 50 }
             ];
-            
+
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            
+
             for (const record of records) {
                 const x = (record.x as number) || 0;
                 const y = (record.y as number) || 0;
                 const w = (record.width as number) || 100;
                 const h = (record.height as number) || 100;
-                
+
                 minX = Math.min(minX, x);
                 minY = Math.min(minY, y);
                 maxX = Math.max(maxX, x + w);
                 maxY = Math.max(maxY, y + h);
             }
-            
+
             const centerX = (minX + maxX) / 2;
             const centerY = (minY + maxY) / 2;
-            
-            if (centerX !== 125) { // (0 + 250) / 2 = 125
-                throw new Error(`Expected centerX 125, got ${centerX}`);
-            }
-            if (centerY !== 125) { // (0 + 250) / 2 = 125
-                throw new Error(`Expected centerY 125, got ${centerY}`);
-            }
+
+            expect(centerX).to.equal(125); // (0 + 250) / 2 = 125
+            expect(centerY).to.equal(125); // (0 + 250) / 2 = 125
         });
     });
 });

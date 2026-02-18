@@ -8,208 +8,212 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+/**
+ * Tests for WhiteboardWidget exports.
+ *
+ * NOTE: WhiteboardWidget is a Theia ReactWidget wired via InversifyJS DI.
+ * It cannot be instantiated without a full Theia container.
+ * These tests cover:
+ *   - Static constants (ID, LABEL)
+ *   - WhiteboardUtils static methods (createEmpty, validate, addShape, removeShape, updateShape)
+ */
+
 import { expect } from 'chai';
-import * as sinon from 'sinon';
+import { WhiteboardWidget, WhiteboardUtils, WhiteboardData, WhiteboardRecord } from '../whiteboard-widget';
 
 describe('WhiteboardWidget', () => {
-    let mockEditor: any;
-    let mockStore: any;
-
-    const sampleWhiteboardData = {
-        schema: { version: 1 },
-        records: [
-            { id: 'shape1', type: 'geo', x: 100, y: 100, props: { geo: 'rectangle' } }
-        ]
-    };
-
-    beforeEach(() => {
-        // Mock tldraw editor
-        mockEditor = {
-            createShape: sinon.stub(),
-            updateShape: sinon.stub(),
-            deleteShape: sinon.stub(),
-            getCurrentPageShapeIds: sinon.stub().returns(new Set(['shape1'])),
-            store: mockStore,
-            putRecord: sinon.stub(),
-            removeRecord: sinon.stub()
-        };
-
-        // Mock store
-        mockStore = {
-            getSnapshot: sinon.stub().returns(sampleWhiteboardData),
-            loadSnapshot: sinon.stub(),
-            addListener: sinon.stub(),
-            removeListener: sinon.stub()
-        };
-    });
-
-    afterEach(() => {
-        sinon.restore();
-    });
 
     describe('Widget Constants', () => {
         it('should have correct widget ID', () => {
-            // Widget ID is defined as constant - verify format
-            const widgetId = 'openspace-whiteboard-widget';
-            expect(widgetId).to.equal('openspace-whiteboard-widget');
-            expect(widgetId).to.include('whiteboard');
+            expect(WhiteboardWidget.ID).to.equal('openspace-whiteboard-widget');
         });
 
         it('should have correct widget label', () => {
-            const widgetLabel = 'Whiteboard';
-            expect(widgetLabel).to.equal('Whiteboard');
+            expect(WhiteboardWidget.LABEL).to.equal('Whiteboard');
         });
     });
 
-    describe('Shape Management', () => {
-        it('should create a shape', () => {
-            // Test shape creation through the editor API
-            mockEditor.createShape.returns({ id: 'new-shape' });
-            
-            const shape = mockEditor.createShape({
-                type: 'geo',
-                x: 100,
-                y: 100,
-                props: { geo: 'rectangle' }
-            });
-
-            expect(shape).to.not.be.undefined;
-            expect(mockEditor.createShape.calledOnce).to.be.true;
+    describe('WhiteboardUtils.createEmpty()', () => {
+        it('should return a whiteboard with schema version 1', () => {
+            const data = WhiteboardUtils.createEmpty();
+            expect(data.schema.version).to.equal(1);
         });
 
-        it('should update a shape', () => {
-            mockEditor.updateShape.returns({ id: 'shape1' });
-            
-            mockEditor.updateShape({
-                id: 'shape1',
-                type: 'geo',
-                props: { color: 'red' }
-            });
-
-            expect(mockEditor.updateShape.calledOnce).to.be.true;
+        it('should return a whiteboard with no records', () => {
+            const data = WhiteboardUtils.createEmpty();
+            expect(data.records).to.be.an('array');
+            expect(data.records).to.have.lengthOf(0);
         });
 
-        it('should delete a shape', () => {
-            mockEditor.deleteShape.returns(undefined);
-            
-            mockEditor.deleteShape('shape1');
-
-            expect(mockEditor.deleteShape.calledOnceWith('shape1')).to.be.true;
-        });
-
-        it('should get all shapes', () => {
-            const shapes = mockEditor.getCurrentPageShapeIds();
-            expect(shapes.size).to.equal(1);
+        it('should return a new object each time', () => {
+            const a = WhiteboardUtils.createEmpty();
+            const b = WhiteboardUtils.createEmpty();
+            expect(a).to.not.equal(b);
         });
     });
 
-    describe('Save/Load', () => {
-        it('should serialize store to JSON', () => {
-            const snapshot = mockStore.getSnapshot();
-            expect(snapshot).to.deep.equal(sampleWhiteboardData);
-            expect(mockStore.getSnapshot.calledOnce).to.be.true;
+    describe('WhiteboardUtils.validate()', () => {
+        it('should accept a valid whiteboard data object', () => {
+            const valid: WhiteboardData = { schema: { version: 1 }, records: [] };
+            expect(WhiteboardUtils.validate(valid)).to.be.true;
         });
 
-        it('should deserialize JSON to store', () => {
-            mockStore.loadSnapshot.returns(undefined);
-            
-            mockStore.loadSnapshot(sampleWhiteboardData);
-
-            expect(mockStore.loadSnapshot.calledOnceWith(sampleWhiteboardData)).to.be.true;
-        });
-
-        it('should handle empty whiteboard', () => {
-            const emptyData = { schema: { version: 1 }, records: [] };
-            mockStore.getSnapshot.returns(emptyData);
-            
-            const snapshot = mockStore.getSnapshot();
-            expect(snapshot.records).to.be.empty;
-        });
-    });
-
-    describe('File Format', () => {
-        it('should use .whiteboard.json extension', () => {
-            // Verify the expected file extension
-            const filename = 'my-drawing.whiteboard.json';
-            expect(filename.endsWith('.whiteboard.json')).to.be.true;
-        });
-
-        it('should validate whiteboard JSON structure', () => {
-            // Validate schema structure
-            expect(sampleWhiteboardData).to.have.property('schema');
-            expect(sampleWhiteboardData).to.have.property('records');
-            expect(sampleWhiteboardData.schema).to.have.property('version');
-            expect(Array.isArray(sampleWhiteboardData.records)).to.be.true;
-        });
-    });
-
-    describe('Auto-save', () => {
-        it('should detect changes in store', () => {
-            const listener = sinon.stub();
-            mockStore.addListener.returns(undefined);
-            mockStore.removeListener.returns(undefined);
-            
-            mockStore.addListener('change', listener);
-            
-            expect(mockStore.addListener.calledOnce).to.be.true;
-        });
-    });
-
-    describe('Whiteboard Data Operations', () => {
-        it('should create empty whiteboard data', () => {
-            const emptyData = { schema: { version: 1 }, records: [] };
-            expect(emptyData.schema.version).to.equal(1);
-            expect(emptyData.records).to.be.an('array');
-            expect(emptyData.records.length).to.equal(0);
-        });
-
-        it('should add shape to whiteboard', () => {
-            const data = { schema: { version: 1 }, records: [] as any[] };
-            const newShape = { id: 'shape1', type: 'geo', x: 100, y: 100 };
-            
-            const updatedData = {
-                ...data,
-                records: [...data.records, newShape]
+        it('should accept whiteboard data with records', () => {
+            const valid: WhiteboardData = {
+                schema: { version: 2 },
+                records: [{ id: 'r1', type: 'geo' }]
             };
-            
-            expect(updatedData.records.length).to.equal(1);
-            expect(updatedData.records[0].id).to.equal('shape1');
+            expect(WhiteboardUtils.validate(valid)).to.be.true;
         });
 
-        it('should remove shape from whiteboard', () => {
-            const data = { 
-                schema: { version: 1 }, 
+        it('should reject null', () => {
+            expect(WhiteboardUtils.validate(null)).to.be.false;
+        });
+
+        it('should reject undefined', () => {
+            expect(WhiteboardUtils.validate(undefined)).to.be.false;
+        });
+
+        it('should reject object without schema', () => {
+            expect(WhiteboardUtils.validate({ records: [] })).to.be.false;
+        });
+
+        it('should reject object with non-numeric schema version', () => {
+            expect(WhiteboardUtils.validate({ schema: { version: 'one' }, records: [] })).to.be.false;
+        });
+
+        it('should reject object with non-array records', () => {
+            expect(WhiteboardUtils.validate({ schema: { version: 1 }, records: 'bad' })).to.be.false;
+        });
+
+        it('should reject primitive values', () => {
+            expect(WhiteboardUtils.validate('string')).to.be.false;
+            expect(WhiteboardUtils.validate(42)).to.be.false;
+        });
+    });
+
+    describe('WhiteboardUtils.addShape()', () => {
+        let base: WhiteboardData;
+
+        beforeEach(() => {
+            base = WhiteboardUtils.createEmpty();
+        });
+
+        it('should add a shape to an empty whiteboard', () => {
+            const shape: WhiteboardRecord = { id: 'shape1', type: 'geo' };
+            const updated = WhiteboardUtils.addShape(base, shape);
+            expect(updated.records).to.have.lengthOf(1);
+            expect(updated.records[0].id).to.equal('shape1');
+        });
+
+        it('should not mutate the original data', () => {
+            const shape: WhiteboardRecord = { id: 'shape1', type: 'geo' };
+            WhiteboardUtils.addShape(base, shape);
+            expect(base.records).to.have.lengthOf(0);
+        });
+
+        it('should preserve existing shapes when adding', () => {
+            const first: WhiteboardRecord = { id: 'r1', type: 'geo' };
+            const second: WhiteboardRecord = { id: 'r2', type: 'arrow' };
+            const withFirst = WhiteboardUtils.addShape(base, first);
+            const withBoth = WhiteboardUtils.addShape(withFirst, second);
+            expect(withBoth.records).to.have.lengthOf(2);
+        });
+
+        it('should preserve schema version when adding shape', () => {
+            const shape: WhiteboardRecord = { id: 's1', type: 'text' };
+            const updated = WhiteboardUtils.addShape(base, shape);
+            expect(updated.schema.version).to.equal(base.schema.version);
+        });
+    });
+
+    describe('WhiteboardUtils.removeShape()', () => {
+        let base: WhiteboardData;
+
+        beforeEach(() => {
+            base = {
+                schema: { version: 1 },
                 records: [
                     { id: 'shape1', type: 'geo' },
-                    { id: 'shape2', type: 'arrow' }
-                ] 
+                    { id: 'shape2', type: 'arrow' },
+                    { id: 'shape3', type: 'text' }
+                ]
             };
-            
-            const updatedData = {
-                ...data,
-                records: data.records.filter(r => r.id !== 'shape1')
-            };
-            
-            expect(updatedData.records.length).to.equal(1);
-            expect(updatedData.records[0].id).to.equal('shape2');
         });
 
-        it('should update shape in whiteboard', () => {
-            const data = { 
-                schema: { version: 1 }, 
+        it('should remove the specified shape by id', () => {
+            const updated = WhiteboardUtils.removeShape(base, 'shape2');
+            expect(updated.records.find(r => r.id === 'shape2')).to.be.undefined;
+        });
+
+        it('should preserve remaining shapes after removal', () => {
+            const updated = WhiteboardUtils.removeShape(base, 'shape2');
+            expect(updated.records).to.have.lengthOf(2);
+            expect(updated.records.map(r => r.id)).to.include.members(['shape1', 'shape3']);
+        });
+
+        it('should not mutate the original data', () => {
+            WhiteboardUtils.removeShape(base, 'shape1');
+            expect(base.records).to.have.lengthOf(3);
+        });
+
+        it('should return unchanged records if id not found', () => {
+            const updated = WhiteboardUtils.removeShape(base, 'nonexistent');
+            expect(updated.records).to.have.lengthOf(3);
+        });
+
+        it('should preserve schema version when removing shape', () => {
+            const updated = WhiteboardUtils.removeShape(base, 'shape1');
+            expect(updated.schema.version).to.equal(1);
+        });
+    });
+
+    describe('WhiteboardUtils.updateShape()', () => {
+        let base: WhiteboardData;
+
+        beforeEach(() => {
+            base = {
+                schema: { version: 1 },
                 records: [
-                    { id: 'shape1', type: 'geo', props: { color: 'red' } }
-                ] 
+                    { id: 'shape1', type: 'geo', x: 100, y: 100 },
+                    { id: 'shape2', type: 'arrow', x: 200, y: 200 }
+                ]
             };
-            
-            const updatedData = {
-                ...data,
-                records: data.records.map(r => 
-                    r.id === 'shape1' ? { ...r, props: { ...r.props, color: 'blue' } } : r
-                )
-            };
-            
-            expect(updatedData.records[0].props.color).to.equal('blue');
+        });
+
+        it('should update properties of the specified shape', () => {
+            const updated = WhiteboardUtils.updateShape(base, 'shape1', { x: 300 });
+            const shape = updated.records.find(r => r.id === 'shape1');
+            expect(shape?.x).to.equal(300);
+        });
+
+        it('should preserve unchanged properties on the updated shape', () => {
+            const updated = WhiteboardUtils.updateShape(base, 'shape1', { x: 300 });
+            const shape = updated.records.find(r => r.id === 'shape1');
+            expect(shape?.y).to.equal(100);
+            expect(shape?.type).to.equal('geo');
+        });
+
+        it('should not affect other shapes', () => {
+            const updated = WhiteboardUtils.updateShape(base, 'shape1', { x: 999 });
+            const other = updated.records.find(r => r.id === 'shape2');
+            expect(other?.x).to.equal(200);
+        });
+
+        it('should not mutate the original data', () => {
+            WhiteboardUtils.updateShape(base, 'shape1', { x: 999 });
+            expect(base.records[0].x).to.equal(100);
+        });
+
+        it('should return unchanged records if id not found', () => {
+            const updated = WhiteboardUtils.updateShape(base, 'nonexistent', { x: 0 });
+            expect(updated.records[0].x).to.equal(100);
+            expect(updated.records[1].x).to.equal(200);
+        });
+
+        it('should preserve schema version when updating shape', () => {
+            const updated = WhiteboardUtils.updateShape(base, 'shape1', { x: 0 });
+            expect(updated.schema.version).to.equal(1);
         });
     });
 });

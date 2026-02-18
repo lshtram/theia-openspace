@@ -8,203 +8,213 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+/**
+ * Tests for PresentationWidget exports.
+ *
+ * NOTE: PresentationWidget is a Theia ReactWidget wired via InversifyJS DI.
+ * It cannot be instantiated without a full Theia container.
+ * These tests cover:
+ *   - Static constants (ID, LABEL)
+ *   - PresentationWidget.parseDeckContent() static method
+ *   - PresentationNavigationService methods (using a stubbed Reveal.js instance)
+ */
+
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import { PresentationWidget, PresentationNavigationService } from '../presentation-widget';
 
 describe('PresentationWidget', () => {
-    let mockReveal: any;
 
-    const sampleDeckContent = `---
+    describe('Widget Constants', () => {
+        it('should have correct widget ID', () => {
+            expect(PresentationWidget.ID).to.equal('openspace-presentation-widget');
+        });
+
+        it('should have correct widget label', () => {
+            expect(PresentationWidget.LABEL).to.equal('Presentation');
+        });
+    });
+
+    describe('parseDeckContent — with frontmatter', () => {
+        const withFrontmatter = `---
 title: Test Presentation
-theme: black
+theme: white
+transition: fade
 ---
 # Slide 1
 Content here
 ---
 # Slide 2
-More content
-`;
+More content`;
 
-    beforeEach(() => {
-        // Mock global Reveal
-        mockReveal = {
-            initialize: sinon.stub().resolves(),
-            sync: sinon.stub(),
-            layout: sinon.stub(),
-            destroy: sinon.stub(),
-            slide: sinon.stub(),
-            next: sinon.stub(),
-            prev: sinon.stub(),
-            getIndices: sinon.stub().returns({ h: 0, v: 0 }),
-            getCurrentSlide: sinon.stub().returns(document.createElement('div')),
-            getConfig: sinon.stub().returns({ keyboard: false })
+        it('should parse title from frontmatter', () => {
+            const deck = PresentationWidget.parseDeckContent(withFrontmatter);
+            expect(deck.options.title).to.equal('Test Presentation');
+        });
+
+        it('should parse theme from frontmatter', () => {
+            const deck = PresentationWidget.parseDeckContent(withFrontmatter);
+            expect(deck.options.theme).to.equal('white');
+        });
+
+        it('should parse transition from frontmatter', () => {
+            const deck = PresentationWidget.parseDeckContent(withFrontmatter);
+            expect(deck.options.transition).to.equal('fade');
+        });
+
+        it('should extract slides after frontmatter', () => {
+            const deck = PresentationWidget.parseDeckContent(withFrontmatter);
+            expect(deck.slides).to.have.lengthOf(2);
+        });
+
+        it('should include slide content', () => {
+            const deck = PresentationWidget.parseDeckContent(withFrontmatter);
+            expect(deck.slides[0].content).to.include('Slide 1');
+            expect(deck.slides[1].content).to.include('Slide 2');
+        });
+
+        it('should use default theme "black" when not specified', () => {
+            const noTheme = `---\ntitle: No Theme\n---\n# Slide 1\nContent`;
+            const deck = PresentationWidget.parseDeckContent(noTheme);
+            expect(deck.options.theme).to.equal('black');
+        });
+
+        it('should use default transition "slide" when not specified', () => {
+            const noTransition = `---\ntitle: No Transition\n---\n# Slide 1\nContent`;
+            const deck = PresentationWidget.parseDeckContent(noTransition);
+            expect(deck.options.transition).to.equal('slide');
+        });
+    });
+
+    describe('parseDeckContent — without frontmatter', () => {
+        it('should parse slides when no frontmatter is present', () => {
+            const noFrontmatter = '# Slide 1\nContent\n---\n# Slide 2\nMore';
+            const deck = PresentationWidget.parseDeckContent(noFrontmatter);
+            expect(deck.slides).to.have.lengthOf(2);
+        });
+
+        it('should include all slide content without frontmatter', () => {
+            const noFrontmatter = '# Slide A\nFoo\n---\n# Slide B\nBar';
+            const deck = PresentationWidget.parseDeckContent(noFrontmatter);
+            expect(deck.slides[0].content).to.include('Slide A');
+            expect(deck.slides[1].content).to.include('Slide B');
+        });
+
+        it('should default theme to "black" with no frontmatter', () => {
+            const deck = PresentationWidget.parseDeckContent('# Single Slide\nHello');
+            expect(deck.options.theme).to.equal('black');
+        });
+    });
+
+    describe('parseDeckContent — edge cases', () => {
+        it('should return empty slides array for empty input', () => {
+            const deck = PresentationWidget.parseDeckContent('');
+            expect(deck.slides).to.have.lengthOf(0);
+        });
+
+        it('should handle single slide with no delimiter', () => {
+            const deck = PresentationWidget.parseDeckContent('# Single\nContent only');
+            expect(deck.slides).to.have.lengthOf(1);
+            expect(deck.slides[0].content).to.include('Single');
+        });
+
+        it('should extract speaker notes from slides', () => {
+            const withNotes = `---\ntitle: Noted\n---\n# Slide 1\nBody text\nNotes: These are speaker notes`;
+            const deck = PresentationWidget.parseDeckContent(withNotes);
+            expect(deck.slides[0].notes).to.equal('These are speaker notes');
+        });
+
+        it('should strip speaker notes from slide content', () => {
+            const withNotes = `---\ntitle: Noted\n---\n# Slide 1\nBody text\nNotes: Speaker notes here`;
+            const deck = PresentationWidget.parseDeckContent(withNotes);
+            expect(deck.slides[0].content).to.not.include('Notes:');
+            expect(deck.slides[0].content).to.not.include('Speaker notes here');
+        });
+
+        it('should return undefined notes when none are present', () => {
+            const noNotes = `---\ntitle: Clean\n---\n# Slide 1\nJust body`;
+            const deck = PresentationWidget.parseDeckContent(noNotes);
+            expect(deck.slides[0].notes).to.be.undefined;
+        });
+    });
+
+    describe('PresentationNavigationService', () => {
+        let service: PresentationNavigationService;
+        let mockReveal: {
+            next: sinon.SinonStub;
+            prev: sinon.SinonStub;
+            slide: sinon.SinonStub;
+            getIndices: sinon.SinonStub;
+            sync: sinon.SinonStub;
+            layout: sinon.SinonStub;
         };
 
-        (global as any).Reveal = sinon.stub().returns(mockReveal);
-    });
-
-    afterEach(() => {
-        sinon.restore();
-        delete (global as any).Reveal;
-    });
-
-    describe('Widget Constants', () => {
-        it('should have correct widget ID', () => {
-            const widgetId = 'openspace-presentation-widget';
-            expect(widgetId).to.equal('openspace-presentation-widget');
-            expect(widgetId).to.include('presentation');
+        beforeEach(() => {
+            mockReveal = {
+                next: sinon.stub(),
+                prev: sinon.stub(),
+                slide: sinon.stub(),
+                getIndices: sinon.stub().returns({ h: 2, v: 1 }),
+                sync: sinon.stub(),
+                layout: sinon.stub()
+            };
+            service = new PresentationNavigationService();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            service.setReveal(mockReveal as any);
         });
 
-        it('should have correct widget label', () => {
-            const widgetLabel = 'Presentation';
-            expect(widgetLabel).to.equal('Presentation');
-        });
-    });
-
-    describe('Deck Content Parsing', () => {
-        it('should parse YAML frontmatter', () => {
-            const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
-            const match = sampleDeckContent.match(frontmatterRegex);
-            expect(match).to.not.be.null;
-            // The frontmatter content
-            expect(sampleDeckContent).to.include('title: Test Presentation');
-            expect(sampleDeckContent).to.include('theme: black');
+        afterEach(() => {
+            sinon.restore();
         });
 
-        it('should extract slides from markdown', () => {
-            const slides = sampleDeckContent.split(/^---$/m).filter(s => s.trim() && !s.startsWith('---'));
-            expect(slides.length).to.be.greaterThan(0);
-        });
-
-        it('should handle deck without frontmatter', () => {
-            const noFrontmatter = `# Slide 1\nContent\n---\n# Slide 2\nMore`;
-            const slides = noFrontmatter.split(/^---$/m).filter(s => s.trim());
-            expect(slides).to.have.lengthOf(2);
-        });
-
-        it('should handle empty deck', () => {
-            const empty = '';
-            const slides = empty.split(/^---$/m).filter(s => s.trim());
-            expect(slides).to.have.lengthOf(0);
-        });
-    });
-
-    describe('Navigation', () => {
-        it('should navigate to next slide', () => {
-            mockReveal.next();
+        it('should call next() on the reveal instance', () => {
+            service.next();
             expect(mockReveal.next.calledOnce).to.be.true;
         });
 
-        it('should navigate to previous slide', () => {
-            mockReveal.prev();
+        it('should call prev() on the reveal instance', () => {
+            service.prev();
             expect(mockReveal.prev.calledOnce).to.be.true;
         });
 
-        it('should navigate to specific slide', () => {
-            mockReveal.slide(1, 0);
-            expect(mockReveal.slide.calledWith(1, 0)).to.be.true;
+        it('should call slide() with correct horizontal and vertical indices', () => {
+            service.slide(3, 2);
+            expect(mockReveal.slide.calledOnceWith(3, 2, 0)).to.be.true;
         });
 
-        it('should get current slide indices', () => {
-            const indices = mockReveal.getIndices();
-            expect(indices.h).to.equal(0);
-            expect(indices.v).to.equal(0);
-        });
-    });
-
-    describe('Fullscreen', () => {
-        it('should have fullscreen toggle capability', () => {
-            // Fullscreen API may not be available in test environment - that's OK
-            // The important thing is the code handles this gracefully
-            expect(typeof document.fullscreenEnabled === 'boolean' || document.fullscreenEnabled === undefined).to.be.true;
-        });
-    });
-
-    describe('Reveal.js Integration', () => {
-        it('should create reveal instance with correct options', () => {
-            const reveal = new (global as any).Reveal(document.createElement('div'), {
-                keyboard: false,
-                hash: true,
-                slideNumber: true
-            });
-            
-            expect(reveal).to.not.be.undefined;
-            expect((global as any).Reveal.calledOnce).to.be.true;
+        it('should default vertical and fragment to 0 when not provided', () => {
+            service.slide(1);
+            expect(mockReveal.slide.calledOnceWith(1, 0, 0)).to.be.true;
         });
 
-        it('should initialize reveal.js', async () => {
-            const reveal = new (global as any).Reveal(document.createElement('div'));
-            await reveal.initialize();
-            
-            expect(mockReveal.initialize.calledOnce).to.be.true;
+        it('should return current slide indices from reveal', () => {
+            const indices = service.getIndices();
+            expect(indices).to.deep.equal({ h: 2, v: 1 });
         });
 
-        it('should destroy reveal.js', () => {
-            const reveal = new (global as any).Reveal(document.createElement('div'));
-            reveal.destroy();
-            
-            expect(mockReveal.destroy.calledOnce).to.be.true;
-        });
-    });
-
-    describe('Markdown to HTML', () => {
-        it('should convert headers', () => {
-            const md = '# Header 1\n## Header 2\n### Header 3';
-            
-            let html = md.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-            html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-            html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-            
-            expect(html).to.include('<h1>Header 1</h1>');
-            expect(html).to.include('<h2>Header 2</h2>');
-            expect(html).to.include('<h3>Header 3</h3>');
+        it('should return { h: 0, v: 0 } when no reveal instance is set', () => {
+            const bare = new PresentationNavigationService();
+            expect(bare.getIndices()).to.deep.equal({ h: 0, v: 0 });
         });
 
-        it('should convert bold and italic', () => {
-            const md = '**bold** and *italic*';
-            
-            let html = md.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
-            expect(html).to.include('<strong>bold</strong>');
-            expect(html).to.include('<em>italic</em>');
+        it('should call sync() on the reveal instance', () => {
+            service.sync();
+            expect(mockReveal.sync.calledOnce).to.be.true;
         });
 
-        it('should convert code blocks', () => {
-            const md = '`inline code`';
-            
-            const html = md.replace(/`(.*?)`/g, '<code>$1</code>');
-            
-            expect(html).to.include('<code>inline code</code>');
+        it('should call layout() on the reveal instance', () => {
+            service.layout();
+            expect(mockReveal.layout.calledOnce).to.be.true;
         });
 
-        it('should convert links', () => {
-            const md = '[link text](http://example.com)';
-            
-            const html = md.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
-            
-            expect(html).to.include('<a href="http://example.com">link text</a>');
+        it('should not throw when next() is called without a reveal instance', () => {
+            const bare = new PresentationNavigationService();
+            expect(() => bare.next()).to.not.throw();
         });
 
-        it('should convert lists', () => {
-            const md = '- item 1\n- item 2';
-            
-            const html = md.replace(/^- (.*$)/gm, '<li>$1</li>');
-            
-            expect(html).to.include('<li>item 1</li>');
-            expect(html).to.include('<li>item 2</li>');
-        });
-    });
-
-    describe('Deck Options', () => {
-        it('should support custom themes', () => {
-            const theme = 'white';
-            expect(['white', 'black', 'league', 'beige', 'sky', 'night']).to.include(theme);
-        });
-
-        it('should support custom transitions', () => {
-            const transition = 'slide';
-            expect(['none', 'fade', 'slide', 'convex', 'concave', 'zoom']).to.include(transition);
+        it('should not throw when prev() is called without a reveal instance', () => {
+            const bare = new PresentationNavigationService();
+            expect(() => bare.prev()).to.not.throw();
         });
     });
 });

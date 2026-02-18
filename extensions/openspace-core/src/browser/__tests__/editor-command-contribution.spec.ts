@@ -17,7 +17,16 @@
 import { Container } from '@theia/core/shared/inversify';
 import { CommandRegistry } from '@theia/core/lib/common/command';
 import { expect } from 'chai';
-import { EditorCommandContribution, EditorCommands } from '../editor-command-contribution';
+import {
+    EditorCommandContribution,
+    EditorCommands,
+    EDITOR_OPEN_SCHEMA,
+    EDITOR_SCROLL_SCHEMA,
+    EDITOR_HIGHLIGHT_SCHEMA,
+    EDITOR_CLEAR_HIGHLIGHT_SCHEMA,
+    EDITOR_READ_FILE_SCHEMA,
+    EDITOR_CLOSE_SCHEMA
+} from '../editor-command-contribution';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
@@ -235,7 +244,6 @@ describe('EditorCommandContribution', () => {
 
     describe('command schemas', () => {
         it('should export EDITOR_OPEN_SCHEMA', () => {
-            const { EDITOR_OPEN_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_OPEN_SCHEMA).to.not.be.undefined;
             expect(EDITOR_OPEN_SCHEMA.type).to.equal('object');
             expect(EDITOR_OPEN_SCHEMA.properties.path).to.not.be.undefined;
@@ -243,7 +251,6 @@ describe('EditorCommandContribution', () => {
         });
 
         it('should export EDITOR_SCROLL_SCHEMA', () => {
-            const { EDITOR_SCROLL_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_SCROLL_SCHEMA).to.not.be.undefined;
             expect(EDITOR_SCROLL_SCHEMA.type).to.equal('object');
             expect(EDITOR_SCROLL_SCHEMA.required).to.include('path');
@@ -251,7 +258,6 @@ describe('EditorCommandContribution', () => {
         });
 
         it('should export EDITOR_HIGHLIGHT_SCHEMA', () => {
-            const { EDITOR_HIGHLIGHT_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_HIGHLIGHT_SCHEMA).to.not.be.undefined;
             expect(EDITOR_HIGHLIGHT_SCHEMA.type).to.equal('object');
             expect(EDITOR_HIGHLIGHT_SCHEMA.required).to.include('path');
@@ -259,21 +265,18 @@ describe('EditorCommandContribution', () => {
         });
 
         it('should export EDITOR_CLEAR_HIGHLIGHT_SCHEMA', () => {
-            const { EDITOR_CLEAR_HIGHLIGHT_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_CLEAR_HIGHLIGHT_SCHEMA).to.not.be.undefined;
             expect(EDITOR_CLEAR_HIGHLIGHT_SCHEMA.type).to.equal('object');
             expect(EDITOR_CLEAR_HIGHLIGHT_SCHEMA.required).to.include('highlightId');
         });
 
         it('should export EDITOR_READ_FILE_SCHEMA', () => {
-            const { EDITOR_READ_FILE_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_READ_FILE_SCHEMA).to.not.be.undefined;
             expect(EDITOR_READ_FILE_SCHEMA.type).to.equal('object');
             expect(EDITOR_READ_FILE_SCHEMA.required).to.include('path');
         });
 
         it('should export EDITOR_CLOSE_SCHEMA', () => {
-            const { EDITOR_CLOSE_SCHEMA } = require('../editor-command-contribution');
             expect(EDITOR_CLOSE_SCHEMA).to.not.be.undefined;
             expect(EDITOR_CLOSE_SCHEMA.type).to.equal('object');
             expect(EDITOR_CLOSE_SCHEMA.required).to.include('path');

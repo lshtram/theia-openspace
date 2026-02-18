@@ -18,77 +18,38 @@
  * Tests for PresentationService methods.
  */
 
-// Helper to parse deck content (mimics widget logic)
-function parseDeckContent(markdown: string): { options: { title?: string; theme?: string }; slides: { content: string }[] } {
-    const lines = markdown.split('\n');
-    const frontmatter: Record<string, string> = {};
-    const slides: { content: string }[] = [];
-    
-    // Parse YAML frontmatter
-    if (lines[0]?.trim() === '---') {
-        let i = 1;
-        while (i < lines.length && lines[i].trim() !== '---') {
-            const [key, ...valueParts] = lines[i].split(':');
-            if (key && valueParts.length > 0) {
-                frontmatter[key.trim()] = valueParts.join(':').trim();
-            }
-            i++;
-        }
-        
-        // Skip past closing ---
-        i++;
-        
-        // Get remaining content as slides
-        const content = lines.slice(i).join('\n');
-        const slideContents = content.split(/^---$/m).filter(s => s.trim());
-        
-        slideContents.forEach(slideContent => {
-            const cleanContent = slideContent.replace(/Note[s]?:\s*[\s\S]*$/i, '').trim();
-            slides.push({ content: cleanContent });
-        });
-    } else {
-        // No frontmatter, treat entire content as slides
-        const slideContents = markdown.split(/^---$/m).filter(s => s.trim());
-        slideContents.forEach(slideContent => {
-            slides.push({ content: slideContent.trim() });
-        });
-    }
-    
-    return {
-        options: {
-            title: frontmatter.title,
-            theme: frontmatter.theme || 'black'
-        },
-        slides
-    };
-}
+import { expect } from 'chai';
+import * as sinon from 'sinon';
+import { PresentationService } from '../presentation-service';
+import { PresentationWidget, DeckOptions } from '../presentation-widget';
 
-// Test buildDeckContent
-function buildDeckContent(title: string, slides: string[], options?: { theme?: string }): string {
-    const frontmatter: string[] = [];
-    frontmatter.push('---');
-    frontmatter.push(`title: ${title}`);
-    
-    if (options?.theme) {
-        frontmatter.push(`theme: ${options.theme}`);
+/**
+ * Subclass that exposes the protected buildDeckContent method for testing.
+ */
+class TestablePresentationService extends PresentationService {
+    public buildDeckContent(title: string, slides: string[], options?: DeckOptions): string {
+        return super.buildDeckContent(title, slides, options);
     }
-    
-    frontmatter.push('---');
-    
-    const content = slides.map(slide => 
-        slide.includes('#') || slide.includes('\n') ? slide : `# ${slide}`
-    ).join('\n\n---\n\n');
-    
-    return frontmatter.join('\n') + '\n\n' + content;
 }
 
 describe('PresentationService', () => {
+    let service: TestablePresentationService;
+
+    beforeEach(() => {
+        service = new TestablePresentationService();
+        // Inject stub fileService and workspaceService — unused by tested methods
+        (service as any).fileService = {};
+        (service as any).workspaceService = {};
+    });
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
     describe('getFileExtension', () => {
         it('should return .deck.md', () => {
-            const ext = '.deck.md';
-            if (ext !== '.deck.md') {
-                throw new Error(`Expected .deck.md, got ${ext}`);
-            }
+            const ext = service.getFileExtension();
+            expect(ext).to.equal('.deck.md');
         });
     });
 
@@ -104,17 +65,11 @@ Content 1
 # Slide 2
 Content 2`;
 
-            const result = parseDeckContent(content);
-            
-            if (result.options.title !== 'Test Presentation') {
-                throw new Error(`Expected title "Test Presentation", got "${result.options.title}"`);
-            }
-            if (result.slides.length !== 2) {
-                throw new Error(`Expected 2 slides, got ${result.slides.length}`);
-            }
-            if (!result.slides[0].content.includes('Slide 1')) {
-                throw new Error(`First slide should contain "Slide 1"`);
-            }
+            const result = PresentationWidget.parseDeckContent(content);
+
+            expect(result.options.title).to.equal('Test Presentation');
+            expect(result.slides).to.have.lengthOf(2);
+            expect(result.slides[0].content).to.include('Slide 1');
         });
 
         it('should handle presentation without frontmatter', () => {
@@ -124,11 +79,9 @@ Content 1
 # Slide 2
 Content 2`;
 
-            const result = parseDeckContent(content);
-            
-            if (result.slides.length !== 2) {
-                throw new Error(`Expected 2 slides, got ${result.slides.length}`);
-            }
+            const result = PresentationWidget.parseDeckContent(content);
+
+            expect(result.slides).to.have.lengthOf(2);
         });
 
         it('should handle single slide', () => {
@@ -137,43 +90,33 @@ title: Single Slide
 ---
 # Hello World`;
 
-            const result = parseDeckContent(content);
-            
-            if (result.slides.length !== 1) {
-                throw new Error(`Expected 1 slide, got ${result.slides.length}`);
-            }
+            const result = PresentationWidget.parseDeckContent(content);
+
+            expect(result.slides).to.have.lengthOf(1);
         });
     });
 
     describe('buildDeckContent', () => {
         it('should build presentation with title', () => {
             const slides = ['# Slide 1', '# Slide 2'];
-            const content = buildDeckContent('My Presentation', slides);
-            
-            if (!content.includes('title: My Presentation')) {
-                throw new Error('Content should include title');
-            }
-            if (!content.includes('# Slide 1')) {
-                throw new Error('Content should include first slide');
-            }
+            const content = service.buildDeckContent('My Presentation', slides);
+
+            expect(content).to.include('title: My Presentation');
+            expect(content).to.include('# Slide 1');
         });
 
         it('should include theme when provided', () => {
             const slides = ['# Slide 1'];
-            const content = buildDeckContent('Test', slides, { theme: 'night' });
-            
-            if (!content.includes('theme: night')) {
-                throw new Error('Content should include theme');
-            }
+            const content = service.buildDeckContent('Test', slides, { theme: 'night' });
+
+            expect(content).to.include('theme: night');
         });
 
         it('should handle plain text slides', () => {
             const slides = ['Just text'];
-            const content = buildDeckContent('Test', slides);
-            
-            if (!content.includes('# Just text')) {
-                throw new Error('Plain text should be wrapped in h1');
-            }
+            const content = service.buildDeckContent('Test', slides);
+
+            expect(content).to.include('# Just text');
         });
     });
 
@@ -184,28 +127,32 @@ title: Single Slide
                 { content: '# Slide 2' },
                 { content: '# Slide 3' }
             ];
-            
+
             // Update slide 1
             const newSlides = [...slides];
             newSlides[1] = { content: '# Updated Slide 2' };
-            
-            if (newSlides[1].content !== '# Updated Slide 2') {
-                throw new Error('Slide should be updated');
-            }
-            if (newSlides[0].content !== '# Slide 1') {
-                throw new Error('Other slides should not change');
-            }
-            if (newSlides[2].content !== '# Slide 3') {
-                throw new Error('Other slides should not change');
-            }
+
+            expect(newSlides[1].content).to.equal('# Updated Slide 2');
+            expect(newSlides[0].content).to.equal('# Slide 1');
+            expect(newSlides[2].content).to.equal('# Slide 3');
         });
 
-        it('should throw error for invalid slide index', () => {
-            const slides = [{ content: '# Slide 1' }];
-            const slideIndex = 5;
-            
-            if (slideIndex < 0 || slideIndex >= slides.length) {
-                // Expected behavior - throw error
+        it('should throw error for invalid slide index', async () => {
+            const deckContent = `---
+title: Test
+---
+# Slide 1`;
+            const stubFileService = {
+                read: sinon.stub().resolves({ value: deckContent }),
+                write: sinon.stub().resolves()
+            };
+            (service as any).fileService = stubFileService;
+
+            try {
+                await service.updateSlide('/test/file.deck.md', 5, '# New Content');
+                expect.fail('Should have thrown');
+            } catch (err: unknown) {
+                expect((err as Error).message).to.include('Invalid slide index: 5');
             }
         });
     });

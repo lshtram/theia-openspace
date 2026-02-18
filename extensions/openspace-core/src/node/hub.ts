@@ -18,36 +18,25 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
-import { CommandManifest, MutableHubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
+import { MutableHubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
+import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
+import * as os from 'os';
 
 /**
- * OpenSpace Hub - HTTP + SSE server that bridges Theia frontend with opencode agent.
- * 
- * Responsibilities:
- * 1. Stores command manifest from BridgeContribution
- * 2. Generates dynamic system prompts for opencode agent
- * 3. Receives agent commands from stream interceptor
- * 4. Broadcasts commands to frontend via SSE
- * 5. Tracks IDE state (panes, editors) for prompt generation
+ * OpenSpace Hub - HTTP server bridging Theia frontend with the opencode MCP agent.
+ *
+ * T3 Architecture:
+ * 1. Serves MCP tools at /mcp (via OpenSpaceMcpServer).
+ * 2. Maintains IDE state (panes) for system prompt generation.
+ * 3. Relays agent commands from MCP tools to the browser via RPC (onAgentCommand).
+ * 4. Receives command results from the browser (POST /openspace/command-results)
+ *    and resolves the pending MCP tool Promises.
  */
-/**
- * Command result structure for feedback mechanism.
- */
-interface CommandResultEntry {
-    cmd: string;
-    args: unknown;
-    success: boolean;
-    output?: unknown;
-    error?: string;
-    executionTime: number;
-    timestamp: string;
-}
-
 @injectable()
 export class OpenSpaceHub implements BackendApplicationContribution {
     @inject(ILogger) protected readonly logger!: ILogger;
 
-    // T3-3: Internal mutable state for updates, exposed as readonly via HubState
+    // Internal mutable state
     private state: MutableHubState = {
         manifest: null,
         paneState: null,
@@ -55,16 +44,8 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         lastStateUpdate: null
     };
 
-    // Ring buffer for command results (max 20 entries)
-    private commandResults: CommandResultEntry[] = [];
-    private readonly maxCommandResults = 20;
-
-    private sseClients: Set<Response> = new Set();
-    private pingInterval: NodeJS.Timeout | undefined;
-
     /**
      * Allowed origins for CORS and origin validation.
-     * T2-5: Restrict to Theia origins to prevent unauthorized access.
      */
     private readonly allowedOrigins: string[] = [
         'http://localhost:3000',
@@ -73,15 +54,16 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         'http://127.0.0.1:3001',
     ];
 
+    /** MCP server — registered tools live here. */
+    private mcpServer!: OpenSpaceMcpServer;
+
     /**
      * Validate request origin and set CORS headers.
-     * T2-5: Middleware to restrict access to Theia origins.
      */
     private validateOrigin(req: Request, res: Response, next: () => void): void {
         const origin = req.headers.origin || req.headers.referer || '';
-        
-        // Check if origin is allowed
-        const isAllowed = this.allowedOrigins.some(allowed => 
+
+        const isAllowed = this.allowedOrigins.some(allowed =>
             origin.startsWith(allowed) || origin === ''
         );
 
@@ -91,13 +73,11 @@ export class OpenSpaceHub implements BackendApplicationContribution {
             return;
         }
 
-        // Set CORS headers
         const allowedOrigin = origin || this.allowedOrigins[0];
         res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        
-        // Handle preflight
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+
         if (req.method === 'OPTIONS') {
             res.status(200).end();
             return;
@@ -110,52 +90,67 @@ export class OpenSpaceHub implements BackendApplicationContribution {
      * Configure Express routes for the Hub.
      */
     configure(app: Application): void {
+        // Resolve workspace root (use HOME as fallback)
+        const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd() || os.homedir();
+        this.mcpServer = new OpenSpaceMcpServer(workspaceRoot);
+
         // Apply origin validation middleware to all /openspace/* routes
         app.use('/openspace/*', (req, res, next) => this.validateOrigin(req, res, next));
 
-        // POST /openspace/manifest - Receive command manifest from frontend (FR-3.7)
-        app.post('/openspace/manifest', (req, res) => this.handleManifest(req, res));
+        // Mount MCP at /mcp (POST, GET, DELETE) — no origin restriction (MCP clients connect directly)
+        this.mcpServer.mount(app);
 
-        // POST /manifest - Receive command manifest from frontend (legacy endpoint)
+        // POST /openspace/register-bridge — browser registers itself as the command bridge
+        app.post('/openspace/register-bridge', (req, res) => this.handleRegisterBridge(req, res));
+
+        // POST /openspace/manifest — Receive command manifest from frontend (kept for backwards compat)
+        app.post('/openspace/manifest', (req, res) => this.handleManifest(req, res));
         app.post('/manifest', (req, res) => this.handleManifest(req, res));
 
-        // GET /openspace/instructions - Generate system prompt
+        // GET /openspace/instructions — Generate system prompt
         app.get('/openspace/instructions', (req, res) => this.handleInstructions(req, res));
 
-        // POST /commands - Receive agent commands from stream interceptor
-        app.post('/commands', (req, res) => this.handleCommands(req, res));
-
-        // POST /state - Receive IDE state updates from frontend
+        // POST /openspace/state — Receive IDE state updates from frontend
         app.post('/state', (req, res) => this.handleState(req, res));
-
-        // POST /openspace/state - Receive IDE state updates from frontend (FR-3.10)
         app.post('/openspace/state', (req, res) => this.handleState(req, res));
 
-        // POST /openspace/command-results - Receive command execution results (FR-3.11)
+        // POST /openspace/command-results — Receive command execution results from browser
         app.post('/openspace/command-results', (req, res) => this.handleCommandResult(req, res));
 
-        // GET /events - SSE endpoint for broadcasting commands to frontend
-        app.get('/events', (req, res) => this.handleEvents(req, res));
-
-        // Start SSE ping interval
-        this.startPingInterval();
-
-        this.logger.info('[Hub] OpenSpace Hub configured with origin validation');
+        this.logger.info('[Hub] OpenSpace Hub configured (T3 MCP mode)');
     }
 
     /**
      * Cleanup on backend shutdown.
      */
     onStop(): void {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-        }
-        this.closeAllSSEConnections();
         this.logger.info('[Hub] OpenSpace Hub stopped');
     }
 
     /**
-     * Handle POST /manifest - Store command manifest.
+     * Handle POST /openspace/register-bridge
+     * The browser frontend calls this to register itself as the command bridge.
+     * Extracts the RPC client reference stored on the request by the backend module.
+     */
+    private handleRegisterBridge(req: Request, res: Response): void {
+        // The bridgeCallback is provided externally via setClientCallback().
+        // The request body may contain metadata, but the real wiring happens
+        // when the backend module calls setClientCallback() after startup.
+        this.logger.info('[Hub] Browser registered as command bridge');
+        res.status(200).json({ success: true, message: 'Bridge registered' });
+    }
+
+    /**
+     * Called by the backend DI module to wire the RPC client callback.
+     * The callback is invoked by hub-mcp when a tool needs the browser to execute a command.
+     */
+    setClientCallback(callback: (command: AgentCommand) => void): void {
+        this.mcpServer.setBridgeCallback(callback);
+        this.logger.info('[Hub] MCP bridge callback wired');
+    }
+
+    /**
+     * Handle POST /openspace/manifest — Store command manifest.
      */
     private handleManifest(req: Request, res: Response): void {
         try {
@@ -168,7 +163,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
 
             this.state.manifest = {
                 version: '1.0.0',
-                commands: body.commands as CommandManifest['commands'],
+                commands: body.commands as any,
                 lastUpdated: body.timestamp || new Date().toISOString()
             };
             this.state.lastManifestUpdate = new Date().toISOString();
@@ -182,7 +177,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     }
 
     /**
-     * Handle GET /openspace/instructions - Generate system prompt.
+     * Handle GET /openspace/instructions — Generate system prompt.
      */
     private handleInstructions(req: Request, res: Response): void {
         try {
@@ -196,46 +191,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     }
 
     /**
-     * Handle POST /commands - Receive agent commands and broadcast via SSE.
-     */
-    private handleCommands(req: Request, res: Response): void {
-        try {
-            const command = req.body as AgentCommand;
-
-            if (!command || !command.cmd) {
-                res.status(400).json({ error: 'Invalid command: missing cmd field' });
-                return;
-            }
-
-            // Validate command exists in manifest
-            if (this.state.manifest === null) {
-                res.status(503).json({ error: 'Manifest not initialized' });
-                return;
-            }
-
-            const commandExists = this.state.manifest.commands.some(c => c.id === command.cmd);
-            if (!commandExists) {
-                this.logger.warn(`[Hub] Unknown command: ${command.cmd}`);
-                res.status(400).json({ error: `Unknown command: ${command.cmd}` });
-                return;
-            }
-
-            // Broadcast command to all SSE clients
-            this.broadcastSSE('AGENT_COMMAND', {
-                cmd: command.cmd,
-                args: command.args
-            });
-
-            this.logger.info(`[Hub] Command received: ${command.cmd} with args ${JSON.stringify(command.args)}`);
-            res.status(202).json({ success: true, message: 'Command queued for broadcast' });
-        } catch (error) {
-            this.logger.error('[Hub] Error handling command:', error);
-            res.status(400).json({ error: 'Invalid JSON' });
-        }
-    }
-
-    /**
-     * Handle POST /state - Update IDE state.
+     * Handle POST /openspace/state — Update IDE state.
      */
     private handleState(req: Request, res: Response): void {
         try {
@@ -258,25 +214,25 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     }
 
     /**
-     * Handle POST /openspace/command-results - Store command execution result.
-     * Maintains a ring buffer of the last 20 results.
+     * Handle POST /openspace/command-results — Receive command execution result from browser.
+     * If the result has a requestId, resolves the corresponding pending MCP Promise.
      */
     private handleCommandResult(req: Request, res: Response): void {
         try {
-            const result = req.body as CommandResultEntry;
+            const result = req.body as CommandBridgeResult;
 
             if (!result || !result.cmd) {
                 res.status(400).json({ error: 'Invalid command result: missing cmd field' });
                 return;
             }
 
-            // Add to ring buffer
-            this.commandResults.push(result);
-            if (this.commandResults.length > this.maxCommandResults) {
-                this.commandResults.shift();
+            this.logger.debug(`[Hub] Command result: ${result.cmd} → ${result.success ? 'SUCCESS' : 'FAILED'}`);
+
+            // If the result has a requestId, resolve the pending MCP Promise
+            if (result.requestId) {
+                this.mcpServer.resolveCommand(result.requestId, result);
             }
 
-            this.logger.debug(`[Hub] Command result stored: ${result.cmd} → ${result.success ? 'SUCCESS' : 'FAILED'}`);
             res.status(200).json({ success: true });
         } catch (error) {
             this.logger.error('[Hub] Error handling command result:', error);
@@ -285,73 +241,24 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     }
 
     /**
-     * Handle GET /events - SSE endpoint.
-     */
-    private handleEvents(req: Request, res: Response): void {
-        // Set SSE headers
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        });
-
-        // Add client to set
-        this.sseClients.add(res);
-        this.logger.info(`[Hub] SSE client connected (total: ${this.sseClients.size})`);
-
-        // Send initial ping
-        try {
-            res.write(`event: ping\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
-        } catch (error) {
-            this.logger.error('[Hub] Error sending initial ping:', error);
-        }
-
-        // Handle client disconnect
-        req.on('close', () => {
-            this.sseClients.delete(res);
-            this.logger.info(`[Hub] SSE client disconnected (total: ${this.sseClients.size})`);
-        });
-    }
-
-    /**
-     * Generate system prompt from manifest and state.
+     * Generate system prompt describing the MCP tools available to the agent.
      */
     private generateInstructions(): string {
-        let instructions = `# OpenSpace IDE Control Instructions\n\n`;
+        let instructions = `# OpenSpace IDE Control — MCP Tools\n\n`;
 
-        instructions += `You are operating inside Theia OpenSpace IDE. You can control the IDE by emitting\n`;
-        instructions += `\`%%OS{...}%%\` blocks in your response. These are invisible to the user.\n\n`;
+        instructions += `You are operating inside Theia OpenSpace IDE. You can control the IDE by calling\n`;
+        instructions += `MCP tools provided by the \`openspace-hub\` MCP server.\n\n`;
 
-        // Commands section
-        if (this.state.manifest && this.state.manifest.commands.length > 0) {
-            instructions += `## Available Commands\n\n`;
+        instructions += `## Available Tool Categories\n\n`;
+        instructions += `- **Pane tools** (4): \`openspace.pane.open\`, \`openspace.pane.close\`, \`openspace.pane.focus\`, \`openspace.pane.list\`\n`;
+        instructions += `- **Editor tools** (6): \`openspace.editor.open\`, \`openspace.editor.read_file\`, \`openspace.editor.close\`, \`openspace.editor.scroll_to\`, \`openspace.editor.highlight\`, \`openspace.editor.clear_highlight\`\n`;
+        instructions += `- **Terminal tools** (5): \`openspace.terminal.create\`, \`openspace.terminal.send\`, \`openspace.terminal.read_output\`, \`openspace.terminal.list\`, \`openspace.terminal.close\`\n`;
+        instructions += `- **File tools** (5, direct): \`openspace.file.read\`, \`openspace.file.write\`, \`openspace.file.list\`, \`openspace.file.search\`, \`openspace.file.patch\`\n\n`;
 
-            for (const cmd of this.state.manifest.commands) {
-                instructions += `- **${cmd.id}**: ${cmd.description || 'No description'}\n`;
-
-                // Add arguments if available
-                if (cmd.arguments_schema && cmd.arguments_schema.properties) {
-                    instructions += `  - Arguments:\n`;
-                    const props = cmd.arguments_schema.properties;
-                    const required = cmd.arguments_schema.required || [];
-
-                    for (const [name, prop] of Object.entries(props)) {
-                        const isRequired = required.includes(name);
-                        const requiredLabel = isRequired ? 'required' : 'optional';
-                        instructions += `    - \`${name}\` (${prop.type}, ${requiredLabel})`;
-                        if (prop.description) {
-                            instructions += `: ${prop.description}`;
-                        }
-                        instructions += `\n`;
-                    }
-                }
-
-                instructions += `  - Example: \`%%OS{"cmd":"${cmd.id}","args":{...}}%%\`\n\n`;
-            }
-        } else {
-            instructions += `## Available Commands\n\n`;
-            instructions += `(No commands registered yet. The IDE is still initializing.)\n\n`;
-        }
+        instructions += `## Usage Notes\n\n`;
+        instructions += `- File tools (read/write/list/search/patch) operate directly on the filesystem.\n`;
+        instructions += `- IDE-control tools (pane/editor/terminal) are forwarded to the Theia frontend and return the result.\n`;
+        instructions += `- IDE tools time out after 30 seconds if the browser does not respond.\n\n`;
 
         // IDE state section
         if (this.state.paneState && this.state.paneState.panes.length > 0) {
@@ -378,105 +285,8 @@ export class OpenSpaceHub implements BackendApplicationContribution {
             }
 
             instructions += `\n`;
-        } else {
-            instructions += `## Current IDE State\n\n`;
-            instructions += `(No state available yet.)\n\n`;
-        }
-
-        // Command format section
-        instructions += `## Command Format\n\n`;
-        instructions += `Commands must be emitted as: \`%%OS{"cmd":"command.id","args":{...}}%%\`\n`;
-        instructions += `Multiple commands can appear in a single response.\n`;
-        instructions += `Commands are executed sequentially in order of appearance.\n\n`;
-
-        // Examples section
-        instructions += `## Examples\n\n`;
-        instructions += `Here are some examples of how to use %%OS{...}%% blocks:\n\n`;
-
-        // Example 1: Open a file in the editor
-        instructions += `### Opening a file\n`;
-        instructions += `To open a file in the editor at a specific line:\n`;
-        instructions += `\`\`\`\n`;
-        instructions += `%%OS{"cmd":"openspace.editor.open","args":{"path":"src/index.ts","line":42}}%%\n`;
-        instructions += `\`\`\`\n\n`;
-
-        // Example 2: Execute a terminal command
-        instructions += `### Executing a terminal command\n`;
-        instructions += `To run a command in the terminal:\n`;
-        instructions += `\`\`\`\n`;
-        instructions += `%%OS{"cmd":"openspace.terminal.execute","args":{"command":"npm run build","terminalId":"main-terminal"}}%%\n`;
-        instructions += `\`\`\`\n\n`;
-
-        // Example 3: Open a pane
-        instructions += `### Opening a pane\n`;
-        instructions += `To open a new pane (e.g., terminal, preview):\n`;
-        instructions += `\`\`\`\n`;
-        instructions += `%%OS{"cmd":"openspace.pane.open","args":{"area":"bottom","type":"terminal","label":"Build Terminal"}}%%\n`;
-        instructions += `\`\`\`\n\n`;
-
-        // Example 4: Multiple commands in one response
-        instructions += `### Multiple commands\n`;
-        instructions += `You can include multiple commands in a single response:\n`;
-        instructions += `\`\`\`\n`;
-        instructions += `I'll open the file and show you the relevant code.\n\n`;
-        instructions += `%%OS{"cmd":"openspace.editor.open","args":{"path":"src/utils.ts"}}%%\n`;
-        instructions += `%%OS{"cmd":"openspace.editor.goto","args":{"path":"src/utils.ts","line":15}}%%\n`;
-        instructions += `\`\`\`\n`;
-
-        // Recent command results section (FR-3.11)
-        if (this.commandResults.length > 0) {
-            instructions += `\n## Recent Command Results\n\n`;
-            
-            // Show last 5 results
-            const recentResults = this.commandResults.slice(-5);
-            for (const result of recentResults) {
-                const status = result.success ? 'SUCCESS' : `FAILED: ${result.error}`;
-                instructions += `- ${result.cmd} → ${status}\n`;
-            }
-            instructions += `\n`;
         }
 
         return instructions;
-    }
-
-    /**
-     * Broadcast SSE event to all connected clients.
-     */
-    private broadcastSSE(event: string, data: unknown): void {
-        const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-
-        this.sseClients.forEach(client => {
-            try {
-                client.write(message);
-            } catch (err) {
-                this.logger.error('[Hub] Failed to write to SSE client:', err);
-                this.sseClients.delete(client);
-            }
-        });
-
-        this.logger.debug(`[Hub] Broadcasted ${event} to ${this.sseClients.size} clients`);
-    }
-
-    /**
-     * Start periodic ping to keep SSE connections alive.
-     */
-    private startPingInterval(): void {
-        this.pingInterval = setInterval(() => {
-            this.broadcastSSE('ping', { timestamp: new Date().toISOString() });
-        }, 30000); // 30 seconds
-    }
-
-    /**
-     * Close all SSE connections gracefully.
-     */
-    private closeAllSSEConnections(): void {
-        this.sseClients.forEach(client => {
-            try {
-                client.end();
-            } catch (err) {
-                // Ignore errors on close
-            }
-        });
-        this.sseClients.clear();
     }
 }

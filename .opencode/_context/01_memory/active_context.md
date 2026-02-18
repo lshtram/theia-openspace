@@ -4,9 +4,37 @@
 **Last Updated:** 2026-02-18
 
 ## Current Focus
-- **Status:** E2E SUITE FULLY PASSING ✅ — 38 pass, 1 skip (intentional memory-leak), 0 fail
-- **Previous:** E2E TEST HOOKS FIXED ✅ — process guard + PermissionDialog overwrite bugs resolved; all 5 agent-control tests now pass (were skipping)
-- **Next:** Phase 5 — Polish & Desktop (5.1 custom layout → 5.2 theming → 5.3 settings → 5.4 Electron → 5.5 persistence → 5.6 sharing → 5.7 E2E)
+- **Status:** PHASE T3 COMPLETE ✅ — MCP Agent Control System live; `%%OS{...}%%` stream interceptor retired
+- **Previous:** E2E SUITE FULLY PASSING ✅ — 38 pass, 1 skip (intentional memory-leak), 0 fail
+- **Next:** Phase T4 — PatchEngine (versioned artifact mutations) OR Phase T5 — ArtifactStore
+
+## Phase T3: MCP Agent Control System — COMPLETE ✅ (2026-02-18)
+
+**Goal:** Replace `%%OS{...}%%` stream interceptor with MCP tools as the sole agent→IDE command path.
+
+**Build:** ✅ PASS (37.9s, 0 errors)  
+**Unit Tests:** ✅ 387/387 passing  
+**E2E:** Pre-existing infrastructure issue (same as baseline — not introduced by T3)
+
+### Files Created/Modified
+| File | Change |
+|---|---|
+| `opencode.json` (project root) | Created — MCP config `http://localhost:3000/mcp` |
+| `extensions/openspace-core/package.json` | Added `@modelcontextprotocol/sdk: 1.26.0` |
+| `src/common/command-manifest.ts` | Added `requestId?` to `AgentCommand` |
+| `src/node/hub-mcp.ts` | NEW — `OpenSpaceMcpServer` with 17 MCP tools (525 lines) |
+| `src/node/hub.ts` | MCP integrated; SSE broadcast removed; `%%OS` removed from instructions |
+| `src/node/opencode-proxy.ts` | Stream interceptor fully removed |
+| `src/browser/bridge-contribution.ts` | SSE methods removed; bridge registration added |
+| `src/browser/opencode-sync-service.ts` | Command queue removed; immediate execute + result report |
+| `src/node/__tests__/opencode-proxy-stream.spec.ts` | Updated |
+| `src/browser/__tests__/opencode-sync-service-validation.spec.ts` | Rewritten |
+
+### 17 MCP Tools (via Hub `/mcp` endpoint)
+- **Pane (4):** `openspace.pane.open/close/focus/list`
+- **Editor (6):** `openspace.editor.open/read_file/close/scroll_to/highlight/clear_highlight`
+- **Terminal (5):** `openspace.terminal.create/send/read_output/list/close`
+- **File (5, Hub-direct FS):** `openspace.file.read/write/list/search/patch`
 
 ## E2E Test Hook Fixes (2026-02-18) ✅ COMPLETE
 

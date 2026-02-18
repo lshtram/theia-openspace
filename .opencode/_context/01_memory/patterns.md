@@ -90,3 +90,17 @@
 - **Solution**: Do NOT use `import type` from ESM packages. Extract types to standalone file OR use dynamic `import()` for runtime (but not for types).
 - **Reference**: Phase 2B decision document (`docs/architecture/DECISION-SDK-ADOPTION.md` v2.0)
 
+### Gotcha: MCP SDK Import Paths — Exports-Map vs Dist Paths (Phase T3)
+- **Context**: `@modelcontextprotocol/sdk` v1.26.0 has BOTH ESM and CJS exports with a `package.json` exports map.
+- **Symptom**: Using `require('@modelcontextprotocol/sdk/dist/cjs/server/mcp.js')` resolves to `dist/cjs/dist/cjs/server/mcp.js` (double-path) — file not found.
+- **Why**: The exports map in `package.json` remaps `./server/mcp.js` → `./dist/cjs/server/mcp.js` automatically. Providing the full `dist/cjs/...` path bypasses the map but doubles the prefix.
+- **Correct Paths (exports-map compatible)**:
+  ```ts
+  const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+  const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+  ```
+- **Wrong Paths (double-resolve)**: `require('@modelcontextprotocol/sdk/dist/cjs/server/mcp.js')` ❌
+- **Tool signature**: `mcp.tool(name, description, zodShape, callback)` — description is a plain string, NOT part of zodShape.
+- **Stateless transport**: `new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })` (one transport per request).
+- **Reference**: Phase T3 implementation (`extensions/openspace-core/src/node/hub-mcp.ts`)
+

@@ -14,293 +14,131 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+/**
+ * Phase T3: Command validation is now inline in executeAndReport().
+ *
+ * In Phase T3 the explicit validateAgentCommand() helper was removed.
+ * Security enforcement is done inline:
+ *   - Commands must be non-empty strings starting with 'openspace.'
+ *   - All other commands are silently dropped before CommandRegistry dispatch.
+ *
+ * These tests verify the security behaviour via the observable side-effect:
+ * _lastDispatchedCommand is only set when a command passes the security check
+ * AND exists in CommandRegistry.  For commands that are rejected by the security
+ * gate, _lastDispatchedCommand stays null.
+ */
+
 import { expect } from 'chai';
+import * as sinon from 'sinon';
 import { OpenCodeSyncServiceImpl } from '../opencode-sync-service';
 import { AgentCommand } from '../../common/command-manifest';
+import { CommandRegistry } from '@theia/core/lib/common/command';
 
 /**
- * Test suite for OpenCodeSyncService agent command validation.
- * 
- * Tests Issue #3: Command validation security checks.
- * 
- * Security Requirements:
- * 1. Only openspace.* commands are allowed (namespace allowlist)
- * 2. Command structure must be valid
- * 3. Args must be undefined, object, or array (not primitives)
- * 
- * This prevents:
- * - Execution of arbitrary Theia commands
- * - Path traversal attacks
- * - Type confusion attacks
+ * Build a minimal stub CommandRegistry that pretends every command exists.
  */
-describe('OpenCodeSyncService - Command Validation', () => {
+function makeCommandRegistry(existingIds: string[] = []): sinon.SinonStubbedInstance<CommandRegistry> {
+    const stub = {
+        getCommand: sinon.stub().callsFake((id: string) =>
+            existingIds.includes(id) ? { id } : undefined
+        ),
+        executeCommand: sinon.stub().resolves(undefined),
+        commands: [],
+    } as unknown as sinon.SinonStubbedInstance<CommandRegistry>;
+    return stub;
+}
+
+describe('OpenCodeSyncService - Command Security Gate (T3)', () => {
     let syncService: OpenCodeSyncServiceImpl;
+    let commandRegistry: sinon.SinonStubbedInstance<CommandRegistry>;
 
     beforeEach(() => {
         syncService = new OpenCodeSyncServiceImpl();
+        // Register a known openspace command so security-passing tests can also dispatch
+        commandRegistry = makeCommandRegistry(['openspace.test', 'openspace.sub.command.deep']);
+        (syncService as any).commandRegistry = commandRegistry;
     });
 
-    /**
-     * Valid commands should pass validation.
-     */
-    describe('Valid Commands', () => {
-        it('should accept valid openspace command with undefined args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.test',
-                args: undefined
-            };
+    afterEach(() => {
+        sinon.restore();
+    });
 
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
+    // ------------------------------------------------------------------
+    // Helper: wait for executeAndReport to finish
+    // ------------------------------------------------------------------
+    async function dispatchAndWait(command: AgentCommand): Promise<void> {
+        syncService.onAgentCommand(command);
+        // onAgentCommand is fire-and-forget; yield the microtask queue
+        await new Promise(resolve => setImmediate(resolve));
+    }
+
+    // ------------------------------------------------------------------
+    // Valid commands — should reach CommandRegistry
+    // ------------------------------------------------------------------
+    describe('Valid commands pass the security gate', () => {
+        it('should dispatch valid openspace command', async () => {
+            await dispatchAndWait({ cmd: 'openspace.test', args: undefined });
+            expect(commandRegistry.executeCommand.calledOnce).to.be.true;
         });
 
-        it('should accept valid openspace command with object args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.test',
-                args: { key: 'value' }
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
+        it('should dispatch command with object args', async () => {
+            await dispatchAndWait({ cmd: 'openspace.test', args: { key: 'value' } });
+            expect(commandRegistry.executeCommand.calledOnce).to.be.true;
         });
 
-        it('should accept valid openspace command with array args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.test',
-                args: [1, 2, 3]
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
+        it('should dispatch command with array args', async () => {
+            await dispatchAndWait({ cmd: 'openspace.test', args: [1, 2, 3] });
+            expect(commandRegistry.executeCommand.calledOnce).to.be.true;
         });
 
-        it('should accept command with nested object args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.complex',
-                args: {
-                    nested: {
-                        deep: 'value'
-                    }
-                }
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
-        });
-
-        it('should accept command with empty object args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.test',
-                args: {}
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
-        });
-
-        it('should accept command with empty array args', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.test',
-                args: []
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
+        it('should dispatch command with deeply nested subcommand', async () => {
+            await dispatchAndWait({ cmd: 'openspace.sub.command.deep', args: undefined });
+            expect(commandRegistry.executeCommand.calledOnce).to.be.true;
         });
     });
 
-    /**
-     * Issue #3: Commands outside openspace.* namespace must be rejected.
-     * 
-     * This prevents malicious agents from executing arbitrary Theia commands
-     * like file system operations, terminal commands, etc.
-     */
-    describe('Issue #3: Namespace Allowlist', () => {
-        it('should reject commands without openspace prefix', () => {
-            const command: AgentCommand = {
-                cmd: 'file.delete',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
+    // ------------------------------------------------------------------
+    // Invalid commands — should be silently dropped before CommandRegistry
+    // ------------------------------------------------------------------
+    describe('Invalid commands are blocked by the security gate', () => {
+        it('should block command without openspace prefix', async () => {
+            await dispatchAndWait({ cmd: 'file.delete', args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject Theia core commands', () => {
-            const command: AgentCommand = {
-                cmd: 'workbench.action.terminal.new',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
+        it('should block Theia core commands', async () => {
+            await dispatchAndWait({ cmd: 'workbench.action.terminal.new', args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject commands with openspace substring but wrong position', () => {
-            const command: AgentCommand = {
-                cmd: 'malicious.openspace.fake',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
+        it('should block commands where openspace is not a prefix', async () => {
+            await dispatchAndWait({ cmd: 'malicious.openspace.fake', args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject empty string command', () => {
-            const command: AgentCommand = {
-                cmd: '',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
+        it('should block empty string command', async () => {
+            await dispatchAndWait({ cmd: '', args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject command with only prefix', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true; // 'openspace.' is technically valid, though useless
-        });
-    });
-
-    /**
-     * Malformed command structures must be rejected.
-     */
-    describe('Malformed Command Structures', () => {
-        it('should reject null command', () => {
-            const result = (syncService as any).validateAgentCommand(null);
-            expect(result).to.be.false;
+        it('should block null cmd', async () => {
+            await dispatchAndWait({ cmd: null as any, args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject undefined command', () => {
-            const result = (syncService as any).validateAgentCommand(undefined);
-            expect(result).to.be.false;
+        it('should block undefined cmd', async () => {
+            await dispatchAndWait({ cmd: undefined as any, args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject command without cmd field', () => {
-            const command = {
-                args: { key: 'value' }
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
+        it('should block non-string cmd (number)', async () => {
+            await dispatchAndWait({ cmd: 123 as any, args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
 
-        it('should reject command with non-string cmd', () => {
-            const command = {
-                cmd: 123
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject command with null cmd', () => {
-            const command = {
-                cmd: null
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject string command (not object)', () => {
-            const result = (syncService as any).validateAgentCommand('openspace.test');
-            expect(result).to.be.false;
-        });
-
-        it('should reject number command (not object)', () => {
-            const result = (syncService as any).validateAgentCommand(123);
-            expect(result).to.be.false;
-        });
-    });
-
-    /**
-     * Args validation: Must be undefined, object, or array (not primitives).
-     * 
-     * This prevents type confusion attacks where primitive values
-     * could be misinterpreted by command handlers.
-     */
-    describe('Args Validation', () => {
-        it('should reject command with string args', () => {
-            const command = {
-                cmd: 'openspace.test',
-                args: 'string value'
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject command with number args', () => {
-            const command = {
-                cmd: 'openspace.test',
-                args: 42
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject command with boolean args', () => {
-            const command = {
-                cmd: 'openspace.test',
-                args: true
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject command with null args', () => {
-            const command = {
-                cmd: 'openspace.test',
-                args: null
-            } as any;
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-    });
-
-    /**
-     * Edge cases and security attack vectors.
-     */
-    describe('Security Edge Cases', () => {
-        it('should reject path traversal attempts in command ID', () => {
-            const command: AgentCommand = {
-                cmd: '../../../malicious',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.false;
-        });
-
-        it('should reject command with special characters', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.\x00malicious',
-                args: undefined
-            };
-
-            // This should still pass validation (startsWith check)
-            // but would fail at command registry lookup
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true; // Validation passes, execution would fail
-        });
-
-        it('should accept command with dots after prefix', () => {
-            const command: AgentCommand = {
-                cmd: 'openspace.sub.command.deep',
-                args: undefined
-            };
-
-            const result = (syncService as any).validateAgentCommand(command);
-            expect(result).to.be.true;
+        it('should block path traversal attempts', async () => {
+            await dispatchAndWait({ cmd: '../../../malicious', args: undefined });
+            expect(commandRegistry.executeCommand.called).to.be.false;
         });
     });
 });

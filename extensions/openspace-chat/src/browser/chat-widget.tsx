@@ -235,8 +235,9 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
  * React component for chat interface.
  * T3-9: Added workspaceRoot prop
  * T3-10: Added messageService prop for dialogs
+ * Exported for unit testing.
  */
-const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);

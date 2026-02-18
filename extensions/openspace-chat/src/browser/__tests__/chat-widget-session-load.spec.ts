@@ -5,430 +5,550 @@
 // terms of the Eclipse Public License v. 2.0 which is available at
 // http://www.eclipse.org/legal/epl-2.0.
 //
-// This Source Code may also be made available under the following Secondary
-// Licenses when the conditions for such availability set forth in the Eclipse
-// Public License v. 2.0 are satisfied: GNU General Public License, version 2
-// with the GNU Classpath Exception which is available at
-// https://www.gnu.org/software/classpath/license.html.
-//
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { expect } from 'chai';
-import * as sinon from 'sinon';
-
 /**
  * Unit tests for ChatWidget Session Auto-Load Fix
- * 
- * Tests the race condition fix where sessions should load when project changes,
- * including loading states, error states, and event listener cleanup.
+ *
+ * Tests render real React component behaviour using jsdom + React 18 createRoot.
+ * Covers:
+ *  - Sessions load on mount (initial getSessions call)
+ *  - Sessions reload when onActiveProjectChanged fires
+ *  - Loading state (isLoadingSessions) while getSessions is in-flight
+ *  - Error state displayed when getSessions rejects
+ *  - Retry button clears error and reloads
+ *  - All event listeners are disposed on unmount
+ *
+ * Imports from compiled lib to avoid ts-node tsx + inversify decorator issues.
  */
 
-interface MockSessionService {
-    activeProject: any | undefined;
-    messages: any[];
-    isStreaming: boolean;
-    getSessions: sinon.SinonStub;
-    onMessagesChanged: sinon.SinonStub;
-    onMessageStreaming: sinon.SinonStub;
-    onIsStreamingChanged: sinon.SinonStub;
-    onActiveSessionChanged: sinon.SinonStub;
-    onActiveProjectChanged: sinon.SinonStub;
+import { expect } from 'chai';
+import * as sinon from 'sinon';
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
+import { act } from 'react';
+import { createRequire } from 'node:module';
+
+// Load compiled ChatComponent — avoids tsx/decorator issues in ts-node
+// Uses createRequire for ESM-compatible CJS module loading
+const _require = createRequire(import.meta.url);
+const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+    ChatComponent: React.FC<any>
+};
+
+// Polyfill scrollIntoView — not implemented in jsdom
+if (!Element.prototype.scrollIntoView) {
+    (Element.prototype as any).scrollIntoView = function (): void { /* noop */ };
 }
 
-describe('ChatWidget - Session Auto-Load Fix', () => {
-    let mockSessionService: MockSessionService;
-    let clock: sinon.SinonFakeTimers;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-    const mockProject = {
-        id: 'proj-1',
-        name: 'Test Project',
-        rootPath: '/test'
+const mockProject = {
+    id: 'proj-1',
+    name: 'Test Project',
+    worktree: '/test',
+    time: { created: Date.now() },
+};
+
+const mockSessions = [
+    {
+        id: 'sess-1',
+        projectID: 'proj-1',
+        title: 'Session 1',
+        time: { created: Date.now(), updated: Date.now() },
+        directory: '/test',
+        version: '1.0.0',
+    },
+    {
+        id: 'sess-2',
+        projectID: 'proj-1',
+        title: 'Session 2',
+        time: { created: Date.now(), updated: Date.now() },
+        directory: '/test',
+        version: '1.0.0',
+    },
+];
+
+function createMockSessionService(overrides: Partial<any> = {}): any {
+    return {
+        activeProject: undefined,
+        activeSession: undefined,
+        activeModel: undefined,
+        messages: [],
+        isLoading: false,
+        lastError: undefined,
+        isStreaming: false,
+        getSessions: sinon.stub().resolves([]),
+        createSession: sinon.stub().resolves(mockSessions[0]),
+        setActiveSession: sinon.stub().resolves(),
+        setActiveModel: sinon.stub(),
+        deleteSession: sinon.stub().resolves(),
+        sendMessage: sinon.stub().resolves(),
+        autoSelectProjectByWorkspace: sinon.stub().resolves(false),
+        getAvailableModels: sinon.stub().resolves([]),
+        abort: sinon.stub().resolves(),
+        appendMessage: sinon.stub(),
+        updateStreamingMessage: sinon.stub(),
+        replaceMessage: sinon.stub(),
+        notifySessionChanged: sinon.stub(),
+        notifySessionDeleted: sinon.stub(),
+        dispose: sinon.stub(),
+        onActiveProjectChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onActiveSessionChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onActiveModelChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onMessagesChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onMessageStreaming: sinon.stub().returns({ dispose: sinon.stub() }),
+        onIsLoadingChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onErrorChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onIsStreamingChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        ...overrides,
     };
+}
 
-    const mockSessions = [
-        {
-            id: 'sess-1',
-            projectID: 'proj-1',
-            title: 'Session 1',
-            time: {
-                created: Date.now(),
-                updated: Date.now()
-            },
-            directory: '/test',
-            version: 1,
-            agent: 'test-agent',
-            model: { providerID: 'test', modelID: 'test-model' }
-        },
-        {
-            id: 'sess-2',
-            projectID: 'proj-1',
-            title: 'Session 2',
-            time: {
-                created: Date.now(),
-                updated: Date.now()
-            },
-            directory: '/test',
-            version: 1,
-            agent: 'test-agent',
-            model: { providerID: 'test', modelID: 'test-model' }
-        }
-    ];
+const mockMessageService = {
+    error: sinon.stub(),
+    info: sinon.stub(),
+    warn: sinon.stub(),
+};
 
-    beforeEach(() => {
-        // Create mock SessionService with all required event listeners
-        mockSessionService = {
-            activeProject: undefined,
-            messages: [],
-            isStreaming: false,
-            getSessions: sinon.stub(),
-            onMessagesChanged: sinon.stub().returns({ dispose: sinon.stub() }),
-            onMessageStreaming: sinon.stub().returns({ dispose: sinon.stub() }),
-            onIsStreamingChanged: sinon.stub().returns({ dispose: sinon.stub() }),
-            onActiveSessionChanged: sinon.stub().returns({ dispose: sinon.stub() }),
-            onActiveProjectChanged: sinon.stub().returns({ dispose: sinon.stub() })
-        };
+interface RenderResult {
+    container: HTMLElement;
+    root: Root;
+    unmount: () => void;
+}
+
+function renderComponent(sessionService: any, workspaceRoot = ''): RenderResult {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    let root: Root;
+
+    act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(ChatComponent, {
+            sessionService,
+            openCodeService: {},
+            workspaceRoot,
+            messageService: mockMessageService,
+        }));
     });
+
+    return {
+        container,
+        root: root!,
+        unmount: () => {
+            act(() => root.unmount());
+            container.remove();
+        },
+    };
+}
+
+/** Helper to flush async React state updates (microtasks only) */
+async function flushAsync(): Promise<void> {
+    await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+    });
+}
+
+/**
+ * Wait past the 100ms minimum-display-time setTimeout in loadSessions.
+ * Must be called when you need sessions/loading state fully settled.
+ */
+async function flushTimers(): Promise<void> {
+    await flushAsync();
+    await act(async () => {
+        await new Promise(r => setTimeout(r, 150));
+    });
+    await flushAsync();
+}
+
+/** Open the session dropdown */
+function openDropdown(container: HTMLElement): void {
+    act(() => {
+        (container.querySelector('.session-dropdown-button') as HTMLButtonElement)?.click();
+    });
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('ChatWidget - Session Auto-Load Fix', () => {
 
     afterEach(() => {
         sinon.restore();
-        if (clock) {
-            clock.restore();
-        }
     });
 
-    /**
-     * Test 1: Sessions should reload when project changes
-     * 
-     * This tests the primary fix: ChatWidget must subscribe to onActiveProjectChanged
-     * and call loadSessions() when the event fires.
-     */
+    // ─── Primary Fix: Subscribe to Project Changes ─────────────────────────────
+
     describe('Primary Fix: Subscribe to Project Changes', () => {
-        it('should call loadSessions when onActiveProjectChanged fires', () => {
-            // Setup: Initially no project
-            mockSessionService.activeProject = undefined;
-            mockSessionService.getSessions.resolves([]);
+        it('should call getSessions on initial mount', () => {
+            const getSessions = sinon.stub().resolves([]);
+            const sessionService = createMockSessionService({ getSessions });
 
-            // Simulate ChatWidget initialization
-            const projectListener = mockSessionService.onActiveProjectChanged();
-            expect(mockSessionService.onActiveProjectChanged.calledOnce).to.be.true;
+            const { unmount } = renderComponent(sessionService);
 
-            // Verify listener is registered
-            const disposeStub = projectListener.dispose;
-            expect(disposeStub).to.exist;
+            expect(getSessions.called).to.be.true;
 
-            // Simulate project load
-            mockSessionService.activeProject = mockProject;
-            mockSessionService.getSessions.resolves(mockSessions);
+            unmount();
+        });
 
-            // Get the registered callback
-            const callback = mockSessionService.onActiveProjectChanged.firstCall.args[0];
-            
-            // Fire the event (simulating project load)
-            if (callback) {
-                callback(mockProject);
+        it('should reload sessions when onActiveProjectChanged fires', async () => {
+            let projectChangedCallback: ((project: any) => void) | undefined;
+            const getSessions = sinon.stub().resolves([]);
+
+            const sessionService = createMockSessionService({
+                getSessions,
+                onActiveProjectChanged: sinon.stub().callsFake((cb: (p: any) => void) => {
+                    projectChangedCallback = cb;
+                    return { dispose: sinon.stub() };
+                }),
+            });
+
+            const { unmount } = renderComponent(sessionService);
+
+            const callCountAfterMount = getSessions.callCount;
+            expect(callCountAfterMount).to.be.greaterThan(0);
+
+            // Simulate project load event firing
+            sessionService.activeProject = mockProject;
+            getSessions.resolves(mockSessions);
+
+            if (projectChangedCallback) {
+                await act(async () => {
+                    projectChangedCallback!(mockProject);
+                    await Promise.resolve();
+                });
             }
 
-            // Verify getSessions would be called (in real component)
-            // This test verifies the event subscription exists
-            expect(mockSessionService.onActiveProjectChanged.called).to.be.true;
+            // getSessions should have been called again after project changed
+            expect(getSessions.callCount).to.be.greaterThan(callCountAfterMount);
+
+            unmount();
         });
 
-        it('should return sessions when project is loaded', async () => {
-            mockSessionService.activeProject = mockProject;
-            mockSessionService.getSessions.resolves(mockSessions);
+        it('should reload sessions when onActiveSessionChanged fires', async () => {
+            let sessionChangedCallback: (() => void) | undefined;
+            const getSessions = sinon.stub().resolves([]);
 
-            const sessions = await mockSessionService.getSessions();
-            
-            expect(sessions).to.have.lengthOf(2);
-            expect(sessions[0].title).to.equal('Session 1');
-            expect(sessions[1].title).to.equal('Session 2');
+            const sessionService = createMockSessionService({
+                getSessions,
+                onActiveSessionChanged: sinon.stub().callsFake((cb: () => void) => {
+                    sessionChangedCallback = cb;
+                    return { dispose: sinon.stub() };
+                }),
+            });
+
+            const { unmount } = renderComponent(sessionService);
+
+            const callCountAfterMount = getSessions.callCount;
+
+            // Simulate session changed event
+            if (sessionChangedCallback) {
+                await act(async () => {
+                    sessionChangedCallback!();
+                    await Promise.resolve();
+                });
+            }
+
+            // getSessions should have been called again
+            expect(getSessions.callCount).to.be.greaterThan(callCountAfterMount);
+
+            unmount();
         });
 
-        it('should return empty array when no project loaded', async () => {
-            mockSessionService.activeProject = undefined;
-            mockSessionService.getSessions.resolves([]);
+        it('should display loaded sessions in dropdown after project change', async () => {
+            let projectChangedCallback: ((project: any) => void) | undefined;
+            const getSessions = sinon.stub().resolves([]);
 
-            const sessions = await mockSessionService.getSessions();
-            
-            expect(sessions).to.be.empty;
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: mockProject,
+                onActiveProjectChanged: sinon.stub().callsFake((cb: (p: any) => void) => {
+                    projectChangedCallback = cb;
+                    return { dispose: sinon.stub() };
+                }),
+            });
+
+            const { container, unmount } = renderComponent(sessionService);
+
+            // Simulate project change with sessions
+            getSessions.resolves(mockSessions);
+
+            if (projectChangedCallback) {
+                await act(async () => {
+                    projectChangedCallback!(mockProject);
+                });
+                await flushTimers();
+            }
+
+            // Open dropdown to verify sessions are shown
+            openDropdown(container);
+
+            const items = container.querySelectorAll('.session-list-item');
+            expect(items.length).to.be.greaterThan(0);
+
+            unmount();
         });
     });
 
-    /**
-     * Test 2: Loading state should display during fetch
-     * 
-     * This tests the secondary fix: ChatWidget must show loading indicator
-     * while sessions are being fetched, with minimum 100ms display time.
-     */
+    // ─── Secondary Fix: Loading State Management ───────────────────────────────
+
     describe('Secondary Fix: Loading State Management', () => {
-        it('should set loading state to true when getSessions starts', () => {
-            clock = sinon.useFakeTimers();
-            
-            // Mock slow getSessions call
-            let resolveCallback: any;
-            const promise = new Promise(resolve => {
-                resolveCallback = resolve;
+        it('should show loading indicator while sessions are being fetched', async () => {
+            let resolveGetSessions: (v: any[]) => void;
+            const slowGetSessions = sinon.stub().returns(
+                new Promise<any[]>(resolve => { resolveGetSessions = resolve; })
+            );
+
+            const sessionService = createMockSessionService({
+                getSessions: slowGetSessions,
+                // activeProject required for loading indicator to show in dropdown
+                activeProject: mockProject,
             });
-            mockSessionService.getSessions.returns(promise);
 
-            // Simulate loadSessions call
-            let isLoading = false;
-            const loadStarted = Date.now();
-            const startLoad = async () => {
-                isLoading = true;
-                try {
-                    await mockSessionService.getSessions();
-                } finally {
-                    isLoading = false;
-                }
-            };
+            const { container, unmount } = renderComponent(sessionService);
 
-            startLoad();
-            
-            // Loading should be true immediately
-            expect(isLoading).to.be.true;
-            expect(loadStarted).to.be.a('number');
+            // Open dropdown so loading indicator is visible
+            openDropdown(container);
 
-            // Resolve the promise
-            resolveCallback(mockSessions);
+            // While getSessions is pending, loading indicator should be visible
+            const loadingEl = container.querySelector('.session-list-loading');
+            expect(loadingEl).to.not.be.null;
+
+            // Resolve the promise and flush
+            await act(async () => {
+                resolveGetSessions!([]);
+                await Promise.resolve();
+            });
+
+            unmount();
         });
 
-        it('should enforce minimum 100ms loading display time', async () => {
-            clock = sinon.useFakeTimers();
-            
-            // Mock fast getSessions call (instant resolve)
-            mockSessionService.getSessions.resolves(mockSessions);
+        it('should hide loading indicator after sessions load', async () => {
+            const getSessions = sinon.stub().resolves([]);
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: mockProject,
+            });
 
-            let isLoading = true;
-            
-            // Simulate loadSessions with minimum display time
-            const loadWithMinimumTime = async () => {
-                const fetchStart = Date.now();
-                try {
-                    await mockSessionService.getSessions();
-                } finally {
-                    const elapsed = Date.now() - fetchStart;
-                    const delay = Math.max(0, 100 - elapsed);
-                    
-                    // Verify delay is calculated correctly
-                    if (elapsed < 100) {
-                        expect(delay).to.be.greaterThan(0);
-                        expect(delay).to.be.at.most(100);
-                    }
-                    
-                    setTimeout(() => {
-                        isLoading = false;
-                    }, delay);
-                }
-            };
+            const { container, unmount } = renderComponent(sessionService);
 
-            await loadWithMinimumTime();
-            
-            // Loading should still be true (timeout not executed)
-            expect(isLoading).to.be.true;
-            
-            // Advance clock by 100ms
-            clock.tick(100);
-            
-            // Now loading should be false
-            expect(isLoading).to.be.false;
+            // Open dropdown
+            openDropdown(container);
+
+            // Wait past the 100ms minimum display delay
+            await flushTimers();
+
+            const loadingEl = container.querySelector('.session-list-loading');
+            expect(loadingEl).to.be.null;
+
+            unmount();
         });
     });
 
-    /**
-     * Test 3: Error state should display on fetch failure
-     * 
-     * This tests the tertiary fix: ChatWidget must catch errors from getSessions()
-     * and display error message with retry button.
-     */
+    // ─── Tertiary Fix: Error State Management ─────────────────────────────────
+
     describe('Tertiary Fix: Error State Management', () => {
-        it('should catch error when getSessions fails', async () => {
-            const error = new Error('Network error');
-            mockSessionService.getSessions.rejects(error);
-
-            let caughtError: string | undefined;
-            
-            try {
-                await mockSessionService.getSessions();
-            } catch (e: any) {
-                caughtError = e.message;
-            }
-
-            expect(caughtError).to.equal('Network error');
-        });
-
-        it('should store error message on failure', async () => {
-            const error = new Error('Backend unavailable');
-            mockSessionService.getSessions.rejects(error);
-
-            let sessionLoadError: string | undefined;
-            
-            // Simulate loadSessions error handling
-            try {
-                await mockSessionService.getSessions();
-            } catch (e: any) {
-                sessionLoadError = e instanceof Error ? e.message : String(e);
-            }
-
-            expect(sessionLoadError).to.equal('Backend unavailable');
-        });
-
-        it('should allow retry after error', async () => {
-            // First call fails
-            mockSessionService.getSessions.onFirstCall().rejects(new Error('Network error'));
-            
-            // Second call succeeds
-            mockSessionService.getSessions.onSecondCall().resolves(mockSessions);
-
-            // First attempt
-            try {
-                await mockSessionService.getSessions();
-                expect.fail('Should have thrown');
-            } catch (e: any) {
-                expect(e.message).to.equal('Network error');
-            }
-
-            // Retry
-            const sessions = await mockSessionService.getSessions();
-            expect(sessions).to.have.lengthOf(2);
-            expect(mockSessionService.getSessions.calledTwice).to.be.true;
-        });
-
-        it('should clear error on successful retry', async () => {
-            // First call fails
-            mockSessionService.getSessions.onFirstCall().rejects(new Error('Timeout'));
-            
-            // Second call succeeds
-            mockSessionService.getSessions.onSecondCall().resolves(mockSessions);
-
-            let sessionLoadError: string | undefined = 'Initial error';
-            
-            // First attempt
-            try {
-                await mockSessionService.getSessions();
-            } catch (e: any) {
-                sessionLoadError = e.message;
-            }
-            expect(sessionLoadError).to.equal('Timeout');
-
-            // Retry (clear error first)
-            sessionLoadError = undefined;
-            const sessions = await mockSessionService.getSessions();
-            
-            expect(sessionLoadError).to.be.undefined;
-            expect(sessions).to.have.lengthOf(2);
-        });
-    });
-
-    /**
-     * Test 4: Event listeners should be cleaned up on unmount
-     * 
-     * This tests memory leak prevention: All event listeners registered in useEffect
-     * must be disposed when component unmounts.
-     */
-    describe('Event Listener Cleanup', () => {
-        it('should register all required event listeners', () => {
-            // Simulate ChatWidget useEffect initialization
-            const messagesListener = mockSessionService.onMessagesChanged();
-            const streamingListener = mockSessionService.onMessageStreaming();
-            const streamingStateListener = mockSessionService.onIsStreamingChanged();
-            const sessionChangedListener = mockSessionService.onActiveSessionChanged();
-            const projectChangedListener = mockSessionService.onActiveProjectChanged();
-
-            // Verify all listeners registered
-            expect(mockSessionService.onMessagesChanged.calledOnce).to.be.true;
-            expect(mockSessionService.onMessageStreaming.calledOnce).to.be.true;
-            expect(mockSessionService.onIsStreamingChanged.calledOnce).to.be.true;
-            expect(mockSessionService.onActiveSessionChanged.calledOnce).to.be.true;
-            expect(mockSessionService.onActiveProjectChanged.calledOnce).to.be.true;
-
-            // Verify all have dispose methods
-            expect(messagesListener.dispose).to.exist;
-            expect(streamingListener.dispose).to.exist;
-            expect(streamingStateListener.dispose).to.exist;
-            expect(sessionChangedListener.dispose).to.exist;
-            expect(projectChangedListener.dispose).to.exist;
-        });
-
-        it('should dispose all listeners on cleanup', () => {
-            // Register listeners
-            const disposables = [
-                mockSessionService.onMessagesChanged(),
-                mockSessionService.onMessageStreaming(),
-                mockSessionService.onIsStreamingChanged(),
-                mockSessionService.onActiveSessionChanged(),
-                mockSessionService.onActiveProjectChanged()
-            ];
-
-            // Simulate cleanup (useEffect return function)
-            disposables.forEach(d => { d.dispose(); });
-
-            // Verify all dispose methods called
-            disposables.forEach(d => {
-                expect(d.dispose.calledOnce).to.be.true;
+        it('should show error message when getSessions fails', async () => {
+            const getSessions = sinon.stub().rejects(new Error('Network error'));
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: mockProject,
             });
+
+            const { container, unmount } = renderComponent(sessionService);
+
+            // Flush rejection and state update
+            await flushAsync();
+
+            // Open dropdown to see error
+            openDropdown(container);
+
+            expect(container.innerHTML).to.include('Network error');
+
+            unmount();
         });
 
-        it('should not throw when firing events after cleanup', () => {
-            const projectListener = mockSessionService.onActiveProjectChanged();
-            
-            // Dispose listener
-            projectListener.dispose();
+        it('should show retry button when getSessions fails', async () => {
+            const getSessions = sinon.stub().rejects(new Error('Backend unavailable'));
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: mockProject,
+            });
 
-            // Firing event after dispose should not throw
-            const callback = mockSessionService.onActiveProjectChanged.firstCall.args[0];
-            
-            expect(() => {
-                if (callback) {
-                    callback(mockProject);
-                }
-            }).to.not.throw();
+            const { container, unmount } = renderComponent(sessionService);
+
+            await flushAsync();
+            openDropdown(container);
+
+            // The retry button has class "retry-button"
+            const retryBtn = container.querySelector('.retry-button');
+            expect(retryBtn).to.not.be.null;
+
+            unmount();
+        });
+
+        it('should clear error and reload sessions on retry', async () => {
+            const getSessions = sinon.stub()
+                .onFirstCall().rejects(new Error('Timeout'))
+                .onSecondCall().resolves(mockSessions);
+
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: mockProject,
+            });
+
+            const { container, unmount } = renderComponent(sessionService);
+
+            // Flush first failure
+            await flushAsync();
+            openDropdown(container);
+
+            // Should show error
+            expect(container.innerHTML).to.include('Timeout');
+
+            // Click retry button
+            const retryBtn = container.querySelector('.retry-button') as HTMLButtonElement;
+            if (retryBtn) {
+                await act(async () => {
+                    retryBtn.click();
+                    await Promise.resolve();
+                    await Promise.resolve();
+                });
+
+                // Error should be cleared after retry
+                expect(container.innerHTML).to.not.include('Timeout');
+                expect(getSessions.callCount).to.be.greaterThan(1);
+            }
+
+            unmount();
         });
     });
 
-    /**
-     * Integration test: Full lifecycle
-     */
+    // ─── Event Listener Cleanup ────────────────────────────────────────────────
+
+    describe('Event Listener Cleanup', () => {
+        it('should register all required event listeners on mount', () => {
+            const sessionService = createMockSessionService();
+            const { unmount } = renderComponent(sessionService);
+
+            expect(sessionService.onMessagesChanged.called).to.be.true;
+            expect(sessionService.onMessageStreaming.called).to.be.true;
+            expect(sessionService.onIsStreamingChanged.called).to.be.true;
+            expect(sessionService.onActiveSessionChanged.called).to.be.true;
+            expect(sessionService.onActiveProjectChanged.called).to.be.true;
+
+            unmount();
+        });
+
+        it('should dispose all event listeners on unmount', () => {
+            const disposeStubs = {
+                messages: sinon.stub(),
+                streaming: sinon.stub(),
+                streamingState: sinon.stub(),
+                session: sinon.stub(),
+                project: sinon.stub(),
+            };
+
+            const sessionService = createMockSessionService({
+                onMessagesChanged: sinon.stub().returns({ dispose: disposeStubs.messages }),
+                onMessageStreaming: sinon.stub().returns({ dispose: disposeStubs.streaming }),
+                onIsStreamingChanged: sinon.stub().returns({ dispose: disposeStubs.streamingState }),
+                onActiveSessionChanged: sinon.stub().returns({ dispose: disposeStubs.session }),
+                onActiveProjectChanged: sinon.stub().returns({ dispose: disposeStubs.project }),
+            });
+
+            const { unmount } = renderComponent(sessionService);
+            unmount();
+
+            expect(disposeStubs.messages.calledOnce).to.be.true;
+            expect(disposeStubs.streaming.calledOnce).to.be.true;
+            expect(disposeStubs.streamingState.calledOnce).to.be.true;
+            expect(disposeStubs.session.calledOnce).to.be.true;
+            expect(disposeStubs.project.calledOnce).to.be.true;
+        });
+
+        it('should not leak listeners across re-renders', () => {
+            const sessionService = createMockSessionService();
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            let root: Root;
+
+            act(() => {
+                root = createRoot(container);
+                root.render(React.createElement(ChatComponent, {
+                    sessionService,
+                    openCodeService: {},
+                    workspaceRoot: '',
+                    messageService: mockMessageService,
+                }));
+            });
+
+            const initialCallCount = sessionService.onMessagesChanged.callCount;
+
+            // Re-render with same sessionService — should not double-register
+            act(() => {
+                root.render(React.createElement(ChatComponent, {
+                    sessionService,
+                    openCodeService: {},
+                    workspaceRoot: '',
+                    messageService: mockMessageService,
+                }));
+            });
+
+            // callCount should not increase significantly (same sessionService ref)
+            expect(sessionService.onMessagesChanged.callCount).to.equal(initialCallCount);
+
+            act(() => root.unmount());
+            container.remove();
+        });
+    });
+
+    // ─── Integration: Full Lifecycle ───────────────────────────────────────────
+
     describe('Integration: Full Lifecycle', () => {
         it('should handle complete flow: mount → project load → sessions load → unmount', async () => {
-            // 1. Mount (no project)
-            mockSessionService.activeProject = undefined;
-            mockSessionService.getSessions.resolves([]);
-            
-            const listeners = [
-                mockSessionService.onMessagesChanged(),
-                mockSessionService.onMessageStreaming(),
-                mockSessionService.onIsStreamingChanged(),
-                mockSessionService.onActiveSessionChanged(),
-                mockSessionService.onActiveProjectChanged()
-            ];
-            
-            // Initial getSessions call (should return empty)
-            let sessions = await mockSessionService.getSessions();
-            expect(sessions).to.be.empty;
+            let projectChangedCallback: ((project: any) => void) | undefined;
 
-            // 2. Project loads
-            mockSessionService.activeProject = mockProject;
-            mockSessionService.getSessions.resolves(mockSessions);
-            
-            // Fire project changed event
-            const projectCallback = mockSessionService.onActiveProjectChanged.firstCall.args[0];
-            if (projectCallback) {
-                projectCallback(mockProject);
+            const disposeProject = sinon.stub();
+            const getSessions = sinon.stub().resolves([]);
+            const sessionService = createMockSessionService({
+                getSessions,
+                activeProject: undefined,
+                onActiveProjectChanged: sinon.stub().callsFake((cb: (p: any) => void) => {
+                    projectChangedCallback = cb;
+                    return { dispose: disposeProject };
+                }),
+            });
+
+            const { container, unmount } = renderComponent(sessionService);
+
+            // 1. Initial mount → getSessions called
+            expect(getSessions.called).to.be.true;
+
+            // 2. Simulate project becoming active
+            sessionService.activeProject = mockProject;
+            getSessions.resolves(mockSessions);
+
+            if (projectChangedCallback) {
+                await act(async () => {
+                    projectChangedCallback!(mockProject);
+                    await Promise.resolve();
+                });
             }
 
-            // 3. Sessions load
-            sessions = await mockSessionService.getSessions();
-            expect(sessions).to.have.lengthOf(2);
+            await flushTimers();
 
-            // 4. Unmount (cleanup)
-            listeners.forEach(d => { d.dispose(); });
-            
-            // Verify cleanup
-            listeners.forEach(d => {
-                expect(d.dispose.calledOnce).to.be.true;
-            });
+            // 3. Open dropdown — sessions should be present
+            openDropdown(container);
+
+            const items = container.querySelectorAll('.session-list-item');
+            expect(items.length).to.be.greaterThan(0);
+
+            // 4. Unmount → listeners disposed
+            unmount();
+            expect(disposeProject.called).to.be.true;
         });
     });
 });

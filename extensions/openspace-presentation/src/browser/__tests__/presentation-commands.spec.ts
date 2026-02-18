@@ -14,6 +14,9 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+import { expect } from 'chai';
+import { PresentationCommandIds, PresentationArgumentSchemas } from '../presentation-command-contribution';
+
 /**
  * Tests for PresentationCommandContribution exports.
  * These tests verify that all 9 commands are properly defined with correct argument schemas.
@@ -22,88 +25,80 @@
 describe('PresentationCommandContribution Exports', () => {
     describe('Command IDs', () => {
         it('should define list command ID', () => {
-            const id = 'openspace.presentation.list';
-            if (id !== 'openspace.presentation.list') {
-                throw new Error(`Expected openspace.presentation.list, got ${id}`);
-            }
+            expect(PresentationCommandIds.LIST).to.equal('openspace.presentation.list');
         });
 
         it('should define read command ID', () => {
-            const id = 'openspace.presentation.read';
-            if (id !== 'openspace.presentation.read') {
-                throw new Error(`Expected openspace.presentation.read, got ${id}`);
-            }
+            expect(PresentationCommandIds.READ).to.equal('openspace.presentation.read');
         });
 
         it('should define create command ID', () => {
-            const id = 'openspace.presentation.create';
-            if (id !== 'openspace.presentation.create') {
-                throw new Error(`Expected openspace.presentation.create, got ${id}`);
-            }
+            expect(PresentationCommandIds.CREATE).to.equal('openspace.presentation.create');
         });
 
         it('should define update_slide command ID', () => {
-            const id = 'openspace.presentation.update_slide';
-            if (id !== 'openspace.presentation.update_slide') {
-                throw new Error(`Expected openspace.presentation.update_slide, got ${id}`);
-            }
+            expect(PresentationCommandIds.UPDATE_SLIDE).to.equal('openspace.presentation.update_slide');
         });
 
         it('should define open command ID', () => {
-            const id = 'openspace.presentation.open';
-            if (id !== 'openspace.presentation.open') {
-                throw new Error(`Expected openspace.presentation.open, got ${id}`);
-            }
+            expect(PresentationCommandIds.OPEN).to.equal('openspace.presentation.open');
         });
 
         it('should define navigate command ID', () => {
-            const id = 'openspace.presentation.navigate';
-            if (id !== 'openspace.presentation.navigate') {
-                throw new Error(`Expected openspace.presentation.navigate, got ${id}`);
-            }
+            expect(PresentationCommandIds.NAVIGATE).to.equal('openspace.presentation.navigate');
         });
 
         it('should define play command ID', () => {
-            const id = 'openspace.presentation.play';
-            if (id !== 'openspace.presentation.play') {
-                throw new Error(`Expected openspace.presentation.play, got ${id}`);
-            }
+            expect(PresentationCommandIds.PLAY).to.equal('openspace.presentation.play');
         });
 
         it('should define pause command ID', () => {
-            const id = 'openspace.presentation.pause';
-            if (id !== 'openspace.presentation.pause') {
-                throw new Error(`Expected openspace.presentation.pause, got ${id}`);
-            }
+            expect(PresentationCommandIds.PAUSE).to.equal('openspace.presentation.pause');
         });
 
         it('should define stop command ID', () => {
-            const id = 'openspace.presentation.stop';
-            if (id !== 'openspace.presentation.stop') {
-                throw new Error(`Expected openspace.presentation.stop, got ${id}`);
-            }
+            expect(PresentationCommandIds.STOP).to.equal('openspace.presentation.stop');
         });
     });
 
     describe('Argument Schemas', () => {
         it('should have valid JSON Schema structure for all commands', () => {
-            // Verify schema structure exists for all 9 commands
-            const expectedCommands = [
-                'list', 'read', 'create', 'update_slide', 
-                'open', 'navigate', 'play', 'pause', 'stop'
-            ];
-            
-            if (expectedCommands.length !== 9) {
-                throw new Error(`Expected 9 commands, got ${expectedCommands.length}`);
-            }
+            const expectedKeys = ['list', 'read', 'create', 'update_slide', 'open', 'navigate', 'play', 'pause', 'stop'];
+            expectedKeys.forEach(key => {
+                expect(PresentationArgumentSchemas).to.have.property(key);
+            });
+            expect(expectedKeys).to.have.length(9);
         });
 
         it('should have proper schema types', () => {
-            // Basic validation that schemas would be objects with type: 'object'
-            const schemaType = 'object';
-            if (schemaType !== 'object') {
-                throw new Error(`Expected type 'object', got '${schemaType}'`);
-            }
+            const schemaKeys = Object.keys(PresentationArgumentSchemas) as Array<keyof typeof PresentationArgumentSchemas>;
+            schemaKeys.forEach(key => {
+                expect(PresentationArgumentSchemas[key].type).to.equal('object');
+            });
+        });
+
+        it('should require path for read schema', () => {
+            expect(PresentationArgumentSchemas.read.required).to.include('path');
+        });
+
+        it('should require path and title for create schema', () => {
+            expect(PresentationArgumentSchemas.create.required).to.include('path');
+            expect(PresentationArgumentSchemas.create.required).to.include('title');
+        });
+
+        it('should require path, slideIndex, and content for update_slide schema', () => {
+            expect(PresentationArgumentSchemas.update_slide.required).to.include('path');
+            expect(PresentationArgumentSchemas.update_slide.required).to.include('slideIndex');
+            expect(PresentationArgumentSchemas.update_slide.required).to.include('content');
+        });
+
+        it('should require path for open schema', () => {
+            expect(PresentationArgumentSchemas.open.required).to.include('path');
+        });
+
+        it('should define direction enum for navigate schema', () => {
+            expect(PresentationArgumentSchemas.navigate.properties.direction.enum).to.include('prev');
+            expect(PresentationArgumentSchemas.navigate.properties.direction.enum).to.include('next');
         });
     });
 });

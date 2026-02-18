@@ -1,7 +1,7 @@
 ---
 id: COMPARATIVE-ARCHITECTURE-ANALYSIS
 author: oracle_a7e2
-status: FINAL
+status: FINAL — UPDATED 2026-02-18
 date: 2026-02-18
 task_id: ArchitectureComparison
 ---
@@ -12,6 +12,10 @@ task_id: ArchitectureComparison
 > and openspace (React/Hub-based) — toward designing the optimal unified architecture for a
 > client IDE with full agentic control over the environment and multiple modalities.  
 > **Audience:** Oracle, technical leads, decision makers
+>
+> **Architecture Decision (2026-02-18):** The `%%OS{...}%%` stream interceptor has been **retired**
+> in theia-openspace. **MCP is the sole agent→IDE command path.** The "dual-path" analysis in §5.2
+> documents the options considered; §5.2.1 records the final decision and rationale.
 
 ---
 
@@ -25,13 +29,13 @@ different strategies.
 | Dimension | theia-openspace (Theia) | openspace (React/Hub) |
 |---|---|---|
 | **Foundation** | Eclipse Theia (full IDE framework) | Vite + React SPA + Express Hub |
-| **Maturity** | Phase 4 of 6 (IDE core done, modalities stub) | All modalities working, production-quality |
-| **Agent→UI pathway** | Stream interceptor (`%%OS{...}%%`) → RPC callback → CommandRegistry | MCP tools → POST /commands → SSE → PaneContext |
-| **Completeness** | 412 unit tests, 38 E2E, modality UIs stub | 602+ unit tests, 104 E2E, modalities fully functional |
+| **Maturity** | Phase 4 complete (🔶 DONE-NOT-VALIDATED), T3–T6 in planning | All modalities working, production-quality |
+| **Agent→UI pathway** | **MCP tools → Hub McpServer → CommandBridge → CommandRegistry** (stream interceptor retired 2026-02-18) | MCP tools → POST /commands → SSE → PaneContext |
+| **Completeness** | 412 unit tests, 38 E2E, modality UIs done-not-validated | 602+ unit tests, 104 E2E, modalities fully functional |
 | **Complexity** | Very high (Theia DI, webpack, multi-extension, ESM/CJS) | Medium (standard React SPA + separate Node server) |
-| **Innovation** | CommandRegistry as universal control plane (automatic discovery) | Canonical artifact model + versioned patch engine |
+| **Innovation** | CommandRegistry as universal control plane + MCP tool surface | Canonical artifact model + versioned patch engine |
 | **Biggest strength** | Real IDE capabilities (Monaco, terminal, keybindings, file tree) | Speed of iteration, modality richness, voice, MCP |
-| **Biggest weakness** | Modalities far from done; Theia complexity tax is enormous | Not a real IDE (no Monaco editing, no terminal, limited file tree) |
+| **Biggest weakness** | Modalities done-not-validated (T3 MCP integration needed); Theia complexity tax | Not a real IDE (no Monaco editing, no terminal, limited file tree) |
 
 ---
 
@@ -52,35 +56,35 @@ different strategies.
 │                              │ JSON-RPC over WebSocket               │
 │  ┌──────────────────────────┴───────────────────────────────────┐   │
 │  │                      Backend (Node.js)                        │   │
-│  │  OpenCodeProxy + StreamInterceptor      Hub (instructions)    │   │
+│  │  OpenCodeProxy (HTTP + SSE, no stream interceptor)           │   │
+│  │  Hub (MCP server + state cache + instructions endpoint)      │   │
 │  └──────────────────────────┬─────────────────────────────────-─┘   │
 └─────────────────────────────┼────────────────────────────────────────┘
-                              │ REST + SSE
-                   ┌──────────▼──────────┐
-                   │  OpenCode Server    │
+                              │ REST + SSE          ▲ MCP tool calls
+                   ┌──────────▼──────────┐          │
+                   │  OpenCode Server    │──────────┘
                    │  (unmodified Go)    │
                    └─────────────────────┘
 ```
 
 ### 2.2 Agent→UI Command Pipeline
 
-**Path:** `OpenCode response stream → StreamInterceptor (strips %%OS{...}%%) → RPC callback (onAgentCommand) → SyncService → CommandRegistry.executeCommand()`
+> **Architecture Decision (2026-02-18):** Stream interceptor retired. MCP is the sole path.
 
-**Key insight:** Every modality action is a **Theia Command**. The agent emits structured
-commands inline in its text response (stripped from visible output). This means:
-- Adding a command automatically exposes it to the agent (zero prompt engineering via manifest)
-- User keybindings, menus, and agent all use the same code path
-- Commands are first-class IDE citizens
+**Path (current):** `Agent → MCP tool call (e.g. openspace.pane.open) → Hub McpServer → CommandBridge → CommandRegistry.executeCommand() → IDE action; result returned to agent`
+
+**Key insight:** Every modality action is a **Theia Command** AND an **MCP tool**. The MCP tool handler calls the CommandRegistry; user keybindings, menus, and agent tool calls all reach the same command handler. MCP gives the agent structured return values and protocol introspection. CommandRegistry gives universal discoverability and keybinding parity.
 
 ### 2.3 Extension Architecture
 
 Six Theia extensions, each with DI modules:
-- `openspace-core` — protocols, session management, Hub, proxy, stream interceptor
+- `openspace-core` — protocols, session management, Hub (MCP server + state cache), OpenCodeProxy
 - `openspace-chat` — ChatWidget, PromptInput, MessageTimeline, ChatAgent (Theia AI)
-- `openspace-presentation` — Reveal.js widget, presentation commands
-- `openspace-whiteboard` — tldraw widget, whiteboard commands
+- `openspace-presentation` — Reveal.js widget, presentation commands + MCP tools
+- `openspace-whiteboard` — tldraw widget, whiteboard commands + MCP tools
 - `openspace-layout` — ApplicationShell customization, theming
 - `openspace-settings` — settings widgets
+- `openspace-voice` *(planned — Phase T6)* — Voice modality (3-FSM pipeline)
 
 ### 2.4 Current State (Feb 2026)
 
@@ -88,11 +92,15 @@ Six Theia extensions, each with DI modules:
 - ✅ Phase 1: Core connection + Hub (14 tasks)
 - ✅ Phase 1B1: Architecture refactor C→B1 (8 tasks)
 - ✅ Phase 2B: SDK types adoption (hybrid approach — ESM/CJS blocker)
-- ✅ Phase 3: Agent IDE control (11 tasks — 20 commands, stream interceptor, security)
+- ✅ Phase 3: Agent IDE control (11 tasks — 20 commands, security)
 - ✅ Phase 1C: Code hardening (54 issues fixed)
 - ✅ E2E suite: 38 pass, 1 skip, 0 fail
-- 🔴 Phase 4: Modality surfaces (presentation/whiteboard widgets are stubs)
-- 🔴 Phase 5: Polish & Desktop (not started)
+- 🔶 Phase 4: Modality surfaces (presentation/whiteboard widgets code-complete, NOT integrated/validated)
+- ⬜ Phase T3: MCP Agent Control System (planned — replaces stream interceptor)
+- ⬜ Phase T4: PatchEngine (planned — versioned file mutations)
+- ⬜ Phase T5: ArtifactStore (planned — atomic writes, audit log)
+- ⬜ Phase T6: Voice modality (planned — 3-FSM pipeline from openspace)
+- 🔴 Phase 5: Polish & Desktop (blocked on T3+T4+T5)
 
 ---
 
@@ -331,37 +339,67 @@ The convergence strategy:
 
 ---
 
-### 5.2 Ideal Agent Command Architecture: Dual-Path
+### 5.2 Agent Command Architecture Options: Dual-Path Analysis
 
-The two approaches to agent→UI commands are **not mutually exclusive**. The optimal
-architecture uses BOTH for different use cases:
+The two approaches to agent→UI commands were analyzed as candidates:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   Dual-Path Agent Command System                  │
+│                Agent Command Architecture Options                  │
 │                                                                   │
-│  Path A: Stream Interceptor (theia-openspace approach)            │
+│  Option A: Stream Interceptor (retired)                           │
 │  ─────────────────────────────────────────────────────           │
 │  Agent response text → %%OS{...}%% blocks → StreamInterceptor    │
 │  → RPC callback → SyncService → CommandRegistry                  │
 │                                                                   │
 │  ✅ Best for: Inline, contextual, ad-hoc commands                │
 │  ✅ Best for: Commands that emerge from reasoning/narration       │
-│  ✅ Best for: Security (same stream, no extra endpoint)           │
+│  ❌ One-way: agent gets no result from commands                   │
+│  ❌ Fragile: stateful streaming parser, chunk boundary bugs       │
+│  ❌ Silent failures: agent cannot know if a command failed        │
+│  ❌ Stream pollution: %%OS{...}%% must be stripped from text      │
 │                                                                   │
-│  Path B: MCP Tools (openspace approach)                           │
+│  Option B: MCP Tools (selected)                                   │
 │  ─────────────────────────────────────────────────────           │
-│  Agent → explicit tool call → MCP server → Hub/CommandRegistry   │
+│  Agent → explicit tool call → Hub McpServer → CommandBridge      │
+│  → CommandRegistry → IDE action; result returned to agent        │
 │                                                                   │
-│  ✅ Best for: Deliberate, structured operations                   │
-│  ✅ Best for: Artifact CRUD (create whiteboard, update slide)     │
-│  ✅ Best for: Rich feedback (tool responses carry structured data)│
-│  ✅ Best for: Agent discoverability (MCP protocol introspection)  │
+│  ✅ Structured return values (agent gets results inline)          │
+│  ✅ Type-safe: JSON Schema validation on every call               │
+│  ✅ Introspectable: agent calls tools/list to discover tools      │
+│  ✅ No stream parsing: no chunk boundary state machine            │
+│  ✅ Rich feedback: errors returned synchronously                  │
+│  ✅ Standard protocol: MCP is the emerging agent tool standard    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-The stream interceptor handles "while I'm explaining this, open the file I'm talking about."
-MCP tools handle "create a new diagram with these nodes." Both are needed.
+#### 5.2.1 Architecture Decision: MCP-Only (Recorded 2026-02-18)
+
+**Decision:** MCP replaces stream interceptor entirely. No dual-path. The stream interceptor (`%%OS{...}%%`) is **retired**.
+
+**Rationale:**
+
+1. **Structured return values win.** The stream interceptor is fundamentally one-way — the agent emits a command and never knows if it succeeded. MCP tool calls return `{ success, data, error }` before the agent continues reasoning. This is the single most valuable improvement.
+
+2. **No stream parsing complexity.** The stream interceptor required a 5-state parser with chunk-boundary handling, brace-depth tracking, timeout guards, and a comprehensive test matrix for edge cases. MCP eliminates all of this.
+
+3. **Silent failure elimination.** With `%%OS{...}%%`, failed commands were silently dropped. The workaround was a deferred command-result log injected into the next system prompt. With MCP, the agent gets the error immediately and can reason about recovery.
+
+4. **Dual-path was not simpler.** Running both paths in parallel would require maintaining two dispatch systems, two test matrices, and two failure modes — doubling surface area for bugs. A single canonical path is strictly better.
+
+5. **MCP is already in opencode.** opencode has native MCP client support. Adding the Hub as an MCP server requires zero opencode modification — just a new entry in `opencode.json`.
+
+**Components removed:**
+- `OpenCodeProxy.interceptStream()` and all `%%OS{...}%%` parsing
+- `OpenCodeClient.onAgentCommand()` RPC callback
+- `SyncService.onAgentCommand()` handler and `CommandQueue`
+- System prompt `%%OS{...}%%` instructions
+
+**Components added:**
+- `Hub.McpServer` — `@modelcontextprotocol/sdk` MCP server at `/mcp`
+- `CommandBridge` — internal adapter: MCP handler → Theia RPC → CommandRegistry
+- `opencode.json` `mcp` block — registers Hub as MCP provider
+- 21+ `openspace.*` MCP tools (see TECHSPEC §6.5)
 
 ---
 
@@ -385,15 +423,17 @@ MCP tools handle "create a new diagram with these nodes." Both are needed.
 
 ### 5.4 The 7 Architectural Improvements for theia-openspace
 
-| # | Improvement | Rationale | Effort |
-|---|---|---|---|
-| **T1** | Implement working whiteboard widget using openspace's IDiagram + tldraw patterns | The stub needs to become functional. openspace solved this completely. | 2-3 days |
-| **T2** | Implement working presentation widget using openspace's Reveal.js patterns | Same situation. openspace has 5 presentation tools and navigation. | 1-2 days |
-| **T3** | Add MCP server alongside stream interceptor (dual-path) | Explicit tool calls are cleaner for artifact CRUD. Add alongside, not replacing. | 2-3 days |
-| **T4** | Adopt PatchEngine for whiteboard/presentation artifact mutations | Versioned, conflict-safe, deterministic. Essential for agent-controlled artifacts. | 1-2 days |
-| **T5** | Add ArtifactStore (atomic writes, backups, audit log) | Hub currently only stores manifest/state. Need artifact persistence. | 1 day |
-| **T6** | Port Voice modality from openspace (3-FSM pipeline) | openspace has a complete, tested implementation. Port rather than rebuild. | 2-3 days |
-| **T7** | Implement rich agent feedback loop | After each command, collect actual state (which pane opened, which file is visible, cursor location) and inject into the next agent context. Neither project has this. | 3-5 days |
+> **Status update (2026-02-18):** T1 and T2 are `🔶 DONE-NOT-VALIDATED` (code exists, awaiting T3 integration). T3 description updated to reflect the MCP-only decision.
+
+| # | Improvement | Rationale | Effort | Status |
+|---|---|---|---|---|
+| **T1** | Working whiteboard widget (openspace's tldraw patterns) | The stub needs to become functional. openspace solved this completely. | 2-3 days | 🔶 Done-Not-Validated |
+| **T2** | Working presentation widget (openspace's Reveal.js patterns) | Same situation. openspace has 5 presentation tools and navigation. | 1-2 days | 🔶 Done-Not-Validated |
+| **T3** | **Replace** stream interceptor with MCP server (sole path) | MCP provides structured return values, typed tool calls, introspection, no stream parsing. **Decision: MCP-only, stream interceptor retired.** | 2-3 days | ⬜ Planned |
+| **T4** | Adopt PatchEngine for whiteboard/presentation artifact mutations | Versioned, conflict-safe, deterministic. Essential for agent-controlled artifacts. | 1-2 days | ⬜ Planned |
+| **T5** | Add ArtifactStore (atomic writes, backups, audit log) | Hub currently only stores pane state. Need artifact persistence. | 1 day | ⬜ Planned |
+| **T6** | Port Voice modality from openspace (3-FSM pipeline) | openspace has a complete, tested implementation. Port rather than rebuild. | 2-3 days | ⬜ Planned |
+| **T7** | Rich agent feedback loop | After each command, collect actual state (which pane opened, which file is visible, cursor location) and inject into the next agent context. Partially addressed by MCP return values; full state injection still needed. | 3-5 days | ⬜ Future |
 
 ---
 
@@ -401,7 +441,7 @@ MCP tools handle "create a new diagram with these nodes." Both are needed.
 
 | # | Improvement | Rationale | Effort |
 |---|---|---|---|
-| **O1** | Adopt stream interceptor pattern as secondary command path | For inline contextual commands (agent narrating while controlling). Lower latency than 5-hop MCP path. | 1-2 days |
+| **O1** | ~~Add stream interceptor as secondary command path~~ — **Not recommended** | Decision: MCP is superior for all command use cases. Dual-path adds complexity without benefit. | N/A |
 | **O2** | Integrate actual Monaco editor via iframe or monaco-editor directly | Current "editor" is read-only viewer. For real coding, need LSP + write + formatting. | 1 week |
 | **O3** | Add real terminal via xterm.js | No terminal at all currently. Agent needs a terminal to run code. | 2-3 days |
 | **O4** | Reduce 5-hop agent command latency | Agent → opencode → MCP → Hub → SSE → Client is high latency. Consider direct WebSocket from Hub to client with command ACK. | 2 days |
@@ -435,41 +475,41 @@ If building from scratch with lessons from both projects:
 │  └──────────────────────┬─────────────────────────────────────────┘  │
 │                         │                                            │
 │  ┌──────────────────────▼─────────────────────────────────────────┐  │
-│  │               Agent Integration Layer (Dual-Path)               │  │
+│  │               Agent Integration Layer (MCP-Only)                │  │
 │  │                                                                 │  │
-│  │  Path A: Stream Interceptor                                     │  │
-│  │    %%OS{cmd}%% → stripped → RPC → SyncService → CommandRegistry│  │
+│  │  MCP Tools (21+ tools across modalities)                        │  │
+│  │    Explicit agent tool calls → JSON Schema validated            │  │
+│  │    → Hub McpServer → CommandBridge → CommandRegistry            │  │
+│  │    → result returned synchronously to agent                     │  │
 │  │                                                                 │  │
-│  │  Path B: MCP Tools (21+ tools across modalities)               │  │
-│  │    Explicit agent tool calls → validated → Hub → CommandRegistry│  │
-│  │                                                                 │  │
-│  │  Feedback Loop: CommandRegistry result → RPC → agent context   │  │
+│  │  Automatic Discovery: agent calls tools/list → all tools        │  │
+│  │  Rich Feedback: every tool returns { success, data, error }     │  │
 │  └──────────────────────┬─────────────────────────────────────────┘  │
 │                         │                                            │
 │  ┌──────────────────────▼─────────────────────────────────────────┐  │
 │  │               Infrastructure Layer                              │  │
-│  │  OpenCodeProxy (HTTP + SSE + StreamInterceptor)                 │  │
-│  │  Hub (manifest + artifacts + pane state + instructions)         │  │
+│  │  OpenCodeProxy (HTTP + SSE — no stream interceptor)             │  │
+│  │  Hub (MCP server + artifacts + pane state + instructions)       │  │
 │  │  VoiceOrchestrator (3 FSMs: Session, Audio, Narration)          │  │
 │  └──────────────────────┬─────────────────────────────────────────┘  │
 │                         │                                            │
 └─────────────────────────┼────────────────────────────────────────────┘
-                          │ REST + SSE (with agent feedback)
-                ┌─────────▼─────────────┐
-                │   OpenCode Server     │
-                │   (Go, unmodified)    │
-                │   + MCP Server        │
-                └───────────────────────┘
+                          │ REST + SSE               ▲ MCP tool calls
+                ┌─────────▼─────────────────────────┘
+                │   OpenCode Server                  │
+                │   (Go, unmodified)                 │
+                │   configured with Hub as MCP server│
+                └────────────────────────────────────┘
 ```
 
 **Key differentiators from both current implementations:**
 
-1. **Both command paths coexist** (stream interceptor for inline + MCP for deliberate)
+1. **MCP-only command path** — typed tool calls, structured return values, introspection (theia-openspace's current T3 direction)
 2. **Universal control plane** — everything goes through CommandRegistry (Theia's insight)
 3. **Canonical artifact model** — PatchEngine + ArtifactStore for all modalities (openspace's insight)
 4. **`useArtifact` pattern** — all modality widgets use same live sync hook (openspace's insight)
-5. **Rich feedback loop** — agent gets actual state after each command (missing from both)
-6. **Automatic discovery** — new command → manifest updates → agent learns (Theia's insight)
+5. **Rich feedback loop** — agent gets actual state after each MCP tool call (MCP's native capability)
+6. **Automatic discovery** — new tool → MCP `tools/list` → agent learns on next session (MCP's introspection)
 7. **All modalities working** — no stubs, all feature-complete (openspace's execution quality)
 8. **Real IDE skeleton** — Monaco with LSP, terminal, file tree (Theia's foundation)
 
@@ -479,32 +519,31 @@ If building from scratch with lessons from both projects:
 
 ### For theia-openspace (Current Focus)
 
-**Immediate (Phase 4 — next 2-4 weeks):**
-1. Implement whiteboard widget using openspace's IDiagram + tldraw patterns (T1)
-2. Implement presentation widget using openspace's Reveal.js patterns (T2)
-3. Add ArtifactStore to Hub for whiteboard/presentation persistence (T5)
-4. Adopt PatchEngine for artifact mutations (T4)
+**In progress / next up (Phase T3–T6):**
+1. **T3 — MCP Agent Control System:** Replace stream interceptor with Hub MCP server. Expose all `openspace.*` commands as MCP tools. Wire `opencode.json`. Remove `%%OS{...}%%` infrastructure.
+2. **T4 — PatchEngine:** Versioned operation-based file mutations with OCC. Powers `openspace.file.patch` MCP tool.
+3. **T5 — ArtifactStore:** Atomic writes, rolling snapshots (last 20), NDJSON audit log. Wired into file MCP tools.
+4. **T6 — Voice modality:** Port openspace's 3-FSM pipeline into `openspace-voice` extension.
 
-**Short-term (Phase 5 — weeks 4-8):**
-5. Add MCP server alongside stream interceptor (T3)
-6. Port Voice modality from openspace (T6)
-7. Implement rich agent feedback loop (T7)
+**After T3–T6 complete:**
+5. **Phase 5 — Polish & Desktop:** Electron packaging, themes, performance.
+6. **T7 — Rich agent feedback loop:** Full IDE state (active file, cursor, visible lines) injected into agent context after each command.
 
 ### For openspace (Parallel Maintenance)
 
 Only if openspace continues as a separate track:
-1. Add stream interceptor as secondary path (O1)
-2. Add real Monaco editor with write support (O2)
-3. Add xterm.js terminal (O3)
-4. Electron packaging (O5)
+1. Add real Monaco editor with write support (O2)
+2. Add xterm.js terminal (O3)
+3. Electron packaging (O5)
 
 ---
 
 ## 7. Conclusion
 
 **theia-openspace** has the **right foundation** (a real IDE) and the **right agent architecture**
-(CommandRegistry as universal control plane, automatic discovery via manifest, stream interceptor
-security). It is currently missing working modalities.
+(CommandRegistry as universal control plane, MCP as the agent tool surface, automatic discovery
+via `tools/list`). Phase 4 modality surfaces are code-complete but not yet integrated. The
+stream interceptor has been retired in favor of MCP.
 
 **openspace** has **working modalities** and **better artifact architecture** (PatchEngine, ArtifactStore,
 useArtifact). It is missing a real IDE foundation.
@@ -513,13 +552,13 @@ The ideal path forward is: **theia-openspace as the primary vehicle, with opensp
 implementations ported in.** This gives you the IDE foundation from Theia and the modality
 richness from openspace — the best of both.
 
-The most impactful single improvement to make right now is: **implement working whiteboard and
-presentation widgets in theia-openspace using the patterns openspace already proved out.** This
-collapses the biggest gap between the two projects and brings theia-openspace to full modality
-parity.
+The most impactful single improvement to make right now is: **implement Phase T3 (MCP Agent
+Control System)** — which validates Phase 4 (modality widgets), establishes the canonical agent
+command path, and unblocks T4, T5, and Phase 5.
 
 ---
 
 *Document generated: 2026-02-18*  
 *Author: Oracle (ID: oracle_a7e2)*  
+*Last updated: 2026-02-18 — MCP-only decision recorded; stream interceptor retired*  
 *Cross-reference: `/Users/Shared/dev/theia-openspace` and `/Users/Shared/dev/openspace`*

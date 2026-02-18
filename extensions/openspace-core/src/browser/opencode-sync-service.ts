@@ -135,12 +135,6 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     private streamingMessages = new Map<string, { text: string }>();
 
     /**
-     * Command queue for sequential execution.
-     */
-    private commandQueue: AgentCommand[] = [];
-    private isProcessingQueue = false;
-
-    /**
      * Tracks the last command dispatched to CommandRegistry.
      * Used by E2E test hooks to verify command dispatch.
      */
@@ -465,140 +459,70 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     }
 
     /**
-     * Handle agent command events from OpenCodeProxy stream interceptor.
-     * 
-     * Commands are queued and executed sequentially to prevent race conditions.
-     * Maximum queue depth is 50 commands (warning logged if exceeded).
-     * 
-     * SECURITY: Commands are validated before queueing. Only commands in the
-     * 'openspace.*' namespace are accepted. Malformed commands are rejected.
-     * 
+     * Handle agent command events forwarded from the MCP hub via RPC.
+     *
+     * T3: Commands arrive via onAgentCommand() RPC notification (Hub → browser).
+     * Executes the command immediately via CommandRegistry, then POSTs the result
+     * back to Hub's POST /openspace/command-results (includes requestId for MCP correlation).
+     *
      * @param command - Agent command to execute
      */
     onAgentCommand(command: AgentCommand): void {
+        console.debug(`[SyncService] Agent command received: ${command.cmd}`);
+        // Execute asynchronously — must not throw from RPC callback
+        this.executeAndReport(command).catch(err => {
+            console.error('[SyncService] Unexpected error in executeAndReport:', err);
+        });
+    }
+
+    private async executeAndReport(command: AgentCommand): Promise<void> {
+        const startTime = Date.now();
+        const { cmd, args } = command;
+
+        // SECURITY: Only openspace.* commands are permitted
+        if (!cmd || typeof cmd !== 'string' || !cmd.startsWith('openspace.')) {
+            console.warn(`[SyncService] Command rejected (not in openspace namespace): ${cmd}`);
+            return;
+        }
+
+        let success = false;
+        let output: unknown;
+        let error: string | undefined;
+
         try {
-            console.debug(`[SyncService] Agent command received: ${command.cmd}`);
-
-            // SECURITY: Validate command before queueing
-            if (!this.validateAgentCommand(command)) {
-                console.warn(`[SyncService] Command validation failed, rejecting: ${command.cmd}`);
-                return;
-            }
-
-            // Add to queue
-            this.commandQueue.push(command);
-
-            // Warn if queue depth exceeds limit
-            if (this.commandQueue.length > 50) {
-                console.warn(`[SyncService] Command queue depth exceeded 50: ${this.commandQueue.length}`);
-            }
-
-            // Start processing if not already running
-            if (!this.isProcessingQueue) {
-                this.processCommandQueue();
-            }
-        } catch (error) {
-            console.error('[SyncService] Error in onAgentCommand:', error);
-            // Never throw from RPC callback
-        }
-    }
-
-    /**
-     * Validate agent command structure and security constraints.
-     * 
-     * Security Rules:
-     * 1. Command ID must be a non-empty string
-     * 2. Command ID must start with 'openspace.' (namespace allowlist)
-     * 3. Command args must be undefined, an object, or an array (not primitive types)
-     * 
-     * This prevents:
-     * - Execution of arbitrary Theia commands outside the OpenSpace namespace
-     * - Path traversal attacks via command IDs
-     * - Type confusion attacks via malformed args
-     * 
-     * @param command - Agent command to validate
-     * @returns true if command is valid and safe to execute, false otherwise
-     */
-    private validateAgentCommand(command: AgentCommand): boolean {
-        // Validate command structure
-        if (!command || typeof command !== 'object') {
-            console.warn('[SyncService] Command validation failed: not an object');
-            return false;
-        }
-
-        // Validate command ID exists and is a string
-        if (!command.cmd || typeof command.cmd !== 'string') {
-            console.warn('[SyncService] Command validation failed: cmd missing or not a string');
-            return false;
-        }
-
-        // SECURITY: Allowlist check - only openspace.* commands permitted
-        if (!command.cmd.startsWith('openspace.')) {
-            console.warn(`[SyncService] Command validation failed: not in openspace namespace: ${command.cmd}`);
-            return false;
-        }
-
-        // Validate args structure (must be undefined, object, or array - not primitive)
-        if (command.args !== undefined) {
-            const argsType = typeof command.args;
-            
-            if (argsType !== 'object') {
-                console.warn(`[SyncService] Command validation failed: args must be object or array, got: ${argsType}`);
-                return false;
-            }
-
-            // Null is typeof 'object' but we don't want it
-            if (command.args === null) {
-                console.warn('[SyncService] Command validation failed: args cannot be null');
-                return false;
-            }
-
-            // Arrays and objects are both typeof 'object', both are acceptable
-            // No need to check Array.isArray - CommandRegistry handles both
-        }
-
-        // Command passed all validation checks
-        return true;
-    }
-
-    /**
-     * Process command queue sequentially with 50ms inter-command delay.
-     * 
-     * Execution Rules:
-     * - Commands execute in FIFO order
-     * - 50ms delay between commands
-     * - Unknown commands are skipped with warning
-     * - Execution errors are logged but don't block queue
-     * - Queue processing continues until empty
-     */
-    private async processCommandQueue(): Promise<void> {
-        this.isProcessingQueue = true;
-
-        while (this.commandQueue.length > 0) {
-            const command = this.commandQueue.shift()!;
-
-            try {
-                // Check if command exists
-                if (!this.commandRegistry.getCommand(command.cmd)) {
-                    console.warn(`[SyncService] Unknown command: ${command.cmd}`);
-                    continue;
-                }
-
-                // Execute command
-                const argsArray = command.args ? (Array.isArray(command.args) ? command.args : [command.args]) : [];
+            if (!this.commandRegistry.getCommand(cmd)) {
+                error = `Unknown command: ${cmd}`;
+                console.warn(`[SyncService] ${error}`);
+            } else {
+                const argsArray = args ? (Array.isArray(args) ? args : [args]) : [];
                 this._lastDispatchedCommand = command;
-                await this.commandRegistry.executeCommand(command.cmd, ...argsArray);
-
-                console.debug(`[SyncService] Command executed: ${command.cmd}`);
-
-                // 50ms delay between commands
-                await new Promise(resolve => setTimeout(resolve, 50));
-            } catch (error) {
-                console.error(`[SyncService] Command execution failed: ${command.cmd}`, error);
-                // Continue with next command (don't block queue)
+                output = await this.commandRegistry.executeCommand(cmd, ...argsArray);
+                success = true;
+                console.debug(`[SyncService] Command executed: ${cmd}`);
             }
+        } catch (err: any) {
+            error = err?.message || String(err);
+            console.error(`[SyncService] Command execution failed: ${cmd}`, err);
         }
 
-        this.isProcessingQueue = false;
+        // POST result back to Hub for MCP correlation
+        try {
+            await fetch('/openspace/command-results', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cmd,
+                    args,
+                    success,
+                    output,
+                    error,
+                    executionTime: Date.now() - startTime,
+                    timestamp: new Date().toISOString(),
+                    requestId: command.requestId
+                })
+            });
+        } catch (fetchErr) {
+            console.debug('[SyncService] Could not post command result to Hub:', fetchErr);
+        }
     }
 }

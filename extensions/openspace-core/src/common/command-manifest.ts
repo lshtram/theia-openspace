@@ -145,4 +145,6 @@ export interface AgentCommand {
     cmd: string;
     args: unknown;
     sessionId?: string;
+    /** Correlation ID used by MCP hub to match command results to pending Promises */
+    requestId?: string;
 }

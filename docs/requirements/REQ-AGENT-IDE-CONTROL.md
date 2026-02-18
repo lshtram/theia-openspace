@@ -3,7 +3,7 @@ id: REQ-AGENT-IDE-CONTROL
 author: oracle_c4e8
 status: APPROVED
 date: 2026-02-17
-updated: 2026-02-17
+updated: 2026-02-18
 task_id: Phase-3-Agent-IDE-Control
 ---
 
@@ -25,36 +25,38 @@ Phase 3 gives the agent **equal control** of the IDE alongside the user. The age
 - Create and manage panes (split, resize, focus)
 - Create terminals, send commands, read output
 - Read and write files within the workspace
-- All through `%%OS{...}%%` blocks embedded in response streams
+- All through MCP tool calls (`openspace.*` tools via Hub MCP server)
 
-The agent goes through the **same CommandRegistry** as the user — there are no special "agent tools" or MCP indirection layers.
+The agent goes through the **same CommandRegistry** as the user — all MCP tool calls route via `CommandBridge` → `CommandRegistry` → IDE action.
 
-### Architecture (B1 — RPC Path)
+### Architecture (B1 + MCP)
 
 ```
-Agent emits %%OS{...}%% in response stream
-    |
-    v
-OpenCodeProxy (stream interceptor)
-    |
-    +---> Clean text --> Chat Widget (user sees clean text)
-    |
-    +---> onAgentCommand() RPC callback --> SyncService
-                                               |
-                                               v
-                                         CommandRegistry
-                                               |
-                                               v
-                                     IDE Action (editor, terminal, pane...)
+Agent (opencode)
+    │
+    │  MCP tool call: openspace.editor.open({ path: "src/index.ts", line: 42 })
+    ▼
+Hub MCP Server  (OpenSpaceMcpServer, @modelcontextprotocol/sdk)
+    │
+    │  routes tool name → handler → CommandBridge
+    ▼
+Theia CommandRegistry
+    │
+    │  dispatches to frontend via Theia IPC
+    ▼
+IDE Action (editor, terminal, pane...)
+    │
+    ▼
+Result returned up call stack → MCP tool response → Agent
 ```
 
 ### Scope
 
 | Category | Count | Commands |
 |----------|-------|----------|
-| **Infrastructure** | 2 tasks | PaneService, stream interceptor hardening |
+| **Infrastructure** | 2 tasks | PaneService, Hub MCP server |
 | **Commands** | 4 tasks | Pane (5), Editor (6), Terminal (5), File (4) = **20 commands** |
-| **Discovery** | 3 tasks | Manifest auto-generation, system prompt, pane state publishing |
+| **Discovery** | 3 tasks | MCP introspection, system prompt, pane state publishing |
 | **Validation** | 1 task | End-to-end agent control test |
 | **Feedback Loop** | 1 task | Command result feedback mechanism |
 
@@ -63,12 +65,12 @@ OpenCodeProxy (stream interceptor)
 ### Success Criteria
 
 1. All 20 Phase 3 commands executable from command palette
-2. Stream interceptor passes all 8+ test cases (including chunk boundary splitting)
-3. `GET /openspace/instructions` includes full command inventory with argument schemas
-4. Adding a new command auto-updates system prompt
+2. All MCP tools discoverable via `tools/list` and callable
+3. `GET /openspace/instructions` describes MCP tool usage and includes current IDE state
+4. Adding a new command auto-updates the Hub MCP server tool registry
 5. Pane state reflected in instructions
-6. Command failures fed back to agent in next system prompt
-7. E2E test: agent controls IDE via `%%OS{...}%%` pattern
+6. Command failures returned synchronously to agent via MCP tool response
+7. E2E test: agent controls IDE via MCP tool calls
 8. Build passes, 80%+ test coverage, E2E tests pass
 
 ---
@@ -81,10 +83,9 @@ OpenCodeProxy (stream interceptor)
 **So that** I can immediately see the code the agent is referencing  
 
 **Acceptance Criteria:**
-- AC-3.1.1: Agent emits `%%OS{"cmd":"openspace.editor.open","args":{"path":"src/index.ts","line":42}}%%`
-- AC-3.1.2: User sees clean text in chat (no `%%OS{...}%%` visible)
-- AC-3.1.3: Monaco editor opens `src/index.ts` and scrolls to line 42
-- AC-3.1.4: If file doesn't exist, command fails gracefully and agent is informed
+- AC-3.1.1: Agent calls MCP tool `openspace.editor.open` with `{ path: "src/index.ts", line: 42 }`
+- AC-3.1.2: Monaco editor opens `src/index.ts` and scrolls to line 42
+- AC-3.1.3: If file doesn't exist, MCP tool returns `{ success: false, error: "file not found" }` and agent is informed inline
 
 ### US-3.2: Agent Highlights Code Region
 **As a** user  
@@ -92,7 +93,7 @@ OpenCodeProxy (stream interceptor)
 **So that** I can visually identify the relevant code without searching  
 
 **Acceptance Criteria:**
-- AC-3.2.1: Agent emits `%%OS{"cmd":"openspace.editor.highlight","args":{"path":"src/index.ts","ranges":[{"startLine":42,"endLine":50}],"highlightId":"fix-1"}}%%`
+- AC-3.2.1: Agent calls MCP tool `openspace.editor.highlight` with `{ path: "src/index.ts", ranges: [{ startLine: 42, endLine: 50 }], highlightId: "fix-1" }`
 - AC-3.2.2: Lines 42-50 in `src/index.ts` are highlighted with a distinct background color
 - AC-3.2.3: Highlight persists until explicitly cleared or user presses Escape
 - AC-3.2.4: Multiple highlights can coexist with different IDs
@@ -103,11 +104,11 @@ OpenCodeProxy (stream interceptor)
 **So that** the agent can run tests, build tools, or diagnostic commands  
 
 **Acceptance Criteria:**
-- AC-3.3.1: Agent emits `%%OS{"cmd":"openspace.terminal.create","args":{"title":"test-runner"}}%%`
+- AC-3.3.1: Agent calls MCP tool `openspace.terminal.create` with `{ title: "test-runner" }`
 - AC-3.3.2: New terminal widget appears in bottom panel with title "test-runner"
-- AC-3.3.3: Agent emits `%%OS{"cmd":"openspace.terminal.send","args":{"terminalId":"test-runner","text":"npm test\n"}}%%`
+- AC-3.3.3: Agent calls MCP tool `openspace.terminal.send` with `{ terminalId: "test-runner", text: "npm test\n" }`
 - AC-3.3.4: Terminal executes `npm test`
-- AC-3.3.5: Agent can read output via `openspace.terminal.read_output`
+- AC-3.3.5: Agent can read output via MCP tool `openspace.terminal.read_output`
 
 ### US-3.4: Agent Creates Presentation and Opens It
 **As a** user  
@@ -117,9 +118,9 @@ OpenCodeProxy (stream interceptor)
 **Note:** This US is **Phase 4** scope, but included here for completeness.
 
 **Acceptance Criteria:**
-- AC-3.4.1: Agent emits `%%OS{"cmd":"openspace.presentation.create","args":{"deckPath":"arch.deck.md","title":"Architecture Overview"}}%%`
+- AC-3.4.1: Agent calls MCP tool `openspace.presentation.create` with `{ deckPath: "arch.deck.md", title: "Architecture Overview" }`
 - AC-3.4.2: File `arch.deck.md` is created with template structure
-- AC-3.4.3: Agent emits `%%OS{"cmd":"openspace.presentation.open","args":{"deckPath":"arch.deck.md"}}%%`
+- AC-3.4.3: Agent calls MCP tool `openspace.presentation.open` with `{ deckPath: "arch.deck.md" }`
 - AC-3.4.4: Presentation widget opens showing slide 1
 
 ### US-3.5: Agent Manages Pane Layout
@@ -128,10 +129,10 @@ OpenCodeProxy (stream interceptor)
 **So that** I can view multiple files/terminals/whiteboards simultaneously  
 
 **Acceptance Criteria:**
-- AC-3.5.1: Agent emits `%%OS{"cmd":"openspace.pane.open","args":{"type":"editor","contentId":"src/auth.ts","splitDirection":"vertical"}}%%`
+- AC-3.5.1: Agent calls MCP tool `openspace.pane.open` with `{ type: "editor", contentId: "src/auth.ts", splitDirection: "vertical" }`
 - AC-3.5.2: New pane opens to the right with `src/auth.ts`
-- AC-3.5.3: Agent emits `%%OS{"cmd":"openspace.pane.list","args":{}}%%`
-- AC-3.5.4: Command returns current layout including pane IDs and geometry
+- AC-3.5.3: Agent calls MCP tool `openspace.pane.list` with `{}`
+- AC-3.5.4: Tool returns current layout including pane IDs and geometry
 
 ### US-3.6: Agent Self-Corrects on Command Failure
 **As a** user  
@@ -139,10 +140,10 @@ OpenCodeProxy (stream interceptor)
 **So that** it doesn't repeat the same mistakes in subsequent responses  
 
 **Acceptance Criteria:**
-- AC-3.6.1: Agent emits `%%OS{"cmd":"openspace.editor.open","args":{"path":"missing.ts"}}%%`
-- AC-3.6.2: Command fails (file not found)
-- AC-3.6.3: Next `GET /openspace/instructions` includes failure message: "Recent: openspace.editor.open → FAILED: file not found"
-- AC-3.6.4: Agent can reference this failure in its next response
+- AC-3.6.1: Agent calls MCP tool `openspace.editor.open` with `{ path: "missing.ts" }`
+- AC-3.6.2: MCP tool returns `{ success: false, error: "file not found" }` synchronously
+- AC-3.6.3: Agent receives error inline before continuing its response and can reason about recovery
+- AC-3.6.4: Agent can reference this failure in its next reasoning step
 
 ---
 
@@ -205,7 +206,7 @@ Create `openspace-core/src/browser/pane-command-contribution.ts` and register 5 
 **Acceptance Criteria:**
 - AC-3.2.1: Commands executable from Theia command palette
 - AC-3.2.2: `openspace.pane.list` returns correct layout
-- AC-3.2.3: All commands include argument schemas for manifest auto-generation
+- AC-3.2.3: All commands include argument schemas for MCP tool registration
 - AC-3.2.4: Commands registered in DI module as `CommandContribution`
 
 **Dependencies:** FR-3.1
@@ -323,60 +324,75 @@ Register 4 file commands wrapping Theia's `FileService` and `WorkspaceService`. 
 
 ---
 
-### FR-3.6: Stream Interceptor Hardening
+### FR-3.6: MCP Tool Catalog (Phase T3 — COMPLETE)
 
 **ID:** FEAT-AGENT-006  
-**Priority:** P0 (CRITICAL)  
+**Priority:** P0  
 **Phase:** 3.6  
+**Status:** ✅ COMPLETE  
 **Owner:** Builder
 
 **Description:**  
-**Note (Architecture B1):** The stream interceptor is integrated directly into `OpenCodeProxy` (no separate file). This task covers **full test coverage and production hardening** of the interceptor.
+The Hub MCP server (`OpenSpaceMcpServer` class in `hub-mcp.ts`) exposes all Phase 3 commands as MCP tools. The `%%OS{...}%%` stream interceptor has been retired; MCP is the sole agent→IDE command path.
 
-**Requirements:**
+Every tool follows the naming convention `openspace.<modality>.<action>`. All inputs are validated via JSON Schema in the MCP `inputSchema` field before execution. Results are returned synchronously as MCP tool responses.
 
-1. **FR-3.6.1:** Implement stateful parser with state machine: `PASSTHROUGH`, `MAYBE_DELIM`, `IN_DELIM`, `IN_BLOCK`, `MAYBE_CLOSE`.
+**Phase 3 MCP Tool Catalog:**
 
-2. **FR-3.6.2:** Handle chunk boundary splitting — a `%%OS{...}%%` block split across multiple SSE chunks MUST be correctly reassembled.
+**Pane tools:**
 
-3. **FR-3.6.3:** JSON validation — malformed JSON blocks are discarded with warning log (not shown to user).
-
-4. **FR-3.6.4:** Nested braces — track brace depth to handle JSON strings containing `}` characters.
-
-5. **FR-3.6.5:** Timeout guard — if `%%OS{` is detected but no closing `}%%` within 5 seconds, discard buffer and log warning.
-
-6. **FR-3.6.6:** Error recovery — one bad block does not corrupt subsequent blocks or visible text.
-
-7. **FR-3.6.7:** Zero overhead — responses with no `%%OS{...}%%` blocks pass through unchanged with minimal performance impact.
-
-8. **FR-3.6.8:** Logging — all interceptor activity logged at DEBUG level with clear messages.
-
-**Test Matrix (Minimum 8 Cases):**
-
-| Test Case | Input | Expected Output |
+| Tool Name | Input Schema | Returns |
 |---|---|---|
-| Clean single block | `text %%OS{"cmd":"x","args":{}}%% more text` | User sees `text  more text`, command dispatched |
-| Block split across 2 chunks | Chunk 1: `text %%OS{"cmd":"x","a` / Chunk 2: `rgs":{}}%% more` | Same as above |
-| Block split at delimiter | Chunk 1: `text %` / Chunk 2: `%OS{"cmd":"x","args":{}}%% more` | Same as above |
-| Malformed JSON | `%%OS{not json}%%` | Discarded, warning logged, text continues |
-| Unclosed block | `%%OS{"cmd":"x"` (no close for 5s) | Timeout, buffer discarded, passthrough resumes |
-| Nested braces in JSON | `%%OS{"cmd":"x","args":{"data":"{}"}}%%` | Correctly parsed despite `}` in string |
-| Multiple blocks | `a %%OS{...}%% b %%OS{...}%% c` | Both commands dispatched, user sees `a  b  c` |
-| No blocks | `plain response text` | Passed through unchanged, zero overhead |
-| False positive `%%` | `100%% increase` | Passed through unchanged (no `OS{` after `%%`) |
+| `openspace.pane.open` | `{ type, contentId, title?, splitDirection? }` | `{ paneId }` |
+| `openspace.pane.close` | `{ paneId }` | `{ success }` |
+| `openspace.pane.focus` | `{ paneId }` | `{ success }` |
+| `openspace.pane.list` | `{}` | `{ panes: PaneInfo[] }` |
+| `openspace.pane.resize` | `{ paneId, width?, height? }` | `{ success }` |
+
+**Editor tools:**
+
+| Tool Name | Input Schema | Returns |
+|---|---|---|
+| `openspace.editor.open` | `{ path, line?, column?, highlight? }` | `{ success }` |
+| `openspace.editor.read_file` | `{ path, startLine?, endLine? }` | `{ content: string }` |
+| `openspace.editor.close` | `{ path }` | `{ success }` |
+| `openspace.editor.scroll_to` | `{ path, line }` | `{ success }` |
+| `openspace.editor.highlight` | `{ path, ranges[], highlightId? }` | `{ highlightId: string }` |
+| `openspace.editor.clear_highlight` | `{ highlightId }` | `{ success }` |
+
+**Terminal tools:**
+
+| Tool Name | Input Schema | Returns |
+|---|---|---|
+| `openspace.terminal.create` | `{ title?, cwd?, shellPath? }` | `{ terminalId: string }` |
+| `openspace.terminal.send` | `{ terminalId, text }` | `{ success }` |
+| `openspace.terminal.read_output` | `{ terminalId, lines? }` | `{ output: string[] }` |
+| `openspace.terminal.list` | `{}` | `{ terminals: TerminalInfo[] }` |
+| `openspace.terminal.close` | `{ terminalId }` | `{ success }` |
+
+**File tools:**
+
+| Tool Name | Input Schema | Returns |
+|---|---|---|
+| `openspace.file.read` | `{ path, startLine?, endLine? }` | `{ content: string }` |
+| `openspace.file.write` | `{ path, content }` | `{ success }` |
+| `openspace.file.list` | `{ path?, recursive? }` | `{ files: FileInfo[] }` |
+| `openspace.file.search` | `{ query, path? }` | `{ matches: SearchMatch[] }` |
+
+**Implementation:** `OpenSpaceMcpServer` class in `hub-mcp.ts`. Each tool handler calls `CommandBridge.execute(commandId, args)` which routes to Theia's `CommandRegistry` via the existing backend→frontend IPC channel.
 
 **Acceptance Criteria:**
-- AC-3.6.1: All 8+ test cases pass
-- AC-3.6.2: Edge-case tests pass (back-to-back blocks, Unicode in args)
-- AC-3.6.3: No regressions in message forwarding
-- AC-3.6.4: Performance: <5ms overhead per message on average
-- AC-3.6.5: Interceptor hardened for production use
+- AC-3.6.1: All 20 Phase 3 tools discoverable via MCP `tools/list`
+- AC-3.6.2: All tools callable and return structured results
+- AC-3.6.3: Invalid inputs rejected by JSON Schema validation before execution
+- AC-3.6.4: Tool errors returned as structured `{ success: false, error: string }` responses
+- AC-3.6.5: No performance regression: tool round-trip latency <100ms for simple operations
 
-**Dependencies:** Phase 1B1 task 1B1.3 (interceptor skeleton implemented)
+**Dependencies:** FR-3.1, FR-3.2, FR-3.3, FR-3.4, FR-3.5
 
 ---
 
-### FR-3.7: Command Manifest Auto-Generation
+### FR-3.7: BridgeContribution and Pane State Publishing
 
 **ID:** FEAT-AGENT-007  
 **Priority:** P0  
@@ -384,51 +400,30 @@ Register 4 file commands wrapping Theia's `FileService` and `WorkspaceService`. 
 **Owner:** Builder
 
 **Description:**  
-Upgrade `BridgeContribution` to build a rich manifest from all registered `openspace.*` commands and publish to Hub.
+`BridgeContribution` (`openspace-core/src/browser/bridge-contribution.ts`) is a `FrontendApplicationContribution` with two responsibilities:
+
+1. Register the frontend as the `CommandBridge` receiver for the Hub MCP server (so MCP tool calls can reach the frontend `CommandRegistry`).
+2. Publish pane state snapshots to Hub for system prompt generation.
+
+MCP tools are introspectable directly via `tools/list` — no text-based command manifest is generated or posted to the Hub. Manifest-based discovery is replaced by MCP introspection.
 
 **Requirements:**
 
-1. **FR-3.7.1:** On `FrontendApplication.onStart()`, enumerate all commands in `CommandRegistry` where `id.startsWith('openspace.')`.
+1. **FR-3.7.1:** On `FrontendApplication.onStart()`, POST to `POST /openspace/register-bridge` to register the frontend as the `CommandBridge` receiver.
 
-2. **FR-3.7.2:** Extract metadata for each command:
-   - `id` (string)
-   - `label` (string)
-   - `description` (string, from command metadata)
-   - `category` (string, optional)
-   - `arguments_schema` (JSON Schema, from command metadata)
-   - `handler` (string, for debugging)
+2. **FR-3.7.2:** Subscribe to `PaneService.onPaneLayoutChanged`. On each event, build a `PaneStateSnapshot` and POST to `POST /openspace/state`.
 
-3. **FR-3.7.3:** Serialize to `CommandManifest` format (see `command-manifest.ts`).
+3. **FR-3.7.3:** Throttle state updates — max 1 POST per second to avoid flooding Hub.
 
-4. **FR-3.7.4:** POST manifest to Hub at `POST /openspace/manifest`.
-
-5. **FR-3.7.5:** Re-publish manifest whenever a new extension loads (handles lazy-loaded extensions).
-
-**Manifest Format:**
-```typescript
-interface CommandManifest {
-  version: string;
-  commands: CommandDefinition[];
-  lastUpdated: string; // ISO 8601
-}
-
-interface CommandDefinition {
-  id: string;
-  name: string;
-  description: string;
-  category?: string;
-  arguments_schema?: CommandArgumentSchema; // JSON Schema
-  handler?: string;
-}
-```
+4. **FR-3.7.4:** On receiving a `CommandBridge.execute(commandId, args)` request from the Hub, call `CommandRegistry.executeCommand(commandId, args)` and return the result.
 
 **Acceptance Criteria:**
-- AC-3.7.1: Hub's manifest cache contains all openspace commands with full argument schemas
-- AC-3.7.2: Adding a new command and restarting Theia → manifest updates automatically
-- AC-3.7.3: Manifest includes all 20 Phase 3 commands after Phase 3 completion
-- AC-3.7.4: Manifest includes presentation/whiteboard commands after Phase 4
+- AC-3.7.1: Hub receives pane state updates when layout changes
+- AC-3.7.2: `GET /openspace/instructions` reflects current pane state
+- AC-3.7.3: State updates throttled (no more than 1/sec)
+- AC-3.7.4: CommandBridge round-trip executes commands in frontend `CommandRegistry`
 
-**Dependencies:** FR-3.2, FR-3.3, FR-3.4, FR-3.5
+**Dependencies:** FR-3.1
 
 ---
 
@@ -440,53 +435,45 @@ interface CommandDefinition {
 **Owner:** Builder
 
 **Description:**  
-Implement system prompt template in Hub's `GET /openspace/instructions` handler. The prompt teaches the LLM how to use IDE commands via `%%OS{...}%%` blocks.
+Implement system prompt template in Hub's `GET /openspace/instructions` handler. The prompt teaches the LLM how to use IDE commands via MCP tool calls. The prompt no longer enumerates command schemas — the agent discovers tools via MCP `tools/list` at runtime.
 
 **Requirements:**
 
 1. **FR-3.8.1:** Prompt structure:
    ```
    # System Instructions: Theia OpenSpace IDE Control
-   
-   You are operating inside Theia OpenSpace IDE. You can control the IDE by emitting
-   %%OS{...}%% blocks in your response. These are invisible to the user.
-   
-   ## Available Commands
-   [Generated from manifest — full command list with argument schemas]
-   
+
+   You are operating inside Theia OpenSpace IDE.
+   You have access to MCP tools prefixed with "openspace." to control the IDE.
+   Call tools/list to see all available tools and their schemas.
+
    ## Current IDE State
    [Generated from pane state — open panes, active tabs, terminals]
-   
+
    ## Examples
-   [2-3 concrete examples of %%OS{...}%% usage]
+   [2-3 concrete examples of MCP tool usage]
    ```
 
-2. **FR-3.8.2:** Command inventory section dynamically generated from manifest. Include:
-   - Command ID
-   - Description
-   - Argument schema (human-readable)
-   - Example usage
-
-3. **FR-3.8.3:** IDE state section dynamically generated from latest pane state snapshot. Include:
+2. **FR-3.8.2:** IDE state section dynamically generated from latest pane state snapshot. Include:
    - Main area: list of open editors and active file
    - Right panel: chat status
    - Bottom panel: list of terminals
    - Active pane indicator
 
-4. **FR-3.8.4:** Examples section includes 2-3 concrete use cases:
+3. **FR-3.8.3:** Examples section includes 2-3 concrete use cases:
    - Opening a file at a specific line
    - Creating a terminal and running a command
    - Creating a presentation and navigating slides
 
-5. **FR-3.8.5:** Prompt updates automatically when:
-   - Manifest changes (new command registered)
-   - Pane state changes (file opened, terminal created)
+4. **FR-3.8.4:** Prompt updates automatically when pane state changes (file opened, terminal created).
+
+5. **FR-3.8.5:** Prompt is concise — the agent discovers tool schemas via `tools/list`, so the prompt does NOT enumerate all command arguments.
 
 **Acceptance Criteria:**
 - AC-3.8.1: `GET /openspace/instructions` returns well-formatted prompt
-- AC-3.8.2: Prompt includes all available commands
+- AC-3.8.2: Prompt describes MCP tool usage (not `%%OS{...}%%` syntax)
 - AC-3.8.3: Prompt includes current IDE state
-- AC-3.8.4: Prompt updates when manifest or state changes
+- AC-3.8.4: Prompt updates when pane state changes
 - AC-3.8.5: Prompt is clear, concise, and actionable (tested with LLM)
 
 **Dependencies:** FR-3.7
@@ -501,16 +488,17 @@ Implement system prompt template in Hub's `GET /openspace/instructions` handler.
 **Owner:** Builder
 
 **Description:**  
-Full integration test verifying the entire agent control pipeline from `%%OS{...}%%` emission to IDE action.
+Full integration test verifying the entire agent control pipeline from MCP tool call to IDE action.
 
 **Requirements:**
 
-1. **FR-3.9.1:** Test covers:
-   - Agent emits `%%OS{...}%%` blocks in response stream
-   - Stream interceptor strips blocks from visible text
-   - `onAgentCommand` RPC callback fires
-   - SyncService dispatches to CommandRegistry
+1. **FR-3.9.1:** Test covers the full MCP path:
+   - Agent issues MCP tool call (`openspace.*`)
+   - Hub MCP server receives and validates tool input
+   - CommandBridge routes call to Theia backend
+   - `CommandRegistry.executeCommand()` dispatches to frontend
    - IDE action is performed (file opens, terminal creates, etc.)
+   - Result returned synchronously to agent as MCP tool response
 
 2. **FR-3.9.2:** Test scenarios:
    - Open file at line 42
@@ -521,14 +509,14 @@ Full integration test verifying the entire agent control pipeline from `%%OS{...
    - Navigate presentation slides (Phase 4)
 
 3. **FR-3.9.3:** Verification:
-   - User sees clean text (no `%%OS{...}%%` visible in chat)
+   - MCP tool calls return structured results (success/error)
    - IDE state changes as expected
-   - Command results logged to Hub
+   - Error cases return structured error responses
 
 **Acceptance Criteria:**
-- AC-3.9.1: Agent successfully controls IDE via `%%OS{...}%%` pattern
-- AC-3.9.2: Clean text shown to user
-- AC-3.9.3: Full RPC callback path verified
+- AC-3.9.1: Agent successfully controls IDE via MCP tool calls
+- AC-3.9.2: MCP tools return structured results (not fire-and-forget)
+- AC-3.9.3: Full CommandBridge path verified
 - AC-3.9.4: All test scenarios pass
 - AC-3.9.5: E2E test is automated and runs in CI
 
@@ -581,48 +569,33 @@ BridgeContribution subscribes to `PaneService.onPaneLayoutChanged` and POSTs upd
 **Owner:** Builder
 
 **Description:**  
-Implement command result feedback loop so the agent can learn from failed commands.
+With MCP, command results are returned **synchronously** as MCP tool responses. The agent receives success or failure inline before continuing its response — no deferred result log or Hub polling is required.
 
 **Requirements:**
 
-1. **FR-3.11.1:** After `SyncService` dispatches a command via `CommandRegistry.executeCommand()`, capture the result:
+1. **FR-3.11.1:** Every MCP tool call MUST return a structured result:
    ```typescript
    interface CommandResult {
      success: boolean;
      output?: string;
      error?: string;
      data?: unknown;
-     executionTime?: number;
    }
    ```
 
-2. **FR-3.11.2:** POST result to Hub at `POST /openspace/command-results` with:
-   ```typescript
-   {
-     sessionId: string;
-     commandId: string;
-     result: CommandResult;
-     timestamp: string;
-   }
-   ```
+2. **FR-3.11.2:** `CommandBridge.execute()` captures the return value from `CommandRegistry.executeCommand()` and propagates it back to the MCP tool handler, which serializes it as the MCP tool response.
 
-3. **FR-3.11.3:** Hub maintains a per-session ring buffer (last 20 results).
+3. **FR-3.11.3:** On failure, the MCP response includes a human-readable `error` string. The agent can immediately reason about recovery without waiting for a future system prompt update.
 
-4. **FR-3.11.4:** Include recent command results in `GET /openspace/instructions` response:
-   ```
-   ## Recent Command Results
-   - openspace.editor.open → SUCCESS (42ms)
-   - openspace.editor.open → FAILED: file not found (5ms)
-   - openspace.terminal.send → SUCCESS (12ms)
-   ```
+4. **FR-3.11.4:** Hub MAY maintain an optional per-session ring buffer (last 20 results) for diagnostic purposes, but this is NOT required for the agent feedback loop (results are synchronous).
 
-5. **FR-3.11.5:** Only include failures and slow commands (>500ms) in prompt to reduce noise.
+5. **FR-3.11.5:** Only persistent failures (e.g. repeated file-not-found) need to surface in `GET /openspace/instructions`. Transient failures are handled inline by the agent.
 
 **Acceptance Criteria:**
-- AC-3.11.1: Failed command → result logged in Hub
-- AC-3.11.2: Next `GET /openspace/instructions` includes failure message
-- AC-3.11.3: Agent can reference failures in subsequent responses
-- AC-3.11.4: Ring buffer prevents unbounded memory growth
+- AC-3.11.1: Every MCP tool call returns a structured result synchronously
+- AC-3.11.2: Failed tool calls return `{ success: false, error: "..." }` before agent continues
+- AC-3.11.3: Agent can reference failure and recover in same response turn
+- AC-3.11.4: No fire-and-forget tool calls (all results acknowledged)
 - AC-3.11.5: Feedback loop improves agent behavior over multiple turns
 
 **Dependencies:** FR-3.9
@@ -633,10 +606,10 @@ Implement command result feedback loop so the agent can learn from failed comman
 
 ### NFR-3.1: Security
 
-**NFR-3.1.1:** All agent commands MUST pass 3-tier validation:
-1. Structure validation (command object has `cmd` and `args` fields)
-2. Namespace validation (only `openspace.*` commands accepted)
-3. Argument validation (args match command schema)
+**NFR-3.1.1:** All MCP tool calls MUST pass 3-tier validation:
+1. Schema validation (input matches MCP `inputSchema` JSON Schema)
+2. Namespace validation (only `openspace.*` tools accepted by Hub MCP server)
+3. Argument validation (semantic checks — path safety, command existence)
 
 **NFR-3.1.2:** File commands MUST enforce workspace-root constraint. Reject:
 - Paths containing `..` (directory traversal)
@@ -647,30 +620,26 @@ Implement command result feedback loop so the agent can learn from failed comman
 - ANSI escape injection
 - Control character injection
 
-**NFR-3.1.4:** Command queue MUST enforce:
-- Max queue depth: 50 commands
-- Inter-command delay: 50ms (rate limiting)
-- Max depth warning at 50
+**NFR-3.1.4:** MCP tool call rate MUST be bounded:
+- Max concurrent tool calls: 10
+- Max tool calls per agent turn: 50
+- Max queue depth warning at 50
 
 ### NFR-3.2: Performance
 
-**NFR-3.2.1:** Stream interceptor overhead: <5ms per message on average
+**NFR-3.2.1:** MCP tool call round-trip latency: <100ms for simple commands (open file, highlight), <500ms for complex commands (list panes, search files)
 
-**NFR-3.2.2:** Command execution: <100ms for simple commands (open file, highlight), <500ms for complex commands (list panes, search files)
+**NFR-3.2.2:** Hub MCP server startup: tools registered and ready <200ms after backend start
 
-**NFR-3.2.3:** Manifest generation: <200ms on startup
-
-**NFR-3.2.4:** System prompt generation: <50ms per request
+**NFR-3.2.3:** System prompt generation: <50ms per request
 
 ### NFR-3.3: Reliability
 
-**NFR-3.3.1:** Stream interceptor MUST handle chunk boundary splitting with 100% reliability (all test cases pass)
+**NFR-3.3.1:** MCP tool calls MUST return structured results — no fire-and-forget
 
-**NFR-3.3.2:** Command dispatch MUST be sequential and FIFO (no race conditions)
+**NFR-3.3.2:** Command dispatch MUST be sequential and FIFO when called in sequence by the agent (agent awaits each result before next call)
 
-**NFR-3.3.3:** Failed commands MUST NOT crash the system (graceful degradation)
-
-**NFR-3.3.4:** Malformed `%%OS{...}%%` blocks MUST NOT corrupt visible text
+**NFR-3.3.3:** Failed commands MUST NOT crash the system (graceful degradation — return error result)
 
 ### NFR-3.4: Maintainability
 
@@ -678,17 +647,15 @@ Implement command result feedback loop so the agent can learn from failed comman
 
 **NFR-3.4.2:** All public methods MUST have JSDoc comments
 
-**NFR-3.4.3:** All commands MUST include argument schemas for auto-documentation
+**NFR-3.4.3:** All MCP tools MUST include JSON Schema `inputSchema` definitions for introspection and validation
 
 **NFR-3.4.4:** Logging MUST be comprehensive (DEBUG level) for troubleshooting
 
 ### NFR-3.5: Usability
 
-**NFR-3.5.1:** Agent commands MUST be invisible to user (no `%%OS{...}%%` visible in chat)
+**NFR-3.5.1:** Command failures MUST be returned as structured MCP tool errors (not silent failures or unformatted strings)
 
-**NFR-3.5.2:** Command failures MUST be logged but not shown as errors to user (unless catastrophic)
-
-**NFR-3.5.3:** System prompt MUST be clear and actionable for LLM (tested with GPT-4, Claude)
+**NFR-3.5.2:** System prompt MUST describe MCP tool usage clearly and be actionable for LLM (tested with GPT-4, Claude)
 
 ---
 
@@ -696,15 +663,19 @@ Implement command result feedback loop so the agent can learn from failed comman
 
 ### TC-3.1: Architecture
 
-**TC-3.1.1:** MUST follow Architecture B1 (RPC path, not Hub SSE relay)
+**TC-3.1.1:** MUST follow Architecture B1 + MCP (RPC path via Hub MCP server, not Hub SSE relay)
 
-**TC-3.1.2:** Stream interceptor MUST be integrated into `OpenCodeProxy` (not separate file)
+**TC-3.1.2:** Agent MUST use MCP tool calls (`openspace.*`) for IDE control — no stream injection, no custom out-of-band channels
 
-**TC-3.1.3:** All commands MUST go through Theia's `CommandRegistry` (no direct service calls from agent)
+**TC-3.1.3:** All commands MUST go through Theia's `CommandRegistry` (no direct service calls from agent or Hub)
+
+**TC-3.1.4:** Tool schemas MUST be validated by Hub MCP server before execution
+
+**TC-3.1.5:** Tool results MUST be returned synchronously before agent continues
 
 ### TC-3.2: Dependencies
 
-**TC-3.2.1:** Phase 1 and Phase 1B1 MUST be complete before Phase 3 begins
+**TC-3.2.1:** Phase 1 MUST be complete before Phase 3 begins
 
 **TC-3.2.2:** Phase 3 does NOT depend on Phase 2 (parallel development possible)
 
@@ -712,9 +683,9 @@ Implement command result feedback loop so the agent can learn from failed comman
 
 **TC-3.3.1:** Unit tests MUST cover all command implementations (80%+ coverage)
 
-**TC-3.3.2:** Integration tests MUST cover stream interceptor (all 8+ test cases)
+**TC-3.3.2:** MCP tool calls MUST return structured results (verified by integration tests — not fire-and-forget)
 
-**TC-3.3.3:** E2E tests MUST cover full agent control pipeline
+**TC-3.3.3:** E2E tests MUST cover full agent control pipeline (MCP call → CommandBridge → CommandRegistry → IDE action → result)
 
 **TC-3.3.4:** All tests MUST run in CI
 
@@ -724,14 +695,14 @@ Implement command result feedback loop so the agent can learn from failed comman
 
 | Risk ID | Risk | Impact | Probability | Mitigation |
 |---------|------|--------|-------------|------------|
-| R-3.1 | Chunk boundary splitting not handled correctly | HIGH | MEDIUM | Implement stateful parser with comprehensive test matrix (8+ cases) |
-| R-3.2 | Runaway command floods freeze UI | HIGH | LOW | Queue depth limit (50) + inter-command delay (50ms) |
-| R-3.3 | File commands escape workspace | CRITICAL | LOW | Workspace-root validation with path traversal detection |
+| R-3.1 | CommandBridge IPC latency exceeds SLA | MEDIUM | LOW | Benchmark early; optimize Theia RPC channel if needed |
+| R-3.2 | Runaway MCP tool calls flood CommandRegistry | HIGH | LOW | Per-turn tool call limit (50) + concurrent call cap (10) |
+| R-3.3 | File commands escape workspace | CRITICAL | LOW | Workspace-root validation with path traversal detection + symlink resolution |
 | R-3.4 | Terminal output too large crashes browser | MEDIUM | MEDIUM | Ring buffer (10K lines max) + pagination |
-| R-3.5 | LLM emits malformed JSON | LOW | HIGH | Parse error handling + warning logs + discard block |
-| R-3.6 | Command execution race conditions | MEDIUM | MEDIUM | Sequential queue (FIFO) + 50ms inter-command delay |
-| R-3.7 | Manifest auto-generation misses commands | MEDIUM | LOW | Enumerate all `openspace.*` commands on startup + re-scan on extension load |
-| R-3.8 | System prompt too long (>10K tokens) | LOW | LOW | Paginate command list or summarize less-used commands |
+| R-3.5 | MCP schema validation too strict — blocks valid calls | LOW | MEDIUM | Use permissive schemas with semantic validation in handler |
+| R-3.6 | Hub MCP server unreachable from opencode | MEDIUM | LOW | Health check endpoint + circuit breaker fallback |
+| R-3.7 | New tools not discoverable (agent uses stale `tools/list`) | MEDIUM | LOW | MCP introspection is per-session; agent calls `tools/list` on each new session |
+| R-3.8 | System prompt too long (>10K tokens) | LOW | LOW | Prompt describes MCP usage only; tool schemas are discovered via `tools/list`, not embedded in prompt |
 
 ---
 
@@ -740,7 +711,8 @@ Implement command result feedback loop so the agent can learn from failed comman
 ### External Dependencies
 
 - Theia 1.68.2 (ApplicationShell, CommandRegistry, EditorManager, TerminalService, FileService)
-- OpenCode server (for `%%OS{...}%%` stream)
+- `@modelcontextprotocol/sdk` (McpServer, StreamableHTTPServerTransport)
+- opencode server (for session management and MCP provider config)
 - Monaco editor (for decorations/highlights)
 - xterm.js (for terminal output capture)
 
@@ -749,9 +721,9 @@ Implement command result feedback loop so the agent can learn from failed comman
 | Phase 3 Task | Depends On |
 |--------------|------------|
 | 3.2 (pane commands) | 3.1 (PaneService) |
-| 3.6 (interceptor hardening) | 1B1.3 (interceptor skeleton) |
-| 3.7 (manifest auto-gen) | 3.2, 3.3, 3.4, 3.5 (all commands registered) |
-| 3.8 (system prompt) | 3.7 (manifest) |
+| 3.6 (Hub MCP tool catalog) | 3.2, 3.3, 3.4, 3.5 (all commands registered) |
+| 3.7 (BridgeContribution + state) | 3.1 |
+| 3.8 (system prompt) | 3.7 (pane state publishing) |
 | 3.9 (E2E test) | 3.6, 3.7, 3.8 |
 | 3.10 (pane state) | 3.1, 3.7 |
 | 3.11 (result feedback) | 3.9 |
@@ -767,18 +739,17 @@ Tasks 3.2, 3.3, 3.4, 3.5 are fully parallelizable (different command groups, no 
 Phase 3 is **COMPLETE** when:
 
 1. ✅ All 20 Phase 3 commands executable from command palette: `openspace.pane.*`, `openspace.editor.*`, `openspace.terminal.*`, `openspace.file.*`
-2. ✅ Stream interceptor passes all 8+ test cases (including chunk boundary splitting)
-3. ✅ Chunk boundary splitting works (blocks split across SSE events correctly reassembled)
-4. ✅ `GET /openspace/instructions` includes full command inventory with argument schemas
-5. ✅ Adding a new command → manifest regenerates → system prompt updates automatically
-6. ✅ Pane state reflected in instructions (open file → instructions show it)
-7. ✅ Command failures fed back to agent (failed command appears in next system prompt)
-8. ✅ E2E test passes: agent controls IDE via `%%OS{...}%%` pattern
-9. ✅ Build passes: `yarn build` exits 0
-10. ✅ Unit tests pass: 80%+ coverage, 100% pass rate
-11. ✅ E2E tests pass: All agent control scenarios work
-12. ✅ CodeReviewer approves with 80%+ confidence
-13. ✅ No regressions in Phase 1 functionality
+2. ✅ All MCP tools discoverable via `tools/list` and callable
+3. ✅ `GET /openspace/instructions` describes MCP tool usage and includes current IDE state
+4. ✅ Adding a new command → Hub MCP server updated → agent discovers it on next `tools/list`
+5. ✅ Pane state reflected in instructions (open file → instructions show it)
+6. ✅ Command failures returned synchronously to agent via MCP tool response
+7. ✅ E2E test passes: agent controls IDE via MCP tool calls
+8. ✅ Build passes: `yarn build` exits 0
+9. ✅ Unit tests pass: 80%+ coverage, 100% pass rate
+10. ✅ E2E tests pass: All agent control scenarios work
+11. ✅ CodeReviewer approves with 80%+ confidence
+12. ✅ No regressions in Phase 1 functionality
 
 ---
 
@@ -796,7 +767,7 @@ The following are **NOT** part of Phase 3:
 
 ## 9. References
 
-- **TECHSPEC:** `docs/architecture/TECHSPEC-THEIA-OPENSPACE.md` §6 (Agent Control System)
+- **TECHSPEC:** `docs/architecture/TECHSPEC-THEIA-OPENSPACE.md` §6 (Agent Control System — MCP Tool Protocol)
 - **WORKPLAN:** `docs/architecture/WORKPLAN.md` Phase 3 (tasks 3.1–3.11)
 - **REQ-OPENSPACE:** `docs/requirements/REQ-OPENSPACE.md` (FEAT-AGENT-001 through FEAT-AGENT-010)
 - **Presentation:** `design/deck/phase-3-requirements-review.deck.md`
@@ -823,7 +794,7 @@ The requirements were reviewed from four stakeholder perspectives:
 | ID | Gap | Perspective | Recommendation | Status |
 |----|-----|-------------|----------------|--------|
 | GAP-1 | Symlink path traversal | Security | Add symlink resolution check in file commands | 🔴 BLOCKING |
-| GAP-2 | Prompt injection via code blocks | Security | Interceptor ignores `%%OS{...}%%` inside markdown code fences | 🔴 BLOCKING |
+| GAP-2 | Prompt injection via code blocks | Security | Hub MCP server is the sole entry point for agent IDE commands — MCP is a structured side channel, never parsed from the response stream | 🔴 BLOCKING |
 | GAP-3 | Silent failures hidden from user | SRE | Add configurable notifications for command failures | 🟡 RECOMMENDED |
 | GAP-4 | No resource cleanup on session end | SRE | Close all agent-created terminals/panes when session ends | 🔴 BLOCKING |
 | GAP-5 | No user consent for agent control | Legal | Add first-run consent dialog | 🟡 RECOMMENDED |
@@ -832,19 +803,19 @@ The requirements were reviewed from four stakeholder perspectives:
 
 | ID | Gap | Perspective | Recommendation | Status |
 |----|-----|-------------|----------------|--------|
-| GAP-6 | Per-message command limit | User | Max 10 commands per agent response | 🟡 RECOMMENDED |
+| GAP-6 | Per-turn tool call limit | User | Max 50 MCP tool calls per agent turn | 🟡 RECOMMENDED |
 | GAP-7 | Undo mechanism | User | "Undo Last Agent Action" command | 🟢 OPTIONAL (Phase 4) |
 | GAP-8 | Dangerous command confirmation | Security | Confirm terminal commands with `rm`, `sudo`, etc. | 🟡 RECOMMENDED |
 | GAP-9 | Sensitive file denylist | Security | Block `.env`, `.git/`, `id_rsa`, etc. from `openspace.file.read` | 🟡 RECOMMENDED |
-| GAP-10 | Metrics/telemetry | SRE | Prometheus metrics for command execution | 🟢 OPTIONAL (Phase 4) |
-| GAP-11 | Comprehensive audit log | Legal | Log all commands to Hub with 90-day retention | 🟢 OPTIONAL (Phase 4) |
+| GAP-10 | Metrics/telemetry | SRE | Prometheus metrics for MCP tool execution | 🟢 OPTIONAL (Phase 4) |
+| GAP-11 | Comprehensive audit log | Legal | Log all MCP tool calls with 90-day retention | 🟢 OPTIONAL (Phase 4) |
 
 #### Low-Priority Additions (NICE TO HAVE for Phase 4+)
 
 | ID | Gap | Perspective | Recommendation | Status |
 |----|-----|-------------|----------------|--------|
 | GAP-12 | User documentation | User | Document agent capabilities in help system | 🟢 OPTIONAL |
-| GAP-13 | Circuit breaker for Hub | SRE | Fall back to cached manifest if Hub unreachable | 🟢 OPTIONAL |
+| GAP-13 | Circuit breaker for Hub | SRE | Fall back gracefully if Hub MCP server unreachable | 🟢 OPTIONAL |
 | GAP-14 | Sensitive data scrubber | Legal | Detect and redact secrets in terminal output | 🟢 OPTIONAL |
 | GAP-15 | ToS/EULA | Legal | Add Terms of Service for agent control | 🟢 OPTIONAL |
 
@@ -856,7 +827,7 @@ The following requirements are **ADDED** to Phase 3 based on audit findings:
 
 **NFR-3.6.1 (GAP-1):** All file commands MUST resolve symlinks and validate that the resolved path is within workspace root. Reject symlinks pointing outside workspace.
 
-**NFR-3.6.2 (GAP-2):** Stream interceptor MUST NOT extract `%%OS{...}%%` blocks that appear inside markdown code fences (` ``` ` delimited blocks). This prevents prompt injection via code examples.
+**NFR-3.6.2 (GAP-2):** The Hub MCP server is the sole entry point for agent IDE commands. MCP tool calls are a structured side channel — they are never parsed from the agent's text response stream. This eliminates prompt injection via code examples entirely.
 
 **NFR-3.6.3 (GAP-8):** Terminal commands containing dangerous patterns (`rm -rf`, `sudo`, `chmod 777`, `dd if=`, `:(){ :|:& };:`) MUST trigger a confirmation dialog before execution (configurable via settings).
 
@@ -874,7 +845,7 @@ The following requirements are **ADDED** to Phase 3 based on audit findings:
 - Highlights created via `openspace.editor.highlight`
 - Panes opened via `openspace.pane.open` (unless pinned by user)
 
-**NFR-3.7.2 (GAP-6):** Enforce per-message command limit: max 10 commands per agent response. If exceeded, log warning and ignore excess commands.
+**NFR-3.7.2 (GAP-6):** Enforce per-turn tool call limit: max 50 MCP tool calls per agent response turn. If exceeded, return an error tool response and log warning.
 
 #### NFR-3.8: User Experience (NEW)
 
@@ -899,13 +870,16 @@ Commands are validated and sandboxed to your workspace.
 **Implementation Strategy:**
 - All BLOCKING and RECOMMENDED gaps are now part of Phase 3 functional and non-functional requirements
 - OPTIONAL gaps documented in `docs/technical-debt/PHASE-3-OPTIONAL-GAPS.md` for future consideration
-- Phase 3 implementation will include security hardening from day one
+- Phase 3 implementation includes security hardening from day one
 
 ---
 
 ## 11. Approval
 
-**Status:** ✅ APPROVED (2026-02-17)
+**Status:** ✅ APPROVED (2026-02-17) — Updated for MCP architecture 2026-02-18
+
+**Architecture Change (2026-02-18):**  
+The `%%OS{...}%%` stream interceptor has been retired and replaced by MCP (Model Context Protocol) as the sole agent→IDE command path. FR-3.6 has been rewritten to document the Hub MCP tool catalog. The `onAgentCommand()` RPC callback, `SyncService` command queue, and stream interceptor parser have all been removed. All Phase 3 command implementations (3.1–3.5, 3.7, 3.8, 3.10, 3.11) remain valid — only the transport layer changed.
 
 **Audit Status:**
 - [x] User perspective (usability, value) — ✅ COMPLETE
@@ -918,7 +892,7 @@ Commands are validated and sandboxed to your workspace.
 2. ~~User review: Accept REQ document and audit findings~~ — ✅ COMPLETE (2026-02-17)
 3. ~~User decision: Implement blocking gaps now (GAP-1, GAP-2, GAP-4) or defer?~~ — ✅ DECISION: Integrate all BLOCKING + RECOMMENDED gaps into requirements
 4. ~~User approval to proceed to implementation~~ — ✅ APPROVED (2026-02-17)
-5. **Next:** Begin Phase 3 implementation in `.worktrees/phase-3-agent-control`
+5. ~~Update requirements for MCP architecture~~ — ✅ COMPLETE (2026-02-18)
 
 ---
 

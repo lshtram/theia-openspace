@@ -1,6 +1,18 @@
 // Test setup file for jsdom environment
 require('global-jsdom/register');
 
+// Register tsx extension with ts-node for React component files
+const tsNode = require('ts-node');
+tsNode.register({
+    transpileOnly: true,
+    files: true,
+    compilerOptions: {
+        jsx: 'react',
+        jsxFactory: 'React.createElement',
+        jsxFragmentFactory: 'React.Fragment'
+    }
+});
+
 // Ignore CSS imports in Node.js (Theia imports CSS from TypeScript files)
 require.extensions['.css'] = () => {};
 require.extensions['.scss'] = () => {};

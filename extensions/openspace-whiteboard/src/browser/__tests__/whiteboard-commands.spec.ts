@@ -14,6 +14,9 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+import { expect } from 'chai';
+import { WhiteboardCommandIds, WhiteboardArgumentSchemas } from '../whiteboard-command-contribution';
+
 /**
  * Tests for WhiteboardCommandContribution exports.
  * These tests verify that all 10 commands are properly defined with correct argument schemas.
@@ -22,95 +25,99 @@
 describe('WhiteboardCommandContribution Exports', () => {
     describe('Command IDs', () => {
         it('should define list command ID', () => {
-            const id = 'openspace.whiteboard.list';
-            if (id !== 'openspace.whiteboard.list') {
-                throw new Error(`Expected openspace.whiteboard.list, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.LIST).to.equal('openspace.whiteboard.list');
         });
 
         it('should define read command ID', () => {
-            const id = 'openspace.whiteboard.read';
-            if (id !== 'openspace.whiteboard.read') {
-                throw new Error(`Expected openspace.whiteboard.read, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.READ).to.equal('openspace.whiteboard.read');
         });
 
         it('should define create command ID', () => {
-            const id = 'openspace.whiteboard.create';
-            if (id !== 'openspace.whiteboard.create') {
-                throw new Error(`Expected openspace.whiteboard.create, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.CREATE).to.equal('openspace.whiteboard.create');
         });
 
         it('should define add_shape command ID', () => {
-            const id = 'openspace.whiteboard.add_shape';
-            if (id !== 'openspace.whiteboard.add_shape') {
-                throw new Error(`Expected openspace.whiteboard.add_shape, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.ADD_SHAPE).to.equal('openspace.whiteboard.add_shape');
         });
 
         it('should define update_shape command ID', () => {
-            const id = 'openspace.whiteboard.update_shape';
-            if (id !== 'openspace.whiteboard.update_shape') {
-                throw new Error(`Expected openspace.whiteboard.update_shape, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.UPDATE_SHAPE).to.equal('openspace.whiteboard.update_shape');
         });
 
         it('should define delete_shape command ID', () => {
-            const id = 'openspace.whiteboard.delete_shape';
-            if (id !== 'openspace.whiteboard.delete_shape') {
-                throw new Error(`Expected openspace.whiteboard.delete_shape, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.DELETE_SHAPE).to.equal('openspace.whiteboard.delete_shape');
         });
 
         it('should define open command ID', () => {
-            const id = 'openspace.whiteboard.open';
-            if (id !== 'openspace.whiteboard.open') {
-                throw new Error(`Expected openspace.whiteboard.open, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.OPEN).to.equal('openspace.whiteboard.open');
         });
 
         it('should define camera.set command ID', () => {
-            const id = 'openspace.whiteboard.camera.set';
-            if (id !== 'openspace.whiteboard.camera.set') {
-                throw new Error(`Expected openspace.whiteboard.camera.set, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.CAMERA_SET).to.equal('openspace.whiteboard.camera.set');
         });
 
         it('should define camera.fit command ID', () => {
-            const id = 'openspace.whiteboard.camera.fit';
-            if (id !== 'openspace.whiteboard.camera.fit') {
-                throw new Error(`Expected openspace.whiteboard.camera.fit, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.CAMERA_FIT).to.equal('openspace.whiteboard.camera.fit');
         });
 
         it('should define camera.get command ID', () => {
-            const id = 'openspace.whiteboard.camera.get';
-            if (id !== 'openspace.whiteboard.camera.get') {
-                throw new Error(`Expected openspace.whiteboard.camera.get, got ${id}`);
-            }
+            expect(WhiteboardCommandIds.CAMERA_GET).to.equal('openspace.whiteboard.camera.get');
         });
     });
 
     describe('Argument Schemas', () => {
         it('should have valid JSON Schema structure for all commands', () => {
-            // Verify schema structure exists for all 10 commands
-            const expectedCommands = [
-                'list', 'read', 'create', 'add_shape', 'update_shape', 
+            const expectedKeys = [
+                'list', 'read', 'create', 'add_shape', 'update_shape',
                 'delete_shape', 'open', 'camera_set', 'camera_fit', 'camera_get'
             ];
-            
-            if (expectedCommands.length !== 10) {
-                throw new Error(`Expected 10 commands, got ${expectedCommands.length}`);
-            }
+            expectedKeys.forEach(key => {
+                expect(WhiteboardArgumentSchemas).to.have.property(key);
+            });
+            expect(expectedKeys).to.have.length(10);
         });
 
         it('should have proper schema types', () => {
-            // Basic validation that schemas would be objects with type: 'object'
-            const schemaType = 'object';
-            if (schemaType !== 'object') {
-                throw new Error(`Expected type 'object', got '${schemaType}'`);
-            }
+            const schemaKeys = Object.keys(WhiteboardArgumentSchemas) as Array<keyof typeof WhiteboardArgumentSchemas>;
+            schemaKeys.forEach(key => {
+                expect(WhiteboardArgumentSchemas[key].type).to.equal('object');
+            });
+        });
+
+        it('should require path for read schema', () => {
+            expect(WhiteboardArgumentSchemas.read.required).to.include('path');
+        });
+
+        it('should require path for create schema', () => {
+            expect(WhiteboardArgumentSchemas.create.required).to.include('path');
+        });
+
+        it('should require path, type, x, and y for add_shape schema', () => {
+            expect(WhiteboardArgumentSchemas.add_shape.required).to.include('path');
+            expect(WhiteboardArgumentSchemas.add_shape.required).to.include('type');
+            expect(WhiteboardArgumentSchemas.add_shape.required).to.include('x');
+            expect(WhiteboardArgumentSchemas.add_shape.required).to.include('y');
+        });
+
+        it('should require path, shapeId, and props for update_shape schema', () => {
+            expect(WhiteboardArgumentSchemas.update_shape.required).to.include('path');
+            expect(WhiteboardArgumentSchemas.update_shape.required).to.include('shapeId');
+            expect(WhiteboardArgumentSchemas.update_shape.required).to.include('props');
+        });
+
+        it('should require path and shapeId for delete_shape schema', () => {
+            expect(WhiteboardArgumentSchemas.delete_shape.required).to.include('path');
+            expect(WhiteboardArgumentSchemas.delete_shape.required).to.include('shapeId');
+        });
+
+        it('should require path for open schema', () => {
+            expect(WhiteboardArgumentSchemas.open.required).to.include('path');
+        });
+
+        it('should require x, y, and zoom for camera_set schema', () => {
+            expect(WhiteboardArgumentSchemas.camera_set.required).to.include('x');
+            expect(WhiteboardArgumentSchemas.camera_set.required).to.include('y');
+            expect(WhiteboardArgumentSchemas.camera_set.required).to.include('zoom');
         });
     });
 });

@@ -2,6 +2,24 @@
 
 ## Current Milestones
 
+### Phase T3: MCP Agent Control System (2026-02-18) ✅ COMPLETE
+- **Status:** ✅ COMPLETE
+- **Build:** ✅ PASS (0 errors, all 6 extensions + backend + frontend bundles)
+- **Unit Tests:** ✅ 387/387 passing (including 12 new security gate tests)
+- **E2E:** Pre-existing infrastructure gap (OpenCode server cannot start without live Theia — same as baseline `cce9459`)
+- **What was built:**
+  - `hub-mcp.ts` — `OpenSpaceMcpServer` with 17 MCP tools (pane×4, editor×6, terminal×5, file×5)
+  - `hub.ts` rewritten — MCP mounted at `/mcp`, SSE broadcast removed, instructions rewritten
+  - `opencode-proxy.ts` — stream interceptor removed (no more `%%OS{...}%%` parsing)
+  - `opencode-sync-service.ts` — command queue removed; immediate `executeAndReport()` with requestId
+  - `bridge-contribution.ts` — SSE methods/schema imports removed; `registerBridge()` added
+  - `opencode.json` created (project root) — MCP config → `http://localhost:3000/mcp`
+  - `command-manifest.ts` — `requestId?` added to `AgentCommand`
+  - `opencode-sync-service-validation.spec.ts` — rewritten (12 security gate tests via `executeAndReport`)
+- **Key discovery:** MCP SDK import paths must use exports-map form: `@modelcontextprotocol/sdk/server/mcp.js` — NOT `dist/cjs/...` prefix
+- **Deferred:** T3.3 presentation/whiteboard tools (Phase 4 not validated), T3.7 full E2E integration test
+- **Files:** `.opencode/context/active_tasks/phase-t3-mcp/result.md`
+
 ### E2E Test Hook Fixes (2026-02-18) ✅ COMPLETE
 - **Status:** ✅ COMPLETE
 - **Tests:** 38 passed, 1 skipped (intentional memory-leak test), 0 failed

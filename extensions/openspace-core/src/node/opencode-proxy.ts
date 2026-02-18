@@ -26,7 +26,6 @@ import {
     Session,
     Message,
     MessageWithParts,
-    MessagePart,
     FileStatus,
     FileContent,
     Agent,
@@ -38,8 +37,6 @@ import {
     PermissionNotification
 } from '../common/opencode-protocol';
 import * as SDKTypes from '../common/opencode-sdk-types';
-import { AgentCommand } from '../common/command-manifest';
-import { StreamInterceptor } from './stream-interceptor';
 
 /**
  * Default OpenCode server URL.
@@ -76,8 +73,7 @@ export class OpenCodeProxy implements OpenCodeService {
     protected currentDirectory: string | undefined;
     protected isDisposed: boolean = false;
 
-    // Stream interceptor for extracting %%OS{...}%% blocks from text
-    protected readonly streamInterceptor: StreamInterceptor = new StreamInterceptor();
+    // Stream interceptor removed in T3 — agent commands now come via MCP tools
 
     constructor() {
         // Constructor body empty - dependencies injected via @inject
@@ -698,8 +694,8 @@ export class OpenCodeProxy implements OpenCodeService {
                     parts: [part]
                 };
 
-                // Intercept stream for agent commands in text parts
-                let notification: MessageNotification = {
+                // Forward message event directly (T3: no stream interception — commands come via MCP)
+                const notification: MessageNotification = {
                     type: 'partial',
                     sessionId: part.sessionID,
                     projectId: '',
@@ -707,27 +703,6 @@ export class OpenCodeProxy implements OpenCodeService {
                     data,
                     delta: delta
                 };
-
-                // If message has text parts, intercept them for agent commands
-                if (data.parts) {
-                    const { cleanParts, commands } = this.interceptStream(data.parts);
-                    
-                    // Dispatch extracted commands
-                    for (const command of commands) {
-                        try {
-                            this._client.onAgentCommand(command);
-                            this.logger.debug(`[OpenCodeProxy] Dispatched agent command: ${command.cmd}`);
-                        } catch (cmdError) {
-                            this.logger.error(`[OpenCodeProxy] Error dispatching command: ${cmdError}`);
-                        }
-                    }
-                    
-                    // Update notification with cleaned parts
-                    notification = {
-                        ...notification,
-                        data: { ...data, parts: cleanParts }
-                    };
-                }
 
                 this._client.onMessageEvent(notification);
                 this.logger.debug(`[OpenCodeProxy] Forwarded message.part.updated: ${part.messageID}, delta=${delta ? delta.length : 0} chars`);
@@ -740,44 +715,6 @@ export class OpenCodeProxy implements OpenCodeService {
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding message event: ${error}`);
         }
-    }
-
-    /**
-     * Intercept message stream to extract agent commands from %%OS{...}%% blocks.
-     */
-    private interceptStream(parts: MessagePart[]): { cleanParts: MessagePart[], commands: AgentCommand[] } {
-        const commands: AgentCommand[] = [];
-        const cleanParts: MessagePart[] = [];
-
-        for (const part of parts) {
-            if (part.type !== 'text') {
-                cleanParts.push(part);
-                continue;
-            }
-
-            if ('text' in part && typeof part.text === 'string') {
-                const { commands: extractedCommands, cleanText } = this.extractAgentCommands(part.text);
-                commands.push(...extractedCommands);
-                if (cleanText) {
-                    cleanParts.push({ ...part, text: cleanText });
-                }
-            }
-        }
-
-        return { cleanParts, commands };
-    }
-
-    /**
-     * Extract agent commands from text using the StreamInterceptor.
-     * Returns cleaned text (with command blocks removed) and extracted commands.
-     */
-    private extractAgentCommands(text: string): { commands: AgentCommand[], cleanText: string } {
-        const result = this.streamInterceptor.processChunk(text);
-        const commands: AgentCommand[] = result.blocks.map(block => ({
-            cmd: block.cmd,
-            args: block.args
-        }));
-        return { commands, cleanText: result.text };
     }
 
     /**
