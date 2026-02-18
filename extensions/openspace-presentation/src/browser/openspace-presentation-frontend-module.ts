@@ -17,7 +17,7 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     .whenTargetNamed(PresentationWidget.ID);
 
   // Register the Navigation Service
-  bind(PresentationNavigationService).toSelf();
+  bind(PresentationNavigationService).toSelf().inSingletonScope();
 
   // Register the Open Handler for .deck.md files
   bind(PresentationOpenHandler).toSelf();

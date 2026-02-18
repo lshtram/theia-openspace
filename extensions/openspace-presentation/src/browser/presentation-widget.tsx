@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
-import { injectable, postConstruct } from '@theia/core/shared/inversify';
+import { injectable, inject, optional, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
 import Reveal from 'reveal.js';
@@ -38,6 +38,60 @@ export interface DeckData {
 }
 
 /**
+ * Navigation service for programmatic slide control
+ */
+@injectable()
+export class PresentationNavigationService {
+    protected reveal: Reveal | undefined;
+
+    constructor() {
+        // Reveal instance is set via setReveal() after widget initialization
+    }
+
+    setReveal(reveal: Reveal | undefined): void {
+        this.reveal = reveal;
+    }
+
+    next(): void {
+        this.reveal?.next();
+    }
+
+    prev(): void {
+        this.reveal?.prev();
+    }
+
+    slide(h: number, v: number = 0, f: number = 0): void {
+        this.reveal?.slide(h, v, f);
+    }
+
+    getIndices(): { h: number; v: number; f?: number } {
+        return this.reveal?.getIndices() || { h: 0, v: 0 };
+    }
+
+    toggleFullscreen(container?: HTMLElement): void {
+        const element = container || document.documentElement;
+        
+        if (!document.fullscreenElement) {
+            element.requestFullscreen().catch(err => {
+                console.error('[PresentationWidget] Failed to enter fullscreen:', err);
+            });
+        } else {
+            document.exitFullscreen().catch(err => {
+                console.error('[PresentationWidget] Failed to exit fullscreen:', err);
+            });
+        }
+    }
+
+    sync(): void {
+        this.reveal?.sync();
+    }
+
+    layout(): void {
+        this.reveal?.layout();
+    }
+}
+
+/**
  * Presentation Widget - displays reveal.js presentations in a Theia widget.
  */
 @injectable()
@@ -51,6 +105,9 @@ export class PresentationWidget extends ReactWidget {
     
     // T2-22: Store the URI for findByUri comparison
     public uri: string = '';
+
+    @inject(PresentationNavigationService) @optional()
+    protected readonly navigationService!: PresentationNavigationService;
 
     constructor() {
         super();
@@ -148,6 +205,7 @@ export class PresentationWidget extends ReactWidget {
             this.revealDeck.destroy();
             this.revealDeck = undefined;
         }
+        this.navigationService?.setReveal(undefined);
         super.onBeforeDetach(msg);
     }
 
@@ -175,7 +233,12 @@ export class PresentationWidget extends ReactWidget {
             center: true
         });
 
-        this.revealDeck.initialize().catch((err: Error) => {
+        const deck = this.revealDeck;
+        deck.initialize().then(() => {
+            if (this.revealDeck === deck) {  // only wire if still current
+                this.navigationService?.setReveal(deck);
+            }
+        }).catch((err: Error) => {
             console.error('[PresentationWidget] Failed to initialize reveal.js:', err);
         });
     }
@@ -284,59 +347,5 @@ More content`}
             ],
             ALLOW_DATA_ATTR: false
         });
-    }
-}
-
-/**
- * Navigation service for programmatic slide control
- */
-@injectable()
-export class PresentationNavigationService {
-    protected reveal: Reveal | undefined;
-
-    constructor() {
-        // Reveal instance is set via setReveal() after widget initialization
-    }
-
-    setReveal(reveal: Reveal): void {
-        this.reveal = reveal;
-    }
-
-    next(): void {
-        this.reveal?.next();
-    }
-
-    prev(): void {
-        this.reveal?.prev();
-    }
-
-    slide(h: number, v: number = 0, f: number = 0): void {
-        this.reveal?.slide(h, v, f);
-    }
-
-    getIndices(): { h: number; v: number; f?: number } {
-        return this.reveal?.getIndices() || { h: 0, v: 0 };
-    }
-
-    toggleFullscreen(container?: HTMLElement): void {
-        const element = container || document.documentElement;
-        
-        if (!document.fullscreenElement) {
-            element.requestFullscreen().catch(err => {
-                console.error('[PresentationWidget] Failed to enter fullscreen:', err);
-            });
-        } else {
-            document.exitFullscreen().catch(err => {
-                console.error('[PresentationWidget] Failed to exit fullscreen:', err);
-            });
-        }
-    }
-
-    sync(): void {
-        this.reveal?.sync();
-    }
-
-    layout(): void {
-        this.reveal?.layout();
     }
 }
