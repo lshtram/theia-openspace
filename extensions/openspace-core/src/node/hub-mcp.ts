@@ -19,6 +19,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { z } from 'zod';
 import { AgentCommand } from '../common/command-manifest';
+import { isSensitiveFile } from '../common/sensitive-files';
 
 // Use exports-map compatible require paths (the package.json exports map resolves these correctly)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -62,7 +63,6 @@ export type BridgeCallback = (command: AgentCommand) => void;
  */
 export class OpenSpaceMcpServer {
 
-    private readonly mcpServer: any; // McpServer instance
     private readonly pendingCommands = new Map<string, {
         resolve: (result: CommandBridgeResult) => void;
         reject: (err: Error) => void;
@@ -77,8 +77,6 @@ export class OpenSpaceMcpServer {
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
-        this.mcpServer = new McpServer({ name: 'openspace-hub', version: '1.0.0' });
-        this.registerTools();
     }
 
     /**
@@ -112,10 +110,13 @@ export class OpenSpaceMcpServer {
     }
 
     private async handleMcpRequest(req: Request, res: Response): Promise<void> {
+        // Create a fresh McpServer per request — the SDK does not allow reuse of a connected instance.
+        const server = new McpServer({ name: 'openspace-hub', version: '1.0.0' });
+        this.registerToolsOn(server);
         // Stateless mode: a new transport per request (sessionIdGenerator: undefined)
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         try {
-            await this.mcpServer.connect(transport);
+            await server.connect(transport);
             await transport.handleRequest(req, res, req.body);
         } catch (err) {
             if (!res.headersSent) {
@@ -126,49 +127,51 @@ export class OpenSpaceMcpServer {
 
     // ─── Tool Registration ────────────────────────────────────────────────────
 
-    private registerTools(): void {
-        this.registerPaneTools();
-        this.registerEditorTools();
-        this.registerTerminalTools();
-        this.registerFileTools();
+    private registerToolsOn(server: any): void {
+        this.registerPaneTools(server);
+        this.registerEditorTools(server);
+        this.registerTerminalTools(server);
+        this.registerFileTools(server);
     }
 
     // ─── Pane Tools (4) ──────────────────────────────────────────────────────
 
-    private registerPaneTools(): void {
-        this.mcpServer.tool(
+    private registerPaneTools(server: any): void {
+        server.tool(
             'openspace.pane.open',
             'Open a pane in the IDE (editor, terminal, preview, etc.)',
             {
-                area: z.enum(['main', 'bottom', 'right', 'left']).describe('Target area to open the pane in'),
-                type: z.string().describe('Pane type (e.g. terminal, editor, preview)'),
-                label: z.string().optional().describe('Optional label for the pane tab'),
-                uri: z.string().optional().describe('Optional URI to open in the pane')
+                type: z.enum(['editor', 'terminal', 'presentation', 'whiteboard']).describe('Pane type'),
+                contentId: z.string().describe('Content identifier: file path for editor, or terminal title'),
+                title: z.string().optional().describe('Optional label for the pane tab'),
+                splitDirection: z.enum(['horizontal', 'vertical']).optional().describe('Split direction when opening alongside existing content'),
+                sourcePaneId: z.string().optional()
+                    .describe('ID of an existing pane to split relative to. When provided, the new pane ' +
+                              'is placed relative to that specific pane instead of the currently active one. ' +
+                              'Use pane.list to obtain pane IDs.'),
             },
             async (args: any) => this.executeViaBridge('openspace.pane.open', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.pane.close',
-            'Close an open pane by its ID or area',
+            'Close an open pane by its ID',
             {
-                paneId: z.string().optional().describe('ID of the pane to close'),
-                area: z.enum(['main', 'bottom', 'right', 'left']).optional().describe('Area of the pane to close')
+                paneId: z.string().describe('ID of the pane to close')
             },
             async (args: any) => this.executeViaBridge('openspace.pane.close', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.pane.focus',
-            'Focus a specific pane by ID or area',
+            'Focus a specific pane by ID',
             {
-                paneId: z.string().optional().describe('ID of the pane to focus'),
-                area: z.enum(['main', 'bottom', 'right', 'left']).optional().describe('Area of the pane to focus')
+                paneId: z.string().describe('ID of the pane to focus')
             },
             async (args: any) => this.executeViaBridge('openspace.pane.focus', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.pane.list',
             'List all open panes and their current state',
             {},
@@ -178,8 +181,8 @@ export class OpenSpaceMcpServer {
 
     // ─── Editor Tools (6) ────────────────────────────────────────────────────
 
-    private registerEditorTools(): void {
-        this.mcpServer.tool(
+    private registerEditorTools(server: any): void {
+        server.tool(
             'openspace.editor.open',
             'Open a file in the editor, optionally jumping to a specific line',
             {
@@ -190,7 +193,7 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.editor.open', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.editor.read_file',
             'Read the contents of the currently open file (or a specified file) from the editor',
             {
@@ -199,7 +202,7 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.editor.read_file', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.editor.close',
             'Close the currently active editor tab or a specified file',
             {
@@ -208,7 +211,7 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.editor.close', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.editor.scroll_to',
             'Scroll the editor to a specific line',
             {
@@ -218,22 +221,28 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.editor.scroll_to', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.editor.highlight',
             'Highlight (select) a range of lines in the editor',
             {
                 path: z.string().optional().describe('File path. Defaults to active editor.'),
-                startLine: z.number().describe('Start line of the highlight range (1-indexed)'),
-                endLine: z.number().describe('End line of the highlight range (1-indexed)')
+                ranges: z.array(z.object({
+                    startLine: z.number().describe('Start line (1-indexed)'),
+                    endLine: z.number().describe('End line (1-indexed)'),
+                    startColumn: z.number().optional().describe('Start column (1-indexed)'),
+                    endColumn: z.number().optional().describe('End column (1-indexed)')
+                })).describe('Array of line ranges to highlight'),
+                highlightId: z.string().optional().describe('Optional custom highlight ID for later removal'),
+                color: z.string().optional().describe('Highlight color (e.g. "yellow", "#ffff00")')
             },
             async (args: any) => this.executeViaBridge('openspace.editor.highlight', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.editor.clear_highlight',
-            'Clear any active highlights in the editor',
+            'Clear a named highlight in the editor',
             {
-                path: z.string().optional().describe('File path. Defaults to active editor.')
+                highlightId: z.string().describe('The highlight ID returned by editor.highlight to clear')
             },
             async (args: any) => this.executeViaBridge('openspace.editor.clear_highlight', args)
         );
@@ -241,18 +250,19 @@ export class OpenSpaceMcpServer {
 
     // ─── Terminal Tools (5) ──────────────────────────────────────────────────
 
-    private registerTerminalTools(): void {
-        this.mcpServer.tool(
+    private registerTerminalTools(server: any): void {
+        server.tool(
             'openspace.terminal.create',
             'Create a new terminal pane',
             {
-                label: z.string().optional().describe('Label for the terminal tab'),
-                cwd: z.string().optional().describe('Working directory for the terminal')
+                title: z.string().optional().describe('Title for the terminal tab'),
+                cwd: z.string().optional().describe('Working directory for the terminal'),
+                shellPath: z.string().optional().describe('Path to shell executable (must be in allowlist)')
             },
             async (args: any) => this.executeViaBridge('openspace.terminal.create', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.terminal.send',
             'Send text/command input to a terminal',
             {
@@ -262,7 +272,7 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.terminal.send', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.terminal.read_output',
             'Read recent output from a terminal',
             {
@@ -272,14 +282,14 @@ export class OpenSpaceMcpServer {
             async (args: any) => this.executeViaBridge('openspace.terminal.read_output', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.terminal.list',
             'List all open terminals and their IDs',
             {},
             async (args: any) => this.executeViaBridge('openspace.terminal.list', args)
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.terminal.close',
             'Close a terminal by its ID',
             {
@@ -291,8 +301,8 @@ export class OpenSpaceMcpServer {
 
     // ─── File Tools (5, Hub-direct) ──────────────────────────────────────────
 
-    private registerFileTools(): void {
-        this.mcpServer.tool(
+    private registerFileTools(server: any): void {
+        server.tool(
             'openspace.file.read',
             'Read the contents of a file from the workspace',
             {
@@ -301,6 +311,9 @@ export class OpenSpaceMcpServer {
             async (args: { path: string }) => {
                 try {
                     const resolved = this.resolveSafePath(args.path);
+                    if (isSensitiveFile(resolved)) {
+                        return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
+                    }
                     const content = fs.readFileSync(resolved, 'utf-8');
                     return { content: [{ type: 'text', text: content }] };
                 } catch (err) {
@@ -309,7 +322,7 @@ export class OpenSpaceMcpServer {
             }
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.file.write',
             'Write (overwrite) a file in the workspace',
             {
@@ -319,6 +332,9 @@ export class OpenSpaceMcpServer {
             async (args: { path: string; content: string }) => {
                 try {
                     const resolved = this.resolveSafePath(args.path);
+                    if (isSensitiveFile(resolved)) {
+                        return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
+                    }
                     const dir = path.dirname(resolved);
                     fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(resolved, args.content, 'utf-8');
@@ -329,7 +345,7 @@ export class OpenSpaceMcpServer {
             }
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.file.list',
             'List files and directories in a workspace directory',
             {
@@ -347,7 +363,7 @@ export class OpenSpaceMcpServer {
             }
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.file.search',
             'Search for a pattern in workspace files',
             {
@@ -369,7 +385,7 @@ export class OpenSpaceMcpServer {
             }
         );
 
-        this.mcpServer.tool(
+        server.tool(
             'openspace.file.patch',
             'Apply a search-and-replace patch to a file',
             {
@@ -380,11 +396,14 @@ export class OpenSpaceMcpServer {
             async (args: { path: string; oldText: string; newText: string }) => {
                 try {
                     const resolved = this.resolveSafePath(args.path);
+                    if (isSensitiveFile(resolved)) {
+                        return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
+                    }
                     const original = fs.readFileSync(resolved, 'utf-8');
                     if (!original.includes(args.oldText)) {
                         return { content: [{ type: 'text', text: 'Error: oldText not found in file' }], isError: true };
                     }
-                    const patched = original.replace(args.oldText, args.newText);
+                    const patched = original.split(args.oldText).join(args.newText);
                     fs.writeFileSync(resolved, patched, 'utf-8');
                     return { content: [{ type: 'text', text: `Patched ${resolved}` }] };
                 } catch (err) {

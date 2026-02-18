@@ -20,6 +20,9 @@ import { Widget, Title } from '@lumino/widgets';
 import { Emitter } from '@theia/core/lib/common/event';
 import { expect } from 'chai';
 import { PaneService, PaneServiceImpl } from '../pane-service';
+import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
+import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 
 // Mock types for testing
 interface MockWidget {
@@ -84,6 +87,7 @@ describe('PaneService', () => {
             addWidget: async () => {},
             closeWidget: async () => true,
             activateWidget: async () => true,
+            revealWidget: async () => undefined,
             onDidChangeActiveWidget: activeWidgetEmitter.event,
             onDidAddWidget: addWidgetEmitter.event,
             onDidRemoveWidget: removeWidgetEmitter.event
@@ -92,6 +96,27 @@ describe('PaneService', () => {
         // Bind PaneService
         container.bind(PaneService).to(PaneServiceImpl);
         container.bind(ApplicationShell).toConstantValue(mockShell);
+
+        // Mock TerminalService — openContent for 'terminal' delegates here
+        const mockTerminalWidget = { id: 'terminal-0', start: async () => {} } as any;
+        const mockTerminalService: Partial<TerminalService> = {
+            newTerminal: async () => mockTerminalWidget,
+            open: () => {}
+        };
+        container.bind(TerminalService).toConstantValue(mockTerminalService as TerminalService);
+
+        // Mock EditorManager — openContent for 'editor' delegates here
+        const mockEditorWidget = { id: 'code-editor-opener:file:///test.ts:1' } as any;
+        const mockEditorManager: Partial<EditorManager> = {
+            open: async () => mockEditorWidget
+        };
+        container.bind(EditorManager).toConstantValue(mockEditorManager as EditorManager);
+
+        // Mock WorkspaceService — needed for relative path resolution
+        const mockWorkspaceService: Partial<WorkspaceService> = {
+            tryGetRoots: () => []
+        };
+        container.bind(WorkspaceService).toConstantValue(mockWorkspaceService as WorkspaceService);
         
         paneService = container.get(PaneService);
     });
@@ -139,6 +164,59 @@ describe('PaneService', () => {
 
             // Assert
             expect(result.success).to.be.true;
+        });
+
+        it('should pass ref widget when sourcePaneId resolves to a known widget', async () => {
+            const refWidget = { id: 'source-pane-123' } as any;
+            (mockShell as any).getWidgetById = (id: string) =>
+                id === 'source-pane-123' ? refWidget : undefined;
+
+            let capturedWidgetOptions: any;
+            const mockEditorWidget = { id: 'new-editor-1' } as any;
+            // Override the editorManager on the service instance
+            const service = paneService as any;
+            service.editorManager = {
+                open: async (_uri: any, opts: any) => {
+                    capturedWidgetOptions = opts?.widgetOptions;
+                    return mockEditorWidget;
+                }
+            };
+
+            const result = await paneService.openContent({
+                type: 'editor',
+                contentId: '/workspace/foo.ts',
+                sourcePaneId: 'source-pane-123',
+                splitDirection: 'vertical',
+            });
+
+            expect(result.success).to.be.true;
+            expect(capturedWidgetOptions.ref).to.equal(refWidget);
+            expect(capturedWidgetOptions.mode).to.equal('split-right');
+        });
+
+        it('should ignore sourcePaneId when it does not resolve to a known widget', async () => {
+            (mockShell as any).getWidgetById = (_id: string) => undefined;
+
+            let capturedWidgetOptions: any;
+            const mockEditorWidget = { id: 'new-editor-2' } as any;
+            const service = paneService as any;
+            service.editorManager = {
+                open: async (_uri: any, opts: any) => {
+                    capturedWidgetOptions = opts?.widgetOptions;
+                    return mockEditorWidget;
+                }
+            };
+
+            const result = await paneService.openContent({
+                type: 'editor',
+                contentId: '/workspace/bar.ts',
+                sourcePaneId: 'nonexistent-pane',
+                splitDirection: 'vertical',
+            });
+
+            expect(result.success).to.be.true;
+            expect(capturedWidgetOptions?.ref).to.be.undefined;
+            expect(capturedWidgetOptions?.mode).to.equal('split-right');
         });
     });
 

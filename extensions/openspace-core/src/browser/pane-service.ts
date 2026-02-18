@@ -19,6 +19,12 @@ import { Emitter, Event } from '@theia/core/lib/common/event';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { Widget } from '@lumino/widgets';
+import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
+import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
+import { EditorWidget } from '@theia/editor/lib/browser';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import { URI } from '@theia/core/lib/common/uri';
+import * as path from 'path';
 
 /**
  * Argument types for PaneService operations.
@@ -28,6 +34,10 @@ export interface PaneOpenArgs {
     contentId: string;
     title?: string;
     splitDirection?: 'horizontal' | 'vertical';
+    /** Optional: ID of an existing pane to split relative to. When provided and the
+     *  widget is found, the new pane is opened relative to it (respecting splitDirection).
+     *  If the widget is not found, falls back to the currently active widget. */
+    sourcePaneId?: string;
 }
 
 export interface PaneCloseArgs {
@@ -153,6 +163,15 @@ export class PaneServiceImpl implements PaneService {
     @inject(ApplicationShell)
     private readonly shell!: ApplicationShell;
 
+    @inject(TerminalService)
+    private readonly terminalService!: TerminalService;
+
+    @inject(EditorManager)
+    private readonly editorManager!: EditorManager;
+
+    @inject(WorkspaceService)
+    private readonly workspaceService!: WorkspaceService;
+
     // Event emitters
     private readonly _onPaneLayoutChanged = new Emitter<PaneStateSnapshot>();
     
@@ -205,43 +224,64 @@ export class PaneServiceImpl implements PaneService {
         console.info(`[PaneService] Operation: openContent(${args.type}, ${args.contentId})`);
 
         try {
-            const paneId = `${args.type}-${args.contentId}-${Date.now()}`;
-            
-            // Determine target area based on content type
+            if (args.type === 'editor') {
+                // Build the URI correctly: absolute paths use fromFilePath, relative paths resolve against workspace root
+                let uri: URI;
+                if (path.isAbsolute(args.contentId)) {
+                    uri = URI.fromFilePath(args.contentId);
+                } else if (args.contentId.startsWith('file://')) {
+                    uri = new URI(args.contentId);
+                } else {
+                    // Relative path — resolve against workspace root
+                    const roots = this.workspaceService.tryGetRoots();
+                    const workspaceRoot = roots.length > 0
+                        ? roots[0].resource.path.toString()
+                        : '/';
+                    uri = URI.fromFilePath(path.join(workspaceRoot, args.contentId));
+                }
+
+                // Resolve optional source pane for targeted splitting
+                const refWidget = args.sourcePaneId
+                    ? this.shell.getWidgetById(args.sourcePaneId) ?? undefined
+                    : undefined;
+
+                const widgetOptions: ApplicationShell.WidgetOptions = {
+                    area: 'main',
+                    mode: args.splitDirection === 'vertical' ? 'split-right' :
+                          args.splitDirection === 'horizontal' ? 'split-bottom' : 'tab-after',
+                    ...(refWidget ? { ref: refWidget } : {}),
+                };
+                const editorWidget = await this.editorManager.open(uri, { mode: 'activate', widgetOptions });
+                const paneId = editorWidget.id;
+                this.trackAgentPane(paneId, false);
+                this.emitLayoutChange();
+                return { success: true, paneId };
+            }
+
+            if (args.type === 'terminal') {
+                // Open a new terminal in the bottom panel
+                const options: any = {
+                    title: args.title || args.contentId || 'Agent Terminal',
+                };
+                const widget = await this.terminalService.newTerminal(options);
+                await widget.start();
+                this.terminalService.open(widget);
+                const paneId = widget.id;
+                this.trackAgentPane(paneId, false);
+                this.emitLayoutChange();
+                return { success: true, paneId };
+            }
+
+            // For other types (presentation, whiteboard), fall back to a label pane
             const area = this.getAreaForType(args.type);
-            
-            // Build widget options
             const widgetOptions: ApplicationShell.WidgetOptions = {
                 area,
-                mode: args.splitDirection === 'vertical' ? 'split-right' : 
+                mode: args.splitDirection === 'vertical' ? 'split-right' :
                       args.splitDirection === 'horizontal' ? 'split-bottom' : 'tab-after',
             };
-
-            // For editors, we use the editor manager
-            if (args.type === 'editor') {
-                // Try to open via Theia's file system
-                const openerService = (window as any).theia?.plugin?.ide?.workspace;
-                if (openerService) {
-                    // Open file using Theia's opener service
-                    console.debug(`[PaneService] Opening editor for: ${args.contentId}`);
-                }
-            }
-
-            // For terminals, try to use terminal service
-            if (args.type === 'terminal') {
-                console.debug(`[PaneService] Opening terminal: ${args.title || args.contentId}`);
-            }
-
-            // For other types, create a placeholder widget
-            console.debug(`[PaneService] Opening ${args.type} in ${area} area with options:`, widgetOptions);
-
-            // Emit layout change event
+            console.debug(`[PaneService] No handler for type '${args.type}', area=${area}`, widgetOptions);
             this.emitLayoutChange();
-
-            // Track this as an agent-created pane
-            this.trackAgentPane(paneId, false);
-
-            return { success: true, paneId };
+            return { success: false };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             console.error(`[PaneService] Error opening content: ${errorMsg}`);
@@ -294,6 +334,8 @@ export class PaneServiceImpl implements PaneService {
             }
 
             await this.shell.activateWidget(widget.id);
+            // Reveal in case the panel is collapsed
+            await this.shell.revealWidget(widget.id);
             
             // Emit layout change event
             this.emitLayoutChange();
@@ -437,9 +479,9 @@ export class PaneServiceImpl implements PaneService {
         // Get title
         const title = widget.title?.label || widget.id;
         
-        // Determine type from widget ID
+        // Determine type from widget class/ID
         let type: TabInfo['type'] = 'other';
-        if (widget.id.startsWith('editor-') || widget.id.includes('file')) {
+        if (widget instanceof EditorWidget) {
             type = 'editor';
         } else if (widget.id.includes('terminal')) {
             type = 'terminal';
@@ -488,6 +530,9 @@ export class PaneServiceImpl implements PaneService {
      * Determine widget type from widget ID.
      */
     private determineWidgetType(widget: Widget): TabInfo['type'] {
+        if (widget instanceof EditorWidget) {
+            return 'editor';
+        }
         const id = widget.id.toLowerCase();
         
         if (id.includes('terminal') || id.includes('term')) {
@@ -498,9 +543,6 @@ export class PaneServiceImpl implements PaneService {
         }
         if (id.includes('whiteboard')) {
             return 'whiteboard';
-        }
-        if (id.includes('editor') || id.includes('file')) {
-            return 'editor';
         }
         
         return 'other';
