@@ -164,9 +164,10 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     // Auto-scroll during streaming — fire after paint so scrollHeight is current
     React.useEffect(() => {
         if (!isStreaming || isUserScrollingRef.current) return;
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
             bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
         });
+        return () => cancelAnimationFrame(rafId);
     }, [streamingData, isStreaming]);
 
     // Scroll to bottom on initial mount so the most recent messages are visible
