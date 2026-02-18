@@ -22,8 +22,7 @@ import {
     SessionNotification,
     MessageNotification,
     FileNotification,
-    PermissionNotification,
-    TextMessagePart
+    PermissionNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -313,15 +312,14 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
     /**
      * Extract text delta from message parts.
-     * Returns concatenated text from all TextMessagePart parts.
+     * Returns concatenated text from all text-type parts (SDK Part union type).
      */
     private extractTextDelta(parts: Array<any>): string {
         let text = '';
 
         for (const part of parts) {
-            if (part.type === 'text') {
-                const textPart = part as TextMessagePart;
-                text += textPart.text;
+            if (part.type === 'text' && 'text' in part) {
+                text += part.text;
             }
         }
 

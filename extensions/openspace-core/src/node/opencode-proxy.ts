@@ -27,7 +27,6 @@ import {
     Message,
     MessageWithParts,
     MessagePart,
-    TextMessagePart,
     FileStatus,
     FileContent,
     Agent,
@@ -714,15 +713,17 @@ export class OpenCodeProxy implements OpenCodeService {
             }
 
             // Extract %%OS{...}%% blocks from text using state machine
-            const textPart = part as TextMessagePart;
-            const { commands: extractedCommands, cleanText } = this.extractAgentCommands(textPart.text);
-            
-            // Add extracted commands to result
-            commands.push(...extractedCommands);
+            // Check if part has 'text' property (SDK TextPart type)
+            if ('text' in part && typeof part.text === 'string') {
+                const { commands: extractedCommands, cleanText } = this.extractAgentCommands(part.text);
+                
+                // Add extracted commands to result
+                commands.push(...extractedCommands);
 
-            // Add cleaned text part (only if non-empty)
-            if (cleanText) {
-                cleanParts.push({ type: 'text', text: cleanText });
+                // Add cleaned text part (only if non-empty)
+                if (cleanText) {
+                    cleanParts.push({ ...part, text: cleanText });
+                }
             }
         }
 

@@ -94,7 +94,7 @@ export interface ImageMessagePart {
  * Props for the PromptInput component.
  */
 export interface PromptInputProps {
-    onSend: (parts: MessagePart[]) => void;
+    onSend: (parts: MessagePart[]) => void | Promise<void>;
     disabled?: boolean;
     placeholder?: string;
 }
