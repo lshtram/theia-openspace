@@ -797,4 +797,52 @@ export class OpenCodeProxy implements OpenCodeService {
             this.logger.error(`[OpenCodeProxy] Error forwarding permission event: ${error}`);
         }
     }
+
+    /**
+     * T1-2/T1-3: Validate a file path by resolving symlinks on the Node backend.
+     * Returns the canonically-resolved path if it is within the workspace root.
+     */
+    async validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> {
+        const path = require('path') as typeof import('path');
+        const fs = require('fs') as typeof import('fs');
+        
+        try {
+            // Attempt to resolve symlinks on the real filesystem
+            let resolvedPath: string;
+            try {
+                resolvedPath = await fs.promises.realpath(filePath);
+            } catch (e) {
+                // Path doesn't exist yet (e.g. createFile for a new file)
+                // Resolve the parent directory instead
+                const parentDir = path.dirname(filePath);
+                const fileName = path.basename(filePath);
+                let resolvedParent: string;
+                try {
+                    resolvedParent = await fs.promises.realpath(parentDir);
+                } catch {
+                    // Parent doesn't exist either — allow it (new nested path)
+                    resolvedParent = path.normalize(parentDir);
+                }
+                resolvedPath = path.join(resolvedParent, fileName);
+            }
+
+            // Normalize workspace root for comparison
+            const normalizedRoot = path.normalize(workspaceRoot);
+            const normalizedResolved = path.normalize(resolvedPath);
+
+            if (!normalizedResolved.startsWith(normalizedRoot + path.sep) && normalizedResolved !== normalizedRoot) {
+                return {
+                    valid: false,
+                    error: `Path resolves outside workspace: ${filePath} → ${resolvedPath}`
+                };
+            }
+
+            return { valid: true, resolvedPath };
+        } catch (err) {
+            return {
+                valid: false,
+                error: `Path validation error: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
+    }
 }

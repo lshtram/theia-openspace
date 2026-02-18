@@ -14,13 +14,14 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { injectable, inject } from '@theia/core/shared/inversify';
+import { injectable, inject, optional } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
 import * as path from 'path';
 import { isSensitiveFile } from '../common/sensitive-files';
+import { OpenCodeService } from '../common/opencode-protocol';
 
 /**
  * File information returned by list command.
@@ -181,6 +182,9 @@ export class FileCommandContribution implements CommandContribution {
     @inject(WorkspaceService)
     private readonly workspaceService!: WorkspaceService;
 
+    @inject(OpenCodeService) @optional()
+    private readonly openCodeService?: OpenCodeService;
+
     /**
      * Validate a file path against workspace root.
      * Implements GAP-1 (path traversal) and symlink protection per §17.1.
@@ -234,10 +238,15 @@ export class FileCommandContribution implements CommandContribution {
                 return null;
             }
 
-            // T1-3: Warning about symlinks (cannot fully validate in browser)
-            const containsSymlinkIndicators = filePath.includes('..') || filePath.includes('~');
-            if (containsSymlinkIndicators) {
-                console.warn(`[FileCommand] Symlink-like path detected, manual verification recommended: ${filePath}`);
+            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
+            if (this.openCodeService) {
+                const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
+                if (!result.valid) {
+                    console.warn(`[FileCommand] Path rejected by symlink check: ${result.error}`);
+                    return null;
+                }
+                // Use the canonically resolved path going forward
+                return result.resolvedPath || normalizedPath;
             }
 
             // Step 5: Check against sensitive file patterns (§17.4) - using shared module

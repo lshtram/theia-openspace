@@ -30,6 +30,7 @@ import {
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import { OpenCodeService } from '../../common/opencode-protocol';
 
 // Minimal mock services for testing path validation logic
 class MockWorkspaceService {
@@ -70,8 +71,19 @@ class MockEditorManager {
     get all() { return []; }
 }
 
+// Mock OpenCodeService for validatePath tests
+class MockOpenCodeService {
+    validatePathCalls: Array<{ filePath: string; workspaceRoot: string }> = [];
+    validatePathResult: { valid: boolean; resolvedPath?: string; error?: string } = { valid: true, resolvedPath: undefined };
+
+    async validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> {
+        this.validatePathCalls.push({ filePath, workspaceRoot });
+        return this.validatePathResult;
+    }
+}
+
 // Simple binding that doesn't require full interface implementation
-function createTestContainer() {
+function createTestContainer(openCodeService?: MockOpenCodeService) {
     const container = new Container();
     
     // Use actual service identifiers for inversify, but cast to any to avoid
@@ -79,6 +91,9 @@ function createTestContainer() {
     container.bind(WorkspaceService).toConstantValue(new MockWorkspaceService() as unknown as WorkspaceService);
     container.bind(FileService).toConstantValue(new MockFileService() as unknown as FileService);
     container.bind(EditorManager).toConstantValue(new MockEditorManager() as unknown as EditorManager);
+    if (openCodeService) {
+        container.bind(OpenCodeService).toConstantValue(openCodeService as unknown as OpenCodeService);
+    }
     return container;
 }
 
@@ -231,6 +246,50 @@ describe('EditorCommandContribution', () => {
         it('should reject .aws credentials', async () => {
             const result = await contribution['validatePath']('.aws/credentials');
             expect(result).to.be.null;
+        });
+    });
+
+    describe('validatePath with OpenCodeService (symlink resolution)', () => {
+        let mockOpenCodeService: MockOpenCodeService;
+        let contributionWithService: EditorCommandContribution;
+
+        beforeEach(() => {
+            mockOpenCodeService = new MockOpenCodeService();
+            const containerWithService = createTestContainer(mockOpenCodeService);
+            containerWithService.bind(EditorCommandContribution).toSelf();
+            contributionWithService = containerWithService.get(EditorCommandContribution);
+        });
+
+        it('should call openCodeService.validatePath with the normalized path and workspace root', async () => {
+            mockOpenCodeService.validatePathResult = { valid: true, resolvedPath: '/workspace/test-project/src/index.ts' };
+
+            const result = await contributionWithService['validatePath']('src/index.ts');
+
+            expect(result).to.not.be.null;
+            expect(mockOpenCodeService.validatePathCalls).to.have.length(1);
+            const call = mockOpenCodeService.validatePathCalls[0];
+            expect(call.filePath).to.include('src/index.ts');
+            expect(call.workspaceRoot).to.include('/workspace/test-project');
+        });
+
+        it('should return null when openCodeService.validatePath returns invalid', async () => {
+            mockOpenCodeService.validatePathResult = {
+                valid: false,
+                error: 'Path resolves outside workspace: /symlink/path → /etc/passwd'
+            };
+
+            const result = await contributionWithService['validatePath']('src/index.ts');
+
+            expect(result).to.be.null;
+        });
+
+        it('should use resolvedPath from openCodeService when provided', async () => {
+            const resolvedPath = '/workspace/test-project/actual/path/file.ts';
+            mockOpenCodeService.validatePathResult = { valid: true, resolvedPath };
+
+            const result = await contributionWithService['validatePath']('src/symlink-dir/file.ts');
+
+            expect(result).to.equal(resolvedPath);
         });
     });
 

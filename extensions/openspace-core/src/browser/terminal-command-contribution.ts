@@ -14,7 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
+import { injectable, inject, optional, postConstruct } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
@@ -22,6 +22,7 @@ import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget
 import { TerminalRingBuffer, sanitizeOutput, isDangerous } from './terminal-ring-buffer';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import * as path from 'path';
+import { OpenCodeService } from '../common/opencode-protocol';
 
 /**
  * Allowlist of permitted shell executables.
@@ -205,6 +206,9 @@ export class TerminalCommandContribution implements CommandContribution {
     @inject(WorkspaceService)
     private readonly workspaceService!: WorkspaceService;
 
+    @inject(OpenCodeService) @optional()
+    private readonly openCodeService?: OpenCodeService;
+
     private readonly ringBuffer: TerminalRingBuffer;
 
     /**
@@ -366,17 +370,32 @@ export class TerminalCommandContribution implements CommandContribution {
                     
                     // Normalize and resolve the cwd path
                     const normalizedCwd = path.normalize(args.cwd);
+                    const normalizedRoot = path.normalize(workspaceRoot);
                     
                     // Check if cwd is within workspace root
-                    // Note: In browser context, we can't use fs.realpath(), so we do basic path check
-                    if (!normalizedCwd.startsWith(workspaceRoot) && 
-                        !normalizedCwd.replace(/[\\/]/g, '/').startsWith(workspaceRoot.replace(/[\\/]/g, '/'))) {
+                    if (!normalizedCwd.startsWith(normalizedRoot) && 
+                        !normalizedCwd.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
                         console.warn(`[TerminalCommand] Working directory outside workspace: ${args.cwd}`);
                         return {
                             success: false,
                             terminalId: '',
                             error: `Working directory must be within workspace: ${args.cwd}`
                         };
+                    }
+
+                    // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
+                    if (this.openCodeService) {
+                        const result = await this.openCodeService.validatePath(normalizedCwd, normalizedRoot);
+                        if (!result.valid) {
+                            console.warn(`[TerminalCommand] cwd rejected by symlink check: ${result.error}`);
+                            return {
+                                success: false,
+                                terminalId: '',
+                                error: `Working directory rejected: ${result.error}`
+                            };
+                        }
+                        // Use canonically resolved cwd going forward
+                        args = { ...args, cwd: result.resolvedPath || normalizedCwd };
                     }
                 }
             }
@@ -396,6 +415,9 @@ export class TerminalCommandContribution implements CommandContribution {
 
             const widget = await this.terminalService.newTerminal(options);
             await widget.start();
+
+            // Attach the widget to the shell so it appears in the UI (bottom panel)
+            this.terminalService.open(widget);
 
             // Track the new terminal
             this.trackTerminal(widget);
@@ -442,7 +464,9 @@ export class TerminalCommandContribution implements CommandContribution {
             }
 
             // Send the text to the terminal (only if not dangerous)
-            widget.sendText(args.text + '\r');
+            // Strip any trailing newline/carriage-return before appending \r to avoid double Enter
+            const textToSend = args.text.replace(/[\r\n]+$/, '');
+            widget.sendText(textToSend + '\r');
 
             return {
                 success: true,
@@ -523,11 +547,8 @@ export class TerminalCommandContribution implements CommandContribution {
                 return { success: false };
             }
 
-            // Close the widget
+            // Close the widget — onDidDispose fires and calls untrackTerminal automatically
             await widget.close();
-
-            // Untrack the terminal
-            this.untrackTerminal(args.terminalId);
 
             return { success: true };
         } catch (error) {

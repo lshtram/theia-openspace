@@ -208,6 +208,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Model methods
     getAvailableModels(directory?: string): Promise<ProviderWithModels[]>;
+
+    // Path validation (Node-side, uses fs.realpath for symlink resolution)
+    validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }>;
 }
 
 /**

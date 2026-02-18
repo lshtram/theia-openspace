@@ -14,7 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { injectable, inject } from '@theia/core/shared/inversify';
+import { injectable, inject, optional } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { EditorManager, EditorOpenerOptions } from '@theia/editor/lib/browser/editor-manager';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
@@ -25,6 +25,7 @@ import * as monaco from '@theia/monaco-editor-core';
 import { Position, EditorWidget } from '@theia/editor/lib/browser';
 import * as path from 'path';
 import { isSensitiveFile } from '../common/sensitive-files';
+import { OpenCodeService } from '../common/opencode-protocol';
 
 /**
  * Range interface for highlighting code regions.
@@ -60,7 +61,7 @@ export interface EditorOpenArgs {
  * Arguments for openspace.editor.scroll_to command.
  */
 export interface EditorScrollArgs {
-    path: string;
+    path?: string;
     line: number;
 }
 
@@ -68,7 +69,7 @@ export interface EditorScrollArgs {
  * Arguments for openspace.editor.highlight command.
  */
 export interface EditorHighlightArgs {
-    path: string;
+    path?: string;
     ranges: Range[];
     highlightId?: string;
     color?: string;
@@ -85,14 +86,14 @@ export interface EditorClearHighlightArgs {
  * Arguments for openspace.editor.read_file command.
  */
 export interface EditorReadFileArgs {
-    path: string;
+    path?: string;
 }
 
 /**
  * Arguments for openspace.editor.close command.
  */
 export interface EditorCloseArgs {
-    path: string;
+    path?: string;
 }
 
 /**
@@ -269,6 +270,9 @@ export class EditorCommandContribution implements CommandContribution {
     @inject(WorkspaceService)
     private readonly workspaceService!: WorkspaceService;
 
+    @inject(OpenCodeService) @optional()
+    private readonly openCodeService?: OpenCodeService;
+
     /**
      * Map of tracked highlights for cleanup (GAP-4).
      */
@@ -311,8 +315,7 @@ export class EditorCommandContribution implements CommandContribution {
             }
 
             // Step 4: Check for symlink traversal outside workspace
-            // T1-3: In browser context, we cannot resolve symlinks with fs.realpath()
-            // We detect common symlink patterns and warn the user
+            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
             const pathComponents = normalizedPath.split(path.sep);
             for (const component of pathComponents) {
                 if (component === '..') {
@@ -329,11 +332,15 @@ export class EditorCommandContribution implements CommandContribution {
                 return null;
             }
 
-            // T1-3: Warning about symlinks (cannot fully validate in browser)
-            // In a full implementation, this would call backend to resolve symlinks
-            const containsSymlinkIndicators = filePath.includes('..') || filePath.includes('~');
-            if (containsSymlinkIndicators) {
-                console.warn(`[EditorCommand] Symlink-like path detected, manual verification recommended: ${filePath}`);
+            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
+            if (this.openCodeService) {
+                const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
+                if (!result.valid) {
+                    console.warn(`[EditorCommand] Path rejected by symlink check: ${result.error}`);
+                    return null;
+                }
+                // Use the canonically resolved path going forward
+                return result.resolvedPath || normalizedPath;
             }
 
             // Step 5: Check against sensitive file patterns (§17.4) - using shared module
@@ -454,10 +461,7 @@ export class EditorCommandContribution implements CommandContribution {
                 return { success: false };
             }
 
-            // Create URI for the file
-            const uri = new URI(validatedPath);
-
-            // Build editor options with selection
+            // Create URI for the file and open the editor
             const options: EditorOpenerOptions = {
                 mode: 'activate',
             };
@@ -465,15 +469,15 @@ export class EditorCommandContribution implements CommandContribution {
             if (args.line !== undefined) {
                 options.selection = {
                     start: {
-                        line: args.line,
-                        character: args.column || 1
+                        line: args.line - 1,
+                        character: args.column !== undefined ? args.column - 1 : 0
                     }
                 };
                 options.revealOption = 'centerIfOutsideViewport';
             }
 
             // Open the editor
-            const editorWidget = await this.editorManager.open(uri, options);
+            const editorWidget = await this.editorManager.open(URI.fromFilePath(validatedPath), options);
 
             // Get editor ID
             const editorId = editorWidget.id;
@@ -490,23 +494,27 @@ export class EditorCommandContribution implements CommandContribution {
      */
     private async scrollToLine(args: EditorScrollArgs): Promise<{ success: boolean }> {
         try {
-            // Validate path first
-            const validatedPath = await this.validatePath(args.path);
-            if (!validatedPath) {
-                return { success: false };
+            let editorWidget: EditorWidget | undefined;
+
+            if (args.path) {
+                // Validate path first
+                const validatedPath = await this.validatePath(args.path);
+                if (!validatedPath) {
+                    return { success: false };
+                }
+                editorWidget = await this.editorManager.getByUri(URI.fromFilePath(validatedPath));
+            } else {
+                editorWidget = this.editorManager.currentEditor;
             }
 
-            const uri = new URI(validatedPath);
-            const editorWidget = await this.editorManager.getByUri(uri);
-
             if (!editorWidget) {
-                console.warn(`[EditorCommand] Editor not found for path: ${args.path}`);
+                console.warn(`[EditorCommand] Editor not found for scroll_to`);
                 return { success: false };
             }
 
             const monacoEditor = MonacoEditor.get(editorWidget);
             if (monacoEditor) {
-                const position: Position = { line: args.line, character: 1 };
+                const position: Position = { line: args.line - 1, character: 0 };
                 monacoEditor.revealPosition(position, { vertical: 'centerIfOutsideViewport' });
             }
             return { success: true };
@@ -521,16 +529,25 @@ export class EditorCommandContribution implements CommandContribution {
      */
     private async highlightCode(args: EditorHighlightArgs): Promise<{ success: boolean; highlightId: string }> {
         try {
-            // Validate path first
-            const validatedPath = await this.validatePath(args.path);
-            if (!validatedPath) {
-                return { success: false, highlightId: '' };
+            let editorWidget: EditorWidget | undefined;
+
+            if (args.path) {
+                // Validate path first
+                const validatedPath = await this.validatePath(args.path);
+                if (!validatedPath) {
+                    return { success: false, highlightId: '' };
+                }
+                editorWidget = await this.editorManager.open(URI.fromFilePath(validatedPath), {
+                    mode: 'reveal'
+                });
+            } else {
+                editorWidget = this.editorManager.currentEditor;
             }
 
-            const uri = new URI(validatedPath);
-            const editorWidget = await this.editorManager.open(uri, {
-                mode: 'reveal'
-            });
+            if (!editorWidget) {
+                console.warn('[EditorCommand] No editor available for highlight');
+                return { success: false, highlightId: '' };
+            }
 
             const monacoEditor = MonacoEditor.get(editorWidget);
             if (!monacoEditor) {
@@ -619,14 +636,39 @@ export class EditorCommandContribution implements CommandContribution {
      */
     private async readFile(args: EditorReadFileArgs): Promise<{ success: boolean; content?: string }> {
         try {
+            // If no path provided, read from current active editor
+            if (!args.path) {
+                const currentEditor = this.editorManager.currentEditor;
+                if (!currentEditor) {
+                    return { success: false };
+                }
+                const monacoEditor = MonacoEditor.get(currentEditor);
+                if (monacoEditor) {
+                    const content = monacoEditor.getControl().getModel()?.getValue();
+                    return { success: true, content: content ?? '' };
+                }
+                return { success: false };
+            }
+
             // Validate path first (security per §17.1, §17.4)
             const validatedPath = await this.validatePath(args.path);
             if (!validatedPath) {
                 return { success: false };
             }
 
-            const uri = new URI(validatedPath);
-            const content = await this.fileService.read(uri);
+            // If the file is already open in an editor, read from the Monaco model
+            // to include any unsaved changes
+            const openWidget = await this.editorManager.getByUri(URI.fromFilePath(validatedPath));
+            if (openWidget) {
+                const monacoEditor = MonacoEditor.get(openWidget);
+                if (monacoEditor) {
+                    const content = monacoEditor.getControl().getModel()?.getValue();
+                    return { success: true, content: content ?? '' };
+                }
+            }
+
+            // Fall back to reading from disk via FileService
+            const content = await this.fileService.read(URI.fromFilePath(validatedPath));
             return { success: true, content: content.value };
         } catch (error) {
             console.error('[EditorCommand] Error reading file:', error);
@@ -639,14 +681,18 @@ export class EditorCommandContribution implements CommandContribution {
      */
     private async closeEditor(args: EditorCloseArgs): Promise<{ success: boolean }> {
         try {
-            // Validate path first
-            const validatedPath = await this.validatePath(args.path);
-            if (!validatedPath) {
-                return { success: false };
-            }
+            let editorWidget: EditorWidget | undefined;
 
-            const uri = new URI(validatedPath);
-            const editorWidget = await this.editorManager.getByUri(uri);
+            if (args.path) {
+                // Validate path first
+                const validatedPath = await this.validatePath(args.path);
+                if (!validatedPath) {
+                    return { success: false };
+                }
+                editorWidget = await this.editorManager.getByUri(URI.fromFilePath(validatedPath));
+            } else {
+                editorWidget = this.editorManager.currentEditor;
+            }
 
             if (!editorWidget) {
                 return { success: false };
