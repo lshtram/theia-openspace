@@ -112,6 +112,47 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, manager, hasFocus]);
 
+    // T2-18: Full focus trap — cycle Tab key within dialog's focusable elements
+    React.useEffect(() => {
+        if (!isOpen || !dialogRef.current) {
+            return;
+        }
+
+        const handleTabKey = (event: KeyboardEvent) => {
+            if (event.key === 'Tab') {
+                const focusableElements = dialogRef.current!.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), ' +
+                    'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                const elements = Array.from(focusableElements);
+                if (elements.length === 0) {
+                    return;
+                }
+
+                const first = elements[0];
+                const last = elements[elements.length - 1];
+                const active = document.activeElement as HTMLElement;
+
+                if (event.shiftKey) {
+                    // Shift+Tab: wrap from first to last
+                    if (active === first) {
+                        event.preventDefault();
+                        last.focus();
+                    }
+                } else {
+                    // Tab: wrap from last to first
+                    if (active === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleTabKey);
+        return () => document.removeEventListener('keydown', handleTabKey);
+    }, [isOpen]);
+
     if (!isOpen || !currentRequest) {
         return null; // Dialog closed
     }
