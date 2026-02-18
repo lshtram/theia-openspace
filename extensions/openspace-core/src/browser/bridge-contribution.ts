@@ -72,7 +72,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     private reconnectAttempts = 0;
     private reconnectTimer?: number;
     private readonly maxReconnectDelay = 30000; // 30 seconds
-    private readonly hubBaseUrl = 'http://localhost:3001'; // TODO: Phase 5.2 - make configurable via preferences
+    private readonly hubBaseUrl = window.location.origin; // Use current origin (Theia port)
     
     // Throttling for state publishing (max 1 POST per second)
     private lastPublishTime = 0;
@@ -80,7 +80,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
 
     /**
      * Called when the frontend application starts.
-     * Publishes command manifest and establishes SSE connection.
+     * Publishes command manifest (SSE removed in Architecture B1 - commands now come via RPC).
      */
     async onStart(): Promise<void> {
         console.info('[BridgeContribution] Starting...');
@@ -91,17 +91,17 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         // Subscribe to pane state changes
         this.subscribeToPaneState();
         
-        // Establish SSE connection
-        this.connectSSE();
+        // Note: SSE connection removed in Architecture B1
+        // Commands now come via RPC callback through OpenCodeProxy → SyncService
     }
 
     /**
      * Called when the frontend application stops.
-     * Closes SSE connection and cleans up resources.
+     * Cleans up resources.
      */
     onStop(): void {
         console.info('[BridgeContribution] Stopping...');
-        this.disconnectSSE();
+        // Note: SSE connection removed in Architecture B1
     }
 
     /**
