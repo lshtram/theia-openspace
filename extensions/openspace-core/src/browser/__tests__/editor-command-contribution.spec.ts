@@ -18,6 +18,9 @@ import { Container } from '@theia/core/shared/inversify';
 import { CommandRegistry } from '@theia/core/lib/common/command';
 import { expect } from 'chai';
 import { EditorCommandContribution, EditorCommands } from '../editor-command-contribution';
+import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
+import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 
 // Minimal mock services for testing path validation logic
 class MockWorkspaceService {
@@ -61,9 +64,12 @@ class MockEditorManager {
 // Simple binding that doesn't require full interface implementation
 function createTestContainer() {
     const container = new Container();
-    container.bind<any>('WorkspaceService').toConstantValue(new MockWorkspaceService());
-    container.bind<any>('FileService').toConstantValue(new MockFileService());
-    container.bind<any>('EditorManager').toConstantValue(new MockEditorManager());
+    
+    // Use actual service identifiers for inversify, but cast to any to avoid
+    // needing full interface implementation for unit tests
+    container.bind(WorkspaceService).toConstantValue(new MockWorkspaceService() as unknown as WorkspaceService);
+    container.bind(FileService).toConstantValue(new MockFileService() as unknown as FileService);
+    container.bind(EditorManager).toConstantValue(new MockEditorManager() as unknown as EditorManager);
     return container;
 }
 

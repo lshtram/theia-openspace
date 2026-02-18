@@ -4,13 +4,14 @@
 **Last Updated:** 2026-02-18
 
 ## Current Focus
-- **Status:** PHASE 2B COMPLETE ✅ — SDK types adopted, ready for Phase 1C
-- **Major Change (2026-02-18):** Original plan (full SDK adoption) **BLOCKED** by ESM/CJS incompatibility. Pivoted to hybrid approach (types only).
-- **Phase 2B Completion (2026-02-18):** All 5 tasks complete (2B.1-2B.5), build clean, 0 new test failures, Janitor ✅ + CodeReviewer ✅ approved
+- **Status:** PHASE 2B.7 COMPLETE ✅ — Unit test infrastructure fixed, all 375 tests passing
+- **Next:** Phase 1C.1 — Fix T1 Blocking Issues (10 security/crash bugs)
 - **Completed (2026-02-18):**
   - Phase 0: All tasks (0.1–0.8) ✅
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
+  - Phase 2B: All tasks (2B.1–2B.5) ✅ — SDK types adopted
+  - Phase 2B.7: Unit test infrastructure ✅ — 375/375 tests passing
   - Phase 3: All tasks (3.1–3.11) ✅
   - Phase 4: All tasks (4.1–4.6) ✅ — Presentation and whiteboard modalities complete
   - Scout research: OpenCode SDK — RFC-002 FINAL (`docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`)

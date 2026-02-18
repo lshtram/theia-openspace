@@ -110,13 +110,13 @@ const SENSITIVE_FILE_PATTERNS: RegExp[] = [
     /\.key$/,
     /\.cert$/,
     /\/\.ssh\//,
-    /\/secrets\//,
-    /\/credentials\//,
-    /\/config\/.*secret/i,
+    /secrets/,
+    /credentials/,
+    /config.*secret/i,
     /\.htpasswd$/,
-    /\/\.aws\//,
-    /\/azure\.json$/,
-    /\/gcloud\//,
+    /\.aws/,
+    /azure\.json$/,
+    /gcloud/,
 ];
 
 /**

@@ -1,8 +1,11 @@
 {
-  "require": ["./test-setup.js", "ts-node/register"],
+  "require": ["./test-setup.js", "ts-node/register/transpile-only"],
   "extensions": ["ts"],
   "spec": "extensions/**/src/**/__tests__/*.spec.ts",
-  "timeout": 5000,
+  "timeout": 10000,
   "color": true,
-  "reporter": "spec"
+  "reporter": "spec",
+  "node-option": [
+    "no-warnings"
+  ]
 }

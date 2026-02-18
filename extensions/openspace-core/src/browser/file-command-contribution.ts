@@ -81,9 +81,9 @@ const SENSITIVE_PATTERNS: RegExp[] = [
  * Critical directories that must be protected from writes per SC-3.5.2.
  */
 const CRITICAL_WRITE_PATTERNS: RegExp[] = [
-    /^\.git\//i,
-    /\/node_modules\//i,
-    /^\.theia\//i,
+    /\.git\//i,
+    /node_modules\//i,
+    /\.theia\//i,
 ];
 
 /**
