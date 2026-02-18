@@ -28,7 +28,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 3: Agent IDE Control | ✅ COMPLETE | All 11 tasks done; stream interceptor superseded by T3 |
 | Phase T3: MCP Agent Control System | ✅ COMPLETE | Hub MCP server live; stream interceptor removed |
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
-| **Phase 1C: Code Hardening** | ⬜ NOT STARTED | T1-7/T1-8 obsolete (see note); all other items pending |
+| **Phase 1C: Code Hardening** | 🟡 In progress | 1C.1–1C.4 complete; 1C.5–1C.7 pending |
 | **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ⬜ NOT STARTED | Validate & integrate existing Phase 4 code |
 | **Phase T4: PatchEngine** | ⬜ NOT STARTED | Versioned artifact mutations |
@@ -37,13 +37,13 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 
-**Next Task:** Phase 1C.1 — Fix T1 blocking security & crash bugs
+**Next Task:** Phase 1C.5 — Test Infrastructure Fixes
 
 ---
 
 ## What's Next
 
-**Immediate:** Phase 1C Code Hardening — begin with 1C.1 (T1 blocking issues: dangerous command confirmation, symlink traversal, XSS in presentation widget, crash bugs). Then 1C.2 (T2 security: Hub origin validation, permission dialog, file size limits).
+**Immediate:** Phase 1C Code Hardening — 1C.1–1C.4 complete (security, reliability, dead code). Continue with 1C.5 (test infrastructure), 1C.6 (T3 minor fixes), 1C.7 (validation).
 
 **After 1C:** Phase 4-Validation (wire existing presentation/whiteboard code into MCP tools), then T4 (PatchEngine), T5 (ArtifactStore), Phase 5. Phase 2 (Chat Polish) and T6 (Voice) are independent and can run in parallel.
 
@@ -73,7 +73,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 
 > **Note:** Tasks T1-7 and T1-8 from the original review (stream interceptor block accumulation and brace counting bugs) are **obsolete** — the stream interceptor has been removed by Phase T3. All other hardening items remain.
 
-**Status:** ⬜ NOT STARTED  
+**Status:** 🟡 In progress  
 **Duration estimate:** 14–22 hours  
 **Exit criteria:** All T1 and T2 issues resolved. Security checklist complete. All tests passing. Build clean.  
 **Source:** Full codebase code review — detailed plan in `docs/tasks/PHASE-1C-HARDENING-PLAN.md`
@@ -93,7 +93,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | All remaining T1 issues resolved. Dangerous commands blocked. XSS patched. Symlink traversal prevented. Tests verify actual application behavior. Build passes. All tests pass. |
 | **Dependencies** | Phase T3 complete |
 | **Estimated effort** | 4–6 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1C.2 — Fix T2 Security Issues
 | | |
@@ -102,7 +102,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | All 7 T2 security issues resolved. Hub endpoints validate origin. Permission dialog has focus trap + deny button. File size limits enforced. postMessage validates origin. |
 | **Dependencies** | 1C.1 |
 | **Estimated effort** | 3–4 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1C.3 — Fix T2 Reliability Issues
 | | |
@@ -111,7 +111,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | All T2 reliability issues resolved. No memory leaks. No dead code. Proper disposal. Correct component lifecycle. All tests pass. |
 | **Dependencies** | 1C.2 |
 | **Estimated effort** | 2–3 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1C.4 — Dead Code Cleanup
 | | |
@@ -120,7 +120,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | Dead code removed. Codebase ~200-300 lines smaller. `yarn build` passes. No broken imports. |
 | **Dependencies** | 1C.3 |
 | **Estimated effort** | 2 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 1C.5 — Test Infrastructure Fixes
 | | |
