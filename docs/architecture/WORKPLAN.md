@@ -361,25 +361,42 @@ task_id: TheiaOpenspaceWorkplan
 
 ---
 
-## Phase 2B: SDK Adoption (Migration)
+## Phase 2B: SDK Adoption (Hybrid Approach — Types Only)
 
-**Goal:** Replace ~1,450 lines of hand-rolled HTTP client code, custom type definitions, and SSE event handling with the official `@opencode-ai/sdk` package. This fixes 7 known field name mismatches, adds 9 missing message Part types, adds 11 missing SSE event types, and ensures forward compatibility as OpenCode evolves.
+**Goal:** Replace ~263 lines of hand-rolled type definitions with the official `@opencode-ai/sdk` auto-generated types. This fixes 7 known field name mismatches, adds 9 missing message Part types, adds 11 missing SSE event types, and ensures forward compatibility as OpenCode API evolves. **Note:** This is a REVISED scope from the original plan — runtime HTTP/SSE client replacement is deferred due to ESM/CommonJS incompatibility blocker (see DECISION-SDK-ADOPTION.md §6).
 
-**Duration estimate:** 1–2 sessions (~12–18 hours)  
-**Exit criteria:** All HTTP calls in `OpenCodeProxy` use SDK client methods. All custom type definitions replaced with SDK type re-exports. SSE handling uses SDK's `client.event.subscribe()` async iterable. `eventsource-parser` dependency removed. All existing tests pass. All downstream consumers updated for field renames. Build clean with zero TypeScript errors.
+**Duration estimate:** 1 session (~6–8 hours)  
+**Exit criteria:** SDK types extracted into `src/common/opencode-sdk-types.ts`. All custom type definitions in `opencode-protocol.ts` replaced with SDK type re-exports. All downstream consumers updated for field renames. HTTP client and SSE handling remain unchanged (retyped but not replaced). Build clean with zero TypeScript errors. All existing tests pass.
 
-**Prerequisites:** Phase 1B1 complete. Tasks 3.1–3.6 complete (they depend on current types but are self-contained).
+**Prerequisites:** Phase 1B1 complete. Phase 3 complete.
 
-**Decision document:** `docs/architecture/DECISION-SDK-ADOPTION.md` (Option A — approved by user 2026-02-17)  
+**Decision document:** `docs/architecture/DECISION-SDK-ADOPTION.md` (Option D — Hybrid Approach, approved 2026-02-18 v2.0)  
 **Research:** `docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md` (FINAL)
 
 **Why now (not later):**
-- Tasks 3.7–3.11 need rich Part types (tool, agent, step-start, etc.) that we currently don't have
-- Building more code on top of incorrect types (7 field mismatches) means exponentially more rework later
-- Clean break point: tasks 3.1–3.6 are done, 3.7 hasn't started
-- SDK adoption is isolated — only replaces the HTTP/type layer, doesn't change Architecture B1
+- Phase 3 already complete, but tasks 3.7/3.11 used workarounds due to missing rich Part types
+- Phase 1C (hardening) scheduled next — includes type safety improvements
+- Clean break point: no in-flight work blocked by type changes
+- Type drift is happening NOW (7 field mismatches cause runtime bugs)
+
+**Why Hybrid (not full SDK):**
+- **CRITICAL BLOCKER DISCOVERED 2026-02-18:** SDK is ESM-only (`"type": "module"`), Theia requires CommonJS (`"module": "commonjs"`)
+- TypeScript cannot import ESM modules in CJS projects (see DECISION-SDK-ADOPTION.md §6 for six evaluated approaches)
+- Hybrid approach: extract SDK's auto-generated `types.gen.d.ts` (3,380 lines, zero imports, self-contained) into project
+- Keep hand-rolled HTTP/SSE client but typed with SDK types
+- Achieves primary goal (type compatibility) while deferring runtime SDK until blocker resolved
+
+**What changes:**
+- Install SDK as devDependency (types source only, not runtime)
+- Extract SDK types → `src/common/opencode-sdk-types.ts`
+- Replace hand-written types with SDK type re-exports
+- Update consumers for field renames (`projectId` → `projectID`, etc.)
+- Add npm script to re-extract types on SDK updates
 
 **What stays unchanged:**
+- HTTP client in `opencode-proxy.ts` (all 24 methods unchanged, just retyped)
+- SSE handling in `opencode-sync-service.ts` (unchanged)
+- `eventsource-parser` dependency (still needed)
 - Architecture B1 (hybrid ChatAgent + custom ChatWidget)
 - JSON-RPC bridge (Theia frontend ↔ backend)
 - Stream interceptor (`%%OS{...}%%` command extraction)
@@ -390,78 +407,170 @@ task_id: TheiaOpenspaceWorkplan
 - Agent command queue (SyncService)
 
 **V&V Targets:**
-- [ ] `@opencode-ai/sdk` installed in `extensions/openspace-core/package.json`
-- [ ] `yarn build` succeeds with zero TypeScript errors after SDK types adopted
-- [ ] All 24 REST API calls in `OpenCodeProxy` use SDK client methods (no raw `http`/`https`)
-- [ ] `opencode-protocol.ts` contains only SDK type re-exports + our RPC interface definitions (no hand-written API types)
-- [ ] SSE event subscription uses SDK's `client.event.subscribe()` async iterable
-- [ ] `eventsource-parser` dependency removed from `package.json`
-- [ ] Stream interceptor still works (operates on raw event data before SDK processing)
+- [ ] `@opencode-ai/sdk` installed in `extensions/openspace-core/package.json` as devDependency
+- [ ] SDK types extracted to `src/common/opencode-sdk-types.ts` (3,380 lines)
+- [ ] npm script `extract-sdk-types` created for type re-extraction
+- [ ] `yarn build` succeeds with zero TypeScript errors
+- [ ] `opencode-protocol.ts` contains only SDK type re-exports + RPC interfaces (no hand-written API types)
 - [ ] All field renames propagated: `projectId` → `projectID`, `sessionId` → `sessionID` in all consumers
-- [ ] All existing unit tests pass (100+ tests)
+- [ ] HTTP client methods in `opencode-proxy.ts` use SDK types for parameters/returns
+- [ ] All existing unit tests pass (100+ tests) with updated field names
 - [ ] All existing E2E tests pass
-- [ ] SDK client instance is injectable via Theia DI (wrapped in `OpenCodeProxy`)
-- [ ] SDK version pinned (exact version, not range)
+- [ ] SDK version pinned exactly (e.g., `"1.2.6"`, not `"^1.2.6"`)
+- [ ] Type extraction process documented in README or separate doc
+- [ ] THIRD-PARTY-NOTICES updated with SDK attribution
 
-### 2B.1 — Install SDK + create type bridge (Phase A)
+### 2B.1 — Extract SDK types + create npm script
 | | |
 |---|---|
-| **What** | Install `@opencode-ai/sdk` as a dependency in `extensions/openspace-core/package.json`. Pin to exact version (e.g., `"1.2.6"`, not `"^1.2.6"`). Create type aliases in `opencode-protocol.ts` that re-export SDK types under our current names, so all existing consumers continue to work unchanged. This is a **non-breaking** change — the type bridge allows gradual migration. Specifically: (a) `import { Session, Message, ... } from "@opencode-ai/sdk"`, (b) `export type { Session, Message, ... }`, (c) keep our `OpenCodeService` and `OpenCodeClient` RPC interfaces unchanged (these are Theia-specific and not in the SDK). |
-| **Acceptance** | `yarn build` succeeds with zero errors. SDK is listed in `package.json` dependencies with exact version. `opencode-protocol.ts` re-exports SDK types. All existing code compiles without changes. No runtime behavior changes. |
-| **Dependencies** | Phase 1B1 complete |
-| **Test requirements** | `yarn build` must pass. Run existing unit test suite — all 100+ tests must still pass. This validates the type bridge is compatible. |
+| **What** | Install `@opencode-ai/sdk` as a devDependency in `extensions/openspace-core/package.json`. Pin to exact version (e.g., `"1.2.6"`, not `"^1.2.6"`). Extract the SDK's auto-generated type file: `node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts` (3,380 lines, zero imports, self-contained) → copy to `extensions/openspace-core/src/common/opencode-sdk-types.ts`. Create npm script `"extract-sdk-types": "cp node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts src/common/opencode-sdk-types.ts"` in `package.json`. Verify TypeScript can import the types: add `import * as SDKTypes from './opencode-sdk-types'` in `opencode-protocol.ts` and verify build succeeds. |
+| **Acceptance** | `yarn build` succeeds with zero errors. SDK is listed in `package.json` devDependencies with exact version. `src/common/opencode-sdk-types.ts` exists and contains 3,380 lines. npm script `extract-sdk-types` works. TypeScript can import from the file. No runtime behavior changes (types only). |
+| **Dependencies** | Phase 1B1 complete, Phase 3 complete |
+| **Test requirements** | `yarn build` must pass. Run existing unit test suite — all 100+ tests must still pass (no code changes yet, just new file). Verify TypeScript recognizes the imported types (IDE autocomplete should work). |
+| **Estimated effort** | 1 hour |
+| **Status** | ⬜ |
+
+### 2B.2 — Create type bridge in opencode-protocol.ts
+| | |
+|---|---|
+| **What** | In `opencode-protocol.ts`, import SDK types and create type aliases/re-exports for backward compatibility. Specifically: (a) `import * as SDKTypes from './opencode-sdk-types'`, (b) export type aliases that map our current names to SDK types: `export type Session = SDKTypes.components['schemas']['Session']`, `export type Message = SDKTypes.components['schemas']['UserMessage'] \| SDKTypes.components['schemas']['AssistantMessage']`, `export type Part = SDKTypes.components['schemas']['Part']`, etc. (c) Map SDK event types to our event protocol (e.g., `export type SessionEvent = SDKTypes.components['schemas']['SessionEvent']`). (d) Keep `OpenCodeService` and `OpenCodeClient` RPC interfaces unchanged (these are Theia-specific, not in SDK). This creates a **non-breaking bridge** — existing code continues to compile without changes. Do NOT remove old type definitions yet (that's 2B.4). |
+| **Acceptance** | `yarn build` succeeds with zero errors. All SDK types are accessible via our current names. No consumer changes needed yet. TypeScript shows both old (hand-written) and new (SDK) types coexist. No runtime behavior changes. |
+| **Dependencies** | 2B.1 |
+| **Test requirements** | `yarn build` must pass. Run unit tests — all 100+ should pass (no consumer changes yet). Verify in IDE that both `Session` (old) and `SDKTypes.Session` (new) are valid and equivalent. |
+| **Estimated effort** | 2 hours |
+| **Status** | ⬜ |
+
+### 2B.3 — Update consumers for field renames + Part types
+| | |
+|---|---|
+| **What** | Update all downstream consumers to use SDK type field names. Known renames: `Session.projectId` → `Session.projectID`, `Message.sessionId` → `Message.sessionID`, `Session.createdAt` → `Session.time.created` (if used). Files to update: `session-service.ts` (~856 LOC), `chat-widget.tsx`, `opencode-sync-service.ts` (~555 LOC), `opencode-proxy.ts` (return types), any test files. Use TypeScript compiler as guide — after removing old type definitions (next phase), compiler will flag every location. Also expand Part type handling: SDK has 12 Part variants (`text`, `image`, `tool`, `agent`, `step-start`, `step-end`, `snapshot`, `patch`, `attachment`, `thinking`, `citation`, `error`) vs our current 3 (`text`, `image`, `tool-call`). Update `chat-widget.tsx` or message renderers to handle new types gracefully (at minimum: render unknown types as text or ignore with warning). |
+| **Acceptance** | All field accesses use SDK naming conventions. Chat widget correctly displays sessions and messages. Part type handling is exhaustive (switch with default case or union check). No TypeScript errors. No runtime `undefined` errors from field mismatches. Build succeeds. |
+| **Dependencies** | 2B.2 |
+| **Test requirements** | Run unit test suite after field renames — expect 10-15 test failures initially (fix assertions to use new field names). After fixes, all tests must pass. Add 2-3 unit tests for expanded Part type handling (verify unknown Part types don't crash). Manual test: create session, send message, verify display correct. |
+| **Estimated effort** | 2 hours |
+| **Status** | ⬜ |
+
+### 2B.4 — Cleanup hand-written types + documentation
+| | |
+|---|---|
+| **What** | Remove all hand-written API types from `opencode-protocol.ts` that are now sourced from SDK. Specifically delete: old `Session` interface, old `Message`/`MessagePart` types, old `Provider`/`Model` types, old event type definitions (~263 lines total). Keep only: (a) SDK type re-exports from 2B.2, (b) `OpenCodeService` interface (Theia RPC), (c) `OpenCodeClient` interface (Theia RPC), (d) `OPENCODE_SERVICE_PATH` constant. Target: `opencode-protocol.ts` reduced from ~313 lines to ~80-100 lines. Update THIRD-PARTY-NOTICES with SDK attribution: "Type definitions sourced from @opencode-ai/sdk (MIT license), auto-generated from OpenCode OpenAPI 3.1 spec." Document type extraction process: create `docs/development/SDK-TYPE-EXTRACTION.md` with instructions for updating types on SDK version changes (run `npm run extract-sdk-types`, verify build, commit). |
+| **Acceptance** | `opencode-protocol.ts` contains only SDK re-exports + RPC interfaces (~80-100 lines, down from ~313). No hand-written API types remain. `yarn build` clean. THIRD-PARTY-NOTICES updated. Type extraction documented. All unit + E2E tests pass. |
+| **Dependencies** | 2B.3 |
+| **Test requirements** | Full test suite (unit + E2E). `yarn build` must be clean. Manual smoke test: start Theia, connect to opencode server, create session, send message, verify streaming works, verify chat displays correctly. |
+| **Estimated effort** | 1 hour |
+| **Status** | ⬜ |
+
+### ~~2B.5~~ — ~~Replace HTTP calls~~ — DEFERRED (ESM/CJS blocker)
+**Status:** ⏸️ **DEFERRED** — Runtime SDK client adoption blocked by ESM/CommonJS incompatibility. HTTP client in `opencode-proxy.ts` remains unchanged (now typed with SDK types). Can revisit when Theia supports ESM or SDK adds CJS builds.
+
+### ~~2B.6~~ — ~~Replace SSE handling~~ — DEFERRED (ESM/CJS blocker)
+**Status:** ⏸️ **DEFERRED** — SDK event subscription (`client.event.subscribe()`) cannot be used due to ESM/CJS blocker. SSE handling in `opencode-sync-service.ts` remains unchanged. `eventsource-parser` dependency still needed.
+
+### 2B.5 — Integration verification
+| | |
+|---|---|
+| **What** | End-to-end verification that the type migration preserves all existing functionality. Repeat key parts of Phase 1.13 integration test: (1) start Theia → connect to opencode server → create session → send message → receive streamed response → verify message appears correctly in chat widget with new field names, (2) verify permission dialog still works (event handling unchanged), (3) verify stream interceptor still strips `%%OS{...}%%` blocks and dispatches commands (no changes to interceptor logic, just type annotations), (4) verify Hub `GET /openspace/instructions` still works, (5) verify session CRUD (create, list, switch, delete) all work. **Focus:** Type correctness (no `undefined` from field mismatches), expanded Part type handling (verify new types don't crash UI), and zero TypeScript errors. |
+| **Acceptance** | All Phase 1, Phase 1B1, and Phase 3 functionality preserved. No regressions from type changes. Build clean. All unit tests pass. All E2E tests pass. Manual smoke test documented with results. |
+| **Dependencies** | 2B.4 |
+| **Test requirements** | Run FULL test suite (unit + E2E in batches). Document manual smoke test results in task result artifact. Verify TypeScript compiler reports zero errors. Verify no console errors at runtime (check browser DevTools). |
 | **Estimated effort** | 1–2 hours |
 | **Status** | ⬜ |
 
-### 2B.2 — Replace HTTP calls in OpenCodeProxy (Phase B)
+---
+
+**Phase 2B Summary (Hybrid Approach):**
+- **Scope reduced:** ~263 LOC eliminated (types only) vs ~1,450 originally planned (types + HTTP + SSE)
+- **Runtime unchanged:** HTTP client and SSE handling remain (now typed with SDK types)
+- **Primary goal achieved:** Type compatibility with OpenCode API ✅
+- **Future path:** Runtime SDK adoption deferred until ESM/CJS blocker resolved (Theia ESM migration or SDK CJS builds)
+
+---
+
+## Phase 1C: Code Hardening & Quality Pass
+
+**Goal:** Fix all findings from the full codebase code review (54 issues: 10 T1 blocking, 28 T2 important, 16 T3 minor). Ensure security, reliability, and code quality before moving to Phase 5 deployment.
+
+**Duration estimate:** 14–22 hours (1–2 sessions)  
+**Exit criteria:** All T1 and T2 issues resolved. Security review checklist complete. All tests passing. Build clean.
+
+**Source:** Full codebase code review by 7 parallel CodeReviewer subagents (2026-02-18)  
+**Detailed plan:** `docs/tasks/PHASE-1C-HARDENING-PLAN.md` (comprehensive implementation guide)  
+**Review report:** `docs/reviews/CODE-REVIEW-FULL-CODEBASE.md`
+
+**Strategic timing:** Placed after Phase 2B (SDK Adoption) to avoid duplicate work. Some issues (like duplicate command extraction) will be automatically resolved by SDK refactor. Phase 4 (Modality Surfaces) is already complete, so Phase 4 security issues (XSS, postMessage origin) are upgraded to critical priority.
+
+**V&V Targets:**
+- [ ] All T1 blocking issues fixed (10/10): dangerous commands blocked, XSS patched, crash bugs fixed, tests valid
+- [ ] All T2 security issues fixed (7/7): Hub auth, symlink resolution, sensitive files, permission dialog, file size limits
+- [ ] All T2 reliability issues fixed (21/21): memory leaks, dead code, fake success returns, type safety
+- [ ] Test infrastructure cleaned (one runner, no phantom tests, no hardcoded timeouts)
+- [ ] Security review checklist complete (10/10 items)
+- [ ] `yarn build` clean (zero TypeScript errors)
+- [ ] `yarn lint` clean (zero lint errors)
+- [ ] All unit tests pass (100+ tests)
+- [ ] All E2E tests pass (batched execution)
+
+### 1C.1 — Fix T1 Blocking Issues (Security & Crash Bugs)
 | | |
 |---|---|
-| **What** | Rewrite `opencode-proxy.ts` to use the SDK client (`createOpencodeClient()`) instead of raw `http`/`https` module calls. Initialize SDK client in the constructor (or `@postConstruct`) with `baseUrl` from configuration. Replace each of the 24 REST API methods (`listProjects`, `createSession`, `listSessions`, `sendMessage`, `listMessages`, `getProviders`, `getConfig`, `deleteSession`, etc.) with the corresponding SDK namespace method (e.g., `this.client.session.list()`, `this.client.session.create(...)`, `this.client.session.prompt(...)`, `this.client.config.providers()`, etc.). **Preserve:** (a) the `OpenCodeService` DI interface (callers don't change), (b) error handling/logging, (c) stream interceptor integration, (d) `onAgentCommand` RPC callback path. **Remove:** all `httpGet()`, `httpPost()`, `httpDelete()`, `httpPatch()` helper methods and their `http`/`https` imports. |
-| **Acceptance** | All 24 API methods work via SDK client. `OpenCodeService` DI interface is unchanged. Callers (SessionService, SyncService, etc.) require zero changes. All existing unit tests pass with mocked SDK client. Manual testing: can list projects, create/delete sessions, send messages, get providers. |
-| **Dependencies** | 2B.1 |
-| **Test requirements** | Unit tests for `OpenCodeProxy` must be updated to mock the SDK client (instead of `http`/`https`). All existing functional tests must pass. **Recommended:** Add 3–5 new unit tests validating SDK client initialization, error propagation from SDK errors to RPC errors, and configuration (baseUrl) handling. |
+| **What** | Fix 10 critical issues: (1) dangerous terminal commands now require user confirmation, (2) validate shellPath/cwd in terminal creation against allowlist, (3) resolve symlinks before path validation to prevent traversal, (4) verify `setSessionService()` wiring (Bug #3), (5) replace unsafe type cast with explicit error, (6) sanitize markdown in presentation widget (XSS), (7) fix StreamInterceptor block accumulation, (8) fix brace counting to handle strings, (9) resolve test runner conflict (Jest vs Mocha), (10) rewrite tautological E2E tests to verify real behavior. **Full implementation details:** See `docs/tasks/PHASE-1C-HARDENING-PLAN.md` Section 1C.1 for code samples, acceptance criteria, and test requirements for each fix. |
+| **Acceptance** | All 10 T1 issues resolved. Dangerous commands blocked. XSS patched. Symlink traversal prevented. Tests actually verify application behavior. Build passes. All tests pass. |
+| **Dependencies** | Phase 2B complete |
 | **Estimated effort** | 4–6 hours |
-| **Risk** | Medium — the stream interceptor currently operates on raw HTTP response data; must verify it still works when SDK handles HTTP. The interceptor may need to operate at the SSE layer (Phase 2B.3) rather than HTTP layer. |
 | **Status** | ⬜ |
 
-### 2B.3 — Replace SSE handling with SDK event subscription (Phase C)
+### 1C.2 — Fix T2 Security Issues
 | | |
 |---|---|
-| **What** | Replace the current SSE handling in `opencode-proxy.ts` (which uses `eventsource-parser` + raw HTTP to maintain an SSE connection to the OpenCode server) with the SDK's `client.event.subscribe()` async iterable. The SDK handles SSE connection management, reconnection, and event parsing. **Key concern:** The stream interceptor currently scans raw SSE text for `%%OS{...}%%` markers. With SDK event subscription, events arrive pre-parsed. The interceptor must now operate on the `text` field of `message.updated` events (inspect `event.properties.parts` where `part.type === "text"` → scan `part.text` for markers). This is architecturally cleaner — we intercept at the semantic level (message text) rather than the wire level (raw SSE bytes). **Update event type mappings:** Map all 13 SDK event types to our RPC callback methods. Currently we only handle 2 event types (`session.updated`, `message.updated`); the SDK provides 13. Add handling for new event types as needed (at minimum: `session.status`, `session.idle` for session state tracking). |
-| **Acceptance** | SSE events flow correctly: OpenCode server → SDK event subscription → OpenCodeProxy → RPC callbacks → SyncService → SessionService → UI. Stream interceptor extracts `%%OS{...}%%` from message text parts (not raw SSE). Reconnection works (SDK handles this). All 8 stream interceptor test cases from TECHSPEC §6.5.1 still pass. Event type coverage expanded from 2 to at least 5 types (session.updated, message.updated, session.status, session.idle, message.part.updated). |
-| **Dependencies** | 2B.2 |
-| **Test requirements** | Update stream interceptor tests to use SDK event format (typed `Part` objects instead of raw text). Add unit tests for new event type handling (session.status → SessionService state update, session.idle → streaming complete signal). Run full unit test suite — all must pass. **Critical test:** Verify chunk-boundary `%%OS{...}%%` splitting still works with SDK event format (it should be simpler since SDK delivers complete events, not raw chunks). |
-| **Estimated effort** | 3–5 hours |
-| **Risk** | Medium — the stream interceptor is the most delicate component. Must verify that SDK event delivery is compatible with our interception pattern. If SDK delivers events asynchronously (batched), interceptor timing may change. |
+| **What** | Fix 7 security issues: (1) add origin validation and CORS headers to Hub endpoints, (2) route all commands through validation pipeline (verify BridgeContribution), (3) consolidate sensitive file patterns (19 patterns → shared constant), (4) implement focus trap in permission dialog, (5) add explicit Deny button to permission dialog, (6) add 10MB file size limit to readFile, (7) validate postMessage origin in whiteboard widget. **Full implementation details:** See `docs/tasks/PHASE-1C-HARDENING-PLAN.md` Section 1C.2. |
+| **Acceptance** | All 7 T2 security issues resolved. Hub endpoints validate origin. Permission dialog has focus trap + deny button. File size limits enforced. postMessage validates origin. |
+| **Dependencies** | 1C.1 |
+| **Estimated effort** | 3–4 hours |
 | **Status** | ⬜ |
 
-### 2B.4 — Update downstream consumers for field renames (Phase D-1)
+### 1C.3 — Fix T2 Reliability Issues
 | | |
 |---|---|
-| **What** | Propagate field name changes from SDK types to all downstream consumers. Known renames: `projectId` → `projectID` (Session), `sessionId` → `sessionID` (Message). Files that reference these fields: `session-service.ts` (~856 LOC), `chat-widget.tsx`, `opencode-sync-service.ts` (~555 LOC), any test files. Use TypeScript compiler errors as the guide — after removing type aliases from 2B.1, the compiler will flag every location that needs updating. Also update `MessagePart` consumers to handle the expanded Part union (12 types instead of 3). For Part types we don't yet render (e.g., `step-start`, `snapshot`, `patch`), add a default/fallback handler that renders them as raw text or ignores them gracefully. |
-| **Acceptance** | `yarn build` succeeds with zero TypeScript errors. All field accesses use SDK naming conventions. No runtime `undefined` errors from field mismatches. Chat widget correctly displays sessions and messages. Part type handling is exhaustive (TypeScript `switch` with `default` case or `exhaustiveCheck`). |
-| **Dependencies** | 2B.3 (all SDK integration complete before consumer updates) |
-| **Test requirements** | TypeScript compiler is the primary validator. Run full unit test suite after renames. Update any test assertions that reference old field names. **Recommended:** Add 2–3 unit tests for the expanded Part type handling (verify unknown Part types are handled gracefully, not crash). |
+| **What** | Fix 21 reliability issues: duplicate types, dead code (pane-protocol.ts), disposal hooks (OpenCodeProxy, PaneService), fake success returns (openContent, resizePane), loading counter nesting, subscription leaks, React component extraction (SessionHeader), correct React imports, test hooks in production, terminal listener cleanup, findByUri bugs, NavigationService wiring, missing dependencies. **Full implementation details:** See `docs/tasks/PHASE-1C-HARDENING-PLAN.md` Section 1C.3. |
+| **Acceptance** | All 21 T2 reliability issues resolved. No memory leaks. No dead code. Proper disposal. Correct component lifecycle. All tests pass. |
+| **Dependencies** | 1C.2 |
 | **Estimated effort** | 2–3 hours |
 | **Status** | ⬜ |
 
-### 2B.5 — Cleanup: remove hand-rolled code and dependencies (Phase D-2)
+### 1C.4 — Dead Code Cleanup
 | | |
 |---|---|
-| **What** | Final cleanup phase. Remove from `opencode-protocol.ts`: all hand-written API types that now come from the SDK (Session, Message, MessagePart, Provider, etc.). Keep only: `OpenCodeService` interface, `OpenCodeClient` interface, `OPENCODE_SERVICE_PATH` constant (these are Theia-specific RPC definitions, not API types). Remove `eventsource-parser` from `package.json` dependencies. Remove any dead `http`/`https` imports and helper methods. Remove unused type imports. Run `yarn build` to verify no lingering references. Document the migration in a brief note at the top of `opencode-protocol.ts` (e.g., "API types are re-exported from @opencode-ai/sdk. Only Theia RPC interfaces are defined here."). |
-| **Acceptance** | `opencode-protocol.ts` contains only RPC interfaces + SDK re-exports (target: ~50 lines, down from ~313). `eventsource-parser` removed from `package.json`. No dead code. `yarn build` clean. All unit and E2E tests pass. `opencode-proxy.ts` reduced from ~931 lines to ~200–300 lines. Total codebase reduction: ~1,200–1,450 lines. |
-| **Dependencies** | 2B.4 |
-| **Test requirements** | Full test suite (unit + E2E). `yarn build` clean. Manual smoke test: start Theia, connect to opencode server, create session, send message, receive streaming response, verify chat widget renders correctly. |
-| **Estimated effort** | 1–2 hours |
+| **What** | Remove dead code: duplicate type definitions (T2-1), unused protocol file (T2-2), duplicate command extraction (T2-4 if not fixed by Phase 2B), redundant MessagePart fields (T3-1), unused session-protocol types (T3-2), duplicate CommandResult (T3-5), spike files (T3-13). Process: run `ts-prune` or manual grep, delete confirmed unused code, verify build passes after each deletion. |
+| **Acceptance** | Dead code removed. Codebase ~200-300 lines smaller. `yarn build` passes. No broken imports. |
+| **Dependencies** | 1C.3 |
+| **Estimated effort** | 2 hours |
 | **Status** | ⬜ |
 
-### 2B.6 — Integration verification
+### 1C.5 — Test Infrastructure Fixes
 | | |
 |---|---|
-| **What** | End-to-end verification that the SDK migration preserves all existing functionality. Repeat the Phase 1.13 integration test protocol: (1) start Theia → connect to opencode server → create session → send message → receive streamed response → verify message appears in chat widget. Additionally verify: (2) permission dialog still works (permission event forwarded correctly via SDK events), (3) stream interceptor still strips `%%OS{...}%%` blocks and dispatches commands via `onAgentCommand` RPC callback, (4) Hub `GET /openspace/instructions` still returns valid system prompt, (5) session CRUD (create, list, switch, delete) all work through UI. |
-| **Acceptance** | All Phase 1 and Phase 1B1 functionality preserved. No regressions. Build clean. All unit tests pass. All E2E tests pass. Manual smoke test documented with results. |
-| **Dependencies** | 2B.5 |
-| **Test requirements** | Run complete test suite: `yarn build` (zero errors), `yarn test` (all units pass), E2E tests (batched per NSO protocol). Manual smoke test covering the 5 verification points above. Document test results in task `result.md`. |
+| **What** | Fix test infrastructure issues: (1) resolve Jest/Mocha conflict by choosing ONE runner (recommend Mocha for Theia compatibility), convert assertions, remove unused deps, (2) rewrite phantom tests (T6-T12) to test actual application code instead of local regex, (3) replace 20+ hardcoded `waitForTimeout` calls with `waitForSelector`/`waitForFunction`, (4) fix route mock ordering in session-management.spec.ts. **Full implementation details:** See `docs/tasks/PHASE-1C-HARDENING-PLAN.md` Section 1C.5. |
+| **Acceptance** | One test runner. All tests verify real behavior. No flaky timeouts. All unit and E2E tests pass. |
+| **Dependencies** | 1C.4 |
+| **Estimated effort** | 3–4 hours |
+| **Status** | ⬜ |
+
+### 1C.6 — T3 Minor Fixes (As Time Allows)
+| | |
+|---|---|
+| **What** | Fix 16 minor issues (best effort): consistent readonly fields, dispose emitters, use UUID for message IDs, clear streaming state on session switch, Hub/workspace URLs from config, replace alert/confirm with MessageService, add ARIA labels, fix model ID parsing, replace console.log with ILogger, remove unused devDeps, fix tautological tests. **See:** `docs/tasks/PHASE-1C-HARDENING-PLAN.md` Section 1C.6 for complete list. |
+| **Acceptance** | T3 issues resolved as time allows. All improvements documented. |
+| **Dependencies** | 1C.5 |
+| **Estimated effort** | 2–4 hours |
+| **Status** | ⬜ |
+
+### 1C.7 — Security Review & Validation
+| | |
+|---|---|
+| **What** | Complete security review checklist: verify command input validation, symlink resolution, sensitive file denylist, permission dialog focus trap, XSS patches, postMessage origin checks, Hub authentication, file size limits, dangerous command confirmation, no test hooks in production. Run full test suite. Verify build clean. Document all findings. |
+| **Acceptance** | Security checklist 10/10 complete. All tests pass. Build clean. Zero TypeScript/lint errors. Phase 1C complete and ready for Phase 5 deployment. |
+| **Dependencies** | 1C.6 |
+| **Test requirements** | Full test suite: `yarn build` (zero errors), `yarn lint` (zero errors), `yarn test` (all unit tests pass), E2E tests batched (all pass). Security penetration testing: attempt path traversal, XSS injection, dangerous commands without approval — all must be blocked. |
 | **Estimated effort** | 1–2 hours |
 | **Status** | ⬜ |
 

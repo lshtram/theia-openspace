@@ -1,6 +1,26 @@
 # Progress
 
 ## Current Milestones
+
+### Phase 2B Post-Mortem (2026-02-18)
+- **Workflow:** NSO BUILD executed (Analyst → Oracle → Builder → Janitor → CodeReviewer → Oracle)
+- **Duration:** 6-8 hours (as estimated)
+- **Quality Metrics:**
+  - Build: ✅ Clean (0 errors)
+  - Tests: ✅ No new failures (100 unit tests passing, 21 E2E tests passing)
+  - Janitor: ✅ APPROVED (7/7 criteria met)
+  - CodeReviewer: ✅ APPROVED WITH CONDITIONS (87% confidence, 9 non-blocking issues)
+- **Key Learning:** ESM/CJS incompatibility discovered and resolved with hybrid approach
+- **Technical Debt Identified:**
+  - 6 type assertions (`as any`) in test files — acceptable for test mocks
+  - StreamInterceptor regex needs robustness improvement — deferred to Phase 3
+  - Field name mismatches in test files — caught by Janitor, fixed by Builder
+- **Process Improvements Identified:**
+  - Builder claimed build clean prematurely (before actually building) — logged for NSO improvement
+  - Janitor correctly rejected first submission and re-validated after fixes
+  - CodeReviewer identified technical debt not caught by automated tests
+
+## Archived Milestones
 - [x] NSO initialized (2026-02-16)
 - [x] OpenCode client feature mapping — OPENCODE_FEATURE_LIST.md (2026-02-16)
 - [x] Reviewed REQ-MODALITY-PLATFORM-V2.md (2026-02-16)
@@ -68,16 +88,20 @@
   - [x] Gap analysis: 7 type mismatches, 11 missing event types, ~1,450 lines eliminable
   - [x] RFC written: `docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`
   - [x] Recommendation: STRONG ADOPT, 12-18 hours effort, before Phase 3 Task 3.7
-- [ ] Phase 2B: SDK Adoption — 🟡 PLANNING COMPLETE (ready for Builder)
+- [x] Phase 2B: SDK Adoption (Hybrid Approach — Types Only) — ✅ COMPLETE (2026-02-18)
   - [x] SDK research complete (RFC-002 FINAL)
-  - [x] Decision document approved (DECISION-SDK-ADOPTION.md — Option A)
-  - [x] Phase 2B added to WORKPLAN.md (6 tasks: 2B.1–2B.6)
-  - [ ] Task 2B.1: Install SDK + type bridge — PENDING
-  - [ ] Task 2B.2: Replace HTTP calls → SDK client — PENDING
-  - [ ] Task 2B.3: Replace SSE handling → SDK events — PENDING
-  - [ ] Task 2B.4: Update consumers for field renames — PENDING
-  - [ ] Task 2B.5: Cleanup (remove hand-rolled code) — PENDING
-  - [ ] Task 2B.6: Integration verification — PENDING
+  - [x] Decision document v1.0 approved (DECISION-SDK-ADOPTION.md — Option A)
+  - [x] ESM/CJS blocker discovered (2026-02-18): SDK is ESM-only, Theia requires CJS
+  - [x] Six approaches evaluated: static import ❌, node16 ❌, bundler ❌, hybrid ✅, fork ⚠️, wait ❓
+  - [x] Decision document v2.0 approved (Hybrid Approach — extract types only)
+  - [x] Phase 2B revised in WORKPLAN.md (5 tasks: 2B.1–2B.5, 6-8h)
+  - [x] Builder contract v2.0 written (hybrid approach)
+  - [x] Task 2B.1: Extract SDK types + npm script — ✅ COMPLETE
+  - [x] Task 2B.2: Create type bridge — ✅ COMPLETE
+  - [x] Task 2B.3: Update consumers for field renames — ✅ COMPLETE
+  - [x] Task 2B.4: Cleanup + documentation — ✅ COMPLETE
+  - [x] Task 2B.5: Integration verification — ✅ COMPLETE
+  - [x] Validation: Janitor ✅ (build clean, 0 new failures), CodeReviewer ✅ (87% confidence, 9 non-blocking issues)
 - [ ] Phase 2: Chat & Prompt System
 - [ ] Phase 3: Agent IDE Control — ✅ COMPLETE
   - [x] Requirements document created (REQ-AGENT-IDE-CONTROL.md)

@@ -1,20 +1,25 @@
 ---
 id: DECISION-SDK-ADOPTION
-author: oracle_7f3a
-status: APPROVED
-date: 2026-02-17
+author: oracle_e4c1
+status: APPROVED (REVISED 2026-02-18)
+date: 2026-02-18
 task_id: SDK-Adoption-Analysis
+version: 2.0
 ---
 
-# Architecture Decision: OpenCode SDK Adoption
+# Architecture Decision: OpenCode SDK Adoption (Hybrid Approach)
 
 ## 1. Executive Summary
 
-We built ~4,000 lines of custom integration code to connect Theia OpenSpace to the OpenCode server. An official SDK (`@opencode-ai/sdk`) exists that provides the **exact same functionality** — type-safe HTTP client, SSE event streaming, full API coverage — in zero-dependency package auto-generated from the server's OpenAPI 3.1 spec.
+We built ~4,000 lines of custom integration code to connect Theia OpenSpace to the OpenCode server. An official SDK (`@opencode-ai/sdk`) exists that provides type-safe HTTP client, SSE event streaming, and full API coverage in a zero-dependency package auto-generated from the server's OpenAPI 3.1 spec.
 
 **Our hand-rolled code is already diverging from the actual API** (7 field name mismatches, 9 missing message part types, 11 missing event types). This will compound as we implement Phase 3+.
 
-This document analyzes three strategic options and recommends a path forward.
+**CRITICAL BLOCKER DISCOVERED (2026-02-18):** Direct SDK adoption failed due to ESM/CommonJS incompatibility. The SDK is ESM-only (`"type": "module"`), while Theia extensions require CommonJS (`"module": "commonjs"` mandated by Theia architecture). TypeScript cannot resolve ESM modules in CommonJS projects regardless of `moduleResolution` strategy.
+
+**APPROVED SOLUTION (2026-02-18):** Hybrid approach — extract SDK's auto-generated type definitions (3,380 lines, zero imports, self-contained) into our codebase, maintain hand-rolled HTTP client but typed with SDK types. This achieves the primary goal (type compatibility with OpenCode API) while deferring runtime SDK adoption until Theia supports ESM or the SDK adds CJS builds.
+
+This document analyzes the blocker, evaluates six approaches, and documents the approved hybrid strategy.
 
 ---
 
@@ -192,172 +197,352 @@ plugin.tool("openEditor", {
 
 ---
 
-## 6. Three Strategic Options
+## 6. CRITICAL BLOCKER: ESM vs CommonJS Incompatibility (Discovered 2026-02-18)
 
-### Option A: Adopt SDK (Replace HTTP/Types Only)
+### 6.1 The Problem
 
-**What changes:**
-- Replace `opencode-proxy.ts` HTTP calls with SDK client methods
-- Replace `opencode-protocol.ts` custom types with SDK type imports
-- Replace `eventsource-parser` SSE handling with SDK's `client.event.subscribe()`
-- Keep: Theia DI wrappers, JSON-RPC bridge, stream interceptor, Hub, sync service, session service, permission UI
+**Attempt 1 (Builder):** Direct SDK import via `import { createOpencodeClient } from "@opencode-ai/sdk"` failed with TypeScript error `TS2307: Cannot find module '@opencode-ai/sdk'`.
 
-**What stays the same:**
-- Architecture B1 (unchanged)
-- Frontend ↔ Backend JSON-RPC protocol (unchanged)
-- `%%OS{...}%%` stream interceptor (unchanged — operates on raw event data before SDK parsing)
-- Hub endpoints (unchanged)
-- All security/validation code (unchanged)
+**Root Cause Analysis:**
 
-**Effort:** 12-18 hours
-**Risk:** Low-Medium
-**Code reduction:** ~1,200-1,450 lines eliminated (from ~4,027 to ~2,600)
+| Component | Configuration | Consequence |
+|-----------|--------------|-------------|
+| **SDK Package** | `"type": "module"` in package.json, `exports` map with `"import"` condition only, NO `"require"` or `"default"` | ESM-only, cannot be required by CJS |
+| **Theia Extensions** | `tsconfig.base.json` has `"module": "commonjs"`, `"moduleResolution": "node"` | Cannot import ESM modules |
+| **TypeScript** | `moduleResolution: "node"` cannot understand `exports` maps | Cannot resolve SDK at all (TS2307) |
 
-### Option B: Adopt SDK + Expose SDK Client Directly to Frontend
+### 6.2 Six Approaches Evaluated
 
-**What changes:**
-- Everything from Option A, plus:
-- Instead of JSON-RPC bridge (our proxy), run SDK client **in the browser** (since it uses `fetch()` internally)
-- Eliminate the entire backend proxy layer
+Oracle conducted empirical tests on six potential solutions:
 
-**What stays the same:**
-- Hub (still needed for instructions endpoint)
-- Stream interceptor (moved to browser)
-- Session service, sync service (simplified)
+#### Approach A: Static `import` with `module: "commonjs"`
+```typescript
+import { createOpencodeClient } from "@opencode-ai/sdk"
+```
 
-**Implications:**
-- The SDK uses `fetch()` which works in browsers
-- CORS: OpenCode server supports `--cors` flag
-- BUT: SSE connections from browser have limitations (max 6 per domain in HTTP/1.1)
-- AND: We lose Theia backend's ability to intercept/transform the stream before it reaches the UI
-- AND: All API traffic goes browser → OpenCode server directly, bypassing Theia
-
-**Effort:** 30-40 hours (significant rearchitecture)
-**Risk:** High
-**Code reduction:** ~2,000 lines eliminated but ~500 lines of new browser-side code
-
-### Option C: Full Plugin System Migration
-
-**What changes:**
-- Adopt SDK for session/message management
-- Replace `%%OS{...}%%` with OpenCode plugin custom tools
-- Agent calls tools instead of emitting markers
-- Plugin communicates with Theia backend via WebSocket/HTTP
-
-**Effort:** 60-80 hours (major rearchitecture, two systems to maintain)
-**Risk:** Very High
-**Code reduction:** Minimal net reduction (complexity moves, doesn't disappear)
+**Result:** ❌ `TS2307: Cannot find module '@opencode-ai/sdk'`  
+**Why:** `moduleResolution: "node"` doesn't understand `exports` maps.
 
 ---
 
-## 7. Recommendation: Option A (SDK Adoption — HTTP/Types Only)
+#### Approach B: Change to `moduleResolution: "node16"`
+```json
+{ "moduleResolution": "node16" }
+```
 
-### 7.1 Why Option A
+**Result:** ❌ `TS1479: The current file is a CommonJS module whose imports will produce 'require' calls; however, the referenced file is an ECMAScript module and cannot be imported with 'require'.`  
+**Why:** TypeScript correctly detects ESM/CJS mismatch and blocks even `import type` statements.
+
+---
+
+#### Approach C: Change to `moduleResolution: "bundler"`
+```json
+{ "moduleResolution": "bundler" }
+```
+
+**Result:** ❌ `TS5095: Option 'bundler' can only be used when 'module' is set to 'es2015' or later.`  
+**Why:** Bundler resolution requires ESM output, incompatible with Theia's CJS requirement.
+
+---
+
+#### Approach D: **Hybrid — Copy Types Locally + Dynamic `import()` at Runtime**
+
+**Type Layer:**
+```typescript
+// Extract SDK's gen/types.gen.d.ts (3,380 lines, zero imports, self-contained)
+// Copy to: src/common/opencode-sdk-types.ts
+export * from "./opencode-sdk-types"
+```
+
+**Runtime Layer (Option 1 — Dynamic Import):**
+```typescript
+const sdk = await import("@opencode-ai/sdk/client")
+const client = sdk.createOpencodeClient({ baseUrl: "..." })
+```
+
+**Runtime Layer (Option 2 — Keep Hand-Rolled HTTP):**
+```typescript
+// Keep existing httpPost/httpGet/httpDelete in opencode-proxy.ts
+// BUT: Use SDK types instead of hand-written types
+async listSessions(): Promise<Session[]> { // Session from SDK types
+  return this.httpGet<Session[]>("/session")
+}
+```
+
+**Result:** ✅ **VERIFIED WORKING**  
+**Types:** TypeScript with `moduleResolution: "node"` can use locally-copied types perfectly (zero imports = no resolution issues)  
+**Runtime (Option 1):** Node.js CAN dynamically import ESM from CJS via `await import()` — VERIFIED with test script  
+**Runtime (Option 2):** Keep HTTP client, eliminate type divergence  
+
+**Trade-off:** Must manually re-extract types on SDK version updates (scriptable via npm post-install hook).
+
+---
+
+#### Approach E: Fork SDK to Build CJS
+
+**Strategy:** Fork `@opencode-ai/sdk`, modify build to output `"module": "commonjs"` and `require()`-compatible code.
+
+**Result:** ✅ Would work  
+**Why Rejected:** High maintenance burden — must sync fork with upstream daily releases, loses auto-update benefit.
+
+---
+
+#### Approach F: Wait for CJS Support from OpenCode
+
+**Strategy:** Request OpenCode team add dual ESM/CJS builds (like most npm packages).
+
+**Result:** ❓ Unknown timeline  
+**Why Rejected:** Blocks Phase 2B indefinitely, type drift continues.
+
+---
+
+### 6.3 Decision: Approach D (Hybrid), Option 2 (Types Only)
+
+**Rationale:**
 
 | Factor | Assessment |
 |--------|------------|
-| **Maximum benefit per effort** | 80% code reduction in the HTTP layer for 12-18 hours of work |
-| **Minimal disruption** | Architecture B1 is unchanged; no new abstractions introduced |
+| **Primary Goal Achieved** | Type compatibility with OpenCode API ✅ |
+| **Minimal Complexity** | Keep existing HTTP client, just update type signatures |
+| **No Runtime Risk** | Zero changes to HTTP/SSE transport layer |
+| **Scriptable** | Type extraction can be automated via npm script |
+| **Reversible** | Can delete SDK types and revert to hand-written anytime |
+| **Future Path** | If Theia adopts ESM or SDK adds CJS, we can switch to runtime SDK later |
+
+**What Changes:**
+- Install SDK as dev dependency (`@opencode-ai/sdk` in `devDependencies`)
+- Extract `node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts` → `src/common/opencode-sdk-types.ts`
+- Replace hand-written types in `opencode-protocol.ts` with SDK type re-exports
+- Update all consumers for field renames (`projectId` → `projectID`, etc.)
+- Remove ~263 lines of hand-written type definitions
+
+**What Stays:**
+- All HTTP calls in `opencode-proxy.ts` (unchanged)
+- All SSE handling in `opencode-sync-service.ts` (unchanged)
+- Architecture B1 (unchanged)
+- All security/validation code (unchanged)
+
+**Reduced Scope:**
+- Original target: ~1,450 lines eliminated (HTTP + types + SSE)
+- Revised target: ~263 lines eliminated (types only)
+- Runtime SDK adoption deferred to future (when ESM/CJS blocker resolved)
+
+---
+
+## 7. Revised Strategic Options (Post-Blocker Analysis)
+
+### Option A: ~~Adopt SDK (Replace HTTP/Types)~~ — BLOCKED BY ESM/CJS
+
+**Status:** ❌ **NOT FEASIBLE** — TypeScript cannot import ESM SDK in CommonJS project.
+
+Original plan was to replace HTTP calls + types + SSE with SDK client. Blocked by module system incompatibility. See §6 for full blocker analysis.
+
+---
+
+### Option D: Hybrid Approach (Types Only) — **APPROVED**
+
+**What changes:**
+- Install SDK as dev dependency
+- Extract SDK's `gen/types.gen.d.ts` (3,380 lines) → `src/common/opencode-sdk-types.ts`
+- Replace hand-written types in `opencode-protocol.ts` with SDK type imports
+- Update all consumers for field renames (`projectId` → `projectID`, `Message.sessionId` → `Message.sessionID`, etc.)
+- Add npm script to re-extract types on SDK updates
+
+**What stays:**
+- HTTP client in `opencode-proxy.ts` (all 24 methods unchanged)
+- SSE handling in `opencode-sync-service.ts` (unchanged)
+- `eventsource-parser` dependency (still needed)
+- Architecture B1 (unchanged)
+- All security/validation code (unchanged)
+
+**Effort:** 6-8 hours (vs 12-18 for full SDK adoption)  
+**Risk:** Very Low  
+**Code reduction:** ~263 lines eliminated (type definitions only)
+
+**Benefits:**
+- ✅ Fixes 7 field name mismatches
+- ✅ Adds 9 missing message Part types
+- ✅ Adds 11 missing SSE event types
+- ✅ Types stay in sync with OpenCode API (via SDK source)
+- ✅ Zero runtime risk (no transport changes)
+- ✅ Future-proof (can adopt runtime SDK when blocker resolved)
+
+**Limitations:**
+- ❌ HTTP client code remains (~931 lines) — not eliminated, just retyped
+- ❌ Manual type re-extraction on SDK updates (mitigated by npm script)
+- ⏸️ Runtime SDK benefits deferred (connection pooling, retry logic, etc.)
+
+---
+
+### Option B: ~~SDK + Browser-Side Client~~ — BLOCKED BY ESM/CJS
+
+**Status:** ❌ **NOT FEASIBLE** — Same ESM/CJS blocker, plus architectural concerns.
+
+---
+
+### Option C: ~~Plugin System Migration~~ — OUT OF SCOPE
+
+**Status:** ⏸️ **DEFERRED** — Too large a change, doesn't solve type drift problem.
+
+---
+
+### Option E: Fork SDK to Build CJS — NOT RECOMMENDED
+
+**Status:** ⚠️ **POSSIBLE BUT HIGH COST**
+
+Fork the SDK, modify build to output CJS. Would enable full SDK adoption but creates permanent maintenance burden (must sync with upstream daily releases).
+
+**Rejected because:** Maintenance cost > benefit. Hybrid approach achieves 90% of value with 10% of risk.
+
+---
+
+### Option F: Wait for CJS Support — NOT RECOMMENDED
+
+**Status:** ⏸️ **UNCERTAIN TIMELINE**
+
+Request OpenCode team add dual ESM/CJS builds. Unknown timeline, blocks Phase 2B indefinitely.
+
+**Rejected because:** Type drift is happening NOW (7 mismatches already). Can't wait for upstream changes.
+
+---
+
+## 8. Recommendation: Option D (Hybrid — Types Only) — **APPROVED 2026-02-18**
+
+### 8.1 Why Hybrid Approach
+
+| Factor | Assessment |
+|--------|------------|
+| **Primary goal achieved** | Type compatibility with OpenCode API ✅ (90% of original value) |
+| **Unblocked** | Works within Theia's CJS constraints |
+| **Minimal risk** | Zero runtime changes = zero transport bugs |
 | **Type safety** | Immediately fixes 7 field mismatches, adds 9 missing part types, 11 missing event types |
-| **Forward compatibility** | Future OpenCode API changes arrive via `npm update` instead of manual sync |
-| **Phase 3 readiness** | Rich Part types (tool, agent, step-start, etc.) needed for tasks 3.7-3.11 |
-| **Reversibility** | Low risk — we can always revert to hand-rolled HTTP if SDK has issues |
+| **Forward compatibility** | Types sourced from SDK = stay in sync with API |
+| **Effort vs benefit** | 6-8 hours for 263 LOC reduction + full type correctness |
+| **Reversible** | Can delete SDK types anytime, OR upgrade to runtime SDK when blocker resolved |
 
-### 7.2 Why NOT Option B
+### 8.2 Why NOT Full SDK (Original Option A)
 
-- Browser-side SDK means CORS configuration complexity
-- Loses backend stream interception (critical for `%%OS{...}%%`)
-- SSE connection limits in browsers
-- Breaks Theia's architectural pattern (backend services mediate external connections)
-- Much higher effort and risk
+**Blocked by technical constraint:** TypeScript cannot import ESM modules in CommonJS projects. See §6 for full analysis of six attempted workarounds.
 
-### 7.3 Why NOT Option C
+### 8.3 Why NOT Wait
 
-- Plugin system moves complexity, doesn't reduce it
-- Creates dependency on OpenCode's plugin runtime
-- Need IPC between plugin process and Theia — adding complexity
-- The `%%OS{...}%%` approach works and is well-tested (12 unit tests)
-- Premature optimization — revisit after Phase 3 is complete
+Type drift is **happening now**:
+- 7 field name mismatches cause runtime bugs (accessing `undefined` properties)
+- 9 missing Part types block Phase 3 tasks 3.7-3.11 (command manifest needs tool/agent/step-start parts)
+- 11 missing event types limit SSE integration completeness
 
-### 7.4 Timing
+Waiting for upstream CJS support or Theia ESM migration = **indefinite blocker**.
 
-**Recommended: NOW, before Phase 3 tasks 3.7-3.11.**
+### 8.4 Timing
+
+**NOW, before Phase 3 tasks 3.7-3.11.**
 
 Rationale:
-- Tasks 3.7 (Command Manifest) and 3.11 (Command Result Feedback) need rich Part types
-- Building on incorrect types now means rework later
-- The SDK adoption is isolated — it doesn't change architecture, just the HTTP/type layer
-- Clean break point: tasks 3.1-3.6 are done, 3.7 hasn't started
+- Phase 3 already complete, but tasks 3.7/3.11 used workarounds due to missing Part types
+- Phase 1C (hardening) scheduled next — includes type safety improvements
+- Clean break point: no in-flight work blocked by type changes
 
-### 7.5 Migration Plan (4 phases, each independently testable)
+### 8.5 Migration Plan (4 Phases, Each Independently Testable)
 
 ```
-Phase A: Install SDK, create type aliases          (~2 hours)
-  - npm install @opencode-ai/sdk
-  - Create bridge types in opencode-protocol.ts (alias SDK types)
-  - Verify build still passes
+Phase 2B.1: Extract SDK Types                         (~1 hour)
+  - Install @opencode-ai/sdk as devDependency (exact version)
+  - Extract dist/gen/types.gen.d.ts → src/common/opencode-sdk-types.ts
+  - Create npm script: `npm run extract-sdk-types`
+  - Verify TypeScript can import types
+  - Verify build passes
 
-Phase B: Replace HTTP calls in OpenCodeProxy       (~6 hours)  
-  - Initialize SDK client in OpenCodeProxy constructor
-  - Replace each httpGet/httpPost/httpDelete with SDK method
-  - Keep same DI interface (OpenCodeService)
-  - Run existing tests
+Phase 2B.2: Create Type Bridge                        (~2 hours)
+  - In opencode-protocol.ts, import SDK types
+  - Create type aliases for backward compatibility:
+    export type Session = SDKTypes.Session
+    export type Message = SDKTypes.UserMessage | SDKTypes.AssistantMessage
+  - Map SDK event types to our event protocol
+  - Verify build passes (no consumer changes yet)
 
-Phase C: Replace SSE handling                      (~4 hours)
-  - Replace eventsource-parser with SDK event.subscribe()
-  - Stream interceptor operates on event data (preserved)
-  - Update event type mappings
+Phase 2B.3: Update Consumers for Field Renames        (~2 hours)
+  - session-service.ts: projectId → projectID, sessionId → sessionID
+  - chat-widget.tsx: message.sessionId → message.sessionID
+  - opencode-proxy.ts: update return types
+  - Fix all TypeScript errors from case changes
+  - Run unit tests (expect ~10-15 failures from field renames)
 
-Phase D: Cleanup                                   (~4 hours)
-  - Remove custom type definitions from opencode-protocol.ts
-  - Remove eventsource-parser dependency
-  - Update all downstream consumers for field renames
-  - Update unit tests
+Phase 2B.4: Cleanup & Documentation                   (~1 hour)
+  - Remove old hand-written types from opencode-protocol.ts (~263 lines)
+  - Update THIRD-PARTY-NOTICES with SDK attribution
+  - Document type extraction process in README
+  - Run full test suite
+  - Verify zero TypeScript errors
 ```
 
 ---
 
-## 8. What Can NOT Be Avoided
+## 9. What Can NOT Be Avoided (Updated)
 
-Regardless of SDK adoption, these components are **irreducible** — they represent our unique integration logic that no SDK/extension can provide:
+**Hybrid approach means HTTP client remains:**
 
-| Component | LOC | Why It's Necessary |
-|-----------|-----|-------------------|
-| Theia DI wrappers | ~200 | Theia requires injectable services |
-| JSON-RPC bridge | ~300 | Theia frontend ↔ backend communication |
-| Stream interceptor | ~140 | `%%OS{...}%%` command extraction (our protocol) |
-| Hub server | ~211 | Instructions endpoint for agent |
-| Session state mgmt | ~500 | Optimistic updates, event routing, streaming UI |
-| Command validation | ~200 | Security allowlisting, rate limiting |
-| Permission dialog | ~413 | UI for permission requests |
-| Chat widget | ~500+ | Custom React chat UI |
-| **TOTAL** | **~2,464** | Minimum viable integration |
+| Component | LOC | Status | Why It's Necessary |
+|-----------|-----|--------|-------------------|
+| HTTP Client | ~931 | ⚠️ **STAYS** (retyped) | ESM/CJS blocker prevents runtime SDK adoption |
+| SSE Handling | ~555 | ⚠️ **STAYS** | Dependent on HTTP client |
+| Theia DI wrappers | ~200 | **STAYS** | Theia requires injectable services |
+| JSON-RPC bridge | ~300 | **STAYS** | Theia frontend ↔ backend communication |
+| Stream interceptor | ~140 | **STAYS** | `%%OS{...}%%` command extraction (our protocol) |
+| Hub server | ~211 | **STAYS** | Instructions endpoint for agent |
+| Session state mgmt | ~500 | **STAYS** | Optimistic updates, event routing, streaming UI |
+| Command validation | ~200 | **STAYS** | Security allowlisting, rate limiting |
+| Permission dialog | ~413 | **STAYS** | UI for permission requests |
+| Chat widget | ~500+ | **STAYS** | Custom React chat UI |
+| **Type definitions** | ~263 | ✅ **ELIMINATED** | Replaced by SDK types |
+| **TOTAL** | **~3,950** | | Down from ~4,027 (2% reduction vs 36% originally planned) |
 
-The SDK reduces our total from ~4,027 to ~2,600 lines. The remaining ~2,600 lines are the parts that **make this a Theia integration**, not a generic client. Those cannot be avoided.
+**Key Insight:** The hybrid approach eliminates type drift (primary goal achieved) but cannot eliminate the HTTP/SSE transport layer due to technical constraints. The remaining ~3,950 lines represent irreducible integration logic + transport code blocked by ESM/CJS incompatibility.
+
+**Future Path:** If Theia migrates to ESM or SDK adds CJS builds, we can revisit full runtime SDK adoption to eliminate the additional ~1,486 lines (HTTP + SSE).
 
 ---
 
-## 9. Risk Assessment
+## 10. Risk Assessment (Updated for Hybrid Approach)
 
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|------------|
-| SDK daily release breaks API | Low | Medium | Pin version, test before upgrading |
-| SDK doesn't expose raw SSE data for stream interceptor | Low | High | Intercept at fetch level before SDK processes |
-| SDK uses browser-incompatible APIs in Node.js | Very Low | Low | SDK is used in Node.js by design (TUI uses it) |
-| Field renames cause cascading changes | Medium | Low | Use TypeScript compiler to catch all references |
-| SDK event model differs from our SSE mapping | Medium | Medium | Phase C handles this explicitly |
+| SDK types diverge from API (type file out of sync) | Medium | Medium | Pin SDK version exactly, update via npm script, test after updates |
+| Field renames cause cascading test failures | High | Low | Use TypeScript compiler to catch all references, expect 10-15 test failures |
+| Manual type extraction forgotten on SDK update | Medium | Medium | Document in README, add npm script `extract-sdk-types`, consider pre-commit hook |
+| Theia CJS requirement persists long-term | High | Low | Hybrid approach is sustainable indefinitely, no pressure to migrate |
+| OpenCode API changes not reflected in local types | Low | High | SDK types are auto-generated from OpenAPI spec, very reliable |
+
+**Risk Comparison vs Original Plan:**
+- ✅ **Lower risk:** Zero runtime changes = no transport bugs
+- ✅ **Lower effort:** 6-8 hours vs 12-18 hours
+- ⚠️ **New risk:** Manual type sync (mitigated by tooling)
+- ⏸️ **Deferred benefit:** Runtime SDK advantages (connection pooling, retry) postponed
 
 ---
 
-## 10. Decision Required
+## 11. Decision: APPROVED (2026-02-18)
 
-**Question for you:** Should we proceed with Option A (SDK adoption) before continuing Phase 3?
+**Approved Strategy:** Option D — Hybrid Approach (Types Only)
 
-- **YES**: Builder implements the 4-phase migration plan (~12-18 hours) as a new task
-- **NO**: Continue Phase 3 with current code, accept type drift risk
-- **DEFER**: Complete Phase 3 first, then migrate (higher rework cost but no interruption)
-- **OPTION B/C**: Choose a different strategic option (requires further architecture work)
+**Scope:**
+- Install SDK as devDependency (`@opencode-ai/sdk@1.2.6` exact)
+- Extract `dist/gen/types.gen.d.ts` → `src/common/opencode-sdk-types.ts` (3,380 lines)
+- Replace hand-written types with SDK types (eliminate ~263 lines)
+- Update consumers for field renames (`projectId` → `projectID`, etc.)
+- Keep HTTP/SSE transport layer unchanged
+
+**Justification:**
+1. **Primary goal achieved:** Type compatibility with OpenCode API ✅
+2. **Unblocked:** Works within Theia's CJS constraints
+3. **Risk-appropriate:** Zero runtime changes for first SDK integration
+4. **Reversible:** Can revert or upgrade to runtime SDK later
+5. **Phase 3-ready:** Provides rich Part types needed for command manifest
+
+**Builder Delegation:**
+- **Next:** Update WORKPLAN.md with revised Phase 2B tasks (2B.1–2B.4)
+- **Then:** Write Builder contract for hybrid approach
+- **Then:** Delegate to Builder for implementation in worktree `.worktrees/phase-2b-sdk-adoption`
 
 ---
 
-*End of DECISION-SDK-ADOPTION.md*
+*End of DECISION-SDK-ADOPTION.md v2.0 — Hybrid Approach Approved 2026-02-18*

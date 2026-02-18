@@ -61,3 +61,32 @@
 - **Problem**: Using `import React from 'react'` or `import * as React from 'react'` may bundle a separate React instance, causing hooks to fail.
 - **Solution**: Always use `import * as React from '@theia/core/shared/react'` and `import * as ReactDOM from '@theia/core/shared/react-dom'` in Theia extensions. Theia re-exports React through its shared package to ensure a single React instance.
 
+## SDK Type Adoption Patterns (Phase 2B — 2026-02-18)
+
+### Pattern: ESM/CJS Incompatibility in TypeScript Projects
+- **Context**: TypeScript CJS projects need to use types from ESM-only npm packages. TypeScript's `import type` does not work with ESM modules when compiling to CJS target.
+- **Blocker**: Node.js cannot load ESM modules synchronously in CJS context. TypeScript resolves `import type` statements to ensure type validity, requiring module graph traversal.
+- **Solution (Hybrid Approach)**: Extract types from SDK source code to standalone `.d.ts` file with zero imports. This creates a "type bridge" that provides SDK types without ESM/CJS interop issues.
+- **Key Technique**: Use npm script to automate type extraction (`npm run extract-sdk-types`). Keep SDK as `devDependency` (never bundle at runtime).
+- **Files**: `scripts/extract-sdk-types.js`, `src/common/opencode-sdk-types.ts`
+
+### Pattern: Type Bridge Implementation
+- **Problem**: Hand-written types and SDK types have field name mismatches (e.g., `modelId` vs `model`, `type` vs `object`).
+- **Solution**: Create intermediate bridge types that map old field names to new SDK types. Allows gradual migration of consumers without breaking changes.
+- **Key Insight**: Bridge types provide backward compatibility during transition period. Can be removed once all consumers updated.
+- **Files**: `src/common/opencode-protocol.ts` (bridge types), test files (consumer updates)
+
+### Pattern: npm Script for Type Extraction
+- **Purpose**: Automate extraction of SDK types when SDK updates are released.
+- **Implementation**: Node.js script that reads SDK source files, strips runtime code, preserves type declarations, and writes to single `.d.ts` file.
+- **Key Design Decision**: Extract full SDK types (3,380 lines) rather than cherry-picking. Prevents missing dependencies and ensures completeness.
+- **Maintenance**: Run `npm run extract-sdk-types` after `npm update @opencode-ai/sdk`.
+- **Files**: `scripts/extract-sdk-types.js`, `package.json` (scripts section)
+
+### Gotcha: TypeScript Cannot Import ESM in CJS Target
+- **Context**: `tsconfig.json` with `"module": "commonjs"` and ESM-only package in `node_modules`.
+- **Symptom**: `import type { X } from 'esm-package'` fails with "ERR_REQUIRE_ESM" or "Module not found".
+- **Why**: TypeScript resolves import paths at compile time to validate types. ESM modules require async loading (`import()`), but CJS `require()` is synchronous.
+- **Solution**: Do NOT use `import type` from ESM packages. Extract types to standalone file OR use dynamic `import()` for runtime (but not for types).
+- **Reference**: Phase 2B decision document (`docs/architecture/DECISION-SDK-ADOPTION.md` v2.0)
+

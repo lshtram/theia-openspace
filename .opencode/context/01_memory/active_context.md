@@ -1,39 +1,84 @@
 # Active Context
 
 **Project:** Theia Openspace
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-18
 
 ## Current Focus
-- **Status:** PHASE 2B (SDK ADOPTION) — Planning complete, ready for Builder delegation
-- **Completed (2026-02-17):**
+- **Status:** PHASE 2B COMPLETE ✅ — SDK types adopted, ready for Phase 1C
+- **Major Change (2026-02-18):** Original plan (full SDK adoption) **BLOCKED** by ESM/CJS incompatibility. Pivoted to hybrid approach (types only).
+- **Phase 2B Completion (2026-02-18):** All 5 tasks complete (2B.1-2B.5), build clean, 0 new test failures, Janitor ✅ + CodeReviewer ✅ approved
+- **Completed (2026-02-18):**
   - Phase 0: All tasks (0.1–0.8) ✅
   - Phase 1: All tasks (1.1–1.15) ✅
   - Phase 1B1: All tasks (1B1.1–1B1.8) ✅
-  - Phase 3: Tasks 3.1–3.6, 3.9 ✅
+  - Phase 3: All tasks (3.1–3.11) ✅
+  - Phase 4: All tasks (4.1–4.6) ✅ — Presentation and whiteboard modalities complete
   - Scout research: OpenCode SDK — RFC-002 FINAL (`docs/architecture/RFC-002-OPENCODE-SDK-RESEARCH.md`)
-  - Decision document: `docs/architecture/DECISION-SDK-ADOPTION.md` — Option A APPROVED
-  - Phase 2B added to WORKPLAN.md (6 tasks: 2B.1–2B.6, ~12–18 hours estimated)
+  - Decision document: `docs/architecture/DECISION-SDK-ADOPTION.md` v2.0 — Hybrid Approach APPROVED (2026-02-18)
+  - ESM/CJS blocker discovered: SDK is ESM-only, Theia requires CJS, TypeScript cannot import ESM in CJS
+  - Six approaches evaluated (static import, node16, bundler, dynamic import, fork, wait) — only hybrid works
+  - Phase 2B scope revised: ~263 lines (types only) vs ~1,450 originally planned (types + HTTP + SSE)
+  - Phase 2B tasks revised: 5 tasks (2B.1–2B.5), 6-8 hours estimated (down from 12-18)
+  - WORKPLAN.md updated with hybrid approach tasks
+  - Builder contract rewritten: `contract.md` v2.0
   - Phase 3 requirements document created and audited
   - Multi-perspective audit (4 perspectives, 15 gaps identified)
   - User decision: All BLOCKING + RECOMMENDED gaps integrated into Phase 3 requirements
   - Architecture refactor: C → B1 complete
-- **Next:** Write `contract.md` for Phase 2B → Delegate to Builder
+  - **Full codebase code review complete (2026-02-18):**
+    - 7 parallel CodeReviewer subagents reviewed all code from Phases 0, 1, 1B1, 3, 4
+    - 54 issues identified: 10 T1 blocking, 28 T2 important, 16 T3 minor
+    - Review report: `docs/reviews/CODE-REVIEW-FULL-CODEBASE.md`
+    - Phase 1C added to WORKPLAN.md (7 tasks: 1C.1–1C.7, ~14–22 hours estimated)
+    - Detailed implementation plan: `docs/tasks/PHASE-1C-HARDENING-PLAN.md`
+    - **User decision:** Execute Phase 1C immediately after Phase 2B completes (before Phase 5)
+- **Next:** Phase 1C Hardening → Phase 5 Polish & Desktop
 
-## Phase 2B: SDK Adoption — Plan Summary
+## Phase 1C: Code Hardening & Quality Pass — Plan Summary (APPROVED 2026-02-18)
+
+**Strategic timing:** Immediately after Phase 2B, before Phase 5 deployment  
+**Rationale:** Avoid duplicate work (SDK refactor resolves some issues), clean break point, Phase 4 already deployed (security issues upgraded to critical)
+
+| Task | What | Effort | Priority |
+|------|------|--------|----------|
+| 1C.1 | Fix T1 blocking (10 issues): dangerous commands, XSS, symlinks, crashes, tests | 4–6h | CRITICAL |
+| 1C.2 | Fix T2 security (7 issues): Hub auth, sensitive files, permission dialog, file limits | 3–4h | HIGH |
+| 1C.3 | Fix T2 reliability (21 issues): memory leaks, dead code, disposal, type safety | 2–3h | MEDIUM |
+| 1C.4 | Dead code cleanup: duplicates, spike files, unused types | 2h | LOW |
+| 1C.5 | Test infrastructure: Jest/Mocha conflict, phantom tests, flaky timeouts | 3–4h | MEDIUM |
+| 1C.6 | T3 minor fixes (16 issues): as time allows | 2–4h | LOW |
+| 1C.7 | Security review & validation: checklist, penetration testing | 1–2h | HIGH |
+
+**Total effort:** 14–22 hours (1–2 sessions)
+
+**Key issues by category:**
+- **Security (T1+T2):** 17 issues — XSS, path traversal, dangerous commands, Hub auth, postMessage origin, file size limits
+- **Reliability (T2):** 21 issues — memory leaks, fake returns, subscription leaks, dead code, type duplicates
+- **Tests (T1+T2):** 13 issues — runner conflict, tautological tests, phantom tests, flaky timeouts
+- **Minor (T3):** 16 issues — cleanup, style, configuration hardcoding
+
+
 | Task | What | Effort | Dependencies |
 |------|------|--------|-------------|
-| 2B.1 | Install `@opencode-ai/sdk`, create type bridge in `opencode-protocol.ts` | 1–2h | Phase 1B1 |
-| 2B.2 | Replace 24 HTTP calls in `OpenCodeProxy` with SDK client methods | 4–6h | 2B.1 |
-| 2B.3 | Replace SSE handling with SDK `event.subscribe()` async iterable | 3–5h | 2B.2 |
-| 2B.4 | Update all downstream consumers for field renames (`projectId`→`projectID`, etc.) | 2–3h | 2B.3 |
-| 2B.5 | Cleanup: remove hand-rolled types, remove `eventsource-parser` dependency | 1–2h | 2B.4 |
-| 2B.6 | Integration verification (full regression test) | 1–2h | 2B.5 |
+| 2B.1 | Extract SDK types + npm script | 1h | Phase 1B1, Phase 3 complete |
+| 2B.2 | Create type bridge in opencode-protocol.ts | 2h | 2B.1 |
+| 2B.3 | Update consumers for field renames + Part types | 2h | 2B.2 |
+| 2B.4 | Cleanup hand-written types + documentation | 1h | 2B.3 |
+| 2B.5 | Integration verification | 1–2h | 2B.4 |
+
+**Deferred (ESM/CJS blocker):**
+- ~~2B.5~~ Replace HTTP calls with SDK client — BLOCKED until Theia ESM migration or SDK CJS builds
+- ~~2B.6~~ Replace SSE handling with SDK events — BLOCKED until ESM/CJS resolved
 
 **Key decisions:**
-- SDK version pinned to exact (not range)
-- Stream interceptor moves from wire-level (raw SSE bytes) to semantic-level (message text parts)
+- SDK installed as devDependency (types source only, not runtime)
+- SDK types extracted to `src/common/opencode-sdk-types.ts` (3,380 lines, zero imports)
+- npm script `extract-sdk-types` for type re-extraction on SDK updates
+- HTTP/SSE client stays unchanged (logic same, just retyped with SDK types)
+- `eventsource-parser` dependency stays
+- Stream interceptor unchanged (operates on raw SSE, not SDK events)
 - `OpenCodeService` DI interface unchanged — callers don't need to change
-- Phase 2B blocks tasks 3.7–3.11 but NOT Phase 2 or Phase 4
+- Phase 2B blocks nothing (types only, zero runtime changes)
 
 ## Architecture B1 Summary
 | Component | Before (Architecture C) | After (Architecture B1) |
