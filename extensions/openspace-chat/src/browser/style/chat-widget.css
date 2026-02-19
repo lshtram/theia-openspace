@@ -799,6 +799,8 @@
     padding: 7px 12px;
     white-space: pre-wrap;
     word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
 }
 
 .message-bubble .part-tool-bash-output {

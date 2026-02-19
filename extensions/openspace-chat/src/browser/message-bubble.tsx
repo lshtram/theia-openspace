@@ -75,9 +75,9 @@ function renderTextPart(part: any, index: number): React.ReactNode {
 const BASH_TOOL_NAMES = /^(bash|execute|run_command|run|shell|cmd|terminal)$/i;
 
 /** Collapsible tool call block. Detects bash and renders terminal style. */
-const ToolBlock: React.FC<{ part: any }> = ({ part }) => {
+const ToolBlock: React.FC<{ part: any; index?: number }> = ({ part }) => {
     const [expanded, setExpanded] = React.useState(false);
-    const name: string = part.name || part.tool || 'tool';
+    const name: string = part.tool || 'tool';
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
         (state && typeof state === 'object' ? (state.status || state.type || 'completed') : 'completed');
@@ -85,15 +85,17 @@ const ToolBlock: React.FC<{ part: any }> = ({ part }) => {
     const isError = stateStr === 'error';
     const isBash = BASH_TOOL_NAMES.test(name);
 
-    // Extract input/output — SDK: state.output for completed state
-    const input = part.input;
+    // Extract input/output — SDK: state.input and state.output for completed state
+    const input = (typeof state === 'object' && state !== null && 'input' in state)
+        ? (state as { input?: unknown }).input
+        : undefined;
     const output = (typeof state === 'object' && state !== null && 'output' in state)
         ? state.output
         : (part.output ?? undefined);
 
     if (isBash) {
         const cmd: string = typeof input === 'string' ? input :
-            (input && typeof input === 'object' ? (input.command ?? JSON.stringify(input, null, 2)) : '');
+            (input && typeof input === 'object' ? ((input as { command?: string }).command ?? JSON.stringify(input, null, 2)) : '');
         const bashOutput: string = typeof output === 'string' ? output :
             (output ? JSON.stringify(output, null, 2) : '');
         return (
@@ -114,6 +116,7 @@ const ToolBlock: React.FC<{ part: any }> = ({ part }) => {
                 {cmd && cmd !== name && (
                     <div className="part-tool-cmd">{cmd}</div>
                 )}
+                {/* TODO: strip ANSI escape codes from bashOutput (raw codes from shell commands will display literally) */}
                 {bashOutput && <div className="part-tool-bash-output">{bashOutput}</div>}
             </div>
         );
@@ -166,7 +169,7 @@ const ToolBlock: React.FC<{ part: any }> = ({ part }) => {
 
 /** Render tool part — minimalist collapsible. Bash tools get terminal style. */
 function renderToolPart(part: any, index: number): React.ReactNode {
-    return <ToolBlock key={`tool-${index}`} part={part} />;
+    return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} />;
 }
 
 /** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet (streaming). */
