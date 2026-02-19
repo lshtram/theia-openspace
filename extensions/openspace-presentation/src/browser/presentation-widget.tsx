@@ -22,7 +22,6 @@ import Reveal from 'reveal.js';
 import RevealMarkdown from 'reveal.js/plugin/markdown/markdown.esm.js';
 import 'reveal.js/dist/reveal.css';
 import 'reveal.js/dist/theme/black.css';
-import DOMPurify from 'dompurify';
 
 export interface DeckOptions {
     title?: string;
@@ -136,7 +135,7 @@ export class PresentationWidget extends ReactWidget {
         this.update();
         // Re-initialize reveal.js if already attached
         if (this.revealDeck) {
-            this.initializeReveal();
+            this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
         }
     }
 
@@ -207,7 +206,7 @@ export class PresentationWidget extends ReactWidget {
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
-        this.initializeReveal();
+        this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
     }
 
     protected onBeforeDetach(msg: Message): void {
@@ -248,7 +247,7 @@ export class PresentationWidget extends ReactWidget {
         });
 
         await this.revealDeck.initialize();
-        this.navigationService.setReveal(this.revealDeck);
+        this.navigationService?.setReveal(this.revealDeck);
     }
 
     protected render(): React.ReactNode {
@@ -258,6 +257,9 @@ export class PresentationWidget extends ReactWidget {
             <div className="presentation-container" ref={this.containerRef}>
                 <div className="reveal">
                     <div className="slides">
+                        {/* Note: RevealMarkdown processes raw markdown via marked.js (sanitize: false).
+                            DOMPurify is no longer applied to slide content — .deck.md files are
+                            trusted workspace files authored by the user or agent, not external input. */}
                         {parsed.slides.map((slide, i) => (
                             <section
                                 key={i}
@@ -290,70 +292,4 @@ More content`}
         );
     }
 
-    /**
-     * Simple markdown to HTML conversion for slides
-     */
-    protected markdownToHtml(markdown: string): string {
-        let html = markdown;
-        
-        // Headers
-        html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-        html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-        html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-        
-        // Bold and italic
-        html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        
-        // Code blocks
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>');
-        html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-        
-        // Lists
-        html = html.replace(/^- (.*$)/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-        
-        // Links
-        html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
-        
-        // Paragraphs (double newlines)
-        html = html.replace(/\n\n/g, '</p><p>');
-        
-        // Wrap in paragraph if not already wrapped
-        if (!html.startsWith('<')) {
-            html = '<p>' + html + '</p>';
-        }
-        
-        return html;
-    }
-
-    /**
-     * Sanitize HTML to prevent XSS attacks (T1-6).
-     * Uses DOMPurify to remove malicious scripts, event handlers, etc.
-     */
-    protected sanitizeHtml(html: string): string {
-        return DOMPurify.sanitize(html, {
-            ALLOWED_TAGS: [
-                'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                'p', 'br', 'hr',
-                'ul', 'ol', 'li',
-                'strong', 'em', 'b', 'i', 'u', 's', 'strike',
-                'code', 'pre', 'samp', 'kbd',
-                'blockquote', 'q',
-                'a',
-                'img',
-                'table', 'thead', 'tbody', 'tr', 'th', 'td',
-                'div', 'span',
-                'section', 'article', 'header', 'footer', 'nav',
-                'small', 'big', 'sub', 'sup'
-            ],
-            ALLOWED_ATTR: [
-                'href', 'src', 'alt', 'title', 'class', 'id',
-                'width', 'height', 'style',
-                'target', 'rel'
-            ],
-            ALLOW_DATA_ATTR: false
-        });
-    }
 }
