@@ -132,6 +132,7 @@ export class OpenSpaceMcpServer {
         this.registerEditorTools(server);
         this.registerTerminalTools(server);
         this.registerFileTools(server);
+        this.registerPresentationTools(server);
     }
 
     // ─── Pane Tools (4) ──────────────────────────────────────────────────────
@@ -410,6 +411,102 @@ export class OpenSpaceMcpServer {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
                 }
             }
+        );
+    }
+
+    // ─── Presentation Tools (10) ─────────────────────────────────────────────
+
+    private registerPresentationTools(server: any): void {
+        server.tool(
+            'openspace.presentation.list',
+            'List all .deck.md presentation files in the workspace',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.presentation.list', args)
+        );
+
+        server.tool(
+            'openspace.presentation.read',
+            'Read a .deck.md presentation file and return its parsed structure',
+            {
+                path: z.string().describe('Absolute path to the .deck.md file'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.read', args)
+        );
+
+        server.tool(
+            'openspace.presentation.create',
+            'Create a new .deck.md presentation file with title and initial slides',
+            {
+                path: z.string().describe('Absolute path for the new .deck.md file'),
+                title: z.string().describe('Presentation title'),
+                slides: z.array(z.string()).optional().describe('Array of markdown slide content strings'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.create', args)
+        );
+
+        server.tool(
+            'openspace.presentation.update_slide',
+            'Update the content of a single slide in a .deck.md file',
+            {
+                path: z.string().describe('Absolute path to the .deck.md file'),
+                slideIndex: z.number().int().min(0).describe('Zero-based slide index'),
+                content: z.string().describe('New markdown content for the slide'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.update_slide', args)
+        );
+
+        server.tool(
+            'openspace.presentation.open',
+            'Open a .deck.md file in the presentation viewer pane',
+            {
+                path: z.string().describe('Absolute path to the .deck.md file'),
+                splitDirection: z.enum(['right', 'left', 'bottom', 'new-tab']).optional()
+                    .describe('Where to open the pane (default: right)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.open', args)
+        );
+
+        server.tool(
+            'openspace.presentation.navigate',
+            'Navigate to a slide in the active presentation',
+            {
+                direction: z.enum(['next', 'prev', 'first', 'last']).optional()
+                    .describe('Navigation direction'),
+                slideIndex: z.number().int().min(0).optional()
+                    .describe('Absolute zero-based slide index to jump to'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.navigate', args)
+        );
+
+        server.tool(
+            'openspace.presentation.play',
+            'Start autoplay — advances slides automatically on a timer',
+            {
+                interval: z.number().int().min(500).optional()
+                    .describe('Milliseconds between slides (default: 5000)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.presentation.play', args)
+        );
+
+        server.tool(
+            'openspace.presentation.pause',
+            'Pause autoplay, keeping current slide position',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.presentation.pause', args)
+        );
+
+        server.tool(
+            'openspace.presentation.stop',
+            'Stop autoplay and return to the first slide',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.presentation.stop', args)
+        );
+
+        server.tool(
+            'openspace.presentation.toggleFullscreen',
+            'Toggle fullscreen mode for the active presentation viewer',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.presentation.toggleFullscreen', args)
         );
     }
 
