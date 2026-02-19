@@ -49,7 +49,7 @@ async function mcpRequest(method: string, params?: unknown): Promise<any> {
 
 /**
  * Expected tool names registered by OpenSpaceMcpServer.
- * These map exactly to the 20 tools in hub-mcp.ts (17 core + 3 editor extras).
+ * These map exactly to the 30 tools in hub-mcp.ts (20 core + 10 presentation).
  */
 const EXPECTED_TOOLS = [
     // Pane tools (4)
@@ -76,6 +76,17 @@ const EXPECTED_TOOLS = [
     'openspace.file.list',
     'openspace.file.search',
     'openspace.file.patch',
+    // Presentation tools (10)
+    'openspace.presentation.list',
+    'openspace.presentation.read',
+    'openspace.presentation.create',
+    'openspace.presentation.update_slide',
+    'openspace.presentation.open',
+    'openspace.presentation.navigate',
+    'openspace.presentation.play',
+    'openspace.presentation.pause',
+    'openspace.presentation.stop',
+    'openspace.presentation.toggleFullscreen',
 ];
 
 test.describe('MCP Tools Smoke Tests', () => {

@@ -424,3 +424,61 @@ describe('Hub — OPENSPACE_HUB_ORIGINS env var (T3-8)', () => {
         expect(src).to.include('OPENSPACE_HUB_ORIGINS');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 6: Presentation tool registration — structural verification
+// ---------------------------------------------------------------------------
+
+describe('OpenSpaceMcpServer — presentation tool registrations', () => {
+    let hubMcpSrc: string;
+
+    before(() => {
+        hubMcpSrc = fs.readFileSync(
+            path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+    });
+
+    const PRESENTATION_TOOLS = [
+        'openspace.presentation.list',
+        'openspace.presentation.read',
+        'openspace.presentation.create',
+        'openspace.presentation.update_slide',
+        'openspace.presentation.open',
+        'openspace.presentation.navigate',
+        'openspace.presentation.play',
+        'openspace.presentation.pause',
+        'openspace.presentation.stop',
+        'openspace.presentation.toggleFullscreen',
+    ];
+
+    for (const toolName of PRESENTATION_TOOLS) {
+        it(`registers tool "${toolName}"`, () => {
+            expect(hubMcpSrc, `hub-mcp.ts must register "${toolName}"`).to.include(`'${toolName}'`);
+        });
+    }
+
+    it('routes all presentation tools through executeViaBridge', () => {
+        // Each presentation tool must delegate to the browser via executeViaBridge
+        // (they cannot be implemented at the node layer since Theia/reveal.js is browser-side)
+        for (const toolName of PRESENTATION_TOOLS) {
+            expect(
+                hubMcpSrc,
+                `"${toolName}" must call executeViaBridge`
+            ).to.include(`executeViaBridge('${toolName}'`);
+        }
+    });
+
+    it('executeViaBridge returns isError:true for presentation tools when bridge is not connected', async () => {
+        const workspaceDir = makeTempDir();
+        const server = new OpenSpaceMcpServer(workspaceDir);
+        // No bridgeCallback set — bridge not connected
+        try {
+            const result = await priv(server).executeViaBridge('openspace.presentation.list', {});
+            expect(result.isError).to.be.true;
+            expect(result.content[0].text).to.include('Bridge not connected');
+        } finally {
+            fs.rmSync(workspaceDir, { recursive: true, force: true });
+        }
+    });
+});

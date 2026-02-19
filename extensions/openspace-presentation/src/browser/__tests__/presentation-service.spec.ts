@@ -40,6 +40,8 @@ describe('PresentationService', () => {
         // Inject stub fileService and workspaceService — unused by tested methods
         (service as any).fileService = {};
         (service as any).workspaceService = {};
+        // Inject stub logger — used by updateSlide and other methods
+        (service as any).logger = { info: sinon.stub(), warn: sinon.stub(), error: sinon.stub() };
     });
 
     afterEach(() => {
@@ -154,6 +156,86 @@ title: Test
             } catch (err: unknown) {
                 expect((err as Error).message).to.include('Invalid slide index: 5');
             }
+        });
+
+        it('should write updated content to disk on happy path', async () => {
+            const deckContent = `---
+title: Happy Path
+---
+# Slide 1
+
+First slide
+
+---
+
+# Slide 2
+
+Second slide`;
+            const writeStub = sinon.stub().resolves();
+            const stubFileService = {
+                read: sinon.stub().resolves({ value: deckContent }),
+                write: writeStub
+            };
+            (service as any).fileService = stubFileService;
+
+            await service.updateSlide('/test/happy.deck.md', 1, '# Updated Slide 2\n\nNew content');
+
+            expect(writeStub.calledOnce).to.be.true;
+            // The second argument to write() is the new file content string
+            const writtenContent: string = writeStub.firstCall.args[1];
+            expect(writtenContent).to.include('# Updated Slide 2');
+            expect(writtenContent).to.include('New content');
+            // Original slide 1 should be unchanged
+            expect(writtenContent).to.include('# Slide 1');
+        });
+    });
+
+    describe('onDidChange emitter', () => {
+        it('should fire onDidChange event after updateSlide', async () => {
+            const deckContent = `---
+title: Emitter Test
+---
+# Slide 1`;
+            const stubFileService = {
+                read: sinon.stub().resolves({ value: deckContent }),
+                write: sinon.stub().resolves()
+            };
+            (service as any).fileService = stubFileService;
+
+            let firedEvent: { path: string; content: string } | undefined;
+            service.onDidChange(evt => { firedEvent = evt; });
+
+            await service.updateSlide('/test/emitter.deck.md', 0, '# Changed Slide');
+
+            expect(firedEvent).to.not.be.undefined;
+            expect(firedEvent!.path).to.equal('/test/emitter.deck.md');
+            expect(firedEvent!.content).to.include('# Changed Slide');
+        });
+    });
+
+    describe('setActivePresentation', () => {
+        it('should set the active presentation path', () => {
+            // Stub fileService to have watch + onDidFilesChange so startWatching works
+            (service as any).fileService = {
+                watch: sinon.stub().returns({ dispose: sinon.stub() }),
+                onDidFilesChange: sinon.stub().returns({ dispose: sinon.stub() })
+            };
+
+            service.setActivePresentation('/test/active.deck.md');
+
+            expect(service.getActivePresentation()).to.equal('/test/active.deck.md');
+        });
+
+        it('should clear the active presentation path when set to undefined', () => {
+            (service as any).fileService = {
+                watch: sinon.stub().returns({ dispose: sinon.stub() }),
+                onDidFilesChange: sinon.stub().returns({ dispose: sinon.stub() })
+            };
+
+            service.setActivePresentation('/test/active.deck.md');
+            service.setActivePresentation(undefined);
+
+            expect(service.getActivePresentation()).to.be.undefined;
         });
     });
 });
