@@ -253,8 +253,19 @@ test('Test 7: Session list renders after project initializes (race condition reg
   // Extra settle time to allow project/session auto-loading to complete
   // This is the regression test for the race condition in session-service.ts
   // where sessions loaded before widget was mounted were lost.
-  await page.waitForTimeout(2000);
-  console.log('✓ Theia fully settled (2s after shell load)');
+  // Wait for the Theia backend service to complete project/session initialization.
+  // The session dropdown button renders immediately, but its data-test-sessions-count
+  // attribute is only set after sessions have loaded. Poll for it.
+  await page.waitForFunction(
+      () => {
+          const btn = document.querySelector('.session-dropdown-button');
+          return btn !== null && btn.getAttribute('data-test-sessions-count') !== null;
+      },
+      { timeout: 15000 }
+  ).catch(() => {
+      // If sessions never load (e.g. no OpenCode server), the test below will assert on null
+  });
+  console.log('✓ Theia fully settled (sessions loaded or timed out)');
 
   // Open chat widget
   await openChatWidget(page);
