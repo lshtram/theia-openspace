@@ -16,6 +16,7 @@
 
 import { Container } from '@theia/core/shared/inversify';
 import { CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { expect } from 'chai';
 import {
     EditorCommandContribution,
@@ -91,6 +92,9 @@ function createTestContainer(openCodeService?: MockOpenCodeService) {
     container.bind(WorkspaceService).toConstantValue(new MockWorkspaceService() as unknown as WorkspaceService);
     container.bind(FileService).toConstantValue(new MockFileService() as unknown as FileService);
     container.bind(EditorManager).toConstantValue(new MockEditorManager() as unknown as EditorManager);
+    container.bind(ILogger).toConstantValue({
+        info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined,
+    });
     if (openCodeService) {
         container.bind(OpenCodeService).toConstantValue(openCodeService as unknown as OpenCodeService);
     }

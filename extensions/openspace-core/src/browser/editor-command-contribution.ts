@@ -16,6 +16,7 @@
 
 import { injectable, inject, optional } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { EditorManager, EditorOpenerOptions } from '@theia/editor/lib/browser/editor-manager';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -273,6 +274,9 @@ export class EditorCommandContribution implements CommandContribution {
     @inject(OpenCodeService) @optional()
     private readonly openCodeService?: OpenCodeService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     /**
      * Map of tracked highlights for cleanup (GAP-4).
      */
@@ -293,7 +297,7 @@ export class EditorCommandContribution implements CommandContribution {
             // Step 1: Get workspace root
             const workspaceRoot = this.workspaceService.tryGetRoots()[0];
             if (!workspaceRoot) {
-                console.warn('[EditorCommand] No workspace root found');
+                this.logger.warn('[EditorCommand] No workspace root found');
                 return null;
             }
             const rootUri = workspaceRoot.resource;
@@ -310,7 +314,7 @@ export class EditorCommandContribution implements CommandContribution {
             // Step 3: Check for path traversal (..)
             let normalizedPath = path.normalize(resolvedPath);
             if (normalizedPath.includes('..')) {
-                console.warn(`[EditorCommand] Path traversal attempt rejected: ${filePath}`);
+                this.logger.warn(`[EditorCommand] Path traversal attempt rejected: ${filePath}`);
                 return null;
             }
 
@@ -319,7 +323,7 @@ export class EditorCommandContribution implements CommandContribution {
             const pathComponents = normalizedPath.split(path.sep);
             for (const component of pathComponents) {
                 if (component === '..') {
-                    console.warn(`[EditorCommand] Path traversal via symlink rejected: ${filePath}`);
+                    this.logger.warn(`[EditorCommand] Path traversal via symlink rejected: ${filePath}`);
                     return null;
                 }
             }
@@ -328,7 +332,7 @@ export class EditorCommandContribution implements CommandContribution {
             const normalizedRoot = path.normalize(rootPath);
             if (!normalizedPath.startsWith(normalizedRoot) && 
                 !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
-                console.warn(`[EditorCommand] Path outside workspace rejected: ${filePath}`);
+                this.logger.warn(`[EditorCommand] Path outside workspace rejected: ${filePath}`);
                 return null;
             }
 
@@ -336,7 +340,7 @@ export class EditorCommandContribution implements CommandContribution {
             if (this.openCodeService) {
                 const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
                 if (!result.valid) {
-                    console.warn(`[EditorCommand] Path rejected by symlink check: ${result.error}`);
+                    this.logger.warn(`[EditorCommand] Path rejected by symlink check: ${result.error}`);
                     return null;
                 }
                 // Update to the canonically resolved path before further checks
@@ -349,13 +353,13 @@ export class EditorCommandContribution implements CommandContribution {
             
             // Use shared sensitive file check from common module
             if (isSensitiveFile(fileName) || isSensitiveFile(relativePath)) {
-                console.warn(`[EditorCommand] Sensitive file access denied: ${filePath}`);
+                this.logger.warn(`[EditorCommand] Sensitive file access denied: ${filePath}`);
                 return null;
             }
 
             return normalizedPath;
         } catch (error) {
-            console.error('[EditorCommand] Path validation error:', error);
+            this.logger.error('[EditorCommand] Path validation error:', error);
             return null;
         }
     }
@@ -484,7 +488,7 @@ export class EditorCommandContribution implements CommandContribution {
 
             return { success: true, editorId };
         } catch (error) {
-            console.error('[EditorCommand] Error opening editor:', error);
+            this.logger.error('[EditorCommand] Error opening editor:', error);
             return { success: false };
         }
     }
@@ -508,7 +512,7 @@ export class EditorCommandContribution implements CommandContribution {
             }
 
             if (!editorWidget) {
-                console.warn(`[EditorCommand] Editor not found for scroll_to`);
+                this.logger.warn(`[EditorCommand] Editor not found for scroll_to`);
                 return { success: false };
             }
 
@@ -519,7 +523,7 @@ export class EditorCommandContribution implements CommandContribution {
             }
             return { success: true };
         } catch (error) {
-            console.error('[EditorCommand] Error scrolling to line:', error);
+            this.logger.error('[EditorCommand] Error scrolling to line:', error);
             return { success: false };
         }
     }
@@ -545,13 +549,13 @@ export class EditorCommandContribution implements CommandContribution {
             }
 
             if (!editorWidget) {
-                console.warn('[EditorCommand] No editor available for highlight');
+                this.logger.warn('[EditorCommand] No editor available for highlight');
                 return { success: false, highlightId: '' };
             }
 
             const monacoEditor = MonacoEditor.get(editorWidget);
             if (!monacoEditor) {
-                console.warn('[EditorCommand] Monaco editor not available');
+                this.logger.warn('[EditorCommand] Monaco editor not available');
                 return { success: false, highlightId: '' };
             }
 
@@ -593,7 +597,7 @@ export class EditorCommandContribution implements CommandContribution {
 
             return { success: true, highlightId };
         } catch (error) {
-            console.error('[EditorCommand] Error highlighting code:', error);
+            this.logger.error('[EditorCommand] Error highlighting code:', error);
             return { success: false, highlightId: '' };
         }
     }
@@ -605,7 +609,7 @@ export class EditorCommandContribution implements CommandContribution {
         try {
             const trackedHighlight = this.highlights.get(args.highlightId);
             if (!trackedHighlight) {
-                console.warn(`[EditorCommand] Highlight not found: ${args.highlightId}`);
+                this.logger.warn(`[EditorCommand] Highlight not found: ${args.highlightId}`);
                 return { success: false };
             }
 
@@ -626,7 +630,7 @@ export class EditorCommandContribution implements CommandContribution {
             this.highlights.delete(args.highlightId);
             return { success: true };
         } catch (error) {
-            console.error('[EditorCommand] Error clearing highlight:', error);
+            this.logger.error('[EditorCommand] Error clearing highlight:', error);
             return { success: false };
         }
     }
@@ -671,7 +675,7 @@ export class EditorCommandContribution implements CommandContribution {
             const content = await this.fileService.read(URI.fromFilePath(validatedPath));
             return { success: true, content: content.value };
         } catch (error) {
-            console.error('[EditorCommand] Error reading file:', error);
+            this.logger.error('[EditorCommand] Error reading file:', error);
             return { success: false };
         }
     }
@@ -702,7 +706,7 @@ export class EditorCommandContribution implements CommandContribution {
             await editorWidget.close();
             return { success: true };
         } catch (error) {
-            console.error('[EditorCommand] Error closing editor:', error);
+            this.logger.error('[EditorCommand] Error closing editor:', error);
             return { success: false };
         }
     }

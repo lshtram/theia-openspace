@@ -16,6 +16,7 @@
 
 import { injectable, inject, optional } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
@@ -185,6 +186,9 @@ export class FileCommandContribution implements CommandContribution {
     @inject(OpenCodeService) @optional()
     private readonly openCodeService?: OpenCodeService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     /**
      * Validate a file path against workspace root.
      * Implements GAP-1 (path traversal) and symlink protection per §17.1.
@@ -199,7 +203,7 @@ export class FileCommandContribution implements CommandContribution {
             // Step 1: Get workspace root
             const workspaceRoot = this.workspaceService.tryGetRoots()[0];
             if (!workspaceRoot) {
-                console.warn('[FileCommand] No workspace root found');
+                this.logger.warn('[FileCommand] No workspace root found');
                 return null;
             }
             const rootUri = workspaceRoot.resource;
@@ -216,7 +220,7 @@ export class FileCommandContribution implements CommandContribution {
             // Step 3: Check for path traversal (..)
             let normalizedPath = path.normalize(resolvedPath);
             if (normalizedPath.includes('..')) {
-                console.warn(`[FileCommand] Path traversal attempt rejected: ${filePath}`);
+                this.logger.warn(`[FileCommand] Path traversal attempt rejected: ${filePath}`);
                 return null;
             }
 
@@ -225,7 +229,7 @@ export class FileCommandContribution implements CommandContribution {
             const pathComponents = normalizedPath.split(path.sep);
             for (const component of pathComponents) {
                 if (component === '..') {
-                    console.warn(`[FileCommand] Path traversal via symlink rejected: ${filePath}`);
+                    this.logger.warn(`[FileCommand] Path traversal via symlink rejected: ${filePath}`);
                     return null;
                 }
             }
@@ -234,7 +238,7 @@ export class FileCommandContribution implements CommandContribution {
             const normalizedRoot = path.normalize(rootPath);
             if (!normalizedPath.startsWith(normalizedRoot) && 
                 !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
-                console.warn(`[FileCommand] Path outside workspace rejected: ${filePath}`);
+                this.logger.warn(`[FileCommand] Path outside workspace rejected: ${filePath}`);
                 return null;
             }
 
@@ -242,7 +246,7 @@ export class FileCommandContribution implements CommandContribution {
             if (this.openCodeService) {
                 const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
                 if (!result.valid) {
-                    console.warn(`[FileCommand] Path rejected by symlink check: ${result.error}`);
+                    this.logger.warn(`[FileCommand] Path rejected by symlink check: ${result.error}`);
                     return null;
                 }
                 // Update to the canonically resolved path before further checks
@@ -255,13 +259,13 @@ export class FileCommandContribution implements CommandContribution {
             
             // Use shared sensitive file check from common module
             if (isSensitiveFile(relativePath) || isSensitiveFile(fileName)) {
-                console.warn(`[FileCommand] Sensitive file access denied: ${filePath}`);
+                this.logger.warn(`[FileCommand] Sensitive file access denied: ${filePath}`);
                 return null;
             }
 
             return normalizedPath;
         } catch (error) {
-            console.error('[FileCommand] Path validation error:', error);
+            this.logger.error('[FileCommand] Path validation error:', error);
             return null;
         }
     }
@@ -285,7 +289,7 @@ export class FileCommandContribution implements CommandContribution {
         
         for (const pattern of CRITICAL_WRITE_PATTERNS) {
             if (pattern.test(normalizedPath)) {
-                console.warn(`[FileCommand] Critical write to protected directory rejected: ${filePath}`);
+                this.logger.warn(`[FileCommand] Critical write to protected directory rejected: ${filePath}`);
                 return null;
             }
         }
@@ -392,14 +396,14 @@ export class FileCommandContribution implements CommandContribution {
             // Check if it's a file
             const stat = await this.fileService.resolve(uri);
             if (!stat.isFile) {
-                console.warn(`[FileCommand] Not a file: ${args.path}`);
+                this.logger.warn(`[FileCommand] Not a file: ${args.path}`);
                 return { success: false };
             }
 
             // T2-20: Check file size before reading
             const size = (stat as any).size;
             if (size !== undefined && size > MAX_FILE_SIZE) {
-                console.warn(`[FileCommand] File too large: ${args.path} (${size} bytes, max ${MAX_FILE_SIZE})`);
+                this.logger.warn(`[FileCommand] File too large: ${args.path} (${size} bytes, max ${MAX_FILE_SIZE})`);
                 return { 
                     success: false, 
                     error: `File too large: ${size} bytes (max ${MAX_FILE_SIZE / (1024 * 1024)}MB)` 
@@ -409,7 +413,7 @@ export class FileCommandContribution implements CommandContribution {
             const content = await this.fileService.read(uri);
             return { success: true, content: content.value };
         } catch (error) {
-            console.error('[FileCommand] Error reading file:', error);
+            this.logger.error('[FileCommand] Error reading file:', error);
             return { success: false };
         }
     }
@@ -440,7 +444,7 @@ export class FileCommandContribution implements CommandContribution {
             await this.fileService.write(uri, args.content);
             return { success: true };
         } catch (error) {
-            console.error('[FileCommand] Error writing file:', error);
+            this.logger.error('[FileCommand] Error writing file:', error);
             return { success: false };
         }
     }
@@ -461,7 +465,7 @@ export class FileCommandContribution implements CommandContribution {
             // Check if it's a directory
             const stat = await this.fileService.resolve(uri);
             if (!stat.isDirectory) {
-                console.warn(`[FileCommand] Not a directory: ${args.path}`);
+                this.logger.warn(`[FileCommand] Not a directory: ${args.path}`);
                 return { success: false, files: [] };
             }
 
@@ -476,7 +480,7 @@ export class FileCommandContribution implements CommandContribution {
 
             return { success: true, files };
         } catch (error) {
-            console.error('[FileCommand] Error listing files:', error);
+            this.logger.error('[FileCommand] Error listing files:', error);
             return { success: false, files: [] };
         }
     }
@@ -490,7 +494,7 @@ export class FileCommandContribution implements CommandContribution {
             // Validate base workspace path
             const workspaceRoot = this.workspaceService.tryGetRoots()[0];
             if (!workspaceRoot) {
-                console.warn('[FileCommand] No workspace root found for search');
+                this.logger.warn('[FileCommand] No workspace root found for search');
                 return { success: false, results: [] };
             }
 
@@ -507,7 +511,7 @@ export class FileCommandContribution implements CommandContribution {
             
             return { success: true, results };
         } catch (error) {
-            console.error('[FileCommand] Error searching files:', error);
+            this.logger.error('[FileCommand] Error searching files:', error);
             return { success: false, results: [] };
         }
     }

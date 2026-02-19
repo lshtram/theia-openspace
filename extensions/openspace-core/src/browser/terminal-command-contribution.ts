@@ -16,6 +16,7 @@
 
 import { injectable, inject, optional, postConstruct } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
 import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
@@ -209,6 +210,9 @@ export class TerminalCommandContribution implements CommandContribution {
     @inject(OpenCodeService) @optional()
     private readonly openCodeService?: OpenCodeService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     private readonly ringBuffer: TerminalRingBuffer;
 
     /**
@@ -353,7 +357,7 @@ export class TerminalCommandContribution implements CommandContribution {
             if (args.shellPath) {
                 const normalizedShellPath = path.normalize(args.shellPath);
                 if (!allowedShells.some(allowed => path.normalize(allowed) === normalizedShellPath)) {
-                    console.warn(`[TerminalCommand] Shell not allowed: ${args.shellPath}`);
+                    this.logger.warn(`[TerminalCommand] Shell not allowed: ${args.shellPath}`);
                     return {
                         success: false,
                         terminalId: '',
@@ -375,7 +379,7 @@ export class TerminalCommandContribution implements CommandContribution {
                     // Check if cwd is within workspace root
                     if (!normalizedCwd.startsWith(normalizedRoot) && 
                         !normalizedCwd.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
-                        console.warn(`[TerminalCommand] Working directory outside workspace: ${args.cwd}`);
+                        this.logger.warn(`[TerminalCommand] Working directory outside workspace: ${args.cwd}`);
                         return {
                             success: false,
                             terminalId: '',
@@ -387,7 +391,7 @@ export class TerminalCommandContribution implements CommandContribution {
                     if (this.openCodeService) {
                         const result = await this.openCodeService.validatePath(normalizedCwd, normalizedRoot);
                         if (!result.valid) {
-                            console.warn(`[TerminalCommand] cwd rejected by symlink check: ${result.error}`);
+                            this.logger.warn(`[TerminalCommand] cwd rejected by symlink check: ${result.error}`);
                             return {
                                 success: false,
                                 terminalId: '',
@@ -427,7 +431,7 @@ export class TerminalCommandContribution implements CommandContribution {
                 terminalId: widget.id
             };
         } catch (error) {
-            console.error('[TerminalCommand] Error creating terminal:', error);
+            this.logger.error('[TerminalCommand] Error creating terminal:', error);
             return {
                 success: false,
                 terminalId: '',
@@ -446,7 +450,7 @@ export class TerminalCommandContribution implements CommandContribution {
         try {
             const widget = this.terminalWidgets.get(args.terminalId);
             if (!widget) {
-                console.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
+                this.logger.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
                 return { success: false };
             }
 
@@ -455,7 +459,7 @@ export class TerminalCommandContribution implements CommandContribution {
 
             // T1-1: BLOCK execution of dangerous commands
             if (dangerous) {
-                console.warn(`[TerminalCommand] Dangerous command blocked: ${args.text.substring(0, 50)}...`);
+                this.logger.warn(`[TerminalCommand] Dangerous command blocked: ${args.text.substring(0, 50)}...`);
                 return {
                     success: false,
                     dangerous: true,
@@ -473,7 +477,7 @@ export class TerminalCommandContribution implements CommandContribution {
                 dangerous: false
             };
         } catch (error) {
-            console.error('[TerminalCommand] Error sending to terminal:', error);
+            this.logger.error('[TerminalCommand] Error sending to terminal:', error);
             return { 
                 success: false,
                 error: error instanceof Error ? error.message : String(error)
@@ -490,7 +494,7 @@ export class TerminalCommandContribution implements CommandContribution {
         try {
             const widget = this.terminalWidgets.get(args.terminalId);
             if (!widget) {
-                console.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
+                this.logger.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
                 return { success: false, output: [] };
             }
 
@@ -505,7 +509,7 @@ export class TerminalCommandContribution implements CommandContribution {
                 output: sanitizedOutput
             };
         } catch (error) {
-            console.error('[TerminalCommand] Error reading terminal output:', error);
+            this.logger.error('[TerminalCommand] Error reading terminal output:', error);
             return { success: false, output: [] };
         }
     }
@@ -531,7 +535,7 @@ export class TerminalCommandContribution implements CommandContribution {
                 terminals
             };
         } catch (error) {
-            console.error('[TerminalCommand] Error listing terminals:', error);
+            this.logger.error('[TerminalCommand] Error listing terminals:', error);
             return { success: false, terminals: [] };
         }
     }
@@ -543,7 +547,7 @@ export class TerminalCommandContribution implements CommandContribution {
         try {
             const widget = this.terminalWidgets.get(args.terminalId);
             if (!widget) {
-                console.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
+                this.logger.warn(`[TerminalCommand] Terminal not found: ${args.terminalId}`);
                 return { success: false };
             }
 
@@ -552,7 +556,7 @@ export class TerminalCommandContribution implements CommandContribution {
 
             return { success: true };
         } catch (error) {
-            console.error('[TerminalCommand] Error closing terminal:', error);
+            this.logger.error('[TerminalCommand] Error closing terminal:', error);
             return { success: false };
         }
     }

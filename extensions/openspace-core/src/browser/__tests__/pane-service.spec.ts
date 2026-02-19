@@ -18,6 +18,8 @@ import { Container } from '@theia/core/shared/inversify';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { Widget, Title } from '@lumino/widgets';
 import { Emitter } from '@theia/core/lib/common/event';
+import { ILogger } from '@theia/core/lib/common/logger';
+import { CommandRegistry } from '@theia/core/lib/common/command';
 import { expect } from 'chai';
 import { PaneService, PaneServiceImpl } from '../pane-service';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
@@ -117,6 +119,16 @@ describe('PaneService', () => {
             tryGetRoots: () => []
         };
         container.bind(WorkspaceService).toConstantValue(mockWorkspaceService as WorkspaceService);
+
+        // Bind CommandRegistry — needed by PaneServiceImpl
+        container.bind(CommandRegistry).toConstantValue({
+            executeCommand: async () => undefined,
+        } as unknown as CommandRegistry);
+
+        // Bind ILogger — needed by PaneServiceImpl after T3-14 migration
+        container.bind(ILogger).toConstantValue({
+            info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined,
+        });
         
         paneService = container.get(PaneService);
     });

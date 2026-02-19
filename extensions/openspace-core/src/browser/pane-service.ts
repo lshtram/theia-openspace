@@ -18,6 +18,7 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { Emitter, Event } from '@theia/core/lib/common/event';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { CommandRegistry } from '@theia/core/lib/common';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { Widget } from '@lumino/widgets';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
@@ -176,6 +177,9 @@ export class PaneServiceImpl implements PaneService {
     @inject(CommandRegistry)
     protected readonly commandRegistry!: CommandRegistry;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     // Event emitters
     private readonly _onPaneLayoutChanged = new Emitter<PaneStateSnapshot>();
     
@@ -198,7 +202,7 @@ export class PaneServiceImpl implements PaneService {
      */
     @postConstruct()
     protected init(): void {
-        console.info('[PaneService] Initializing...');
+        this.logger.info('[PaneService] Initializing...');
 
         // Subscribe to active widget changes
         const activeWidgetDisposable = this.shell.onDidChangeActiveWidget(() => {
@@ -218,14 +222,14 @@ export class PaneServiceImpl implements PaneService {
         });
         this.disposables.push(removeWidgetDisposable);
 
-        console.info('[PaneService] Initialized');
+        this.logger.info('[PaneService] Initialized');
     }
 
     /**
      * Open content in a pane.
      */
     async openContent(args: PaneOpenArgs): Promise<{ success: boolean; paneId?: string }> {
-        console.info(`[PaneService] Operation: openContent(${args.type}, ${args.contentId})`);
+        this.logger.info(`[PaneService] Operation: openContent(${args.type}, ${args.contentId})`);
 
         try {
             if (args.type === 'editor') {
@@ -300,12 +304,12 @@ export class PaneServiceImpl implements PaneService {
                 mode: args.splitDirection === 'vertical' ? 'split-right' :
                       args.splitDirection === 'horizontal' ? 'split-bottom' : 'tab-after',
             };
-            console.debug(`[PaneService] No handler for type '${args.type}', area=${area}`, widgetOptions);
+            this.logger.debug(`[PaneService] No handler for type '${args.type}', area=${area}`, widgetOptions);
             this.emitLayoutChange();
             return { success: false };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[PaneService] Error opening content: ${errorMsg}`);
+            this.logger.error(`[PaneService] Error opening content: ${errorMsg}`);
             return { success: false };
         }
     }
@@ -314,13 +318,13 @@ export class PaneServiceImpl implements PaneService {
      * Close a pane by ID.
      */
     async closeContent(args: PaneCloseArgs): Promise<{ success: boolean }> {
-        console.info(`[PaneService] Operation: closeContent(${args.paneId})`);
+        this.logger.info(`[PaneService] Operation: closeContent(${args.paneId})`);
 
         try {
             const widget = this.shell.getWidgetById(args.paneId);
             
             if (!widget) {
-                console.warn(`[PaneService] Pane not found: ${args.paneId}`);
+                this.logger.warn(`[PaneService] Pane not found: ${args.paneId}`);
                 return { success: false };
             }
 
@@ -335,7 +339,7 @@ export class PaneServiceImpl implements PaneService {
             return { success: true };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[PaneService] Error closing content: ${errorMsg}`);
+            this.logger.error(`[PaneService] Error closing content: ${errorMsg}`);
             return { success: false };
         }
     }
@@ -344,13 +348,13 @@ export class PaneServiceImpl implements PaneService {
      * Focus a pane by ID.
      */
     async focusContent(args: PaneFocusArgs): Promise<{ success: boolean }> {
-        console.info(`[PaneService] Operation: focusContent(${args.paneId})`);
+        this.logger.info(`[PaneService] Operation: focusContent(${args.paneId})`);
 
         try {
             const widget = this.shell.getWidgetById(args.paneId);
             
             if (!widget) {
-                console.warn(`[PaneService] Pane not found: ${args.paneId}`);
+                this.logger.warn(`[PaneService] Pane not found: ${args.paneId}`);
                 return { success: false };
             }
 
@@ -364,7 +368,7 @@ export class PaneServiceImpl implements PaneService {
             return { success: true };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[PaneService] Error focusing content: ${errorMsg}`);
+            this.logger.error(`[PaneService] Error focusing content: ${errorMsg}`);
             return { success: false };
         }
     }
@@ -373,7 +377,7 @@ export class PaneServiceImpl implements PaneService {
      * List all panes with geometry.
      */
     async listPanes(): Promise<PaneInfo[]> {
-        console.debug('[PaneService] Operation: listPanes()');
+        this.logger.debug('[PaneService] Operation: listPanes()');
 
         const panes: PaneInfo[] = [];
 
@@ -404,13 +408,13 @@ export class PaneServiceImpl implements PaneService {
      * Resize a pane to specified dimensions.
      */
     async resizePane(args: PaneResizeArgs): Promise<{ success: boolean }> {
-        console.info(`[PaneService] Operation: resizePane(${args.paneId}, ${args.width}x${args.height})`);
+        this.logger.info(`[PaneService] Operation: resizePane(${args.paneId}, ${args.width}x${args.height})`);
 
         try {
             const widget = this.shell.getWidgetById(args.paneId);
             
             if (!widget) {
-                console.warn(`[PaneService] Pane not found: ${args.paneId}`);
+                this.logger.warn(`[PaneService] Pane not found: ${args.paneId}`);
                 return { success: false };
             }
 
@@ -419,7 +423,7 @@ export class PaneServiceImpl implements PaneService {
             // For now, we emit the layout change and return success
             // A full implementation would need to manipulate the DockPanel's layout data
             
-            console.debug(`[PaneService] Resizing pane ${args.paneId} to ${args.width}% x ${args.height}%`);
+            this.logger.debug(`[PaneService] Resizing pane ${args.paneId} to ${args.width}% x ${args.height}%`);
             
             // Emit layout change event
             this.emitLayoutChange();
@@ -427,7 +431,7 @@ export class PaneServiceImpl implements PaneService {
             return { success: true };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[PaneService] Error resizing pane: ${errorMsg}`);
+            this.logger.error(`[PaneService] Error resizing pane: ${errorMsg}`);
             return { success: false };
         }
     }
@@ -436,7 +440,7 @@ export class PaneServiceImpl implements PaneService {
      * Track an agent-created pane for cleanup.
      */
     trackAgentPane(paneId: string, pinned: boolean = false): void {
-        console.debug(`[PaneService] Tracking agent pane: ${paneId}, pinned=${pinned}`);
+        this.logger.debug(`[PaneService] Tracking agent pane: ${paneId}, pinned=${pinned}`);
         
         this.agentPanes.set(paneId, {
             paneId,
@@ -457,7 +461,7 @@ export class PaneServiceImpl implements PaneService {
      * T2-8: Clean up all event subscriptions
      */
     dispose(): void {
-        console.info('[PaneService] Disposing...');
+        this.logger.info('[PaneService] Disposing...');
         
         // T2-8: Dispose all tracked subscriptions
         for (const disposable of this.disposables) {
@@ -468,7 +472,7 @@ export class PaneServiceImpl implements PaneService {
         this._onPaneLayoutChanged.dispose();
         this.agentPanes.clear();
         
-        console.info('[PaneService] Disposed');
+        this.logger.info('[PaneService] Disposed');
     }
 
     // Private helper methods

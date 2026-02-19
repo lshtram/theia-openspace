@@ -16,6 +16,7 @@
 
 import { Container } from '@theia/core/shared/inversify';
 import { CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { expect } from 'chai';
 import { FileCommandContribution, FileCommands } from '../file-command-contribution';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -76,6 +77,9 @@ function createTestContainer() {
     // needing full interface implementation for unit tests
     container.bind(WorkspaceService).toConstantValue(new MockWorkspaceService() as unknown as WorkspaceService);
     container.bind(FileService).toConstantValue(new MockFileService() as unknown as FileService);
+    container.bind(ILogger).toConstantValue({
+        info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined,
+    });
     return container;
 }
 
