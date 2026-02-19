@@ -384,9 +384,10 @@ export class SessionServiceImpl implements SessionService {
             // Load messages for the new session
             await this.loadMessages();
             
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as Error;
             this.logger.error('[SessionService] Error in setActiveSession:', error);
-            this._lastError = error.message || String(error);
+            this._lastError = err.message || String(error);
             this.onErrorChangedEmitter.fire(this._lastError);
             throw error;
         } finally {
@@ -557,6 +558,7 @@ export class SessionServiceImpl implements SessionService {
                 providerID: model?.providerID || 'unknown',
                 modelID: model?.modelID || 'unknown'
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             parts: parts as any // Input parts will be converted to full parts by server
         } as Message;
 
@@ -577,6 +579,7 @@ export class SessionServiceImpl implements SessionService {
             const result = await this.openCodeService.createMessage(
                 this._activeProject.id,
                 this._activeSession.id,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 { parts: parts as any },
                 model
             );
@@ -836,6 +839,7 @@ export class SessionServiceImpl implements SessionService {
 
         if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
             // Append to existing text part
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const lastPart = parts[parts.length - 1] as any;
             if ('text' in lastPart) {
                 parts[parts.length - 1] = { ...lastPart, text: lastPart.text + delta };
@@ -848,7 +852,7 @@ export class SessionServiceImpl implements SessionService {
                 id: `temp-part-${crypto.randomUUID()}`,
                 sessionID: message.sessionID,
                 messageID: message.id
-            } as any);
+            } as unknown as Message['parts'][0]);
         }
 
         // Update message with new parts
@@ -861,6 +865,48 @@ export class SessionServiceImpl implements SessionService {
             this._isStreaming = false;
             this.onIsStreamingChangedEmitter.fire(false);
         }
+    }
+
+    /**
+     * Upsert tool parts into a streaming message's parts array.
+     * Called when message.part.updated SSE events carry tool parts (not text deltas).
+     * Fires onMessagesChanged to trigger React re-render.
+     *
+     * @param messageId - ID of the message to update
+     * @param toolParts - Array of tool parts to upsert (matched by part.id)
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateStreamingMessageParts(messageId: string, toolParts: any[]): void {
+        if (!toolParts || toolParts.length === 0) return;
+
+        const index = this._messages.findIndex(m => m.id === messageId);
+        if (index < 0) {
+            this.logger.warn(`[SessionService] updateStreamingMessageParts: message not found: ${messageId}`);
+            return;
+        }
+
+        const message = this._messages[index];
+        const parts = [...(message.parts || [])];
+
+        for (const incoming of toolParts) {
+            const existingIndex = parts.findIndex(p => (p as any).id === incoming.id);
+            if (existingIndex >= 0) {
+                // Replace existing part with updated state
+                parts[existingIndex] = incoming;
+            } else {
+                // Insert tool part before the last text part (if any), otherwise append
+                const lastTextIndex = parts.reduce((acc, p, i) => p.type === 'text' ? i : acc, -1);
+                if (lastTextIndex >= 0) {
+                    parts.splice(lastTextIndex, 0, incoming);
+                } else {
+                    parts.push(incoming);
+                }
+            }
+        }
+
+        this._messages[index] = { ...message, parts };
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+        this.logger.debug(`[SessionService] Tool parts upserted for message: ${messageId}, count=${toolParts.length}`);
     }
 
     /**
