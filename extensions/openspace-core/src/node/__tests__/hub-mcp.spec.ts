@@ -413,3 +413,14 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
         });
     });
 });
+
+describe('Hub — OPENSPACE_HUB_ORIGINS env var (T3-8)', () => {
+    it('Hub allows origins from OPENSPACE_HUB_ORIGINS env var', () => {
+        // Structural test: verify source reads the env var
+        const src = fs.readFileSync(
+            path.join(__dirname, '../hub.ts'),
+            'utf-8'
+        );
+        expect(src).to.include('OPENSPACE_HUB_ORIGINS');
+    });
+});

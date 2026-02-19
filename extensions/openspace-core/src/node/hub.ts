@@ -47,12 +47,20 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     /**
      * Allowed origins for CORS and origin validation.
      */
-    private readonly allowedOrigins: string[] = [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001',
-    ];
+    private readonly allowedOrigins: string[] = (() => {
+        const defaults = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001',
+        ];
+        const envOrigins = process.env['OPENSPACE_HUB_ORIGINS'];
+        if (!envOrigins) {
+            return defaults;
+        }
+        const extra = envOrigins.split(',').map(s => s.trim()).filter(Boolean);
+        return [...new Set([...defaults, ...extra])];
+    })();
 
     /** MCP server — registered tools live here. */
     private mcpServer!: OpenSpaceMcpServer;
