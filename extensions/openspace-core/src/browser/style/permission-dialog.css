@@ -142,47 +142,42 @@
     background-color: var(--theia-titleBar-activeBackground, #252526);
 }
 
-.openspace-permission-button {
-    padding: 8px 20px;
-    border: none;
+/* Permission dialog action buttons */
+.permission-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
     border-radius: 4px;
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    border: none;
+    transition: background 0.1s;
 }
 
-.openspace-permission-button:focus {
+.permission-action-btn:focus {
     outline: 2px solid var(--theia-focusBorder, #007acc);
     outline-offset: 2px;
 }
 
-/* Deny button (red) */
-.openspace-permission-deny {
-    background-color: #c74440;
-    color: #ffffff;
+.permission-action-btn.grant {
+    background: #007acc;
+    color: #fff;
 }
 
-.openspace-permission-deny:hover {
-    background-color: #e04844;
+.permission-action-btn.grant:hover {
+    background: #1f8ad2;
 }
 
-.openspace-permission-deny:active {
-    background-color: #a83834;
+.permission-action-btn.deny {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ccc;
 }
 
-/* Grant button (green) */
-.openspace-permission-grant {
-    background-color: #4caf50;
-    color: #ffffff;
-}
-
-.openspace-permission-grant:hover {
-    background-color: #5bc65f;
-}
-
-.openspace-permission-grant:active {
-    background-color: #3d8b40;
+.permission-action-btn.deny:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 /* Queue indicator */
