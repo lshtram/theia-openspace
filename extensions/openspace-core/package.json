@@ -18,7 +18,9 @@
     "@theia/scm": "1.68.2",
     "@theia/terminal": "1.68.2",
     "@theia/workspace": "1.68.2",
+    "chokidar": "^3.6.0",
     "eventsource-parser": "^1.1.2",
+    "p-queue": "^6.6.2",
     "react": "^18",
     "react-dom": "^18"
   },
