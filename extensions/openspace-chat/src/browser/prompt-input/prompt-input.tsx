@@ -17,7 +17,7 @@ import type { PromptInputProps, Prompt, ImagePart, FilePart } from './types';
 import '../style/prompt-input.css';
 
 // Simple unique ID generator
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const generateId = () => crypto.randomUUID();
 
 // Available agents (hardcoded for now - could come from configuration)
 const AVAILABLE_AGENTS = [

@@ -10,6 +10,8 @@
 
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SessionServiceImpl } from '../session-service';
 import { OpenCodeService, Project, Session } from '../../common/opencode-protocol';
 
@@ -330,6 +332,19 @@ describe('SessionService', () => {
             
             expect(result).to.be.empty;
             expect(sessionService.lastError).to.equal('Connection timeout');
+        });
+    });
+
+    describe('UUID format for IDs (T3-6)', () => {
+        it('should use UUID format (not Date.now) for optimistic message part IDs', () => {
+            const src = fs.readFileSync(
+                path.join(__dirname, '../session-service.ts'),
+                'utf-8'
+            );
+            // Should NOT use Date.now() for temp-part IDs
+            expect(src).not.to.match(/id.*temp-part.*Date\.now/);
+            // Should use crypto.randomUUID()
+            expect(src).to.match(/temp-part.*randomUUID|randomUUID.*temp-part/);
         });
     });
 });

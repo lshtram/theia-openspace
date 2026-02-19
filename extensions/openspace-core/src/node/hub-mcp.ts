@@ -521,7 +521,7 @@ export class OpenSpaceMcpServer {
             return { content: [{ type: 'text', text: 'Error: Bridge not connected. Browser frontend not registered.' }], isError: true };
         }
 
-        const requestId = `${cmd}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const requestId = `${cmd}-${crypto.randomUUID()}`;
 
         const resultPromise = new Promise<CommandBridgeResult>((resolve, reject) => {
             const timer = setTimeout(() => {

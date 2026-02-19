@@ -841,7 +841,7 @@ export class SessionServiceImpl implements SessionService {
             parts.push({ 
                 type: 'text', 
                 text: delta,
-                id: `temp-part-${Date.now()}`,
+                id: `temp-part-${crypto.randomUUID()}`,
                 sessionID: message.sessionID,
                 messageID: message.id
             } as any);
