@@ -641,6 +641,7 @@ These are independent post-MVP features that can be done in any order.
 | 6.4 — Browser preview modality | Embedded browser (iframe or Electron webview) for previewing web apps. Agent can navigate, screenshot, inspect DOM. | ⬜ |
 | 6.5 — Auto-updater | Electron auto-update via GitHub Releases. Notification UI for available updates. | ⬜ |
 | 6.6 — Custom tldraw shapes | Register custom tldraw shape types for structured diagrams: ClassBox (UML), InterfaceBox, State, Decision, Process, Lifeline. (Deferred from Phase 4.) | ⬜ |
+| 6.7 — LLM inline completions (ghost text) | Wire `monaco.languages.registerInlineCompletionsProvider()` in `openspace-languages` to call the existing OpenCode AI backend (via `opencode-proxy.ts`). Gives Copilot-style tab-to-accept ghost text completions for all supported languages. Infrastructure is fully present: `InlineCompletionsController` auto-registers, `@theia/ai-core` already defines a `default/code-completion` model alias. Needs: a `LanguageModelInlineCompletionProvider` class, debounced trigger on cursor position change, streaming response from the LLM formatted as `InlineCompletion[]`, and an accept/dismiss keybinding. | ⬜ |
 
 ---
 
