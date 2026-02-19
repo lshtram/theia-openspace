@@ -27,6 +27,13 @@ const AVAILABLE_AGENTS = [
     { name: 'janitor', description: 'QA and validation' },
 ];
 
+// Available slash commands
+const SLASH_COMMANDS = [
+    { name: '/clear', description: 'Clear the current session messages' },
+    { name: '/help', description: 'Show available commands' },
+    { name: '/compact', description: 'Compact conversation to save context' },
+];
+
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
     disabled = false,
@@ -43,6 +50,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [typeaheadPosition, setTypeaheadPosition] = React.useState({ top: 0, left: 0 });
     const [selectedTypeaheadIndex, setSelectedTypeaheadIndex] = React.useState(0);
     const [typeaheadType, setTypeaheadType] = React.useState<'agent' | 'file' | null>(null);
+    const [showSlashMenu, setShowSlashMenu] = React.useState(false);
+    const [slashQuery, setSlashQuery] = React.useState('');
 
     /**
      * Get the current prompt from editor and attachments.
@@ -99,6 +108,15 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             }
         }
 
+        // Handle slash menu navigation
+        if (showSlashMenu) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowSlashMenu(false);
+                return;
+            }
+        }
+
         // Handle Enter to send (Shift+Enter for newline)
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -135,6 +153,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 setTypeaheadQuery(query);
                 setTypeaheadType(query.length === 0 || /^[a-zA-Z]/.test(query) ? 'agent' : 'file');
                 setShowTypeahead(true);
+                setShowSlashMenu(false);
                 setSelectedTypeaheadIndex(0);
                 
                 // Calculate position for dropdown
@@ -149,6 +168,18 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         }
         
         setShowTypeahead(false);
+
+        // Slash command detection
+        const slashIndex = beforeCursor.lastIndexOf('/');
+        if (slashIndex >= 0 && !beforeCursor.slice(0, slashIndex).trim()) {
+            const query = beforeCursor.slice(slashIndex + 1);
+            if (!query.includes(' ')) {
+                setSlashQuery(query);
+                setShowSlashMenu(true);
+                return;
+            }
+        }
+        setShowSlashMenu(false);
     };
 
     /**
@@ -361,6 +392,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     const typeaheadItems = getTypeaheadItems();
+    const filteredSlashCommands = SLASH_COMMANDS.filter(c =>
+        c.name.toLowerCase().includes(slashQuery.toLowerCase())
+    );
 
     return (
         <div className="prompt-input-container">
@@ -476,6 +510,44 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                     {item.description && (
                                         <div className="typeahead-description">{item.description}</div>
                                     )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Slash Command Menu */}
+                {showSlashMenu && filteredSlashCommands.length > 0 && (
+                    <div className="prompt-input-typeahead" role="listbox" aria-label="Commands">
+                        {filteredSlashCommands.map((cmd, index) => (
+                            <div
+                                key={cmd.name}
+                                className={`typeahead-item ${index === 0 ? 'selected' : ''}`}
+                                onClick={() => {
+                                    // Insert the command into the editor
+                                    if (editorRef.current) {
+                                        editorRef.current.textContent = cmd.name + ' ';
+                                        // Move cursor to end
+                                        const range = document.createRange();
+                                        const sel = window.getSelection();
+                                        range.setStart(editorRef.current, editorRef.current.childNodes.length);
+                                        range.collapse(true);
+                                        sel?.removeAllRanges();
+                                        sel?.addRange(range);
+                                    }
+                                    setShowSlashMenu(false);
+                                }}
+                                role="option"
+                                tabIndex={0}
+                            >
+                                <span className="typeahead-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                                    </svg>
+                                </span>
+                                <div className="typeahead-content">
+                                    <div className="typeahead-name">{cmd.name}</div>
+                                    <div className="typeahead-description">{cmd.description}</div>
                                 </div>
                             </div>
                         ))}
