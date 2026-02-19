@@ -239,6 +239,7 @@ export interface PresentationUpdateSlideArgs {
 export interface PresentationOpenArgs {
     path: string;
     slideIndex?: number;
+    splitDirection?: 'right' | 'left' | 'bottom' | 'new-tab';
 }
 
 export interface PresentationNavigateArgs {

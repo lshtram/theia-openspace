@@ -16,9 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
-import { URI } from '@theia/core/lib/common/uri';
-import { FileService } from '@theia/filesystem/lib/browser/file-service';
-import { WidgetManager } from '@theia/core/lib/browser';
+import { ApplicationShell, WidgetManager } from '@theia/core/lib/browser';
 import { PresentationService, 
     PresentationListArgs, 
     PresentationReadArgs, 
@@ -118,6 +116,11 @@ export const PresentationArgumentSchemas = {
             path: {
                 type: 'string',
                 description: 'Path to the presentation file'
+            },
+            splitDirection: {
+                type: 'string',
+                enum: ['right', 'left', 'bottom', 'new-tab'],
+                description: 'Where to open the presentation widget (default: right)'
             }
         },
         required: ['path'],
@@ -180,8 +183,8 @@ export class PresentationCommandContribution implements CommandContribution {
     @inject(PresentationService)
     protected readonly presentationService!: PresentationService;
 
-    @inject(FileService)
-    protected readonly fileService!: FileService;
+    @inject(ApplicationShell)
+    protected readonly shell!: ApplicationShell;
 
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
@@ -263,7 +266,7 @@ export class PresentationCommandContribution implements CommandContribution {
             {
                 execute: async (args: PresentationOpenArgs) => {
                     console.log('[PresentationCommand] Opening presentation:', args.path);
-                    return this.openPresentation(args.path);
+                    return this.openPresentation(args);
                 }
             }
         );
@@ -328,38 +331,37 @@ export class PresentationCommandContribution implements CommandContribution {
     /**
      * Open a presentation in a widget.
      */
-    protected async openPresentation(path: string): Promise<PresentationWidget> {
-        const uri = new URI(path);
-        
-        // Read file content
-        const contentResult = await this.fileService.read(uri);
-        const content = contentResult.value;
+    protected async openPresentation(args: PresentationOpenArgs): Promise<void> {
+        const { path, splitDirection } = args;
 
-        // Get or create widget
-        const widget = await this.widgetManager.getOrCreateWidget(
+        // Use service (not raw fileService.read) to avoid duplicate read logic
+        const { content, data } = await this.presentationService.readPresentation(path);
+
+        const widget = await this.widgetManager.getOrCreateWidget<PresentationWidget>(
             PresentationWidget.ID,
             { uri: path }
-        ) as PresentationWidget;
+        );
 
-        // Set content
+        // Map splitDirection to Theia shell area/mode
+        const area: ApplicationShell.Area = splitDirection === 'bottom' ? 'bottom' : 'main';
+        const mode: ApplicationShell.WidgetOptions['mode'] =
+            splitDirection === 'left'    ? 'split-left'  :
+            splitDirection === 'bottom'  ? 'tab-after'   :
+            splitDirection === 'new-tab' ? 'tab-after'   :
+            'split-right'; // default
+
+        this.shell.addWidget(widget, { area, mode });
+
         widget.setContent(content);
-        
-        // Activate the widget
-        widget.activate();
+        await widget.activate();
 
-        // Update service state
         this.presentationService.setActivePresentation(path);
-        
-        const state = this.presentationService.getPlaybackState();
         this.presentationService.setPlaybackState({
-            ...state,
             isPlaying: false,
             isPaused: false,
             currentSlide: 0,
-            totalSlides: PresentationWidget.parseDeckContent(content).slides.length
+            totalSlides: data.slides.length,
         });
-
-        return widget;
     }
 
     /**
