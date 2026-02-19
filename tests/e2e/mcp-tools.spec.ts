@@ -22,7 +22,7 @@ import { mcpJsonRpc, MCP_URL } from './helpers/mcp';
 
 /**
  * Expected tool names registered by OpenSpaceMcpServer.
- * These map exactly to the 30 tools in hub-mcp.ts (20 core + 10 presentation).
+ * These map exactly to the 33 tools in hub-mcp.ts (20 core + 10 presentation + 3 new whiteboard).
  */
 const EXPECTED_TOOLS = [
     // Pane tools (4)
@@ -60,6 +60,10 @@ const EXPECTED_TOOLS = [
     'openspace.presentation.pause',
     'openspace.presentation.stop',
     'openspace.presentation.toggleFullscreen',
+    // New whiteboard tools (3) — added in feat: batch_add_shapes, replace, find_shapes
+    'openspace.whiteboard.batch_add_shapes',
+    'openspace.whiteboard.replace',
+    'openspace.whiteboard.find_shapes',
 ];
 
 test.describe('MCP Tools Smoke Tests', () => {
