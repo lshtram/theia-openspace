@@ -10,6 +10,7 @@
   "dependencies": {
     "@theia/core": "1.68.2",
     "@theia/monaco": "1.68.2",
+    "@theia/monaco-editor-core": "1.68.2",
     "tm-grammars": "^1.30.10"
   },
   "devDependencies": {
