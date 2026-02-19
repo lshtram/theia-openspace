@@ -1,0 +1,115 @@
+/* *****************************************************************************
+ * Copyright (C) 2024 OpenSpace contributors.
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+.openspace-markdown-viewer-widget {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Preview mode */
+.openspace-markdown-viewer-widget .markdown-viewer-preview {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 24px 32px;
+    box-sizing: border-box;
+    color: var(--theia-editor-foreground);
+    background: var(--theia-editor-background);
+    font-family: var(--theia-ui-font-family);
+    font-size: var(--theia-ui-font-size1);
+    line-height: 1.7;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview h1,
+.openspace-markdown-viewer-widget .markdown-viewer-preview h2,
+.openspace-markdown-viewer-widget .markdown-viewer-preview h3,
+.openspace-markdown-viewer-widget .markdown-viewer-preview h4 {
+    color: var(--theia-editor-foreground);
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    border-bottom: 1px solid var(--theia-widget-border);
+    padding-bottom: 0.2em;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview h1 { font-size: 2em; }
+.openspace-markdown-viewer-widget .markdown-viewer-preview h2 { font-size: 1.5em; }
+.openspace-markdown-viewer-widget .markdown-viewer-preview h3 { font-size: 1.2em; }
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview p {
+    margin: 0.6em 0;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview code {
+    background: var(--theia-textCodeBlock-background);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-family: var(--theia-code-font-family);
+    font-size: 0.9em;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview pre {
+    background: var(--theia-textCodeBlock-background);
+    padding: 1em;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0.8em 0;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.875em;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview blockquote {
+    border-left: 3px solid var(--theia-focusBorder);
+    margin: 0.8em 0;
+    padding: 0.2em 1em;
+    color: var(--theia-descriptionForeground);
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview a {
+    color: var(--theia-textLink-foreground);
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview ul,
+.openspace-markdown-viewer-widget .markdown-viewer-preview ol {
+    padding-left: 1.5em;
+    margin: 0.4em 0;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview th,
+.openspace-markdown-viewer-widget .markdown-viewer-preview td {
+    border: 1px solid var(--theia-widget-border);
+    padding: 6px 12px;
+    text-align: left;
+}
+
+.openspace-markdown-viewer-widget .markdown-viewer-preview th {
+    background: var(--theia-list-activeSelectionBackground);
+    font-weight: 600;
+}
+
+/* Mermaid diagrams */
+.openspace-markdown-viewer-widget .markdown-viewer-preview .mermaid {
+    background: transparent;
+    text-align: center;
+    padding: 1em 0;
+}
+
+/* Edit mode — Monaco container fills the widget */
+.openspace-markdown-viewer-widget .markdown-viewer-editor-container {
+    position: absolute;
+    inset: 0;
+}
