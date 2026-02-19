@@ -3,25 +3,15 @@ import { LanguageGrammarDefinitionContribution } from '@theia/monaco/lib/browser
 import { TextmateRegistry } from '@theia/monaco/lib/browser/textmate/textmate-registry';
 import * as monaco from '@theia/monaco-editor-core';
 
-// tm-grammars ships JSON grammar files — import them directly (resolveJsonModule: true in tsconfig)
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const tsGrammar = require('tm-grammars/grammars/typescript.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const tsxGrammar = require('tm-grammars/grammars/tsx.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jsGrammar = require('tm-grammars/grammars/javascript.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jsxGrammar = require('tm-grammars/grammars/jsx.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const htmlGrammar = require('tm-grammars/grammars/html.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const cssGrammar = require('tm-grammars/grammars/css.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const scssGrammar = require('tm-grammars/grammars/scss.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jsonGrammar = require('tm-grammars/grammars/json.json');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const mdGrammar = require('tm-grammars/grammars/markdown.json');
+import tsGrammar from 'tm-grammars/grammars/typescript.json';
+import tsxGrammar from 'tm-grammars/grammars/tsx.json';
+import jsGrammar from 'tm-grammars/grammars/javascript.json';
+import jsxGrammar from 'tm-grammars/grammars/jsx.json';
+import htmlGrammar from 'tm-grammars/grammars/html.json';
+import cssGrammar from 'tm-grammars/grammars/css.json';
+import scssGrammar from 'tm-grammars/grammars/scss.json';
+import jsonGrammar from 'tm-grammars/grammars/json.json';
+import mdGrammar from 'tm-grammars/grammars/markdown.json';
 
 @injectable()
 export class LanguageGrammarContribution implements LanguageGrammarDefinitionContribution {
@@ -61,7 +51,7 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
         this.registerGrammar(registry, 'typescript', 'source.ts', tsGrammar,
             ['.ts', '.mts', '.cts'],
             ['TypeScript', 'ts'],
-            TYPESCRIPT_LANG_CONFIG
+            TS_JS_LANG_CONFIG
         );
     }
 
@@ -69,7 +59,7 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
         this.registerGrammar(registry, 'typescriptreact', 'source.tsx', tsxGrammar,
             ['.tsx'],
             ['TSX', 'TypeScript React'],
-            TYPESCRIPT_LANG_CONFIG
+            TS_JS_LANG_CONFIG
         );
     }
 
@@ -77,15 +67,15 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
         this.registerGrammar(registry, 'javascript', 'source.js', jsGrammar,
             ['.js', '.mjs', '.cjs'],
             ['JavaScript', 'js'],
-            TYPESCRIPT_LANG_CONFIG
+            TS_JS_LANG_CONFIG
         );
     }
 
     private registerJsx(registry: TextmateRegistry): void {
-        this.registerGrammar(registry, 'javascriptreact', 'source.jsx', jsxGrammar,
+        this.registerGrammar(registry, 'javascriptreact', 'source.js.jsx', jsxGrammar,
             ['.jsx'],
             ['JSX', 'JavaScript React'],
-            TYPESCRIPT_LANG_CONFIG
+            TS_JS_LANG_CONFIG
         );
     }
 
@@ -133,7 +123,7 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
 // ── Language configurations ──────────────────────────────────────────────────
 // These match VS Code's built-in configs for bracket matching, auto-close, etc.
 
-const TYPESCRIPT_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+const TS_JS_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
     comments: { lineComment: '//', blockComment: ['/*', '*/'] },
     brackets: [['${', '}'], ['{', '}'], ['[', ']'], ['(', ')']],
     autoClosingPairs: [
@@ -187,7 +177,6 @@ const CSS_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
 };
 
 const JSON_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
-    comments: { lineComment: '//' },
     brackets: [['{', '}'], ['[', ']']],
     autoClosingPairs: [
         { open: '{', close: '}' }, { open: '[', close: ']' },
