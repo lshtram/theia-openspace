@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsc && mkdir -p lib/browser/style && cp src/browser/style/*.css lib/browser/style/",
     "clean": "rimraf lib tsconfig.tsbuildinfo",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "cd ../.. && mocha --spec 'extensions/openspace-viewers/src/**/__tests__/*.spec.ts'"
   }
 }
