@@ -65,16 +65,15 @@ export function renderMarkdown(text: string): React.ReactNode[] {
     const nodes: React.ReactNode[] = [];
     const fenceRe = /```(\w*)\n([\s\S]*?)```/g;
     let last = 0;
-    let blockKey = 0;
     let match: RegExpExecArray | null;
     while ((match = fenceRe.exec(text)) !== null) {
         const before = text.slice(last, match.index);
-        if (before) { nodes.push(...renderLines(before, blockKey)); blockKey += 100; }
-        nodes.push(<CodeBlock key={`cb-${blockKey++}`} lang={match[1]} code={match[2].trimEnd()} />);
+        if (before) { nodes.push(...renderLines(before, nodes.length)); }
+        nodes.push(<CodeBlock key={`cb-${nodes.length}`} lang={match[1]} code={match[2].trimEnd()} />);
         last = match.index + match[0].length;
     }
     const remaining = text.slice(last);
-    if (remaining) { nodes.push(...renderLines(remaining, blockKey)); }
+    if (remaining) { nodes.push(...renderLines(remaining, nodes.length)); }
     return nodes;
 }
 
