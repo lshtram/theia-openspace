@@ -19,7 +19,7 @@ import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/com
 import { ILogger } from '@theia/core/lib/common/logger';
 import { URI } from '@theia/core/lib/common/uri';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
-import { WidgetManager } from '@theia/core/lib/browser';
+import { WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
 import { WhiteboardService, 
     WhiteboardListArgs, 
     WhiteboardReadArgs, 
@@ -237,6 +237,9 @@ export class WhiteboardCommandContribution implements CommandContribution {
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
 
+    @inject(ApplicationShell)
+    protected readonly shell!: ApplicationShell;
+
     @inject(ILogger)
     protected readonly logger!: ILogger;
 
@@ -344,9 +347,14 @@ export class WhiteboardCommandContribution implements CommandContribution {
                 label: 'OpenSpace: Open Whiteboard'
             },
             {
-                execute: async (args: WhiteboardOpenArgs) => {
-                    this.logger.info('[WhiteboardCommand] Opening whiteboard:', args.path);
-                    return this.openWhiteboard(args.path);
+                execute: async (args?: WhiteboardOpenArgs) => {
+                    if (args?.path) {
+                        this.logger.info('[WhiteboardCommand] Opening whiteboard:', args.path);
+                        return this.openWhiteboard(args.path);
+                    }
+                    // No path provided (e.g. command palette) — open empty whiteboard
+                    this.logger.info('[WhiteboardCommand] Opening blank whiteboard');
+                    return this.openBlankWhiteboard();
                 }
             }
         );
@@ -395,6 +403,21 @@ export class WhiteboardCommandContribution implements CommandContribution {
     }
 
     /**
+     * Open a blank whiteboard (no file backing) — useful for quick access from command palette.
+     */
+    protected async openBlankWhiteboard(): Promise<WhiteboardWidget> {
+        const widget = await this.widgetManager.getOrCreateWidget(
+            WhiteboardWidget.ID,
+            { uri: '__blank__' }
+        ) as WhiteboardWidget;
+        if (!widget.isAttached) {
+            this.shell.addWidget(widget, { area: 'main' });
+        }
+        this.shell.activateWidget(widget.id);
+        return widget;
+    }
+
+    /**
      * Open a whiteboard in a widget.
      */
     protected async openWhiteboard(path: string): Promise<WhiteboardWidget> {
@@ -414,8 +437,11 @@ export class WhiteboardCommandContribution implements CommandContribution {
         widget.loadFromJson(content);
         widget.setFilePath(path);
         
-        // Activate the widget
-        widget.activate();
+        // Add to shell if not already attached, then activate
+        if (!widget.isAttached) {
+            this.shell.addWidget(widget, { area: 'main' });
+        }
+        this.shell.activateWidget(widget.id);
 
         // Update service state
         this.whiteboardService.setActiveWhiteboard(path);
