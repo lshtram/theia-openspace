@@ -28,6 +28,15 @@ import * as os from 'os';
 const HUB_URL = 'http://localhost:3000';
 const MCP_URL = `${HUB_URL}/mcp`;
 
+/** Parse an SSE-formatted MCP response body into a JSON object. */
+function parseSseResponse(text: string): any {
+    const dataLine = text.split('\n').find(line => line.startsWith('data:'));
+    if (!dataLine) {
+        throw new Error(`MCP SSE response has no data line. Body: ${text.substring(0, 200)}`);
+    }
+    return JSON.parse(dataLine.slice('data:'.length).trim());
+}
+
 /** Send a JSON-RPC request to the MCP endpoint and return the parsed response. */
 async function mcpCall(name: string, args: unknown = {}): Promise<any> {
     const body = {
@@ -41,7 +50,7 @@ async function mcpCall(name: string, args: unknown = {}): Promise<any> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Accept: 'application/json',
+            Accept: 'application/json, text/event-stream',
         },
         body: JSON.stringify(body),
     });
@@ -50,7 +59,7 @@ async function mcpCall(name: string, args: unknown = {}): Promise<any> {
         throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    return parseSseResponse(await response.text());
 }
 
 /** Assert that an MCP response is well-formed (has result.content array). */
@@ -104,10 +113,11 @@ test.describe('Presentation MCP Tools', () => {
     test('all 10 presentation tools are registered in tools/list', async () => {
         const response = await fetch(MCP_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
         });
-        const data = await response.json();
+        const text = await response.text();
+        const data = parseSseResponse(text);
 
         const toolNames: string[] = data.result.tools.map((t: any) => t.name);
         const presentationTools = [
@@ -131,10 +141,11 @@ test.describe('Presentation MCP Tools', () => {
     test('each presentation tool has name, description, and inputSchema', async () => {
         const response = await fetch(MCP_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
         });
-        const data = await response.json();
+        const text = await response.text();
+        const data = parseSseResponse(text);
 
         const presentationTools: any[] = data.result.tools.filter((t: any) =>
             t.name.startsWith('openspace.presentation.')
