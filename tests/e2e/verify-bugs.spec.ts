@@ -6,11 +6,10 @@ async function openChatWidget(page: Page) {
     await page.goto(THEIA_URL);
     // Wait for Theia shell
     await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await page.waitForTimeout(3000); // let it settle
+    await page.waitForSelector('.theia-main-container, .theia-left-content-panel', { timeout: 10000 });
     // Click the chat icon in the left activity bar
     const chatTab = page.locator('#shell-tab-openspace-chat-widget');
     await chatTab.click();
-    await page.waitForTimeout(1000);
     // Wait for the chat widget to be visible
     await page.waitForSelector('.openspace-chat-widget', { timeout: 10000 });
 }
@@ -21,8 +20,9 @@ async function openChatWidget(page: Page) {
  */
 async function openChatWithSession(page: Page) {
     await openChatWidget(page);
-    // Wait a little for auto-project selection to complete
-    await page.waitForTimeout(2000);
+    // Auto-project selection fires console logs; we can't intercept them here.
+    // Wait for the session dropdown to be rendered as a signal that initialization completed.
+    await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
     // Click the "+ New" session button
     const newSessionBtn = page.locator('.new-session-button');
     await newSessionBtn.click();
@@ -37,7 +37,7 @@ test('Bug 1: autoSelectProjectByWorkspace registers workspace as project', async
     await openChatWidget(page);
 
     // Give it a moment to auto-select project
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
 
     // Check logs for project registration
     const projectLogs = consoleLogs.filter(l => l.includes('SessionService') && (l.includes('project') || l.includes('Project')));
@@ -60,7 +60,8 @@ test('Bug 2: SSE events handled without crash', async ({ page }) => {
     });
 
     await openChatWidget(page);
-    await page.waitForTimeout(3000);
+    // Wait for the session dropdown to confirm widget is fully initialized
+    await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
 
     const sseErrors = errors.filter(e => e.includes('Cannot read properties of undefined') && e.includes('type'));
     console.log('SSE errors:', sseErrors);
