@@ -17,6 +17,7 @@
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { Emitter, Event } from '@theia/core/lib/common/event';
 import { Disposable } from '@theia/core/lib/common/disposable';
+import { CommandRegistry } from '@theia/core/lib/common';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { Widget } from '@lumino/widgets';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
@@ -172,6 +173,9 @@ export class PaneServiceImpl implements PaneService {
     @inject(WorkspaceService)
     private readonly workspaceService!: WorkspaceService;
 
+    @inject(CommandRegistry)
+    protected readonly commandRegistry!: CommandRegistry;
+
     // Event emitters
     private readonly _onPaneLayoutChanged = new Emitter<PaneStateSnapshot>();
     
@@ -272,7 +276,24 @@ export class PaneServiceImpl implements PaneService {
                 return { success: true, paneId };
             }
 
-            // For other types (presentation, whiteboard), fall back to a label pane
+            if (args.type === 'presentation') {
+                // Map PaneOpenArgs.splitDirection to PresentationOpenArgs.splitDirection:
+                // 'vertical' → 'right' (split-right), 'horizontal' → 'bottom' (split-bottom)
+                const splitDirection: 'right' | 'left' | 'bottom' | 'new-tab' | undefined =
+                    args.splitDirection === 'vertical' ? 'right' :
+                    args.splitDirection === 'horizontal' ? 'bottom' :
+                    undefined;
+                await this.commandRegistry.executeCommand(
+                    'openspace.presentation.open',
+                    {
+                        path: args.contentId,
+                        splitDirection,
+                    }
+                );
+                return { success: true };
+            }
+
+            // For other types (whiteboard), fall back to a label pane
             const area = this.getAreaForType(args.type);
             const widgetOptions: ApplicationShell.WidgetOptions = {
                 area,
