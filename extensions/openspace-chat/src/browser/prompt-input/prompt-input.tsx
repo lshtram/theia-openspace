@@ -369,7 +369,12 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 <div className="prompt-input-file-attachments">
                     {fileAttachments.map(file => (
                         <div key={file.path} className="prompt-input-file-item">
-                            <span className="file-icon">📄</span>
+                            <span className="file-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" aria-hidden="true">
+                                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                            </span>
                             <span className="file-name">{file.path}</span>
                             <button
                                 type="button"
@@ -481,22 +486,45 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     
                     <button
                         type="button"
-                        className="prompt-input-button"
-                        onClick={handleFileButtonClick}
+                        className="prompt-input-icon-btn"
+                        onClick={() => { /* trigger @mention */ }}
                         disabled={disabled}
-                        title="Attach file or image"
+                        title="Mention agent or file (@)"
                     >
-                        📎 Attach
+                        @
+                    </button>
+                    <button
+                        type="button"
+                        className="prompt-input-icon-btn"
+                        onClick={() => { /* trigger / command menu */ }}
+                        disabled={disabled}
+                        title="Commands (/)"
+                    >
+                        /
                     </button>
 
                     <button
                         type="button"
-                        className="prompt-input-button prompt-input-send-button"
+                        className="prompt-input-icon-btn"
+                        onClick={handleFileButtonClick}
+                        disabled={disabled}
+                        title="Attach file or image"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </button>
+
+                    <button
+                        type="button"
+                        className="prompt-input-send-button"
                         onClick={handleSendClick}
                         disabled={disabled}
                         title="Send message (Enter)"
                     >
-                        Send
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                        </svg>
                     </button>
                 </div>
             </div>

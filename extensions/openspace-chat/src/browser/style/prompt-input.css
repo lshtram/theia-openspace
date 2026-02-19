@@ -6,12 +6,20 @@
     gap: 8px;
 }
 
+/* ─── Input wrapper ─────────────────────────────────────────── */
 .prompt-input-editor-wrapper {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--theia-input-border);
-    border-radius: 4px;
-    background: var(--theia-input-background);
+    border: 1px solid var(--theia-input-border, #333);
+    border-radius: 6px;
+    background: var(--theia-input-background, #2d2d2d);
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+    position: relative;
+}
+
+.prompt-input-editor-wrapper:focus-within {
+    border-color: #007acc;
 }
 
 .prompt-input-editor {
@@ -111,39 +119,71 @@
     background: rgba(0, 0, 0, 0.9);
 }
 
-/* Toolbar */
+/* ─── Toolbar (input footer) ────────────────────────────────── */
 .prompt-input-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    border-top: 1px solid var(--theia-input-border);
+    gap: 2px;
+    padding: 5px 8px;
+    border-top: 1px solid var(--theia-input-border, #333);
+    background: rgba(255,255,255,0.02);
 }
 
-.prompt-input-button {
-    padding: 4px 12px;
-    border: 1px solid var(--theia-button-border);
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border-radius: 3px;
+/* ─── Icon buttons in toolbar ───────────────────────────────── */
+.prompt-input-icon-btn {
+    background: none;
+    border: none;
+    color: var(--theia-descriptionForeground, #858585);
     cursor: pointer;
-    font-size: 13px;
+    padding: 4px 5px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--theia-code-font-family, monospace);
+    line-height: 1;
+    transition: background 0.1s, color 0.1s;
+    min-width: 22px;
+    min-height: 22px;
 }
 
-.prompt-input-button:hover {
-    background: var(--theia-button-hoverBackground);
+.prompt-input-icon-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.08);
+    color: var(--theia-foreground, #ccc);
 }
 
-.prompt-input-button:disabled {
-    opacity: 0.5;
+.prompt-input-icon-btn:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
 }
 
+/* ─── Send button ───────────────────────────────────────────── */
 .prompt-input-send-button {
     margin-left: auto;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    font-weight: 500;
+    background: #007acc;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+    flex-shrink: 0;
+}
+
+.prompt-input-send-button:hover:not(:disabled) {
+    background: #1f8ad2;
+}
+
+.prompt-input-send-button:disabled {
+    background: rgba(0,122,204,0.3);
+    cursor: not-allowed;
 }
 
 /* Drag Overlay */
@@ -233,15 +273,18 @@
     border-bottom: 1px solid var(--theia-input-border);
 }
 
+/* ─── Attachment chips ──────────────────────────────────────── */
 .prompt-input-file-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: var(--theia-badge-background);
-    color: var(--theia-badge-foreground);
-    border-radius: 12px;
-    font-size: 12px;
+    gap: 5px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: default;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--theia-foreground, #ccc);
 }
 
 .prompt-input-file-item .file-icon {
@@ -256,23 +299,21 @@
 }
 
 .prompt-input-file-item .file-remove {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: transparent;
+    background: none;
     border: none;
     cursor: pointer;
-    display: flex;
+    padding: 0;
+    color: var(--theia-descriptionForeground, #858585);
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    color: inherit;
-    opacity: 0.7;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+    line-height: 1;
 }
 
 .prompt-input-file-item .file-remove:hover {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.2);
+    color: var(--theia-foreground, #ccc);
 }
 
 /* Typeahead Dropdown */
