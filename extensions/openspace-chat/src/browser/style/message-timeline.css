@@ -19,29 +19,51 @@
    ============================================================================ */
 
 .openspace-chat-widget {
-    /* Message bubble colors */
-    --message-user-bg: var(--theia-button-background);
-    --message-user-fg: var(--theia-button-foreground);
-    --message-assistant-bg: var(--theia-panel-background);
-    --message-assistant-fg: var(--theia-panel-foreground);
-    --message-assistant-border: var(--theia-panel-border);
+    /* ─── OpenSpace Chat design tokens ─────────────────────────── */
+    --oc-bg:           #1e1e1e;
+    --oc-bg-raised:    #252526;
+    --oc-bg-input:     #2d2d2d;
+    --oc-bg-hover:     #2a2d2e;
+    --oc-border:       #333333;
+    --oc-border-focus: #007acc;
+    --oc-text:         #cccccc;
+    --oc-text-dim:     #858585;
+    --oc-text-bright:  #ffffff;
+    --oc-accent:       #007acc;
+    --oc-accent-hover: #1f8ad2;
+    --oc-green:        #4ec94e;
+    --oc-pill-bg:      rgba(255,255,255,0.06);
+    --oc-pill-border:  rgba(255,255,255,0.1);
 
-    /* Spacing and sizing */
+    /* ─── Derived message tokens ────────────────────────────────── */
+    --message-user-bg:       #333333;
+    --message-user-fg:       #ffffff;
+    --message-assistant-bg:  transparent;
+    --message-assistant-fg:  var(--oc-text);
     --message-border-radius: 12px;
-    --message-padding: 12px 16px;
-    --message-max-width: 85%;
-    --message-gap: 16px;
-    --message-group-gap: 4px;
-    --timeline-padding: 16px;
+    --message-spacing:       16px;
 
-    /* Streaming indicator */
-    --cursor-color: var(--theia-editor-foreground);
-    --cursor-blink-duration: 1s;
+    /* ─── Legacy derived tokens (compatibility) ─────────────────── */
+    --message-padding:          12px 16px;
+    --message-max-width:        100%;
+    --message-gap:              8px;
+    --message-group-gap:        16px;
+    --timeline-padding:         12px;
+    --message-assistant-border: none;
+    --cursor-color:             var(--oc-accent);
+    --cursor-blink-duration:    1s;
+    --new-messages-bg:          var(--oc-accent);
+    --new-messages-fg:          var(--oc-text-bright);
+    --new-messages-shadow:      0 2px 8px rgba(0,122,204,0.4);
 
-    /* New messages indicator */
-    --new-messages-bg: var(--theia-button-background);
-    --new-messages-fg: var(--theia-button-foreground);
-    --new-messages-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -330,4 +352,55 @@
         --message-max-width: 90%;
         --timeline-padding: 12px;
     }
+}
+
+/* ─── Shared animations ─────────────────────────────────────── */
+@keyframes oc-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes oc-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+/* ─── Utility: icon button ──────────────────────────────────── */
+.openspace-chat-widget .oc-icon-btn {
+    background: none;
+    border: none;
+    color: var(--oc-text-dim);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .oc-icon-btn:hover {
+    background: var(--oc-bg-hover);
+    color: var(--oc-text);
+}
+
+.openspace-chat-widget .oc-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ─── Utility: spinning icon ────────────────────────────────── */
+.oc-spin {
+    animation: oc-spin 1s linear infinite;
+    transform-origin: center;
+}
+
+/* ─── Utility: shimmer text ─────────────────────────────────── */
+.oc-shimmer {
+    background: linear-gradient(90deg, #555 25%, #999 50%, #555 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: oc-shimmer 2s linear infinite;
 }
