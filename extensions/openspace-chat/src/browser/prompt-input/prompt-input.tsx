@@ -95,6 +95,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setHasContent(text.trim().length > 0 || hasAttachments);
     }, [imageAttachments, fileAttachments]);
 
+    // Re-evaluate content when attachment state changes
+    React.useEffect(() => {
+        handleEditorInput();
+    }, [imageAttachments, fileAttachments, handleEditorInput]);
+
+    const handleAllInput = React.useCallback(() => {
+        handleInput();
+        handleEditorInput();
+    }, [handleEditorInput]);
+
     /**
      * Handle keyboard events.
      */
@@ -429,6 +439,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const filteredSlashCommands = SLASH_COMMANDS.filter(c =>
         c.name.toLowerCase().includes(slashQuery.toLowerCase())
     );
+    const showStop = isStreaming && !hasContent;
 
     return (
         <div
@@ -489,7 +500,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     contentEditable={!disabled}
                     data-placeholder={placeholder}
                     onKeyDown={handleKeyDown}
-                    onInput={() => { handleInput(); handleEditorInput(); }}
+                    onInput={handleAllInput}
                     onPaste={handlePaste}
                     role="textbox"
                     aria-multiline="true"
@@ -672,31 +683,24 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         </svg>
                     </button>
 
-                    {(() => {
-                        const showStop = isStreaming && !hasContent;
-                        return (
-                            <button
-                                type="button"
-                                className={showStop ? 'prompt-input-send-button prompt-input-stop-button' : 'prompt-input-send-button'}
-                                onClick={handleSendClick}
-                                disabled={disabled && !showStop}
-                                title={showStop ? 'Stop generation' : 'Send message (Enter)'}
-                                aria-label={showStop ? 'Stop generation' : 'Send message'}
-                            >
-                                {showStop ? (
-                                    // Stop icon — filled square
-                                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
-                                        <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                    </svg>
-                                ) : (
-                                    // Send icon — arrow up
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                                        <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-                                    </svg>
-                                )}
-                            </button>
-                        );
-                    })()}
+                    <button
+                        type="button"
+                        className={showStop ? 'prompt-input-send-button prompt-input-stop-button' : 'prompt-input-send-button'}
+                        onClick={handleSendClick}
+                        disabled={disabled && !showStop}
+                        title={showStop ? 'Stop generation' : 'Send message (Enter)'}
+                        aria-label={showStop ? 'Stop generation' : 'Send message'}
+                    >
+                        {showStop ? (
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
+                                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            </svg>
+                        ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                            </svg>
+                        )}
+                    </button>
                 </div>
             </div>
         </div>
