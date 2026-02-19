@@ -297,15 +297,18 @@ export class PaneServiceImpl implements PaneService {
                 return { success: true };
             }
 
-            // For other types (whiteboard), fall back to a label pane
-            const area = this.getAreaForType(args.type);
-            const widgetOptions: ApplicationShell.WidgetOptions = {
-                area,
-                mode: args.splitDirection === 'vertical' ? 'split-right' :
-                      args.splitDirection === 'horizontal' ? 'split-bottom' : 'tab-after',
-            };
-            this.logger.debug(`[PaneService] No handler for type '${args.type}', area=${area}`, widgetOptions);
-            this.emitLayoutChange();
+            if (args.type === 'whiteboard') {
+                const isBlank = !args.contentId || args.contentId === '__blank__';
+                await this.commandRegistry.executeCommand(
+                    'openspace.whiteboard.open',
+                    isBlank ? undefined : { path: args.contentId }
+                );
+                this.emitLayoutChange();
+                return { success: true };
+            }
+
+            // Unknown type — no handler
+            this.logger.warn(`[PaneService] No handler for type '${args.type}'`);
             return { success: false };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -480,19 +483,6 @@ export class PaneServiceImpl implements PaneService {
     /**
      * Determine the area for a content type.
      */
-    private getAreaForType(type: PaneOpenArgs['type']): 'main' | 'left' | 'right' | 'bottom' {
-        switch (type) {
-            case 'terminal':
-                return 'bottom';
-            case 'presentation':
-            case 'whiteboard':
-                return 'right';
-            case 'editor':
-            default:
-                return 'main';
-        }
-    }
-
     /**
      * Convert a widget to PaneInfo.
      */

@@ -3,6 +3,7 @@
  * To reset delete this file and rerun theia build again.
  */
 // @ts-check
+const path = require('path');
 const configs = require('./gen-webpack.config.js');
 const nodeConfig = require('./gen-webpack.node.config.js');
 
@@ -32,6 +33,19 @@ configs.forEach(config => {
             /Critical dependency: the request of a dependency is an expression/,
         ],
     };
+
+    // Fix hotkeys-js CJS/ESM interop issue with tldraw.
+    // tldraw's pre-bundled CJS uses esbuild's __toESM(require('hotkeys-js'), 1).
+    // With isNodeMode=1, __toESM does: { default: module.exports }.
+    // The CJS index.js routes through an env check; we alias to the CJS dist
+    // directly to ensure webpack gets the function as module.exports, giving
+    // import_hotkeys_js.default = the hotkeys function (not a double-wrapped namespace).
+    if (config.resolve) {
+        config.resolve.alias = {
+            ...config.resolve.alias,
+            'hotkeys-js': path.resolve(__dirname, '../node_modules/hotkeys-js/dist/hotkeys.common.js'),
+        };
+    }
 });
 
 module.exports = [
