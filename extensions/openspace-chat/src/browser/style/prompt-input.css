@@ -192,6 +192,15 @@
     cursor: not-allowed;
 }
 
+/* ─── Stop button (shown while agent is working and input is empty) ─── */
+.prompt-input-stop-button {
+    background: var(--oc-red, #c0392b);
+}
+
+.prompt-input-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--oc-red, #c0392b) 80%, black);
+}
+
 /* ─── Drag-drop overlay ─────────────────────────────────────── */
 .prompt-input-drag-overlay {
     position: absolute;
