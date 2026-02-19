@@ -116,7 +116,10 @@ export class WhiteboardService {
     async createWhiteboard(path: string, _title?: string): Promise<string> {
         // Resolve to a full URI using the configured default folder
         const roots = this.workspaceService.tryGetRoots();
-        const workspaceRoot = roots[0]?.resource.toString() ?? 'file:///';
+        if (!roots.length) {
+            throw new Error('[WhiteboardService] Cannot create whiteboard: no workspace is open');
+        }
+        const workspaceRoot = roots[0].resource.toString();
         const configuredFolder = this.preferenceService.get<string>(
             OpenspacePreferences.WHITEBOARDS_PATH,
             'openspace/whiteboards'
@@ -129,8 +132,12 @@ export class WhiteboardService {
         const parentUri = uri.parent;
         const parentExists = await this.fileService.exists(parentUri);
         if (!parentExists) {
-            await this.fileService.createFolder(parentUri);
-            this.logger.info('[WhiteboardService] Created folder:', parentUri.toString());
+            try {
+                await this.fileService.createFolder(parentUri);
+                this.logger.info('[WhiteboardService] Created folder:', parentUri.toString());
+            } catch (err) {
+                throw new Error(`[WhiteboardService] Failed to create folder '${parentUri.toString()}': ${(err as Error).message}`);
+            }
         }
 
         // Create with minimal empty snapshot

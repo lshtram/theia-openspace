@@ -125,7 +125,10 @@ export class PresentationService {
     ): Promise<string> {
         // Resolve to a full URI using the configured default folder
         const roots = await this.workspaceService.roots;
-        const workspaceRoot = roots[0]?.resource.toString() ?? 'file:///';
+        if (!roots.length) {
+            throw new Error('[PresentationService] Cannot create presentation: no workspace is open');
+        }
+        const workspaceRoot = roots[0].resource.toString();
         const configuredFolder = this.preferenceService.get<string>(
             OpenspacePreferences.DECKS_PATH,
             'openspace/decks'
@@ -138,8 +141,12 @@ export class PresentationService {
         const parentUri = uri.parent;
         const parentExists = await this.fileService.exists(parentUri);
         if (!parentExists) {
-            await this.fileService.createFolder(parentUri);
-            this.logger.info('[PresentationService] Created folder:', parentUri.toString());
+            try {
+                await this.fileService.createFolder(parentUri);
+                this.logger.info('[PresentationService] Created folder:', parentUri.toString());
+            } catch (err) {
+                throw new Error(`[PresentationService] Failed to create folder '${parentUri.toString()}': ${(err as Error).message}`);
+            }
         }
 
         const content = this.buildDeckContent(title, slides, options);
