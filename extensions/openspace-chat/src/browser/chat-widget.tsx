@@ -117,8 +117,8 @@ interface ChatComponentProps {
     messageService: MessageService;
 }
 
-// T2-13: SessionHeader moved to module scope to prevent recreation on every render
-interface SessionHeaderProps {
+// T7: ChatHeaderBar — unified single-bar header replacing the 2-bar layout
+interface ChatHeaderBarProps {
     showSessionList: boolean;
     sessions: Session[];
     activeSession: Session | undefined;
@@ -132,7 +132,7 @@ interface SessionHeaderProps {
     onToggleDropdown: () => void;
 }
 
-const SessionHeader: React.FC<SessionHeaderProps> = ({
+const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     showSessionList,
     sessions,
     activeSession,
@@ -145,96 +145,145 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
     onDeleteSession,
     onToggleDropdown
 }) => {
+    const [showMenu, setShowMenu] = React.useState(false);
+    const menuRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!showMenu) return;
+        const handleOutside = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setShowMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutside);
+        return () => document.removeEventListener('mousedown', handleOutside);
+    }, [showMenu]);
+
     return (
-        <div className="session-header" data-test-show-list={showSessionList.toString()}>
+        <div className="chat-header-bar">
+            {/* Session title — clicking opens dropdown */}
             <div className="session-selector">
-                <button 
+                <button
                     type="button"
-                    className="session-dropdown-button session-header-button"
+                    className={`chat-header-title oc-icon-btn ${activeSession ? '' : 'no-session'}`}
+                    style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 6px', borderRadius: 3, textAlign: 'left' }}
                     onClick={onToggleDropdown}
                     data-test-sessions-count={sessions.length}
-                    aria-label="Select session"
                     aria-haspopup="listbox"
                     aria-expanded={showSessionList}
+                    title={activeSession?.title ?? 'No session'}
                 >
-                    {activeSession ? activeSession.title : 'No Session'}
-                    <span className="dropdown-icon" aria-hidden="true">▼</span>
+                    {activeSession ? activeSession.title : 'No session'}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
+                        <path d="m6 9 6 6 6-6"/>
+                    </svg>
                 </button>
-                
+
                 {showSessionList && (
                     <div className="session-list-dropdown" role="listbox" aria-label="Session list">
                         {!sessionService.activeProject && (
-                            <div className="session-list-empty">
-                                <span>⚠️</span> No project selected. Please open a project to see sessions.
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585' }}>
+                                No project open.
                             </div>
                         )}
                         {sessionService.activeProject && isLoadingSessions && (
-                            <div className="session-list-loading">
-                                <span className="spinner">⏳</span> Loading sessions...
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                </svg>
+                                Loading...
                             </div>
                         )}
                         {sessionService.activeProject && sessionLoadError && (
-                            <div className="session-list-error">
-                                <div className="error-message">
-                                    <span className="error-icon">⚠️</span> {sessionLoadError}
-                                </div>
-                                <button 
-                                    type="button"
-                                    className="retry-button" 
-                                    onClick={onLoadSessions}
-                                >
-                                    Retry
-                                </button>
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: '#f14c4c' }}>
+                                {sessionLoadError}
+                                <button type="button" onClick={onLoadSessions} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#007acc', cursor: 'pointer', fontSize: 12 }}>Retry</button>
                             </div>
                         )}
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
-                            <div className="session-list-empty">No sessions yet. Click + to create one.</div>
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585' }}>No sessions yet.</div>
                         )}
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
-                            <div 
+                            <div
                                 key={session.id}
                                 className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
                                 onClick={() => onSessionSwitch(session.id)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        onSessionSwitch(session.id);
-                                    }
-                                }}
                                 role="option"
                                 tabIndex={0}
                                 aria-selected={session.id === activeSession?.id}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { onSessionSwitch(session.id); } }}
                             >
-                                {session.title}
-                                {session.id === activeSession?.id && <span className="active-indicator"> ●</span>}
+                                <span className="session-list-item-title">{session.title}</span>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
-            
-            <button 
+
+            {/* Model selector pill */}
+            <ModelSelector sessionService={sessionService} />
+
+            {/* New session */}
+            <button
                 type="button"
-                className="new-session-button"
+                className="oc-icon-btn"
                 onClick={onNewSession}
-                title={sessionService.activeProject ? "Create new session" : "No project selected"}
+                title="New session"
+                aria-label="New session"
             >
-                + New
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
             </button>
-            
-            {activeSession && (
-                <button 
+
+            {/* More actions (…) button with dropdown */}
+            <div style={{ position: 'relative' }} ref={menuRef}>
+                <button
                     type="button"
-                    className="delete-session-button"
-                    onClick={onDeleteSession}
-                    title="Delete current session"
+                    className="oc-icon-btn"
+                    onClick={() => setShowMenu(m => !m)}
+                    title="More actions"
+                    aria-label="More actions"
+                    aria-haspopup="true"
+                    aria-expanded={showMenu}
                 >
-                    🗑️
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                    </svg>
                 </button>
-            )}
+                {showMenu && (
+                    <div className="chat-header-menu" role="menu">
+                        {activeSession && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onDeleteSession(); }}
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                </svg>
+                                Delete session
+                            </button>
+                        )}
+                        {!activeSession && (
+                            <div className="chat-header-menu-empty">No actions</div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
+
+const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
+    <div className="chat-footer-bar">
+        <div className="chat-footer-status">
+            <div className={`status-dot ${isStreaming ? 'streaming' : 'connected'}`} />
+            <span>{isStreaming ? 'Generating...' : 'Ready'}</span>
+        </div>
+    </div>
+);
 
 /**
  * React component for chat interface.
@@ -250,6 +299,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
+    const [queuedCount, setQueuedCount] = React.useState(0);
+    const messageQueueRef = React.useRef<PromptMessagePart[][]>([]);
+    const isSendingRef = React.useRef(false);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
     // Subscribe to model changes
@@ -438,34 +490,63 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     }, [sessionService, loadSessions, messageService]);
 
     // Handle send message (updated for multi-part input and model selection)
+    // Messages are queued if streaming is active, and drained sequentially.
+    const sendPartsNow = React.useCallback(async (parts: PromptMessagePart[]) => {
+        const activeModel = sessionService.activeModel;
+        const model = activeModel ? (() => {
+            const [providerPart, ...modelParts] = activeModel.split('/');
+            const modelPart = modelParts.join('/');
+            return { providerID: providerPart, modelID: modelPart };
+        })() : undefined;
+
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[ChatWidget] Sending message with model:', model || 'default');
+        }
+        await sessionService.sendMessage(parts as any as MessagePartInput[], model);
+    }, [sessionService]);
+
+    const drainQueue = React.useCallback(async () => {
+        if (isSendingRef.current) return;
+        while (messageQueueRef.current.length > 0) {
+            isSendingRef.current = true;
+            const next = messageQueueRef.current.shift()!;
+            setQueuedCount(messageQueueRef.current.length);
+            try {
+                await sendPartsNow(next);
+            } catch (error) {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error('[ChatWidget] Error sending queued message:', error);
+                }
+            }
+        }
+        isSendingRef.current = false;
+    }, [sendPartsNow]);
+
+    // When streaming ends, drain any queued messages
+    React.useEffect(() => {
+        if (!isStreaming) {
+            drainQueue();
+        }
+    }, [isStreaming, drainQueue]);
+
     const handleSend = React.useCallback(async (parts: PromptMessagePart[]) => {
-        if (parts.length === 0) {
+        if (parts.length === 0) return;
+
+        if (isStreaming || isSendingRef.current) {
+            // Queue for later — input stays enabled so user can keep typing
+            messageQueueRef.current.push(parts);
+            setQueuedCount(messageQueueRef.current.length);
             return;
         }
 
         try {
-            // Get selected model and pass it separately (not in parts metadata)
-            // OpenCode API expects model as top-level parameter: { providerID, modelID }
-            // T3-12: Handle multi-slash model IDs correctly (e.g., "provider/model/version")
-            const activeModel = sessionService.activeModel;
-            const model = activeModel ? (() => {
-                const [providerPart, ...modelParts] = activeModel.split('/');
-                const modelPart = modelParts.join('/');
-                return { providerID: providerPart, modelID: modelPart };
-            })() : undefined;
-
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('[ChatWidget] Sending message with model:', model || 'default');
-            }
-            // PromptInput MessagePart types are compatible with MessagePartInput
-            await sessionService.sendMessage(parts as any as MessagePartInput[], model);
+            await sendPartsNow(parts);
         } catch (error) {
             if (process.env.NODE_ENV !== 'production') {
                 console.error('[ChatWidget] Error sending message:', error);
             }
-            // TODO: Show error to user
         }
-    }, [sessionService]);
+    }, [sessionService, isStreaming, sendPartsNow]);
 
     // handleKeyDown removed - now handled by PromptInput component
 
@@ -478,11 +559,11 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         setShowSessionList(prev => !prev);
     }, []);
 
-    // T2-13: Use module-level SessionHeader with props
+    // T7: Use unified ChatHeaderBar
     return (
         <div className="chat-container">
             <div className="chat-active">
-                <SessionHeader 
+                <ChatHeaderBar
                     showSessionList={showSessionList}
                     sessions={sessions}
                     activeSession={activeSession}
@@ -502,9 +583,6 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     </div>
                 ) : (
                     <>
-                        <div className="chat-header-secondary">
-                            <ModelSelector sessionService={sessionService} />
-                        </div>
                         <MessageTimeline
                             messages={messages}
                             streamingData={streamingData}
@@ -515,10 +593,11 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
-                            disabled={isStreaming}
-                            placeholder="Type your message, @mention files/agents, or attach images..."
+                            disabled={false}
+                            placeholder={queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
                         />
+                        <ChatFooter isStreaming={isStreaming} />
                     </>
                 )}
             </div>

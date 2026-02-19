@@ -27,6 +27,13 @@ const AVAILABLE_AGENTS = [
     { name: 'janitor', description: 'QA and validation' },
 ];
 
+// Available slash commands
+const SLASH_COMMANDS = [
+    { name: '/clear', description: 'Clear the current session messages' },
+    { name: '/help', description: 'Show available commands' },
+    { name: '/compact', description: 'Compact conversation to save context' },
+];
+
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
     disabled = false,
@@ -40,9 +47,10 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [isDragging, setIsDragging] = React.useState(false);
     const [showTypeahead, setShowTypeahead] = React.useState(false);
     const [typeaheadQuery, setTypeaheadQuery] = React.useState('');
-    const [typeaheadPosition, setTypeaheadPosition] = React.useState({ top: 0, left: 0 });
     const [selectedTypeaheadIndex, setSelectedTypeaheadIndex] = React.useState(0);
     const [typeaheadType, setTypeaheadType] = React.useState<'agent' | 'file' | null>(null);
+    const [showSlashMenu, setShowSlashMenu] = React.useState(false);
+    const [slashQuery, setSlashQuery] = React.useState('');
 
     /**
      * Get the current prompt from editor and attachments.
@@ -66,6 +74,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setImageAttachments([]);
         setFileAttachments([]);
         setShowTypeahead(false);
+        setShowSlashMenu(false);
     };
 
     /**
@@ -99,6 +108,15 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             }
         }
 
+        // Handle slash menu navigation
+        if (showSlashMenu) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowSlashMenu(false);
+                return;
+            }
+        }
+
         // Handle Enter to send (Shift+Enter for newline)
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -107,49 +125,71 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
-     * Handle input to detect @ mentions.
+     * Get all text content before the cursor in the editor (across all nodes).
+     * This is needed for @ and / detection to work even with pill spans present.
      */
-    const handleInput = () => {
+    const getTextBeforeCursor = (): string => {
+        const editor = editorRef.current;
+        if (!editor) return '';
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return '';
+        const range = selection.getRangeAt(0);
+        // Create a range from start of editor to cursor position
+        const preRange = document.createRange();
+        preRange.setStart(editor, 0);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        return preRange.toString();
+    };
+
+    // Ref holding the latest handleInput implementation — avoids stale closure in native listener
+    const handleInputRef = React.useRef<() => void>(() => { /* noop */ });
+
+    /**
+     * Handle input to detect @ mentions and / commands.
+     */
+    const handleInput = React.useCallback(() => {
         if (!editorRef.current) return;
 
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
+        const beforeCursor = getTextBeforeCursor();
 
-        const range = selection.getRangeAt(0);
-        const textNode = range.startContainer;
-        
-        if (textNode.nodeType !== Node.TEXT_NODE) return;
-
-        const text = textNode.textContent || '';
-        const cursorPosition = range.startOffset;
-        
-        // Check if we're typing @ or after @
-        const beforeCursor = text.slice(0, cursorPosition);
-        const atIndex = beforeCursor.lastIndexOf('@');
-        
-        if (atIndex >= 0) {
-            const query = beforeCursor.slice(atIndex + 1);
-            
-            // Don't show if there's a space in the query
-            if (!query.includes(' ')) {
-                setTypeaheadQuery(query);
-                setTypeaheadType(query.length === 0 || /^[a-zA-Z]/.test(query) ? 'agent' : 'file');
-                setShowTypeahead(true);
-                setSelectedTypeaheadIndex(0);
-                
-                // Calculate position for dropdown
-                const rect = range.getBoundingClientRect();
-                const editorRect = editorRef.current.getBoundingClientRect();
-                setTypeaheadPosition({
-                    top: rect.bottom - editorRect.top + 5,
-                    left: rect.left - editorRect.left
-                });
-                return;
-            }
+        // @ mention detection — find last @ not preceded by a word character
+        const atMatch = beforeCursor.match(/@([^\s@]*)$/);
+        if (atMatch) {
+            const query = atMatch[1];
+            setTypeaheadQuery(query);
+            setTypeaheadType('agent');
+            setShowTypeahead(true);
+            setShowSlashMenu(false);
+            setSelectedTypeaheadIndex(0);
+            return;
         }
-        
         setShowTypeahead(false);
-    };
+
+        // Slash command detection — / at start of content or after whitespace only
+        const slashMatch = beforeCursor.match(/(?:^|\s)\/([^\s/]*)$/);
+        if (slashMatch) {
+            const query = slashMatch[1];
+            setSlashQuery(query);
+            setShowSlashMenu(true);
+            return;
+        }
+        setShowSlashMenu(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Keep ref in sync so the native listener always calls the latest implementation
+    React.useEffect(() => {
+        handleInputRef.current = handleInput;
+    });
+
+    // Attach native input listener once so toolbar-button-dispatched events are caught
+    React.useEffect(() => {
+        const el = editorRef.current;
+        if (!el) return;
+        const handler = () => handleInputRef.current();
+        el.addEventListener('input', handler);
+        return () => el.removeEventListener('input', handler);
+    }, []);
 
     /**
      * Get items for typeahead based on query and type.
@@ -319,21 +359,24 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         }
     };
 
-    /**
-     * Handle drag events.
-     */
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(true);
     };
 
     const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        setIsDragging(false);
+        // Only hide overlay when leaving the container entirely, not child elements
+        const container = e.currentTarget as HTMLDivElement;
+        if (!container.contains(e.relatedTarget as Node)) {
+            setIsDragging(false);
+        }
     };
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(false);
 
         const files = e.dataTransfer.files;
@@ -361,15 +404,28 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     const typeaheadItems = getTypeaheadItems();
+    const filteredSlashCommands = SLASH_COMMANDS.filter(c =>
+        c.name.toLowerCase().includes(slashQuery.toLowerCase())
+    );
 
     return (
-        <div className="prompt-input-container">
+        <div
+            className="prompt-input-container"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
             {/* File Attachments Preview */}
             {fileAttachments.length > 0 && (
                 <div className="prompt-input-file-attachments">
                     {fileAttachments.map(file => (
                         <div key={file.path} className="prompt-input-file-item">
-                            <span className="file-icon">📄</span>
+                            <span className="file-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" aria-hidden="true">
+                                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                            </span>
                             <span className="file-name">{file.path}</span>
                             <button
                                 type="button"
@@ -413,9 +469,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     onKeyDown={handleKeyDown}
                     onInput={handleInput}
                     onPaste={handlePaste}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
                     role="textbox"
                     aria-multiline="true"
                     aria-label="Message input"
@@ -424,10 +477,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
                 {/* Drag Overlay */}
                 {isDragging && (
-                    <div className="prompt-input-drag-overlay">
-                        <div className="prompt-input-drag-overlay-text">
-                            Drop files or images here
-                        </div>
+                    <div className="prompt-input-drag-overlay" aria-hidden="true">
+                        <svg className="prompt-input-drag-overlay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="28" height="28">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <div className="prompt-input-drag-overlay-text">Drop files or images</div>
                     </div>
                 )}
 
@@ -435,7 +491,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 {showTypeahead && typeaheadItems.length > 0 && (
                     <div 
                         className="prompt-input-typeahead"
-                        style={{ top: typeaheadPosition.top, left: typeaheadPosition.left }}
                     >
                         {typeaheadItems.map((item, index) => (
                             <div
@@ -453,7 +508,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                 tabIndex={0}
                             >
                                 <span className={`typeahead-icon ${item.type}`}>
-                                    {item.type === 'agent' ? '🤖' : '📄'}
+                                    {item.type === 'agent' ? (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                        </svg>
+                                    ) : (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                        </svg>
+                                    )}
                                 </span>
                                 <div className="typeahead-content">
                                     <div className="typeahead-name">
@@ -462,6 +526,44 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                     {item.description && (
                                         <div className="typeahead-description">{item.description}</div>
                                     )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Slash Command Menu */}
+                {showSlashMenu && filteredSlashCommands.length > 0 && (
+                    <div className="prompt-input-typeahead" role="listbox" aria-label="Commands">
+                        {filteredSlashCommands.map((cmd, index) => (
+                            <div
+                                key={cmd.name}
+                                className={`typeahead-item ${index === 0 ? 'selected' : ''}`}
+                                onClick={() => {
+                                    // Insert the command into the editor
+                                    if (editorRef.current) {
+                                        editorRef.current.textContent = cmd.name + ' ';
+                                        // Move cursor to end
+                                        const range = document.createRange();
+                                        const sel = window.getSelection();
+                                        range.setStart(editorRef.current, editorRef.current.childNodes.length);
+                                        range.collapse(true);
+                                        sel?.removeAllRanges();
+                                        sel?.addRange(range);
+                                    }
+                                    setShowSlashMenu(false);
+                                }}
+                                role="option"
+                                tabIndex={0}
+                            >
+                                <span className="typeahead-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                                    </svg>
+                                </span>
+                                <div className="typeahead-content">
+                                    <div className="typeahead-name">{cmd.name}</div>
+                                    <div className="typeahead-description">{cmd.description}</div>
                                 </div>
                             </div>
                         ))}
@@ -481,22 +583,83 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     
                     <button
                         type="button"
-                        className="prompt-input-button"
-                        onClick={handleFileButtonClick}
+                        className="prompt-input-icon-btn"
+                        onClick={() => {
+                            const el = editorRef.current;
+                            if (!el) return;
+                            el.focus();
+                            // Insert @ at cursor
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                const textNode = document.createTextNode('@');
+                                range.insertNode(textNode);
+                                range.setStartAfter(textNode);
+                                range.setEndAfter(textNode);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            } else {
+                                el.appendChild(document.createTextNode('@'));
+                            }
+                            // Manually fire input event so handleInput runs
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }}
                         disabled={disabled}
-                        title="Attach file or image"
+                        title="Mention agent or file (@)"
                     >
-                        📎 Attach
+                        @
+                    </button>
+                    <button
+                        type="button"
+                        className="prompt-input-icon-btn"
+                        onClick={() => {
+                            const el = editorRef.current;
+                            if (!el) return;
+                            el.focus();
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                const textNode = document.createTextNode('/');
+                                range.insertNode(textNode);
+                                range.setStartAfter(textNode);
+                                range.setEndAfter(textNode);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            } else {
+                                el.appendChild(document.createTextNode('/'));
+                            }
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }}
+                        disabled={disabled}
+                        title="Commands (/)"
+                    >
+                        /
                     </button>
 
                     <button
                         type="button"
-                        className="prompt-input-button prompt-input-send-button"
+                        className="prompt-input-icon-btn"
+                        onClick={handleFileButtonClick}
+                        disabled={disabled}
+                        title="Attach file or image"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </button>
+
+                    <button
+                        type="button"
+                        className="prompt-input-send-button"
                         onClick={handleSendClick}
                         disabled={disabled}
                         title="Send message (Enter)"
                     >
-                        Send
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                        </svg>
                     </button>
                 </div>
             </div>

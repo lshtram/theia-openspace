@@ -6,12 +6,20 @@
     gap: 8px;
 }
 
+/* ─── Input wrapper ─────────────────────────────────────────── */
 .prompt-input-editor-wrapper {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--theia-input-border);
-    border-radius: 4px;
-    background: var(--theia-input-background);
+    border: 1px solid var(--theia-input-border, var(--oc-border));
+    border-radius: 6px;
+    background: var(--theia-input-background, var(--oc-bg-input));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+    position: relative;
+}
+
+.prompt-input-editor-wrapper:focus-within {
+    border-color: var(--theia-focusBorder, var(--oc-accent));
 }
 
 .prompt-input-editor {
@@ -50,12 +58,12 @@
 }
 
 .prompt-pill[data-type="file"] {
-    background: var(--theia-textLink-activeForeground, #ff8800);
+    background: var(--theia-textLink-activeForeground, var(--oc-accent));
     color: white;
 }
 
 .prompt-pill[data-type="agent"] {
-    background: var(--theia-button-background, #0066cc);
+    background: var(--theia-button-background, var(--oc-accent));
     color: white;
 }
 
@@ -111,116 +119,104 @@
     background: rgba(0, 0, 0, 0.9);
 }
 
-/* Toolbar */
+/* ─── Toolbar (input footer) ────────────────────────────────── */
 .prompt-input-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    border-top: 1px solid var(--theia-input-border);
+    gap: 2px;
+    padding: 5px 8px;
+    border-top: 1px solid var(--theia-input-border, var(--oc-border));
+    background: rgba(255,255,255,0.02);
 }
 
-.prompt-input-button {
-    padding: 4px 12px;
-    border: 1px solid var(--theia-button-border);
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border-radius: 3px;
+/* ─── Icon buttons in toolbar ───────────────────────────────── */
+.prompt-input-icon-btn {
+    background: none;
+    border: none;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim));
     cursor: pointer;
-    font-size: 13px;
+    padding: 4px 5px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--theia-code-font-family, monospace);
+    line-height: 1;
+    transition: background 0.1s, color 0.1s;
+    min-width: 22px;
+    min-height: 22px;
 }
 
-.prompt-input-button:hover {
-    background: var(--theia-button-hoverBackground);
+.prompt-input-icon-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.08);
+    color: var(--theia-foreground, var(--oc-text));
 }
 
-.prompt-input-button:disabled {
-    opacity: 0.5;
+.prompt-input-icon-btn:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
 }
 
-.prompt-input-send-button {
-    margin-left: auto;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    font-weight: 500;
+.prompt-input-icon-btn:focus-visible,
+.prompt-input-send-button:focus-visible {
+    outline: 2px solid var(--theia-focusBorder, var(--oc-accent));
+    outline-offset: 1px;
 }
 
-/* Drag Overlay */
-.prompt-input-drag-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 120, 212, 0.1);
-    border: 2px dashed var(--theia-button-background);
+/* ─── Send button ───────────────────────────────────────────── */
+.prompt-input-send-button {
+    margin-left: auto;
+    background: var(--theia-button-background, var(--oc-accent));
+    color: var(--theia-button-foreground, var(--oc-text-bright));
+    border: none;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: none;
-    z-index: 10;
-}
-
-.prompt-input-drag-overlay-text {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--theia-button-background);
-}
-
-/* Typeahead Dropdown */
-.prompt-typeahead-dropdown {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
-    margin-bottom: 4px;
-    max-height: 300px;
-    overflow-y: auto;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 100;
-}
-
-.prompt-typeahead-item {
-    padding: 8px 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.prompt-typeahead-item:hover,
-.prompt-typeahead-item.active {
-    background: var(--theia-list-hoverBackground);
-}
-
-.prompt-typeahead-item-icon {
-    width: 20px;
-    height: 20px;
+    transition: background 0.1s;
     flex-shrink: 0;
 }
 
-.prompt-typeahead-item-label {
-    flex: 1;
-    font-size: 13px;
+.prompt-input-send-button:hover:not(:disabled) {
+    background: var(--theia-button-hoverBackground, var(--oc-accent-hover));
 }
 
-.prompt-typeahead-item-type {
-    font-size: 11px;
+.prompt-input-send-button:disabled {
+    background: color-mix(in srgb, var(--oc-accent) 30%, transparent);
+    cursor: not-allowed;
+}
+
+/* ─── Drag-drop overlay ─────────────────────────────────────── */
+.prompt-input-drag-overlay {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--oc-accent) 8%, transparent);
+    border: 2px dashed var(--oc-accent);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.prompt-input-drag-overlay-icon {
+    color: var(--oc-accent);
     opacity: 0.7;
 }
 
-.prompt-typeahead-group {
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    opacity: 0.7;
-    border-bottom: 1px solid var(--theia-dropdown-border);
+.prompt-input-drag-overlay-text {
+    font-size: 12px;
+    color: var(--oc-accent);
+    font-weight: 500;
 }
 
 /* File Attachments */
@@ -233,15 +229,18 @@
     border-bottom: 1px solid var(--theia-input-border);
 }
 
+/* ─── Attachment chips ──────────────────────────────────────── */
 .prompt-input-file-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: var(--theia-badge-background);
-    color: var(--theia-badge-foreground);
-    border-radius: 12px;
-    font-size: 12px;
+    gap: 5px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: default;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--theia-foreground, var(--oc-text));
 }
 
 .prompt-input-file-item .file-icon {
@@ -256,87 +255,82 @@
 }
 
 .prompt-input-file-item .file-remove {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: transparent;
+    background: none;
     border: none;
     cursor: pointer;
-    display: flex;
+    padding: 0;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim));
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    color: inherit;
-    opacity: 0.7;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+    line-height: 1;
 }
 
 .prompt-input-file-item .file-remove:hover {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.2);
+    color: var(--theia-foreground, var(--oc-text));
 }
 
-/* Typeahead Dropdown */
+/* ─── Typeahead / command dropdown ─────────────────────────── */
 .prompt-input-typeahead {
     position: absolute;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--oc-bg-raised);
+    border: 1px solid var(--oc-border);
     border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    min-width: 200px;
-    max-height: 300px;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.5);
+    z-index: 300;
+    max-height: 200px;
     overflow-y: auto;
+    margin-bottom: 4px;
+    font-size: 12px;
 }
 
 .typeahead-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 10px;
+    padding: 7px 12px;
     cursor: pointer;
-    border-bottom: 1px solid var(--theia-dropdown-border);
-}
-
-.typeahead-item:last-child {
-    border-bottom: none;
+    color: var(--oc-text);
+    border-bottom: 1px solid transparent;
+    transition: background 0.08s;
 }
 
 .typeahead-item:hover,
 .typeahead-item.selected {
-    background: var(--theia-list-activeSelectionBackground);
-    color: var(--theia-list-activeSelectionForeground);
+    background: var(--oc-bg-hover);
+}
+
+.typeahead-item.selected {
+    background: color-mix(in srgb, var(--oc-accent) 12%, transparent);
 }
 
 .typeahead-icon {
-    font-size: 16px;
-    width: 24px;
-    height: 24px;
+    width: 16px;
+    height: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-}
-
-.typeahead-icon.agent {
-    background: var(--theia-button-background);
-}
-
-.typeahead-icon.file {
-    background: var(--theia-textLink-activeForeground);
-}
-
-.typeahead-content {
-    flex: 1;
-    min-width: 0;
+    color: var(--oc-text-dim);
+    flex-shrink: 0;
 }
 
 .typeahead-name {
-    font-size: 13px;
     font-weight: 500;
+    font-size: 12px;
 }
 
 .typeahead-description {
     font-size: 11px;
-    opacity: 0.7;
-    margin-top: 2px;
+    color: var(--oc-text-dim);
+    margin-top: 1px;
+}
+
+.typeahead-content {
+    display: flex;
+    flex-direction: column;
 }

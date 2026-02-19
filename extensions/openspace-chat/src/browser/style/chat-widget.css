@@ -4,88 +4,86 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    background-color: var(--oc-bg);
+    color: var(--oc-text);
 }
 
-/* Model/Provider Status Display */
-.openspace-chat-widget .model-provider-status {
-    padding: 4px 12px;
-    font-size: 0.85em;
-    color: var(--theia-descriptionForeground);
-    background-color: var(--theia-editor-background);
-    border-bottom: 1px solid var(--theia-panel-border);
+/* ─── Chat header ────────────────────────────────────────────── */
+.openspace-chat-widget .chat-header-bar {
     display: flex;
     align-items: center;
     gap: 6px;
+    padding: 0 8px;
+    min-height: 36px;
+    border-bottom: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    flex-shrink: 0;
 }
 
-.openspace-chat-widget .model-provider-status-icon {
-    font-size: 14px;
-}
-
-.openspace-chat-widget .model-provider-status-text {
-    font-weight: 400;
-}
-
-/* Session Header */
-.openspace-chat-widget .session-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px;
-    border-bottom: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-}
-
-/* Session Selector */
-.openspace-chat-widget .session-selector {
-    position: relative;
+.openspace-chat-widget .chat-header-title {
     flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.openspace-chat-widget .session-dropdown-button {
-    width: 100%;
-    padding: 6px 12px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
+.openspace-chat-widget .chat-header-title.no-session {
+    color: var(--oc-text-dim, #858585);
+    font-style: italic;
+}
+
+/* Model pill inside header */
+.openspace-chat-widget .model-selector {
+    position: relative;
+    display: inline-flex;
+}
+
+.openspace-chat-widget .model-selector-pill {
+    display: inline-flex;
     align-items: center;
-    font-size: 13px;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text, #ccc);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color 0.1s, background 0.1s;
 }
 
-.openspace-chat-widget .session-dropdown-button:hover:not(:disabled) {
-    background: var(--theia-button-hoverBackground);
+.openspace-chat-widget .model-selector-pill:hover {
+    border-color: var(--oc-border-focus, #007acc);
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
-.openspace-chat-widget .session-dropdown-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+/* Remove old secondary header */
+.openspace-chat-widget .chat-header-secondary {
+    display: none;
 }
 
-.openspace-chat-widget .dropdown-icon {
-    margin-left: 8px;
-    font-size: 10px;
-}
-
-/* Session List Dropdown */
+/* ─── Session dropdown (restyled) ── */
 .openspace-chat-widget .session-list-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-    margin-top: 4px;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
-    border-radius: 3px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    max-height: 300px;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    z-index: 200;
+    max-height: 280px;
     overflow-y: auto;
-    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 200px;
 }
 
 .openspace-chat-widget .session-list-item {
@@ -94,125 +92,38 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
-    color: var(--theia-foreground);
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
 }
 
 .openspace-chat-widget .session-list-item:hover {
-    background: var(--theia-list-hoverBackground);
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
 .openspace-chat-widget .session-list-item.active {
-    background: var(--theia-list-activeSelectionBackground);
-    color: var(--theia-list-activeSelectionForeground);
-    font-weight: bold;
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
 }
 
-.openspace-chat-widget .active-indicator {
-    color: var(--theia-badge-background);
-    font-size: 16px;
-}
-
-.openspace-chat-widget .session-list-empty {
-    padding: 12px;
-    text-align: center;
-    color: var(--theia-descriptionForeground);
-    font-size: 12px;
-}
-
-/* Session List Loading State */
-.openspace-chat-widget .session-list-loading {
-    padding: 12px;
-    text-align: center;
-    color: var(--theia-descriptionForeground);
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-.openspace-chat-widget .session-list-loading .spinner {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Session List Error State */
-.openspace-chat-widget .session-list-error {
-    padding: 12px;
-    background: var(--theia-inputValidation-errorBackground);
-    border: 1px solid var(--theia-inputValidation-errorBorder);
-    border-radius: 3px;
-    margin: 8px;
-}
-
-.openspace-chat-widget .session-list-error .error-message {
-    color: var(--theia-errorForeground);
-    font-size: 12px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.openspace-chat-widget .session-list-error .error-icon {
-    font-size: 14px;
-}
-
-.openspace-chat-widget .session-list-error .retry-button {
-    width: 100%;
-    padding: 4px 8px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-.openspace-chat-widget .session-list-error .retry-button:hover {
-    background: var(--theia-button-hoverBackground);
-}
-
-/* New Session Button */
-.openspace-chat-widget .new-session-button {
-    padding: 6px 12px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 13px;
+.openspace-chat-widget .session-list-item-title {
+    flex: 1;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
 }
 
-.openspace-chat-widget .new-session-button:hover:not(:disabled) {
-    background: var(--theia-button-hoverBackground);
+.openspace-chat-widget .session-list-item-time {
+    font-size: 10px;
+    color: var(--oc-text-dim, #858585);
+    flex-shrink: 0;
 }
 
-.openspace-chat-widget .new-session-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Delete Session Button */
-.openspace-chat-widget .delete-session-button {
-    padding: 6px 12px;
-    background: var(--theia-button-secondaryBackground);
-    color: var(--theia-button-secondaryForeground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 16px;
-}
-
-.openspace-chat-widget .delete-session-button:hover {
-    background: var(--theia-errorForeground);
-    color: white;
+/* Session Selector wrapper */
+.openspace-chat-widget .session-selector {
+    position: relative;
+    flex: 1;
+    min-width: 0;
 }
 
 /* Active chat state */
@@ -280,6 +191,7 @@
     align-self: flex-end;
     background-color: var(--theia-button-background);
     color: var(--theia-button-foreground);
+    border: 1px solid var(--theia-openspace-chat-userBubbleBorder);
 }
 
 .openspace-chat-widget .chat-message-assistant {
@@ -374,69 +286,6 @@
 /* ============================================================================
    Model Selector Styles
    ============================================================================ */
-
-/* Model Selector Container */
-.openspace-chat-widget .model-selector {
-    position: relative;
-    display: inline-flex;
-}
-
-/* Secondary header for model selector */
-.openspace-chat-widget .chat-header-secondary {
-    padding: 4px 12px;
-    border-bottom: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-    display: flex;
-    justify-content: flex-end;
-}
-
-/* Model Selector Display Button */
-.openspace-chat-widget .model-selector-display {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-    transition: all 0.2s ease;
-}
-
-.openspace-chat-widget .model-selector-display:hover {
-    background: var(--theia-toolbar-hoverBackground);
-    border-color: var(--theia-toolbar-hoverBackground);
-}
-
-.openspace-chat-widget .model-selector-display:focus {
-    outline: none;
-    border-color: var(--theia-focusBorder);
-}
-
-.openspace-chat-widget .model-selector-display[aria-expanded="true"] {
-    background: var(--theia-toolbar-activeBackground);
-    border-color: var(--theia-focusBorder);
-}
-
-.openspace-chat-widget .model-selector-icon {
-    font-size: 14px;
-}
-
-.openspace-chat-widget .model-selector-name {
-    font-weight: 500;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.openspace-chat-widget .model-selector-arrow {
-    font-size: 10px;
-    margin-left: 2px;
-    opacity: 0.7;
-}
 
 /* Model Dropdown Panel */
 .openspace-chat-widget .model-dropdown {
@@ -569,7 +418,8 @@
 }
 
 .openspace-chat-widget .model-option-indicator {
-    font-size: 8px;
+    display: inline-flex;
+    flex-shrink: 0;
     color: var(--theia-badge-background);
 }
 
@@ -680,151 +530,517 @@
     line-height: 1.5;
 }
 
-/* Tool part — collapsible block with name and input/output */
+/* ─── Tool call block — minimalist collapsible ───────────────── */
 .message-bubble .part-tool {
-    margin: 4px 0;
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 4px;
-    overflow: hidden;
+    margin: 3px 0;
+    font-size: 12px;
 }
 
-.message-bubble .part-tool-summary {
+.message-bubble .part-tool-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: 8px;
+    padding: 4px 0;
     cursor: pointer;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-    background: var(--theia-editor-background);
     user-select: none;
+    color: var(--oc-text-dim, #858585);
+    transition: color 0.1s;
 }
 
-.message-bubble .part-tool-summary:hover {
-    background: var(--theia-list-hoverBackground);
-}
-
-.message-bubble .part-tool-icon {
-    font-family: monospace;
-    font-weight: bold;
-    font-size: 11px;
-    opacity: 0.6;
-}
-
-.message-bubble .part-tool-name {
-    font-weight: 600;
-    font-family: var(--theia-code-font-family);
+.message-bubble .part-tool-header:hover {
     color: var(--theia-foreground);
 }
 
-.message-bubble .part-tool-state {
-    font-size: 11px;
+.message-bubble .part-tool-chevron {
+    margin-left: auto;
+    opacity: 0.4;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.message-bubble .part-tool[data-expanded="true"] .part-tool-chevron {
+    transform: rotate(90deg);
+}
+
+.message-bubble .part-tool-icon {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--oc-text-dim, #858585);
+}
+
+.message-bubble .part-tool[data-state="completed"] .part-tool-icon {
+    color: var(--oc-green, #4ec94e);
     opacity: 0.7;
-    font-style: italic;
+}
+
+.message-bubble .part-tool[data-state="error"] .part-tool-icon {
+    color: #f14c4c;
+}
+
+.message-bubble .part-tool-name {
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+}
+
+.message-bubble .part-tool-body {
+    display: none;
+    padding: 6px 0 6px 22px;
+    border-left: 1px solid var(--oc-border, #333);
+    margin-left: 6px;
+}
+
+.message-bubble .part-tool[data-expanded="true"] .part-tool-body {
+    display: block;
 }
 
 .message-bubble .part-tool-io {
     margin: 0;
-    padding: 8px 10px;
+    padding: 6px 10px;
     font-size: 11px;
-    font-family: var(--theia-code-font-family);
+    font-family: var(--theia-code-font-family, monospace);
     line-height: 1.4;
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
     overflow-y: auto;
-    border-top: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    background: var(--theia-editor-background, #1e1e1e);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 3px;
+    color: var(--theia-editor-foreground, #ccc);
 }
 
-/* Reasoning part — italic/dimmed thinking indicator */
-.message-bubble .part-reasoning {
-    margin: 4px 0;
-    padding: 6px 10px;
-    border-left: 3px solid var(--theia-descriptionForeground);
-    opacity: 0.7;
-    font-style: italic;
+.message-bubble .part-tool-io + .part-tool-io {
+    margin-top: 4px;
+}
+
+/* ─── Bash block — terminal style ───────────────────────────── */
+.message-bubble .part-tool-bash {
+    border-radius: 4px;
+    margin: 6px 0;
+    overflow: hidden;
     font-size: 12px;
-    color: var(--theia-descriptionForeground);
+    background: var(--theia-openspace-chat-bashBackground);
+    border: 1px solid var(--theia-openspace-chat-bashBorder);
+}
+
+.message-bubble .part-tool-bash .part-tool-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--theia-openspace-chat-bashBorder);
+    background: var(--theia-openspace-chat-bashBackground);
+    color: var(--oc-text, #cccccc);
+    cursor: default;
+}
+
+.message-bubble .part-tool-bash .part-tool-header:hover {
+    color: var(--oc-text, #cccccc);
+}
+
+.message-bubble .part-tool-cmd {
+    font-family: var(--theia-code-font-family, monospace);
+    color: var(--oc-green, #4ec94e);
+    padding: 7px 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.message-bubble .part-tool-bash-output {
+    padding: 0 12px 8px;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 11px;
+    color: var(--oc-text, #cccccc);
+    opacity: 0.85;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ─── Reasoning block — fluent side-line ────────────────────── */
+.message-bubble .part-reasoning {
+    margin: 8px 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--theia-openspace-chat-reasoningBorder);
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.message-bubble .part-reasoning-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.1s;
+}
+
+.message-bubble .part-reasoning-header:hover {
+    color: var(--theia-foreground);
+}
+
+.message-bubble .part-reasoning-chevron {
+    opacity: 0.5;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.message-bubble .part-reasoning[data-expanded="true"] .part-reasoning-chevron {
+    transform: rotate(90deg);
 }
 
 .message-bubble .part-reasoning-label {
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: block;
-    margin-bottom: 2px;
+    font-style: italic;
+    font-size: 12px;
 }
 
-.message-bubble .part-reasoning-text {
+.message-bubble .part-reasoning-body {
+    display: none;
+    padding-top: 6px;
+    padding-bottom: 4px;
+    font-style: italic;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.4;
 }
 
-/* Step parts — progress indicators */
+.message-bubble .part-reasoning[data-expanded="true"] .part-reasoning-body {
+    display: block;
+}
+
+/* ─── Step parts ─────────────────────────────────────────────── */
 .message-bubble .part-step {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-}
-
-.message-bubble .part-step-icon {
-    font-family: monospace;
-    font-weight: bold;
+    padding: 2px 0;
     font-size: 11px;
-    opacity: 0.6;
+    color: var(--oc-text-dim, #858585);
+    opacity: 0.75;
 }
 
-.message-bubble .part-step-label {
-    font-weight: 500;
+.message-bubble .part-step-start .part-step-label {
+    font-style: italic;
 }
 
 .message-bubble .part-step-finish {
-    opacity: 0.6;
+    opacity: 0.5;
 }
 
-/* File part — file path reference */
+/* ─── File part ──────────────────────────────────────────────── */
 .message-bubble .part-file {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 5px;
+    padding: 3px 8px;
     margin: 2px 0;
-    background: var(--theia-editor-background);
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 3px;
-    font-size: 12px;
-    font-family: var(--theia-code-font-family);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text, #ccc);
 }
 
-.message-bubble .part-file-icon {
-    font-weight: bold;
+/* ─── Fallback part ──────────────────────────────────────────── */
+.message-bubble .part-fallback {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    margin: 2px 2px;
+    border-radius: 3px;
     font-size: 10px;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text-dim, #858585);
     opacity: 0.6;
 }
 
-.message-bubble .part-file-path {
-    color: var(--theia-textLink-foreground);
+/* ─── Markdown renderer styles ───────────────────────────────── */
+.message-bubble .md-para {
+    margin: 0 0 8px;
+    line-height: 1.6;
 }
 
-/* Fallback part — small info badge for unhandled types */
-.message-bubble .part-fallback {
-    display: inline-flex;
-    padding: 2px 6px;
-    margin: 2px 0;
-    background: var(--theia-badge-background);
-    color: var(--theia-badge-foreground);
-    border-radius: 3px;
-    font-size: 10px;
+.message-bubble .md-para:last-child { margin-bottom: 0; }
+
+.message-bubble .md-h1,
+.message-bubble .md-h2,
+.message-bubble .md-h3 {
+    color: var(--oc-text-bright, #fff);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    margin: 12px 0 6px;
+}
+.message-bubble .md-h1 { font-size: 16px; }
+.message-bubble .md-h2 { font-size: 14px; }
+.message-bubble .md-h3 { font-size: 13px; }
+
+.message-bubble .md-ul,
+.message-bubble .md-ol {
+    padding-left: 20px;
+    margin: 4px 0 8px;
+    line-height: 1.6;
 }
 
+.message-bubble .md-inline-code {
+    font-family: var(--theia-code-font-family, monospace);
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #ce9178;
+}
+
+.message-bubble .md-code-block {
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+    border: 1px solid var(--oc-border, #333);
+}
+
+.message-bubble .md-code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background: #111;
+    border-bottom: 1px solid var(--oc-border, #333);
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.message-bubble .md-code-copy {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.message-bubble .md-code-body {
+    margin: 0;
+    padding: 12px 14px;
+    background: #1e1e1e;
+    overflow-x: auto;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+    line-height: 1.5;
+    white-space: pre;
+}
+
+/* ─── Chat footer status bar ─────────────────────────────────── */
+.openspace-chat-widget .chat-footer-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    height: 24px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .chat-footer-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.openspace-chat-widget .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .status-dot.connected {
+    background: var(--oc-green, #4ec94e);
+    box-shadow: 0 0 4px rgba(78,201,78,0.5);
+}
+
+.openspace-chat-widget .status-dot.streaming {
+    background: #cca700;
+}
+
+/* ─── Chat header context menu ───────────────────────────────── */
+.openspace-chat-widget .chat-header-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 200;
+    min-width: 140px;
+    padding: 2px 0;
+}
+
+.openspace-chat-widget .chat-header-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 12px;
+    background: none;
+    border: none;
+    color: var(--oc-text, #ccc);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.08s;
+}
+
+.openspace-chat-widget .chat-header-menu-item:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+}
+
+.openspace-chat-widget .chat-header-menu-empty {
+    padding: 7px 12px;
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+}
+
+/* ─── Sessions sidebar widget ────────────────────────────────── */
+.openspace-sessions-widget {
+    --oc-bg:        var(--theia-openspace-chat-background);
+    --oc-bg-raised: var(--theia-openspace-chat-backgroundRaised);
+    --oc-bg-hover:  var(--theia-openspace-chat-backgroundHover);
+    --oc-border:    var(--theia-openspace-chat-border);
+    --oc-text:      var(--theia-openspace-chat-foreground);
+    --oc-text-dim:  var(--theia-openspace-chat-foregroundDim);
+    --oc-accent:    var(--theia-openspace-chat-accent);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    font-size: 13px;
+}
+
+.openspace-sessions-widget .sessions-widget-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--oc-border);
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--oc-text-dim);
+    letter-spacing: 0.5px;
+}
+
+.openspace-sessions-widget .sessions-widget-loading,
+.openspace-sessions-widget .sessions-widget-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--oc-text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.openspace-sessions-widget .sessions-widget-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.openspace-sessions-widget .sessions-widget-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--oc-text);
+    border-bottom: 1px solid transparent;
+    gap: 8px;
+    transition: background 0.08s;
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover {
+    background: var(--oc-bg-hover);
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-delete {
+    opacity: 1;
+}
+
+.openspace-sessions-widget .sessions-widget-item.active {
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
+}
+
+.openspace-sessions-widget .sessions-widget-item-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-time {
+    font-size: 10px;
+    color: var(--oc-text-dim);
+}
+
+.openspace-sessions-widget .sessions-widget-delete {
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+/* Sessions widget icon buttons (standalone, not scoped to .openspace-chat-widget) */
+.sessions-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 3px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--oc-text-dim, #858585);
+    transition: background 0.1s, color 0.1s;
+    line-height: 1;
+}
+
+.sessions-icon-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #cccccc);
+}
+
+.sessions-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@keyframes sessions-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.openspace-sessions-widget .sessions-spin {
+    animation: sessions-spin 1s linear infinite;
+}
