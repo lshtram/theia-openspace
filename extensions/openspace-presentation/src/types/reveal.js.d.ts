@@ -30,3 +30,12 @@ declare module 'reveal.js' {
 
     export default Reveal;
 }
+
+declare module 'reveal.js/plugin/markdown/markdown.esm.js' {
+    interface RevealPlugin {
+        id: string;
+        init(deck: import('reveal.js').default): void | Promise<void>;
+    }
+    const RevealMarkdown: RevealPlugin;
+    export default RevealMarkdown;
+}
