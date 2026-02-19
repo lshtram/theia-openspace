@@ -57,6 +57,12 @@ describe('OpenCodeSyncService - Command Security Gate (T3)', () => {
         // Register a known openspace command so security-passing tests can also dispatch
         commandRegistry = makeCommandRegistry(['openspace.test', 'openspace.sub.command.deep']);
         (syncService as any).commandRegistry = commandRegistry;
+        (syncService as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
     });
 
     afterEach(() => {

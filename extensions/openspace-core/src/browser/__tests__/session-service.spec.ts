@@ -78,6 +78,12 @@ describe('SessionService', () => {
         // Create SessionService instance
         sessionService = new SessionServiceImpl();
         (sessionService as any).openCodeService = mockOpenCodeService;
+        (sessionService as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
     });
 
     afterEach(() => {
@@ -225,6 +231,12 @@ describe('SessionService', () => {
             // Create new service without project
             const newService = new SessionServiceImpl();
             (newService as any).openCodeService = mockOpenCodeService;
+            (newService as any).logger = {
+                info: sinon.stub(),
+                warn: sinon.stub(),
+                error: sinon.stub(),
+                debug: sinon.stub(),
+            };
             
             try {
                 await newService.deleteSession('session-1');

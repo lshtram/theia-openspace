@@ -17,6 +17,7 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { Emitter, Event } from '@theia/core';
 import { CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import {
     OpenCodeClient,
     SessionNotification,
@@ -81,14 +82,17 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     @inject(CommandRegistry)
     private commandRegistry!: CommandRegistry;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     setSessionService(sessionService: SessionService): void {
         this._sessionService = sessionService;
-        console.info('[SyncService] SessionService wired successfully');
+        this.logger.info('[SyncService] SessionService wired successfully');
 
         // T3-7: Subscribe to session changes to clear streaming messages
         sessionService.onActiveSessionChanged(() => {
             this.streamingMessages.clear();
-            console.debug('[SyncService] Streaming messages cleared on session change');
+            this.logger.debug('[SyncService] Streaming messages cleared on session change');
         });
 
         // T2-15: Only expose test hooks in non-production builds.
@@ -109,7 +113,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     this.onMessageEvent(event);
                 }
             });
-            console.info('[SyncService] E2E test helpers exposed (non-production)');
+            this.logger.info('[SyncService] E2E test helpers exposed (non-production)');
         }
     }
 
@@ -157,11 +161,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onSessionEvent(event: SessionNotification): void {
         try {
-            console.debug(`[SyncService] Session event: ${event.type}, sessionId=${event.sessionId}`);
+            this.logger.debug(`[SyncService] Session event: ${event.type}, sessionId=${event.sessionId}`);
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                console.debug('[SyncService] Ignoring event for non-active session');
+                this.logger.debug('[SyncService] Ignoring event for non-active session');
                 return;
             }
 
@@ -186,7 +190,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     break;
 
                 case 'init_started':
-                    console.debug('[SyncService] Session init started');
+                    this.logger.debug('[SyncService] Session init started');
                     break;
 
                 case 'init_completed':
@@ -214,10 +218,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     break;
 
                 default:
-                    console.warn(`[SyncService] Unknown session event type: ${event.type}`);
+                    this.logger.warn(`[SyncService] Unknown session event type: ${event.type}`);
             }
         } catch (error) {
-            console.error('[SyncService] Error in onSessionEvent:', error);
+            this.logger.error('[SyncService] Error in onSessionEvent:', error);
             // Never throw from RPC callback
         }
     }
@@ -237,11 +241,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onMessageEvent(event: MessageNotification): void {
         try {
-            console.debug(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}`);
+            this.logger.debug(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}`);
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                console.debug('[SyncService] Ignoring event for non-active session');
+                this.logger.debug('[SyncService] Ignoring event for non-active session');
                 return;
             }
 
@@ -260,10 +264,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     break;
 
                 default:
-                    console.warn(`[SyncService] Unknown message event type: ${event.type}`);
+                    this.logger.warn(`[SyncService] Unknown message event type: ${event.type}`);
             }
         } catch (error) {
-            console.error('[SyncService] Error in onMessageEvent:', error);
+            this.logger.error('[SyncService] Error in onMessageEvent:', error);
             // Never throw from RPC callback
         }
     }
@@ -273,7 +277,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     private handleMessageCreated(event: MessageNotification): void {
         if (!event.data) {
-            console.warn('[SyncService] message.created event missing data');
+            this.logger.warn('[SyncService] message.created event missing data');
             return;
         }
 
@@ -283,7 +287,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // Initialize streaming state
         this.streamingMessages.set(event.messageId, { text: '' });
 
-        console.debug(`[SyncService] Message created: ${event.messageId}`);
+        this.logger.debug(`[SyncService] Message created: ${event.messageId}`);
     }
 
     /**
@@ -293,7 +297,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     private handleMessagePartial(event: MessageNotification): void {
         if (!event.data) {
-            console.warn('[SyncService] message.partial event missing data');
+            this.logger.warn('[SyncService] message.partial event missing data');
             return;
         }
 
@@ -302,7 +306,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         const delta = event.delta || this.extractTextDelta(event.data.parts);
 
         if (!delta) {
-            console.debug('[SyncService] No text delta in partial event');
+            this.logger.debug('[SyncService] No text delta in partial event');
             return;
         }
 
@@ -310,7 +314,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         let stream = this.streamingMessages.get(event.messageId);
         if (!stream) {
             // Received partial before created — auto-initialize tracking
-            console.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
+            this.logger.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
             stream = { text: '' };
             this.streamingMessages.set(event.messageId, stream);
 
@@ -326,7 +330,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // Update SessionService with delta
         this.sessionService.updateStreamingMessage(event.messageId, delta, false);
 
-        console.debug(`[SyncService] Message partial: ${event.messageId}, delta=${delta.length} chars`);
+        this.logger.debug(`[SyncService] Message partial: ${event.messageId}, delta=${delta.length} chars`);
     }
 
     /**
@@ -334,7 +338,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     private handleMessageCompleted(event: MessageNotification): void {
         if (!event.data) {
-            console.warn('[SyncService] message.completed event missing data');
+            this.logger.warn('[SyncService] message.completed event missing data');
             return;
         }
 
@@ -347,7 +351,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // Clean up streaming state
         this.streamingMessages.delete(event.messageId);
 
-        console.debug(`[SyncService] Message completed: ${event.messageId}`);
+        this.logger.debug(`[SyncService] Message completed: ${event.messageId}`);
     }
 
     /**
@@ -376,33 +380,33 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onFileEvent(event: FileNotification): void {
         try {
-            console.debug(`[SyncService] File event: ${event.type}, path=${event.path || 'unknown'}`);
+            this.logger.debug(`[SyncService] File event: ${event.type}, path=${event.path || 'unknown'}`);
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                console.debug('[SyncService] Ignoring event for non-active session');
+                this.logger.debug('[SyncService] Ignoring event for non-active session');
                 return;
             }
 
             // Phase 1: Log only (no immediate action)
             switch (event.type) {
                 case 'changed':
-                    console.debug('[SyncService] File changed (no action in Phase 1)');
+                    this.logger.debug('[SyncService] File changed (no action in Phase 1)');
                     break;
 
                 case 'saved':
-                    console.debug('[SyncService] File saved (no action in Phase 1)');
+                    this.logger.debug('[SyncService] File saved (no action in Phase 1)');
                     break;
 
                 case 'reset':
-                    console.debug('[SyncService] File reset (no action in Phase 1)');
+                    this.logger.debug('[SyncService] File reset (no action in Phase 1)');
                     break;
 
                 default:
-                    console.warn(`[SyncService] Unknown file event type: ${event.type}`);
+                    this.logger.warn(`[SyncService] Unknown file event type: ${event.type}`);
             }
         } catch (error) {
-            console.error('[SyncService] Error in onFileEvent:', error);
+            this.logger.error('[SyncService] Error in onFileEvent:', error);
             // Never throw from RPC callback
         }
     }
@@ -417,11 +421,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onPermissionEvent(event: PermissionNotification): void {
         try {
-            console.debug(`[SyncService] Permission event: ${event.type}, permissionId=${event.permissionId || 'unknown'}`);
+            this.logger.debug(`[SyncService] Permission event: ${event.type}, permissionId=${event.permissionId || 'unknown'}`);
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                console.debug('[SyncService] Ignoring event for non-active session');
+                this.logger.debug('[SyncService] Ignoring event for non-active session');
                 return;
             }
 
@@ -433,22 +437,22 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             // Handle other event types
             switch (event.type) {
                 case 'requested':
-                    console.debug('[SyncService] Permission requested - event emitted');
+                    this.logger.debug('[SyncService] Permission requested - event emitted');
                     break;
 
                 case 'granted':
-                    console.debug('[SyncService] Permission granted');
+                    this.logger.debug('[SyncService] Permission granted');
                     break;
 
                 case 'denied':
-                    console.debug('[SyncService] Permission denied');
+                    this.logger.debug('[SyncService] Permission denied');
                     break;
 
                 default:
-                    console.warn(`[SyncService] Unknown permission event type: ${event.type}`);
+                    this.logger.warn(`[SyncService] Unknown permission event type: ${event.type}`);
             }
         } catch (error) {
-            console.error('[SyncService] Error in onPermissionEvent:', error);
+            this.logger.error('[SyncService] Error in onPermissionEvent:', error);
             // Never throw from RPC callback
         }
     }
@@ -463,10 +467,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      * @param command - Agent command to execute
      */
     onAgentCommand(command: AgentCommand): void {
-        console.debug(`[SyncService] Agent command received: ${command.cmd}`);
+        this.logger.debug(`[SyncService] Agent command received: ${command.cmd}`);
         // Execute asynchronously — must not throw from RPC callback
         this.executeAndReport(command).catch(err => {
-            console.error('[SyncService] Unexpected error in executeAndReport:', err);
+            this.logger.error('[SyncService] Unexpected error in executeAndReport:', err);
         });
     }
 
@@ -476,7 +480,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
         // SECURITY: Only openspace.* commands are permitted
         if (!cmd || typeof cmd !== 'string' || !cmd.startsWith('openspace.')) {
-            console.warn(`[SyncService] Command rejected (not in openspace namespace): ${cmd}`);
+            this.logger.warn(`[SyncService] Command rejected (not in openspace namespace): ${cmd}`);
             return;
         }
 
@@ -487,17 +491,17 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         try {
             if (!this.commandRegistry.getCommand(cmd)) {
                 error = `Unknown command: ${cmd}`;
-                console.warn(`[SyncService] ${error}`);
+                this.logger.warn(`[SyncService] ${error}`);
             } else {
                 const argsArray = args ? (Array.isArray(args) ? args : [args]) : [];
                 this._lastDispatchedCommand = command;
                 output = await this.commandRegistry.executeCommand(cmd, ...argsArray);
                 success = true;
-                console.debug(`[SyncService] Command executed: ${cmd}`);
+                this.logger.debug(`[SyncService] Command executed: ${cmd}`);
             }
         } catch (err: any) {
             error = err?.message || String(err);
-            console.error(`[SyncService] Command execution failed: ${cmd}`, err);
+            this.logger.error(`[SyncService] Command execution failed: ${cmd}`, err);
         }
 
         // POST result back to Hub for MCP correlation
@@ -517,7 +521,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 })
             });
         } catch (fetchErr) {
-            console.debug('[SyncService] Could not post command result to Hub:', fetchErr);
+            this.logger.debug('[SyncService] Could not post command result to Hub:', fetchErr);
         }
     }
 }

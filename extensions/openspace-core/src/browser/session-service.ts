@@ -17,6 +17,7 @@
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { Emitter, Event } from '@theia/core/lib/common/event';
 import { Disposable } from '@theia/core/lib/common/disposable';
+import { ILogger } from '@theia/core/lib/common/logger';
 import {
     OpenCodeService,
     Project,
@@ -100,6 +101,9 @@ export class SessionServiceImpl implements SessionService {
     @inject(OpenCodeService)
     protected readonly openCodeService!: OpenCodeService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     // Private state
     private _activeProject: Project | undefined;
     private _activeSession: Session | undefined;
@@ -182,7 +186,7 @@ export class SessionServiceImpl implements SessionService {
      */
     @postConstruct()
     protected init(): void {
-        console.info('[SessionService] Initializing...');
+        this.logger.info('[SessionService] Initializing...');
 
         const projectId = window.localStorage.getItem('openspace.activeProjectId');
         const sessionId = window.localStorage.getItem('openspace.activeSessionId');
@@ -192,9 +196,9 @@ export class SessionServiceImpl implements SessionService {
             if (projectId) {
                 try {
                     await this.setActiveProject(projectId);
-                    console.debug(`[SessionService] Restored project: ${projectId}`);
+                    this.logger.debug(`[SessionService] Restored project: ${projectId}`);
                 } catch (err) {
-                    console.warn('[SessionService] Failed to restore project:', err);
+                    this.logger.warn('[SessionService] Failed to restore project:', err);
                 }
             }
 
@@ -202,13 +206,13 @@ export class SessionServiceImpl implements SessionService {
             if (sessionId && this._activeProject) {
                 try {
                     await this.setActiveSession(sessionId);
-                    console.debug(`[SessionService] Restored session: ${sessionId}`);
+                    this.logger.debug(`[SessionService] Restored session: ${sessionId}`);
                 } catch (err) {
-                    console.warn('[SessionService] Failed to restore session:', err);
+                    this.logger.warn('[SessionService] Failed to restore session:', err);
                 }
             }
 
-            console.info(`[SessionService] Initialized with project=${this._activeProject?.id || 'none'}, session=${this._activeSession?.id || 'none'}`);
+            this.logger.info(`[SessionService] Initialized with project=${this._activeProject?.id || 'none'}, session=${this._activeSession?.id || 'none'}`);
         })();
     }
 
@@ -221,7 +225,7 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if project not found
      */
     async setActiveProject(projectId: string): Promise<void> {
-        console.info(`[SessionService] Operation: setActiveProject(${projectId})`);
+        this.logger.info(`[SessionService] Operation: setActiveProject(${projectId})`);
 
         // Clear previous error
         this._lastError = undefined;
@@ -244,21 +248,21 @@ export class SessionServiceImpl implements SessionService {
             window.localStorage.setItem('openspace.activeProjectId', projectId);
             this.onActiveProjectChangedEmitter.fire(project);
 
-            console.debug(`[SessionService] State: project=${project.id} (${project.worktree})`);
+            this.logger.debug(`[SessionService] State: project=${project.id} (${project.worktree})`);
 
             // Connect SSE for the project's directory
             if (project.worktree) {
                 try {
                     await this.openCodeService.connectToProject(project.worktree);
-                    console.debug(`[SessionService] SSE connected for directory: ${project.worktree}`);
+                    this.logger.debug(`[SessionService] SSE connected for directory: ${project.worktree}`);
                 } catch (sseError) {
-                    console.warn('[SessionService] Failed to connect SSE (non-fatal):', sseError);
+                    this.logger.warn('[SessionService] Failed to connect SSE (non-fatal):', sseError);
                 }
             }
 
             // Clear active session if it belonged to a different project
             if (this._activeSession && this._activeSession.projectID !== projectId) {
-                console.debug(`[SessionService] Clearing session from different project`);
+                this.logger.debug(`[SessionService] Clearing session from different project`);
                 this._activeSession = undefined;
                 this._messages = [];
                 window.localStorage.removeItem('openspace.activeSessionId');
@@ -267,7 +271,7 @@ export class SessionServiceImpl implements SessionService {
             }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
@@ -285,10 +289,10 @@ export class SessionServiceImpl implements SessionService {
      * @returns true if a project was selected, false otherwise
      */
     async autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean> {
-        console.info(`[SessionService] Auto-selecting project for workspace: ${workspacePath}`);
+        this.logger.info(`[SessionService] Auto-selecting project for workspace: ${workspacePath}`);
         
         if (!workspacePath) {
-            console.warn('[SessionService] No workspace path provided');
+            this.logger.warn('[SessionService] No workspace path provided');
             return false;
         }
 
@@ -305,20 +309,20 @@ export class SessionServiceImpl implements SessionService {
             });
 
             if (matchingProject) {
-                console.info(`[SessionService] Found matching project: ${matchingProject.id} (${matchingProject.worktree})`);
+                this.logger.info(`[SessionService] Found matching project: ${matchingProject.id} (${matchingProject.worktree})`);
                 await this.setActiveProject(matchingProject.id);
                 return true;
             } else {
                 // No existing project matches — register the workspace as a new project
-                console.info(`[SessionService] No existing project matches workspace. Registering: ${workspacePath}`);
-                console.debug('[SessionService] Available projects:', projects.map(p => ({ id: p.id, worktree: p.worktree })));
+                this.logger.info(`[SessionService] No existing project matches workspace. Registering: ${workspacePath}`);
+                this.logger.debug('[SessionService] Available projects:', projects.map(p => ({ id: p.id, worktree: p.worktree })));
                 const newProject = await this.openCodeService.initProject(workspacePath);
-                console.info(`[SessionService] Registered new project: ${newProject.id} (${newProject.worktree})`);
+                this.logger.info(`[SessionService] Registered new project: ${newProject.id} (${newProject.worktree})`);
                 await this.setActiveProject(newProject.id);
                 return true;
             }
         } catch (error) {
-            console.error('[SessionService] Error auto-selecting project:', error);
+            this.logger.error('[SessionService] Error auto-selecting project:', error);
             return false;
         }
     }
@@ -331,7 +335,7 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if no active project or session not found
      */
     async setActiveSession(sessionId: string): Promise<void> {
-        console.info(`[SessionService] Operation: setActiveSession(${sessionId})`);
+        this.logger.info(`[SessionService] Operation: setActiveSession(${sessionId})`);
 
         // Cancel any in-flight session load operation
         this.sessionLoadAbortController?.abort();
@@ -341,7 +345,7 @@ export class SessionServiceImpl implements SessionService {
         // Require active project
         if (!this._activeProject) {
             const errorMsg = 'No active project. Call setActiveProject() first.';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -360,19 +364,19 @@ export class SessionServiceImpl implements SessionService {
             
             // Check if this operation was cancelled while waiting for RPC
             if (signal.aborted) {
-                console.debug(`[SessionService] Session load cancelled (stale operation for ${sessionId})`);
+                this.logger.debug(`[SessionService] Session load cancelled (stale operation for ${sessionId})`);
                 return; // Ignore stale response
             }
 
             // Clear messages from previous session BEFORE updating session
             this._messages = [];
             this.onMessagesChangedEmitter.fire([...this._messages]);
-            console.debug('[SessionService] State: messages cleared');
+            this.logger.debug('[SessionService] State: messages cleared');
 
             // Update active session
             this._activeSession = session;
             this.onActiveSessionChangedEmitter.fire(session);
-            console.debug(`[SessionService] State: activeSession=${session.id}`);
+            this.logger.debug(`[SessionService] State: activeSession=${session.id}`);
 
             // Persist to localStorage
             window.localStorage.setItem('openspace.activeSessionId', sessionId);
@@ -381,7 +385,7 @@ export class SessionServiceImpl implements SessionService {
             await this.loadMessages();
             
         } catch (error: any) {
-            console.error('[SessionService] Error in setActiveSession:', error);
+            this.logger.error('[SessionService] Error in setActiveSession:', error);
             this._lastError = error.message || String(error);
             this.onErrorChangedEmitter.fire(this._lastError);
             throw error;
@@ -398,10 +402,10 @@ export class SessionServiceImpl implements SessionService {
      * @param model - Model ID in provider/model format
      */
     setActiveModel(model: string): void {
-        console.info(`[SessionService] Operation: setActiveModel(${model})`);
+        this.logger.info(`[SessionService] Operation: setActiveModel(${model})`);
         this._activeModel = model;
         this.onActiveModelChangedEmitter.fire(model);
-        console.debug(`[SessionService] State: activeModel=${model}`);
+        this.logger.debug(`[SessionService] State: activeModel=${model}`);
     }
 
     /**
@@ -411,16 +415,16 @@ export class SessionServiceImpl implements SessionService {
      * @returns Array of providers with their models
      */
     async getAvailableModels(): Promise<ProviderWithModels[]> {
-        console.info('[SessionService] Operation: getAvailableModels()');
+        this.logger.info('[SessionService] Operation: getAvailableModels()');
         
         try {
             const directory = this._activeProject?.worktree;
             const providers = await this.openCodeService.getAvailableModels(directory);
-            console.debug(`[SessionService] Found ${providers.length} providers`);
+            this.logger.debug(`[SessionService] Found ${providers.length} providers`);
             return providers;
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error fetching models: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error fetching models: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             return [];
@@ -436,26 +440,26 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if no active project
      */
     async createSession(title?: string): Promise<Session> {
-        console.info(`[SessionService] Operation: createSession(${title || 'untitled'})`);
+        this.logger.info(`[SessionService] Operation: createSession(${title || 'untitled'})`);
 
         // If no active project, try to auto-select the first available project
         if (!this._activeProject) {
-            console.debug('[SessionService] No active project, fetching available projects...');
+            this.logger.debug('[SessionService] No active project, fetching available projects...');
             try {
                 const projects = await this.openCodeService.getProjects();
                 if (projects.length > 0) {
-                    console.debug(`[SessionService] Auto-selecting first project: ${projects[0].id}`);
+                    this.logger.debug(`[SessionService] Auto-selecting first project: ${projects[0].id}`);
                     await this.setActiveProject(projects[0].id);
                 } else {
                     const errorMsg = 'No projects available on OpenCode server';
-                    console.error(`[SessionService] Error: ${errorMsg}`);
+                    this.logger.error(`[SessionService] Error: ${errorMsg}`);
                     this._lastError = errorMsg;
                     this.onErrorChangedEmitter.fire(errorMsg);
                     throw new Error(errorMsg);
                 }
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
-                console.error(`[SessionService] Error getting projects: ${errorMsg}`);
+                this.logger.error(`[SessionService] Error getting projects: ${errorMsg}`);
                 this._lastError = errorMsg;
                 this.onErrorChangedEmitter.fire(errorMsg);
                 throw new Error(`No active project: ${errorMsg}`);
@@ -465,7 +469,7 @@ export class SessionServiceImpl implements SessionService {
         // Require active project
         if (!this._activeProject) {
             const errorMsg = 'No active project';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -482,7 +486,7 @@ export class SessionServiceImpl implements SessionService {
             // Create session via backend
             const session = await this.openCodeService.createSession(this._activeProject.id, { title });
 
-            console.debug(`[SessionService] Created session: ${session.id}`);
+            this.logger.debug(`[SessionService] Created session: ${session.id}`);
 
             // Set as active session
             await this.setActiveSession(session.id);
@@ -490,7 +494,7 @@ export class SessionServiceImpl implements SessionService {
             return session;
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
@@ -515,12 +519,12 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if no active project or session
      */
     async sendMessage(parts: MessagePartInput[], model?: { providerID: string; modelID: string }): Promise<void> {
-        console.info(`[SessionService] Operation: sendMessage(${parts.length} parts, model: ${model ? `${model.providerID}/${model.modelID}` : 'none'})`);
+        this.logger.info(`[SessionService] Operation: sendMessage(${parts.length} parts, model: ${model ? `${model.providerID}/${model.modelID}` : 'none'})`);
 
         // Require active project and session
         if (!this._activeProject) {
             const errorMsg = 'No active project';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -528,7 +532,7 @@ export class SessionServiceImpl implements SessionService {
 
         if (!this._activeSession) {
             const errorMsg = 'No active session';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -560,7 +564,7 @@ export class SessionServiceImpl implements SessionService {
         this._messages.push(optimisticMsg);
         this.onMessagesChangedEmitter.fire([...this._messages]);
 
-        console.debug(`[SessionService] Added optimistic message: ${optimisticMsg.id}`);
+        this.logger.debug(`[SessionService] Added optimistic message: ${optimisticMsg.id}`);
 
         // Set streaming state
         this._isStreaming = true;
@@ -597,24 +601,24 @@ export class SessionServiceImpl implements SessionService {
                 this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
                 const partsCount = assistantMessage.parts?.length || 0;
-                console.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${partsCount} parts`);
+                this.logger.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${partsCount} parts`);
             } else {
                 // Optimistic message not found (shouldn't happen, but handle gracefully)
-                console.warn(`[SessionService] Optimistic message not found for replacement: ${optimisticMsg.id}`);
+                this.logger.warn(`[SessionService] Optimistic message not found for replacement: ${optimisticMsg.id}`);
                 this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
             }
 
-            console.debug(`[SessionService] State: messages=${this._messages.length}`);
+            this.logger.debug(`[SessionService] State: messages=${this._messages.length}`);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
 
             // Rollback optimistic message on error
             this._messages = this._messages.filter(m => m.id !== optimisticMsg.id);
             this.onMessagesChangedEmitter.fire([...this._messages]);
 
-            console.debug(`[SessionService] Rolled back optimistic message: ${optimisticMsg.id}`);
+            this.logger.debug(`[SessionService] Rolled back optimistic message: ${optimisticMsg.id}`);
 
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
@@ -632,12 +636,12 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if no active project or session
      */
     async abort(): Promise<void> {
-        console.info(`[SessionService] Operation: abort()`);
+        this.logger.info(`[SessionService] Operation: abort()`);
 
         // Require active project and session
         if (!this._activeProject) {
             const errorMsg = 'No active project';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -645,7 +649,7 @@ export class SessionServiceImpl implements SessionService {
 
         if (!this._activeSession) {
             const errorMsg = 'No active session';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw new Error(errorMsg);
@@ -655,10 +659,10 @@ export class SessionServiceImpl implements SessionService {
             // Call backend to abort session
             await this.openCodeService.abortSession(this._activeProject.id, this._activeSession.id);
 
-            console.debug(`[SessionService] Aborted session: ${this._activeSession.id}`);
+            this.logger.debug(`[SessionService] Aborted session: ${this._activeSession.id}`);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
@@ -675,7 +679,7 @@ export class SessionServiceImpl implements SessionService {
      * @returns Array of sessions, or empty array if no active project or error
      */
     async getSessions(): Promise<Session[]> {
-        console.info('[SessionService] Operation: getSessions()');
+        this.logger.info('[SessionService] Operation: getSessions()');
         
         if (!this._activeProject) {
             // No active project is normal on startup - don't log as warning
@@ -684,11 +688,11 @@ export class SessionServiceImpl implements SessionService {
         
         try {
             const sessions = await this.openCodeService.getSessions(this._activeProject.id);
-            console.debug(`[SessionService] Found ${sessions.length} sessions`);
+            this.logger.debug(`[SessionService] Found ${sessions.length} sessions`);
             return sessions;
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error fetching sessions: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error fetching sessions: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             return [];
@@ -703,11 +707,11 @@ export class SessionServiceImpl implements SessionService {
      * @throws Error if no active project
      */
     async deleteSession(sessionId: string): Promise<void> {
-        console.info(`[SessionService] Operation: deleteSession(${sessionId})`);
+        this.logger.info(`[SessionService] Operation: deleteSession(${sessionId})`);
         
         if (!this._activeProject) {
             const errorMsg = 'No active project';
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             throw new Error(errorMsg);
         }
         
@@ -718,7 +722,7 @@ export class SessionServiceImpl implements SessionService {
             // Delete via backend
             await this.openCodeService.deleteSession(this._activeProject.id, sessionId);
             
-            console.debug(`[SessionService] Deleted session: ${sessionId}`);
+            this.logger.debug(`[SessionService] Deleted session: ${sessionId}`);
             
             // If deleted session was active, clear active session
             if (this._activeSession?.id === sessionId) {
@@ -727,11 +731,11 @@ export class SessionServiceImpl implements SessionService {
                 window.localStorage.removeItem('openspace.activeSessionId');
                 this.onActiveSessionChangedEmitter.fire(undefined);
                 this.onMessagesChangedEmitter.fire([]);
-                console.debug('[SessionService] Cleared active session (was deleted)');
+                this.logger.debug('[SessionService] Cleared active session (was deleted)');
             }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
@@ -750,7 +754,7 @@ export class SessionServiceImpl implements SessionService {
             return;
         }
 
-        console.debug(`[SessionService] Loading messages for session: ${this._activeSession.id}`);
+        this.logger.debug(`[SessionService] Loading messages for session: ${this._activeSession.id}`);
 
         // T2-11: Set loading state using counter
         this.incrementLoading();
@@ -769,11 +773,11 @@ export class SessionServiceImpl implements SessionService {
             }));
             this.onMessagesChangedEmitter.fire([...this._messages]);
 
-            console.debug(`[SessionService] Loaded ${this._messages.length} messages`);
-            console.debug(`[SessionService] State: messages=${this._messages.length}`);
+            this.logger.debug(`[SessionService] Loaded ${this._messages.length} messages`);
+            this.logger.debug(`[SessionService] State: messages=${this._messages.length}`);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[SessionService] Error loading messages: ${errorMsg}`);
+            this.logger.error(`[SessionService] Error loading messages: ${errorMsg}`);
             this._lastError = errorMsg;
             this.onErrorChangedEmitter.fire(errorMsg);
             // Don't throw - loading messages is not critical enough to fail the session change
@@ -790,12 +794,12 @@ export class SessionServiceImpl implements SessionService {
      * @param message - Message to append
      */
     appendMessage(message: Message): void {
-        console.debug(`[SessionService] Appending message: ${message.id}`);
+        this.logger.debug(`[SessionService] Appending message: ${message.id}`);
 
         // Check if message already exists (prevent duplicates)
         const exists = this._messages.some(m => m.id === message.id);
         if (exists) {
-            console.warn(`[SessionService] Message already exists: ${message.id}`);
+            this.logger.warn(`[SessionService] Message already exists: ${message.id}`);
             return;
         }
 
@@ -812,7 +816,7 @@ export class SessionServiceImpl implements SessionService {
      * @param isDone - Whether streaming is complete
      */
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void {
-        console.debug(`[SessionService] Streaming update: ${messageId}, isDone=${isDone}`);
+        this.logger.debug(`[SessionService] Streaming update: ${messageId}, isDone=${isDone}`);
 
         // Fire streaming event for incremental updates
         if (!isDone) {
@@ -822,7 +826,7 @@ export class SessionServiceImpl implements SessionService {
         // Find message in array
         const index = this._messages.findIndex(m => m.id === messageId);
         if (index < 0) {
-            console.warn(`[SessionService] Streaming message not found: ${messageId}`);
+            this.logger.warn(`[SessionService] Streaming message not found: ${messageId}`);
             return;
         }
 
@@ -866,11 +870,11 @@ export class SessionServiceImpl implements SessionService {
      * @param message - New message to replace with
      */
     replaceMessage(messageId: string, message: Message): void {
-        console.debug(`[SessionService] Replacing message: ${messageId}`);
+        this.logger.debug(`[SessionService] Replacing message: ${messageId}`);
 
         const index = this._messages.findIndex(m => m.id === messageId);
         if (index < 0) {
-            console.warn(`[SessionService] Message not found for replacement: ${messageId}`);
+            this.logger.warn(`[SessionService] Message not found for replacement: ${messageId}`);
             return;
         }
 
@@ -885,11 +889,11 @@ export class SessionServiceImpl implements SessionService {
      * @param session - Updated session data
      */
     notifySessionChanged(session: Session): void {
-        console.debug(`[SessionService] External session update: ${session.id}`);
+        this.logger.debug(`[SessionService] External session update: ${session.id}`);
 
         // Only update if this is the active session
         if (this._activeSession?.id !== session.id) {
-            console.debug('[SessionService] Ignoring update for non-active session');
+            this.logger.debug('[SessionService] Ignoring update for non-active session');
             return;
         }
 
@@ -904,11 +908,11 @@ export class SessionServiceImpl implements SessionService {
      * @param sessionId - ID of the deleted session
      */
     notifySessionDeleted(sessionId: string): void {
-        console.debug(`[SessionService] External session deletion: ${sessionId}`);
+        this.logger.debug(`[SessionService] External session deletion: ${sessionId}`);
 
         // Only clear if this is the active session
         if (this._activeSession?.id !== sessionId) {
-            console.debug('[SessionService] Ignoring deletion of non-active session');
+            this.logger.debug('[SessionService] Ignoring deletion of non-active session');
             return;
         }
 
@@ -923,7 +927,7 @@ export class SessionServiceImpl implements SessionService {
      * Dispose the service - cleanup emitters and state.
      */
     dispose(): void {
-        console.info('[SessionService] Disposing...');
+        this.logger.info('[SessionService] Disposing...');
 
         // Cancel any in-flight operations
         this.sessionLoadAbortController?.abort();
@@ -948,6 +952,6 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = undefined;
         this._isStreaming = false;
 
-        console.info('[SessionService] Disposed');
+        this.logger.info('[SessionService] Disposed');
     }
 }

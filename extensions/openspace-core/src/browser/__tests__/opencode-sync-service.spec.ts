@@ -66,6 +66,7 @@ describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
         process.env.NODE_ENV = 'production';
 
         const service = new OpenCodeSyncServiceImpl();
+        (service as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
         service.setSessionService(makeSessionServiceStub());
 
         expect((window as any).__openspace_test__).to.be.undefined;
@@ -75,6 +76,7 @@ describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
         process.env.NODE_ENV = 'test';
 
         const service = new OpenCodeSyncServiceImpl();
+        (service as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
         service.setSessionService(makeSessionServiceStub());
 
         expect((window as any).__openspace_test__).to.not.be.undefined;
