@@ -910,3 +910,135 @@
     font-size: 12px;
     color: var(--oc-text-dim, #858585);
 }
+
+/* ─── Sessions sidebar widget ────────────────────────────────── */
+.openspace-sessions-widget {
+    --oc-bg:        #1e1e1e;
+    --oc-bg-raised: #252526;
+    --oc-bg-hover:  #2a2d2e;
+    --oc-border:    #333333;
+    --oc-text:      #cccccc;
+    --oc-text-dim:  #858585;
+    --oc-accent:    #007acc;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    font-size: 13px;
+}
+
+.openspace-sessions-widget .sessions-widget-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--oc-border);
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--oc-text-dim);
+    letter-spacing: 0.5px;
+}
+
+.openspace-sessions-widget .sessions-widget-loading,
+.openspace-sessions-widget .sessions-widget-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--oc-text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.openspace-sessions-widget .sessions-widget-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.openspace-sessions-widget .sessions-widget-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--oc-text);
+    border-bottom: 1px solid transparent;
+    gap: 8px;
+    transition: background 0.08s;
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover {
+    background: var(--oc-bg-hover);
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-delete {
+    opacity: 1;
+}
+
+.openspace-sessions-widget .sessions-widget-item.active {
+    background: rgba(0,122,204,0.1);
+    color: #fff;
+}
+
+.openspace-sessions-widget .sessions-widget-item-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-time {
+    font-size: 10px;
+    color: var(--oc-text-dim);
+}
+
+.openspace-sessions-widget .sessions-widget-delete {
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+/* Sessions widget icon buttons (standalone, not scoped to .openspace-chat-widget) */
+.sessions-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 3px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--oc-text-dim, #858585);
+    transition: background 0.1s, color 0.1s;
+    line-height: 1;
+}
+
+.sessions-icon-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #cccccc);
+}
+
+.sessions-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@keyframes sessions-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.openspace-sessions-widget .sessions-spin {
+    animation: sessions-spin 1s linear infinite;
+}
