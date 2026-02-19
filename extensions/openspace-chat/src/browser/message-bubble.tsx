@@ -16,6 +16,7 @@
 
 import * as React from '@theia/core/shared/react';
 import { Message, MessagePart } from 'openspace-core/lib/common/opencode-protocol';
+import { renderMarkdown } from './markdown-renderer';
 
 /**
  * Props for the MessageBubble component.
@@ -62,12 +63,10 @@ function renderPart(part: MessagePart, index: number): React.ReactNode {
 /** Render text part — preserves whitespace, code blocks rendered as <pre>. */
 function renderTextPart(part: any, index: number): React.ReactNode {
     const text: string = part.text || '';
-    if (!text) {
-        return null;
-    }
+    if (!text) return null;
     return (
         <div key={`text-${index}`} className="part-text">
-            {text}
+            {renderMarkdown(text)}
         </div>
     );
 }
