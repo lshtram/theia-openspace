@@ -30,6 +30,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { ArtifactStore } from './artifact-store';
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -214,10 +215,8 @@ function applyReplaceLines(currentContent: string, ops: ReplaceLinesOp[]): strin
 export class PatchEngine {
     private versions = new Map<string, number>();
     private readonly versionsFilePath: string;
-    /** Per-file serial write queue: prevents torn writes under concurrent calls */
-    private writeQueues = new Map<string, Promise<void>>();
 
-    constructor(private readonly workspaceRoot: string) {
+    constructor(private readonly workspaceRoot: string, private readonly store: ArtifactStore) {
         this.versionsFilePath = path.join(workspaceRoot, '.openspace', 'patch-versions.json');
     }
 
@@ -237,7 +236,7 @@ export class PatchEngine {
      */
     async apply(filePath: string, request: PatchRequest): Promise<PatchApplyResult> {
         // 1. Validate and resolve path (prevents traversal attacks)
-        const absolutePath = this.resolveSafePath(filePath);
+        this.resolveSafePath(filePath); // throws if invalid
 
         // 2. OCC check
         const currentVersion = this.getVersion(filePath);
@@ -248,54 +247,40 @@ export class PatchEngine {
         // 3. Parse and validate ops
         const parsed = this.parseRequest(request);
 
-        // 4. Enqueue behind any in-flight write for this path (serial queue)
-        const doWrite = async (): Promise<PatchApplyResult> => {
-            // Read current content (empty string for new files)
-            let currentContent = '';
-            if (fs.existsSync(absolutePath)) {
-                currentContent = fs.readFileSync(absolutePath, 'utf-8');
+        // 4. Read current content if needed
+        let currentContent = '';
+        if (parsed.type === 'replace_lines') {
+            try {
+                const buf = await this.store.read(filePath);
+                currentContent = buf.toString('utf-8');
+            } catch {
+                // file doesn't exist yet — ok
             }
+        }
 
-            // Apply operations
-            let nextContent: string;
-            if (parsed.type === 'replace_content') {
-                nextContent = applyReplaceContent(parsed.ops[0] as ReplaceContentOp);
-            } else {
-                nextContent = applyReplaceLines(currentContent, parsed.ops as ReplaceLinesOp[]);
-            }
+        // 5. Apply operations
+        let nextContent: string;
+        if (parsed.type === 'replace_content') {
+            nextContent = applyReplaceContent(parsed.ops[0] as ReplaceContentOp);
+        } else {
+            nextContent = applyReplaceLines(currentContent, parsed.ops as ReplaceLinesOp[]);
+        }
 
-            // Ensure parent directory exists
-            const dir = path.dirname(absolutePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-
-            // Write file
-            fs.writeFileSync(absolutePath, nextContent, 'utf-8');
-
-            // Increment version
-            const nextVersion = currentVersion + 1;
-            this.versions.set(filePath, nextVersion);
-
-            // Persist versions to disk
-            await this.saveVersions();
-
-            return {
-                version: nextVersion,
-                bytes: Buffer.byteLength(nextContent, 'utf-8'),
-            };
-        };
-
-        // Chain write behind any in-flight write for the same path
-        const prev = this.writeQueues.get(filePath) ?? Promise.resolve();
-        let result!: PatchApplyResult;
-        const next = prev.then(async () => {
-            result = await doWrite();
+        // 6. Write via ArtifactStore (atomic, backed up, audited)
+        await this.store.write(filePath, nextContent, {
+            actor: (request.actor === 'user' ? 'user' : 'agent') as 'agent' | 'user',
+            reason: request.intent,
         });
-        this.writeQueues.set(filePath, next.catch(() => {}));
 
-        await next;
-        return result;
+        // 7. Increment version and persist
+        const nextVersion = currentVersion + 1;
+        this.versions.set(filePath, nextVersion);
+        await this.saveVersions();
+
+        return {
+            version: nextVersion,
+            bytes: Buffer.byteLength(nextContent, 'utf-8'),
+        };
     }
 
     /**
