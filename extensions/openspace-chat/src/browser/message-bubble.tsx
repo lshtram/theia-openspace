@@ -72,26 +72,101 @@ function renderTextPart(part: any, index: number): React.ReactNode {
     );
 }
 
-/** Render tool part — shows tool name, input, and output in a collapsible block. */
-function renderToolPart(part: any, index: number): React.ReactNode {
+const BASH_TOOL_NAMES = /^(bash|execute|run_command|run|shell|cmd|terminal)$/i;
+
+/** Collapsible tool call block. Detects bash and renders terminal style. */
+const ToolBlock: React.FC<{ part: any }> = ({ part }) => {
+    const [expanded, setExpanded] = React.useState(false);
     const name: string = part.name || part.tool || 'tool';
-    const state: string = part.state || '';
-    const stateLabel = state === 'running' ? ' (running...)' : state === 'error' ? ' (error)' : '';
+    const state = part.state;
+    const stateStr: string = typeof state === 'string' ? state :
+        (state && typeof state === 'object' ? (state.status || state.type || 'completed') : 'completed');
+    const isRunning = stateStr === 'running';
+    const isError = stateStr === 'error';
+    const isBash = BASH_TOOL_NAMES.test(name);
+
+    // Extract input/output — SDK: state.output for completed state
+    const input = part.input;
+    const output = (typeof state === 'object' && state !== null && 'output' in state)
+        ? state.output
+        : (part.output ?? undefined);
+
+    if (isBash) {
+        const cmd: string = typeof input === 'string' ? input :
+            (input && typeof input === 'object' ? (input.command ?? JSON.stringify(input, null, 2)) : '');
+        const bashOutput: string = typeof output === 'string' ? output :
+            (output ? JSON.stringify(output, null, 2) : '');
+        return (
+            <div className="part-tool part-tool-bash" data-state={stateStr}>
+                <div className="part-tool-header">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                    <span style={{ fontWeight: 600, color: '#ccc', fontFamily: 'var(--theia-code-font-family, monospace)' }}>
+                        {cmd || name}
+                    </span>
+                    {isRunning && (
+                        <svg className="oc-spin" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ marginLeft: 'auto', opacity: 0.5 }}>
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                        </svg>
+                    )}
+                </div>
+                {cmd && cmd !== name && (
+                    <div className="part-tool-cmd">{cmd}</div>
+                )}
+                {bashOutput && <div className="part-tool-bash-output">{bashOutput}</div>}
+            </div>
+        );
+    }
+
+    const hasBody = !!(input || output);
+
     return (
-        <details key={`tool-${index}`} className="part-tool">
-            <summary className="part-tool-summary">
-                <span className="part-tool-icon">{'>'}</span>
-                <span className="part-tool-name">{name}</span>
-                {stateLabel && <span className="part-tool-state">{stateLabel}</span>}
-            </summary>
-            {part.input && (
-                <pre className="part-tool-io part-tool-input">{typeof part.input === 'string' ? part.input : JSON.stringify(part.input, null, 2)}</pre>
+        <div className="part-tool" data-expanded={expanded ? 'true' : 'false'} data-state={stateStr}>
+            <div className="part-tool-header" onClick={() => hasBody && setExpanded(e => !e)}>
+                <span className="part-tool-icon" aria-hidden="true">
+                    {isRunning ? (
+                        <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                        </svg>
+                    ) : isError ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                    )}
+                </span>
+                <span className={isRunning ? 'part-tool-name oc-shimmer' : 'part-tool-name'}>{name}</span>
+                {hasBody && (
+                    <svg className="part-tool-chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                        <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                )}
+            </div>
+            {hasBody && (
+                <div className="part-tool-body">
+                    {input && (
+                        <pre className="part-tool-io part-tool-input">
+                            {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
+                        </pre>
+                    )}
+                    {output && (
+                        <pre className="part-tool-io part-tool-output">
+                            {typeof output === 'string' ? output : JSON.stringify(output, null, 2)}
+                        </pre>
+                    )}
+                </div>
             )}
-            {part.output && (
-                <pre className="part-tool-io part-tool-output">{typeof part.output === 'string' ? part.output : JSON.stringify(part.output, null, 2)}</pre>
-            )}
-        </details>
+        </div>
     );
+};
+
+/** Render tool part — minimalist collapsible. Bash tools get terminal style. */
+function renderToolPart(part: any, index: number): React.ReactNode {
+    return <ToolBlock key={`tool-${index}`} part={part} />;
 }
 
 /** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet (streaming). */

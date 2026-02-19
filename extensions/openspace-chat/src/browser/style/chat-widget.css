@@ -680,63 +680,137 @@
     line-height: 1.5;
 }
 
-/* Tool part — collapsible block with name and input/output */
+/* ─── Tool call block — minimalist collapsible ───────────────── */
 .message-bubble .part-tool {
-    margin: 4px 0;
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 4px;
-    overflow: hidden;
+    margin: 3px 0;
+    font-size: 12px;
 }
 
-.message-bubble .part-tool-summary {
+.message-bubble .part-tool-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: 8px;
+    padding: 4px 0;
     cursor: pointer;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-    background: var(--theia-editor-background);
     user-select: none;
+    color: var(--oc-text-dim, #858585);
+    transition: color 0.1s;
 }
 
-.message-bubble .part-tool-summary:hover {
-    background: var(--theia-list-hoverBackground);
-}
-
-.message-bubble .part-tool-icon {
-    font-family: monospace;
-    font-weight: bold;
-    font-size: 11px;
-    opacity: 0.6;
-}
-
-.message-bubble .part-tool-name {
-    font-weight: 600;
-    font-family: var(--theia-code-font-family);
+.message-bubble .part-tool-header:hover {
     color: var(--theia-foreground);
 }
 
-.message-bubble .part-tool-state {
-    font-size: 11px;
+.message-bubble .part-tool-chevron {
+    margin-left: auto;
+    opacity: 0.4;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.message-bubble .part-tool[data-expanded="true"] .part-tool-chevron {
+    transform: rotate(90deg);
+}
+
+.message-bubble .part-tool-icon {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--oc-text-dim, #858585);
+}
+
+.message-bubble .part-tool[data-state="completed"] .part-tool-icon {
+    color: var(--oc-green, #4ec94e);
     opacity: 0.7;
-    font-style: italic;
+}
+
+.message-bubble .part-tool[data-state="error"] .part-tool-icon {
+    color: #f14c4c;
+}
+
+.message-bubble .part-tool-name {
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+}
+
+.message-bubble .part-tool-body {
+    display: none;
+    padding: 6px 0 6px 22px;
+    border-left: 1px solid var(--oc-border, #333);
+    margin-left: 6px;
+}
+
+.message-bubble .part-tool[data-expanded="true"] .part-tool-body {
+    display: block;
 }
 
 .message-bubble .part-tool-io {
     margin: 0;
-    padding: 8px 10px;
+    padding: 6px 10px;
     font-size: 11px;
-    font-family: var(--theia-code-font-family);
+    font-family: var(--theia-code-font-family, monospace);
     line-height: 1.4;
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
     overflow-y: auto;
-    border-top: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    background: var(--theia-editor-background, #1e1e1e);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 3px;
+    color: var(--theia-editor-foreground, #ccc);
+}
+
+.message-bubble .part-tool-io + .part-tool-io {
+    margin-top: 4px;
+}
+
+/* ─── Bash block — terminal style ───────────────────────────── */
+.message-bubble .part-tool-bash {
+    border-radius: 4px;
+    margin: 6px 0;
+    overflow: hidden;
+    font-size: 12px;
+    background: #000000;
+    border: 1px solid #333333;
+}
+
+.message-bubble .part-tool-bash .part-tool-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border-bottom: 1px solid #333333;
+    background: #000000;
+    color: #cccccc;
+    cursor: default;
+}
+
+.message-bubble .part-tool-bash .part-tool-header:hover {
+    color: #cccccc;
+}
+
+.message-bubble .part-tool-cmd {
+    font-family: var(--theia-code-font-family, monospace);
+    color: #4ec94e;
+    padding: 7px 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.message-bubble .part-tool-bash-output {
+    padding: 0 12px 8px;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 11px;
+    color: #cccccc;
+    opacity: 0.85;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 /* ─── Reasoning block — fluent side-line ────────────────────── */
