@@ -572,38 +572,43 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
         expect(result).to.have.property('bytes').that.is.a('number').and.greaterThan(0);
     });
 
-    it('ConflictError (wrong baseVersion) causes patchEngine.apply to throw with version info', async () => {
-        const relPath = 'conflict.ts';
-        fs.writeFileSync(path.join(workspaceDir, relPath), 'const a = 1;\n', 'utf-8');
+    it('ConflictError (wrong baseVersion) returns isError:true from the MCP tool handler', async () => {
+        // Capture the actual openspace.artifact.patch handler by passing a fake server
+        const handlers = new Map<string, Function>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        priv(server).registerToolsOn(fakeServer);
+        const handler = handlers.get('openspace.artifact.patch')!;
 
-        // Apply first patch to bump version to 1
-        await priv(server).patchEngine.apply(relPath, {
-            baseVersion: 0,
+        // Call handler with a baseVersion that will never match (file version is 0)
+        const result = await handler({
+            path: 'new-file.ts',
+            baseVersion: 99, // wrong — current version is 0
             actor: 'agent',
-            intent: 'first write',
-            ops: [{ op: 'replace_content', content: 'const a = 2;\n' }],
+            intent: 'stale patch',
+            ops: [{ op: 'replace_content', content: 'const x = 1;\n' }],
         });
 
-        // Now attempt with stale baseVersion 0 — should throw ConflictError
-        let threw = false;
-        try {
-            await priv(server).patchEngine.apply(relPath, {
-                baseVersion: 0, // stale — should be 1 now
-                actor: 'agent',
-                intent: 'stale patch',
-                ops: [{ op: 'replace_content', content: 'const a = 3;\n' }],
-            });
-        } catch (err: any) {
-            threw = true;
-            expect(err.message).to.include('conflict.ts');
-            expect(err.message).to.include('1'); // currentVersion
-        }
-        expect(threw, 'Expected ConflictError to be thrown').to.be.true;
+        expect(result.isError).to.be.true;
+        expect(result.content[0].text).to.include('Error:');
     });
 
-    it('path traversal returns isError:true via resolveSafePath', () => {
-        // resolveSafePath throws on path traversal — same guard used by tool handler
-        expect(() => priv(server).resolveSafePath('../../../etc/passwd'))
-            .to.throw(/Path traversal detected/);
+    it('path traversal returns isError:true from the MCP tool handler', async () => {
+        // Capture the actual openspace.artifact.patch handler by passing a fake server
+        const handlers = new Map<string, Function>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        priv(server).registerToolsOn(fakeServer);
+        const handler = handlers.get('openspace.artifact.patch')!;
+
+        // Call handler with a path-traversal path
+        const result = await handler({
+            path: '../outside.txt',
+            baseVersion: 0,
+            actor: 'agent',
+            intent: 'traversal attempt',
+            ops: [{ op: 'replace_content', content: 'evil\n' }],
+        });
+
+        expect(result.isError).to.be.true;
+        expect(result.content[0].text).to.include('Error:');
     });
 });
