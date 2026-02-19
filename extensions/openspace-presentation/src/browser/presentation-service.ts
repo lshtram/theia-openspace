@@ -249,6 +249,7 @@ export interface PresentationNavigateArgs {
 
 export interface PresentationPlayArgs {
     path?: string;
+    interval?: number;
 }
 
 export interface PresentationPauseArgs {

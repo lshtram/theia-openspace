@@ -16,6 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { ApplicationShell, WidgetManager } from '@theia/core/lib/browser';
 import { PresentationService, 
     PresentationListArgs, 
@@ -44,6 +45,7 @@ export const PresentationCommandIds = {
     PLAY: 'openspace.presentation.play',
     PAUSE: 'openspace.presentation.pause',
     STOP: 'openspace.presentation.stop',
+    TOGGLE_FULLSCREEN: 'openspace.presentation.toggleFullscreen',
 } as const;
 
 /**
@@ -147,6 +149,10 @@ export const PresentationArgumentSchemas = {
             path: {
                 type: 'string',
                 description: 'Optional path to presentation file'
+            },
+            interval: {
+                type: 'number',
+                description: 'Autoplay interval in milliseconds (default: 5000)'
             }
         },
         additionalProperties: false
@@ -170,7 +176,12 @@ export const PresentationArgumentSchemas = {
             }
         },
         additionalProperties: false
-    }
+    },
+    TOGGLE_FULLSCREEN: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+    },
 };
 
 /**
@@ -178,7 +189,7 @@ export const PresentationArgumentSchemas = {
  * Registers all openspace.presentation.* commands in Theia's CommandRegistry.
  */
 @injectable()
-export class PresentationCommandContribution implements CommandContribution {
+export class PresentationCommandContribution implements CommandContribution, KeybindingContribution {
 
     @inject(PresentationService)
     protected readonly presentationService!: PresentationService;
@@ -191,6 +202,8 @@ export class PresentationCommandContribution implements CommandContribution {
 
     @inject(PresentationNavigationService)
     protected readonly navigationService!: PresentationNavigationService;
+
+    private autoplayTimer: ReturnType<typeof setInterval> | undefined;
 
     /**
      * Register all presentation commands.
@@ -294,7 +307,7 @@ export class PresentationCommandContribution implements CommandContribution {
             {
                 execute: async (args?: PresentationPlayArgs) => {
                     console.log('[PresentationCommand] Playing presentation');
-                    return this.playPresentation();
+                    return this.playPresentation(args ?? {});
                 }
             }
         );
@@ -326,6 +339,22 @@ export class PresentationCommandContribution implements CommandContribution {
                 }
             }
         );
+
+        // openspace.presentation.toggleFullscreen
+        registry.registerCommand(
+            { id: PresentationCommandIds.TOGGLE_FULLSCREEN, label: 'Presentation: Toggle Fullscreen' },
+            { execute: () => this.toggleFullscreen() }
+        );
+    }
+
+    /**
+     * Register keybindings for presentation commands.
+     */
+    registerKeybindings(registry: KeybindingRegistry): void {
+        registry.registerKeybinding({
+            command: PresentationCommandIds.TOGGLE_FULLSCREEN,
+            keybinding: 'ctrlcmd+shift+f',
+        });
     }
 
     /**
@@ -390,48 +419,64 @@ export class PresentationCommandContribution implements CommandContribution {
     /**
      * Start presentation playback.
      */
-    protected async playPresentation(): Promise<void> {
-        const state = this.presentationService.getPlaybackState();
-        
-        // In fullscreen/presentation mode
-        this.navigationService.toggleFullscreen();
-        
+    protected playPresentation(args: PresentationPlayArgs): void {
+        const interval = args.interval ?? 5000;
+        if (this.autoplayTimer !== undefined) {
+            clearInterval(this.autoplayTimer);
+        }
+        this.autoplayTimer = setInterval(() => {
+            this.navigationService?.next();
+        }, interval);
         this.presentationService.setPlaybackState({
-            ...state,
+            ...this.presentationService.getPlaybackState(),
             isPlaying: true,
-            isPaused: false
+            isPaused: false,
         });
     }
 
     /**
      * Pause presentation playback.
      */
-    protected async pausePresentation(): Promise<void> {
-        const state = this.presentationService.getPlaybackState();
-        
+    protected pausePresentation(): void {
+        if (this.autoplayTimer !== undefined) {
+            clearInterval(this.autoplayTimer);
+            this.autoplayTimer = undefined;
+        }
         this.presentationService.setPlaybackState({
-            ...state,
+            ...this.presentationService.getPlaybackState(),
             isPlaying: false,
-            isPaused: true
+            isPaused: true,
         });
     }
 
     /**
      * Stop presentation and exit.
      */
-    protected async stopPresentation(): Promise<void> {
-        const state = this.presentationService.getPlaybackState();
-        
-        // Exit fullscreen if in presentation mode
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
+    protected stopPresentation(): void {
+        if (this.autoplayTimer !== undefined) {
+            clearInterval(this.autoplayTimer);
+            this.autoplayTimer = undefined;
         }
-        
+        this.navigationService?.slide(0, 0);
         this.presentationService.setPlaybackState({
-            ...state,
             isPlaying: false,
             isPaused: false,
-            currentSlide: 0
+            currentSlide: 0,
+            totalSlides: this.presentationService.getPlaybackState().totalSlides,
         });
+    }
+
+    /**
+     * Toggle fullscreen mode for the presentation widget.
+     */
+    protected toggleFullscreen(): void {
+        const widget = this.widgetManager.tryGetWidget<PresentationWidget>(PresentationWidget.ID);
+        const container = widget?.revealContainer;
+        if (!container) { return; }
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            container.requestFullscreen();
+        }
     }
 }
