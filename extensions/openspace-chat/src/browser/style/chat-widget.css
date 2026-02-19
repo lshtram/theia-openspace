@@ -836,6 +836,52 @@
     white-space: pre;
 }
 
+/* ─── Chat footer status bar ─────────────────────────────────── */
+.openspace-chat-widget .chat-footer-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    height: 24px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .chat-footer-separator {
+    width: 1px;
+    height: 12px;
+    background: var(--oc-border, #333);
+}
+
+.openspace-chat-widget .chat-footer-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.openspace-chat-widget .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .status-dot.connected {
+    background: var(--oc-green, #4ec94e);
+    box-shadow: 0 0 4px rgba(78,201,78,0.5);
+}
+
+.openspace-chat-widget .status-dot.disconnected {
+    background: #f14c4c;
+}
+
+.openspace-chat-widget .status-dot.connecting {
+    background: #cca700;
+}
+
 /* ─── Chat header context menu ───────────────────────────────── */
 .openspace-chat-widget .chat-header-menu {
     position: absolute;

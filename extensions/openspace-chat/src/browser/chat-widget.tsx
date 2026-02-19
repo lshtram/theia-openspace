@@ -276,6 +276,15 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
+const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
+    <div className="chat-footer-bar">
+        <div className="chat-footer-status">
+            <div className={`status-dot ${isStreaming ? 'connecting' : 'connected'}`} />
+            <span>{isStreaming ? 'Generating...' : 'Ready'}</span>
+        </div>
+    </div>
+);
+
 /**
  * React component for chat interface.
  * T3-9: Added workspaceRoot prop
@@ -556,6 +565,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             placeholder="Type your message, @mention files/agents, or attach images..."
                             workspaceRoot={workspaceRoot}
                         />
+                        <ChatFooter isStreaming={isStreaming} />
                     </>
                 )}
             </div>
