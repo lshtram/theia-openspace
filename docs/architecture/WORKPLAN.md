@@ -3,7 +3,7 @@ id: WORKPLAN-THEIA-OPENSPACE
 author: oracle_e3f7
 status: ACTIVE
 date: 2026-02-16
-updated: 2026-02-18
+updated: 2026-02-19
 task_id: TheiaOpenspaceWorkplan
 ---
 
@@ -37,6 +37,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 | Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
+| Phase EW.5: Markdown Viewer | ✅ COMPLETE | openspace-viewers extension; MarkdownViewerWidget with Mermaid diagram support and Monaco edit mode; 16 new unit tests (569 total passing) |
 
 **Next Task:** Phase T4: PatchEngine
 
@@ -64,6 +65,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 3: Agent IDE Control | 2026-02-18 | Pane/editor/terminal/file commands; manifest auto-gen; stream interceptor (superseded by T3) |
 | Phase T3: MCP Agent Control System | 2026-02-18 | Hub MCP server (21 tools); stream interceptor removed; opencode.json configured |
 | Phase EW: Editor Windows | 2026-02-19 | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
+| Phase EW.5: Markdown Viewer | 2026-02-19 | openspace-viewers extension; MarkdownViewerWidget, MarkdownViewerOpenHandler, MarkdownViewerToolbarContribution, DI module; Mermaid diagram support; Monaco edit mode; 16 new unit tests (569 total passing) |
 
 Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCHIVE-2026-02-18.md](./WORKPLAN-ARCHIVE-2026-02-18.md).
 
@@ -644,6 +646,7 @@ These are independent post-MVP features that can be done in any order.
 | 6.5 — Auto-updater | Electron auto-update via GitHub Releases. Notification UI for available updates. | ⬜ |
 | 6.6 — Custom tldraw shapes | Register custom tldraw shape types for structured diagrams: ClassBox (UML), InterfaceBox, State, Decision, Process, Lifeline. (Deferred from Phase 4.) | ⬜ |
 | 6.7 — LLM inline completions (ghost text) | Wire `monaco.languages.registerInlineCompletionsProvider()` in `openspace-languages` to call the existing OpenCode AI backend (via `opencode-proxy.ts`). Gives Copilot-style tab-to-accept ghost text completions for all supported languages. Infrastructure is fully present: `InlineCompletionsController` auto-registers, `@theia/ai-core` already defines a `default/code-completion` model alias. Needs: a `LanguageModelInlineCompletionProvider` class, debounced trigger on cursor position change, streaming response from the LLM formatted as `InlineCompletion[]`, and an accept/dismiss keybinding. | ⬜ |
+| 6.8 — Extension marketplace | Add `@theia/vsx-registry` to `browser-app/package.json` to enable the Extensions View panel and Open VSX Registry integration. Users can then install community extensions at runtime without a rebuild. Also: curate a recommended extensions list (PDF viewer `tomoki1207.pdf`, SVG `jock.svg`, YAML `redhat.vscode-yaml`, Jupyter `ms-toolsai.jupyter`, PlantUML `jebbs.plantuml`, Mermaid standalone `tomoyukim.vscode-mermaid-editor`) — test each for compatibility and publish as in-app recommendations or a defaults list. | ⬜ |
 
 ---
 
