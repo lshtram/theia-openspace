@@ -6,7 +6,7 @@ async function openChatWidget(page: Page) {
     await page.goto(THEIA_URL);
     // Wait for Theia shell
     await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await page.waitForSelector('.theia-main-container, .theia-left-content-panel', { timeout: 10000 });
+    await page.waitForSelector('.theia-app-main, .theia-left-side-panel', { state: 'attached', timeout: 10000 });
     // Click the chat icon in the left activity bar
     const chatTab = page.locator('#shell-tab-openspace-chat-widget');
     await chatTab.click();

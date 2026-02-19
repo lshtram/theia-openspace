@@ -75,7 +75,7 @@ test.describe('App Load Smoke Tests', () => {
         expect(body).toHaveProperty('success', true);
     });
 
-    test('Hub instructions endpoint returns non-empty string containing %%OS', async ({ page }) => {
+    test('Hub instructions endpoint returns non-empty string containing openspace tool references', async ({ page }) => {
         // GET /openspace/instructions — returns system prompt text for AI agents
         const response = await page.request.get(`${BASE_URL}/openspace/instructions`);
         expect(response.status()).toBe(200);
@@ -83,8 +83,8 @@ test.describe('App Load Smoke Tests', () => {
         const text = await response.text();
         // Non-trivial content (more than 100 chars)
         expect(text.length).toBeGreaterThan(100);
-        // Must contain the OpenSpace command syntax marker
-        expect(text).toContain('%%OS');
+        // Must reference OpenSpace tools
+        expect(text).toContain('openspace.');
     });
 
 });

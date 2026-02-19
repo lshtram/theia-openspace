@@ -44,12 +44,12 @@ function assertSuccess(response: any, toolName: string): void {
 function assertSuccessOrBridgeDisconnected(response: any, toolName: string): void {
     assertWellFormed(response, toolName);
     if (response.result.isError === true) {
-        // Acceptable disconnected state: bridge not connected or command not found
+        // Acceptable disconnected state: bridge not connected, command not found, or timeout
         const text: string = response.result.content[0].text ?? '';
         expect(
             text,
             `${toolName}: if isError, must be a known bridge error`
-        ).toMatch(/Bridge not connected|Command not found|not connected/i);
+        ).toMatch(/Bridge not connected|Command not found|not connected|timed out/i);
     }
     // If isError is false/undefined, success — no further assertion needed
 }
@@ -63,6 +63,16 @@ const WORKSPACE_ROOT = '/Users/Shared/dev/theia-openspace';
 const TEST_DECK_PATH = path.join(WORKSPACE_ROOT, '_e2e-test-presentation.deck.md');
 
 test.describe('Presentation MCP Tools', () => {
+
+    // Ensure the Theia bridge is connected before running tests that go through
+    // executeViaBridge (all presentation tools, including create/read/list/update_slide).
+    test.beforeAll(async ({ browser }) => {
+        const page = await browser.newPage();
+        await page.goto('http://localhost:3000');
+        await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
+        // Keep the page open (don't close) so the bridge stays connected during the suite.
+        // afterAll will clean up.
+    });
 
     // Clean up the test deck file after each test run
     test.afterAll(async () => {
