@@ -35,7 +35,7 @@ async function mcpRequest(method: string, params?: unknown): Promise<any> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Accept: 'application/json',
+            Accept: 'application/json, text/event-stream',
         },
         body: JSON.stringify(body),
     });
@@ -44,7 +44,14 @@ async function mcpRequest(method: string, params?: unknown): Promise<any> {
         throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    const text = await response.text();
+    // Streamable HTTP returns SSE: "event: message\ndata: {...}\n\n"
+    // Extract the JSON from the data: line.
+    const dataLine = text.split('\n').find(line => line.startsWith('data:'));
+    if (!dataLine) {
+        throw new Error(`MCP response has no data line. Body: ${text.substring(0, 200)}`);
+    }
+    return JSON.parse(dataLine.slice('data:'.length).trim());
 }
 
 /**
