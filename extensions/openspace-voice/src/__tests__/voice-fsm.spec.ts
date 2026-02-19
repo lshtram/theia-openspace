@@ -6,10 +6,6 @@ import {
   validateNarrationTransition,
   validateSessionTransition,
   VoiceFsmError,
-  type AudioState,
-  type TranscriptState,
-  type NarrationState,
-  type SessionState,
 } from '../common/voice-fsm';
 
 describe('AudioFSM', () => {

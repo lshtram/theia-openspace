@@ -3,7 +3,6 @@ import { assert } from 'chai';
 import {
   resolveVoicePolicy,
   DEFAULT_VOICE_POLICY,
-  type VoicePolicy,
 } from '../common/voice-policy';
 
 describe('VoicePolicy', () => {
