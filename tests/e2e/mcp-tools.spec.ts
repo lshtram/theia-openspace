@@ -18,41 +18,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-
-const HUB_URL = 'http://localhost:3000';
-const MCP_URL = `${HUB_URL}/mcp`;
-
-/** Send a JSON-RPC request to the MCP endpoint and return the response body. */
-async function mcpRequest(method: string, params?: unknown): Promise<any> {
-    const body = {
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method,
-        ...(params !== undefined ? { params } : {}),
-    };
-
-    const response = await fetch(MCP_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const text = await response.text();
-    // Streamable HTTP returns SSE: "event: message\ndata: {...}\n\n"
-    // Extract the JSON from the data: line.
-    const dataLine = text.split('\n').find(line => line.startsWith('data:'));
-    if (!dataLine) {
-        throw new Error(`MCP response has no data line. Body: ${text.substring(0, 200)}`);
-    }
-    return JSON.parse(dataLine.slice('data:'.length).trim());
-}
+import { mcpJsonRpc, MCP_URL } from './helpers/mcp';
 
 /**
  * Expected tool names registered by OpenSpaceMcpServer.
@@ -100,7 +66,7 @@ test.describe('MCP Tools Smoke Tests', () => {
 
     test('/mcp endpoint is reachable (POST returns JSON-RPC response)', async () => {
         // A tools/list call must return a valid JSON-RPC response (result or error)
-        const response = await mcpRequest('tools/list');
+        const response = await mcpJsonRpc('tools/list');
         expect(response).toBeDefined();
         // Valid JSON-RPC 2.0 response must have jsonrpc and id fields
         expect(response.jsonrpc).toBe('2.0');
@@ -111,7 +77,7 @@ test.describe('MCP Tools Smoke Tests', () => {
     });
 
     test('tools/list returns all expected OpenSpace tools', async () => {
-        const response = await mcpRequest('tools/list');
+        const response = await mcpJsonRpc('tools/list');
 
         expect(response.result).toBeDefined();
         expect(response.result.tools).toBeDefined();
@@ -124,7 +90,7 @@ test.describe('MCP Tools Smoke Tests', () => {
     });
 
     test('tools/list returns tools with required MCP schema fields', async () => {
-        const response = await mcpRequest('tools/list');
+        const response = await mcpJsonRpc('tools/list');
         const tools: any[] = response.result.tools;
 
         for (const tool of tools) {
@@ -138,7 +104,7 @@ test.describe('MCP Tools Smoke Tests', () => {
 
     test('tools/call for openspace.file.read with invalid path returns isError:true', async () => {
         // Path traversal attempt — should be rejected by resolveSafePath
-        const response = await mcpRequest('tools/call', {
+        const response = await mcpJsonRpc('tools/call', {
             name: 'openspace.file.read',
             arguments: { path: '../../../etc/passwd' },
         });
@@ -154,7 +120,7 @@ test.describe('MCP Tools Smoke Tests', () => {
     test('tools/call for openspace.pane.list returns isError:true when bridge not connected', async () => {
         // Bridge is not connected in a fresh server start without a browser frontend
         // The tool should return isError:true with "Bridge not connected" message
-        const response = await mcpRequest('tools/call', {
+        const response = await mcpJsonRpc('tools/call', {
             name: 'openspace.pane.list',
             arguments: {},
         });

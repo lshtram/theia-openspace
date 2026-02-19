@@ -23,44 +23,7 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
-
-const HUB_URL = 'http://localhost:3000';
-const MCP_URL = `${HUB_URL}/mcp`;
-
-/** Parse an SSE-formatted MCP response body into a JSON object. */
-function parseSseResponse(text: string): any {
-    const dataLine = text.split('\n').find(line => line.startsWith('data:'));
-    if (!dataLine) {
-        throw new Error(`MCP SSE response has no data line. Body: ${text.substring(0, 200)}`);
-    }
-    return JSON.parse(dataLine.slice('data:'.length).trim());
-}
-
-/** Send a JSON-RPC request to the MCP endpoint and return the parsed response. */
-async function mcpCall(name: string, args: unknown = {}): Promise<any> {
-    const body = {
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'tools/call',
-        params: { name, arguments: args },
-    };
-
-    const response = await fetch(MCP_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
-    }
-
-    return parseSseResponse(await response.text());
-}
+import { mcpCall, parseSseResponse, MCP_URL } from './helpers/mcp';
 
 /** Assert that an MCP response is well-formed (has result.content array). */
 function assertWellFormed(response: any, toolName: string): void {
