@@ -44,6 +44,9 @@ build/
 # Git worktrees
 .worktrees/
 
+# Temporary dev artifacts
+tmp/
+
 # OpenCode
 .claude/
 
