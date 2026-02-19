@@ -70,6 +70,7 @@ try {
 - **Commits:** Concise, descriptive messages. Focus on "why" not "what".
 - **Branches:** Feature branches via worktree for BUILD workflow.
 - **No secrets:** Never commit API keys, tokens, or credentials.
+- **E2E tests before push (REQUIRED):** Any change that touches real functionality — Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path — MUST have the full E2E suite run and passing before `git push`. Run: `yarn test:e2e`. Unit tests alone are not sufficient for functional changes. If E2E tests fail, the push is blocked until fixed.
 
 ---
 

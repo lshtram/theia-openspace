@@ -37,6 +37,27 @@
 - Use exact version pins for @theia/* packages (e.g., "1.68.2" not "^1.68.0")
 - Delegate to Scout for research, Builder for implementation, Janitor for validation
 
+## Release Gate: E2E Tests Required Before Push (Added 2026-02-19)
+
+**Rule:** Any commit that touches real functionality (Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path) MUST have the full E2E test suite pass before `git push`.
+
+**Command:** `yarn test:e2e`
+
+**Rationale:** Unit tests verify individual units in isolation but cannot catch integration regressions — e.g., the Hub failing to serve the app, MCP tool endpoints returning errors, or browser extension lifecycle failures. E2E tests run Playwright against the real running app and catch these.
+
+**What counts as "real functionality":**
+- Any change to `extensions/openspace-core/src/node/` (Hub, MCP server, ArtifactStore, PatchEngine)
+- Any change to `extensions/openspace-core/src/browser/` (frontend modules, bridge, sync service)
+- Any new MCP tool registration
+- Any change to `hub.ts`, `hub-mcp.ts`, `artifact-store.ts`, `patch-engine.ts`
+- webpack bundle rebuilds (browser-app)
+
+**What does NOT require E2E (unit tests + build sufficient):**
+- Pure type/interface changes
+- Documentation updates
+- Test file changes only
+- `.opencode/` context updates
+
 ## Critical Runtime Patterns (Discovered 2026-02-17)
 
 ### Pattern: Circular DI Dependencies in Theia Extensions
