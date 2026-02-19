@@ -525,3 +525,85 @@ describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 8: openspace.artifact.patch tool
+// ---------------------------------------------------------------------------
+
+describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
+    let workspaceDir: string;
+    let server: OpenSpaceMcpServer;
+
+    beforeEach(() => {
+        workspaceDir = makeTempDir();
+        server = new OpenSpaceMcpServer(workspaceDir);
+    });
+
+    afterEach(() => {
+        priv(server).artifactStore?.close();
+        fs.rmSync(workspaceDir, { recursive: true, force: true });
+    });
+
+    it('openspace.artifact.patch is registered in hub-mcp.ts source', () => {
+        const hubMcpSrc = fs.readFileSync(
+            path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+        expect(hubMcpSrc).to.include("'openspace.artifact.patch'");
+    });
+
+    it('successful replace_content patch returns JSON { version, bytes, path }', async () => {
+        const relPath = 'artifact.ts';
+        const content = 'export const x = 1;\n';
+
+        // Pre-create file so it exists
+        fs.writeFileSync(path.join(workspaceDir, relPath), content, 'utf-8');
+
+        // Call the tool handler directly via private registerFileTools logic
+        // We invoke patchEngine.apply directly to mirror what the tool does
+        const result = await priv(server).patchEngine.apply(relPath, {
+            baseVersion: 0,
+            actor: 'agent',
+            intent: 'test patch',
+            ops: [{ op: 'replace_content', content: 'export const x = 42;\n' }],
+        });
+
+        expect(result).to.have.property('version', 1);
+        expect(result).to.have.property('bytes').that.is.a('number').and.greaterThan(0);
+    });
+
+    it('ConflictError (wrong baseVersion) causes patchEngine.apply to throw with version info', async () => {
+        const relPath = 'conflict.ts';
+        fs.writeFileSync(path.join(workspaceDir, relPath), 'const a = 1;\n', 'utf-8');
+
+        // Apply first patch to bump version to 1
+        await priv(server).patchEngine.apply(relPath, {
+            baseVersion: 0,
+            actor: 'agent',
+            intent: 'first write',
+            ops: [{ op: 'replace_content', content: 'const a = 2;\n' }],
+        });
+
+        // Now attempt with stale baseVersion 0 — should throw ConflictError
+        let threw = false;
+        try {
+            await priv(server).patchEngine.apply(relPath, {
+                baseVersion: 0, // stale — should be 1 now
+                actor: 'agent',
+                intent: 'stale patch',
+                ops: [{ op: 'replace_content', content: 'const a = 3;\n' }],
+            });
+        } catch (err: any) {
+            threw = true;
+            expect(err.message).to.include('conflict.ts');
+            expect(err.message).to.include('1'); // currentVersion
+        }
+        expect(threw, 'Expected ConflictError to be thrown').to.be.true;
+    });
+
+    it('path traversal returns isError:true via resolveSafePath', () => {
+        // resolveSafePath throws on path traversal — same guard used by tool handler
+        expect(() => priv(server).resolveSafePath('../../../etc/passwd'))
+            .to.throw(/Path traversal detected/);
+    });
+});

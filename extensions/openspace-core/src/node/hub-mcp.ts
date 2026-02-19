@@ -20,6 +20,8 @@ import * as fs from 'fs';
 import { z } from 'zod';
 import { AgentCommand } from '../common/command-manifest';
 import { isSensitiveFile } from '../common/sensitive-files';
+import { ArtifactStore } from './artifact-store';
+import { PatchEngine } from './patch-engine';
 
 // Use exports-map compatible require paths (the package.json exports map resolves these correctly)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -73,10 +75,22 @@ export class OpenSpaceMcpServer {
     /** Absolute path of the workspace root (enforced for file tools). */
     private workspaceRoot: string;
 
+    private artifactStore!: ArtifactStore;
+    private patchEngine!: PatchEngine;
+
     private readonly commandTimeoutMs = 30_000; // 30 seconds
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
+        this.artifactStore = new ArtifactStore(this.workspaceRoot);
+        this.patchEngine = new PatchEngine(this.workspaceRoot, this.artifactStore);
+        this.patchEngine.loadVersions().catch((err: unknown) =>
+            console.error('[Hub] Failed to load patch versions:', err)
+        );
+    }
+
+    close(): void {
+        this.artifactStore.close();
     }
 
     /**
@@ -337,9 +351,8 @@ export class OpenSpaceMcpServer {
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
-                    const dir = path.dirname(resolved);
-                    fs.mkdirSync(dir, { recursive: true });
-                    fs.writeFileSync(resolved, args.content, 'utf-8');
+                    const relPath = path.relative(this.workspaceRoot, resolved);
+                    await this.artifactStore.write(relPath, args.content, { actor: 'agent', reason: 'openspace.file.write MCP tool' });
                     return { content: [{ type: 'text', text: `Written ${resolved}` }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
@@ -410,6 +423,42 @@ export class OpenSpaceMcpServer {
                     return { content: [{ type: 'text', text: `Patched ${resolved}` }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
+                }
+            }
+        );
+
+        server.tool(
+            'openspace.artifact.patch',
+            'Apply an OCC-versioned patch to an artifact file. Provides atomic write with backup, audit log, and version conflict detection. Prefer this over openspace.file.write for important artifact files.',
+            {
+                path: z.string().describe('File path relative to workspace root'),
+                baseVersion: z.number().int().min(0).describe('Expected current version (0 if file is new). Use openspace.artifact.getVersion to get the current version.'),
+                actor: z.enum(['agent', 'user']).default('agent').describe('Who is applying the patch'),
+                intent: z.string().describe('Human-readable description of the change'),
+                ops: z.array(z.record(z.string(), z.unknown())).describe('Operations to apply. For replace_content: [{op:"replace_content",content:"..."}]. For replace_lines: [{op:"replace_lines",startLine:N,endLine:N,content:"..."}]'),
+            },
+            async (args: { path: string; baseVersion: number; actor: 'agent' | 'user'; intent: string; ops: unknown[] }) => {
+                try {
+                    const resolved = this.resolveSafePath(args.path);
+                    if (isSensitiveFile(resolved)) {
+                        return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
+                    }
+                    const relPath = path.relative(this.workspaceRoot, resolved);
+                    const result = await this.patchEngine.apply(relPath, {
+                        baseVersion: args.baseVersion,
+                        actor: args.actor ?? 'agent',
+                        intent: args.intent,
+                        ops: args.ops,
+                    });
+                    return {
+                        content: [{
+                            type: 'text',
+                            text: JSON.stringify({ version: result.version, bytes: result.bytes, path: relPath }),
+                        }],
+                    };
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true };
                 }
             }
         );
