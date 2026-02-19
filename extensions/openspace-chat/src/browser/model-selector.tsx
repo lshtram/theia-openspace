@@ -200,7 +200,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
     // Get display name for current model
     const currentModelDisplay = React.useMemo(() => {
         if (!activeModel) return 'Select Model';
-        const [providerId, modelId] = activeModel.split('/');
+        const [providerId, ...modelParts] = activeModel.split('/');
+        const modelId = modelParts.join('/');
         const provider = providers.find(p => p.id === providerId);
         const model = provider?.models[modelId];
         if (provider && model) {

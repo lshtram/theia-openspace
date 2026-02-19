@@ -431,10 +431,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             // T3-12: Handle multi-slash model IDs correctly (e.g., "provider/model/version")
             const activeModel = sessionService.activeModel;
             const model = activeModel ? (() => {
-                const parts = activeModel.split('/');
-                const providerID = parts[0];
-                const modelID = parts.slice(1).join('/');
-                return { providerID, modelID };
+                const [providerPart, ...modelParts] = activeModel.split('/');
+                const modelPart = modelParts.join('/');
+                return { providerID: providerPart, modelID: modelPart };
             })() : undefined;
 
             console.log('[ChatWidget] Sending message with model:', model || 'default');

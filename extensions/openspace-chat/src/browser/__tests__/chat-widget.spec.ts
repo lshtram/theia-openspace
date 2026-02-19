@@ -718,3 +718,16 @@ describe('ChatWidget - MessageService for delete confirmation (T3-10)', () => {
         expect(src).to.include('messageService.warn');
     });
 });
+
+describe('ModelSelector - multi-slash model ID parsing (T3-12)', () => {
+    it('should parse multi-slash model IDs correctly', () => {
+        const src = fs.readFileSync(
+            path.join(__dirname_chat, '../model-selector.tsx'),
+            'utf-8'
+        );
+        // Must NOT use destructuring that drops extra slashes
+        expect(src).not.to.match(/const\s*\[providerId,\s*modelId\]\s*=.*split\('\/'\)/);
+        // Must use rest spread + join to preserve multi-slash model IDs
+        expect(src).to.match(/\.\.\.\s*modelParts.*join\('\/'\)/s);
+    });
+});
