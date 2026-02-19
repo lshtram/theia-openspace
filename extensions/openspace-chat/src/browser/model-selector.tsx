@@ -376,7 +376,7 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, onSelect }
             tabIndex={0}
         >
             <span className="model-option-name">
-                {isSelected && <span className="model-option-indicator">●</span>}
+                {isSelected && <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true"><circle cx="4" cy="4" r="3"/></svg>}
                 {model.modelName}
             </span>
             <span className="model-option-id">{model.fullId}</span>
