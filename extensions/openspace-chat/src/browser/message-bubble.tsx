@@ -94,15 +94,38 @@ function renderToolPart(part: any, index: number): React.ReactNode {
     );
 }
 
-/** Render reasoning part — italic/dimmed thinking indicator. */
-function renderReasoningPart(part: any, index: number): React.ReactNode {
+/** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet (streaming). */
+const ReasoningBlock: React.FC<{ part: any }> = ({ part }) => {
+    const [expanded, setExpanded] = React.useState(false);
     const text: string = part.text || part.reasoning || '';
+    const isStreaming = !text;
     return (
-        <div key={`reasoning-${index}`} className="part-reasoning">
-            <span className="part-reasoning-label">Thinking</span>
-            {text && <div className="part-reasoning-text">{text}</div>}
+        <div className="part-reasoning" data-expanded={expanded ? 'true' : 'false'}>
+            <div
+                className="part-reasoning-header"
+                onClick={() => text && setExpanded(e => !e)}
+                aria-expanded={expanded}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' && text) { setExpanded(x => !x); } }}
+            >
+                <svg className="part-reasoning-chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                    <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <span className={isStreaming ? 'part-reasoning-label oc-shimmer' : 'part-reasoning-label'}>
+                    {isStreaming ? 'Thinking...' : 'Thinking Process'}
+                </span>
+            </div>
+            {text && (
+                <div className="part-reasoning-body">{text}</div>
+            )}
         </div>
     );
+};
+
+/** Render reasoning part — collapsible side-line block. */
+function renderReasoningPart(part: any, index: number): React.ReactNode {
+    return <ReasoningBlock key={`reasoning-${index}`} part={part} />;
 }
 
 /** Render step-start part — progress indicator for a named step. */
