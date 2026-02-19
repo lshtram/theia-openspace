@@ -16,6 +16,7 @@
 
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { PaneService, PaneStateSnapshot } from './pane-service';
 import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
 import { SessionService } from './session-service';
@@ -60,6 +61,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
     @inject(SessionService)
     private readonly sessionService!: SessionService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     private readonly hubBaseUrl = window.location.origin; // Use current origin (Theia port)
     
     // Throttling for state publishing (max 1 POST per second)
@@ -71,7 +75,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * Registers the browser as the command bridge with the Hub.
      */
     async onStart(): Promise<void> {
-        console.info('[BridgeContribution] Starting...');
+        this.logger.info('[BridgeContribution] Starting...');
         
         // Wire SessionService → SyncService (breaks circular DI dependency)
         this.syncService.setSessionService(this.sessionService);
@@ -88,7 +92,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * Cleans up resources.
      */
     onStop(): void {
-        console.info('[BridgeContribution] Stopping...');
+        this.logger.info('[BridgeContribution] Stopping...');
         // Note: SSE connection removed in Architecture B1
     }
 
@@ -108,7 +112,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            console.info('[BridgeContribution] Registered as MCP command bridge');
+            this.logger.info('[BridgeContribution] Registered as MCP command bridge');
         } catch (error: any) {
             if (error.name === 'TypeError' || error.message.includes('fetch')) {
                 console.warn('[BridgeContribution] Warning: Hub not available, bridge not registered');

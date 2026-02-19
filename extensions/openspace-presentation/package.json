@@ -20,7 +20,7 @@
     "typescript": "~5.4.5"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p lib/browser/style && cp src/browser/style/*.css lib/browser/style/",
     "clean": "rimraf lib tsconfig.tsbuildinfo",
     "watch": "tsc --watch"
   }

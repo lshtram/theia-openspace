@@ -221,8 +221,11 @@ export class PresentationCommandContribution implements CommandContribution, Key
 
         // Live reload: when the active .deck.md changes on disk, push new content to widget
         this.presentationService.onDidChange(({ path, content }) => {
-            const widget = this.widgetManager.tryGetWidget<PresentationWidget>(PresentationWidget.ID);
-            if (widget && widget.uri === path) {
+            const widget = this.findPresentationWidget();
+            if (!widget) { return; }
+            // Accept if uri matches or is unset (e.g. after layout restore without re-opening)
+            if (!widget.uri || widget.uri === path) {
+                widget.uri = path;
                 widget.setContent(content);
             }
         });
@@ -402,6 +405,8 @@ export class PresentationCommandContribution implements CommandContribution, Key
             splitDirection === 'new-tab' ? 'tab-after'   :
             'split-right'; // default
 
+        widget.uri = path;
+
         await this.shell.addWidget(widget, { area, mode });
 
         widget.setContent(content);
@@ -493,7 +498,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
      * Toggle fullscreen mode for the presentation widget.
      */
     protected toggleFullscreen(): void {
-        const widget = this.widgetManager.tryGetWidget<PresentationWidget>(PresentationWidget.ID);
+        const widget = this.findPresentationWidget();
         const container = widget?.revealContainer;
         if (!container) { return; }
         if (document.fullscreenElement) {
@@ -501,5 +506,21 @@ export class PresentationCommandContribution implements CommandContribution, Key
         } else {
             container.requestFullscreen();
         }
+    }
+
+    /**
+     * Find the active PresentationWidget by searching all shell areas.
+     * Theia layout restoration may recreate widgets outside WidgetManager's cache,
+     * so tryGetWidget() is unreliable after a page reload.
+     */
+    protected findPresentationWidget(): PresentationWidget | undefined {
+        for (const area of ['main', 'left', 'right', 'bottom'] as const) {
+            for (const widget of this.shell.getWidgets(area)) {
+                if (widget.id === PresentationWidget.ID) {
+                    return widget as PresentationWidget;
+                }
+            }
+        }
+        return undefined;
     }
 }

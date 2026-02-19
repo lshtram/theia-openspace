@@ -180,6 +180,12 @@ export class PresentationService {
         await this.fileService.write(uri, newContent);
         
         console.log('[PresentationService] Updated slide', slideIndex, 'in', path);
+
+        // Fire live-reload event directly — fileService.write() does not cause
+        // onDidFilesChange to fire (that event is for external filesystem changes only).
+        // Always fire the event; the listener in PresentationCommandContribution checks
+        // widget.uri to filter to the correct widget.
+        this.onDidChangeEmitter.fire({ path, content: newContent });
     }
 
     /**

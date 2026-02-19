@@ -132,10 +132,45 @@ export class PresentationWidget extends ReactWidget {
      */
     setContent(content: string): void {
         this.deckContent = content;
-        this.update();
-        // Re-initialize reveal.js if already attached
-        if (this.revealDeck) {
-            this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
+        // Imperatively write slides into the .slides container — outside React's
+        // reconciliation scope — so that RevealMarkdown can freely mutate the DOM
+        // without React overwriting its changes on the next render cycle.
+        this.writeSlidesDom();
+        this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
+    }
+
+    /**
+     * Write slide sections directly into the .slides DOM element (imperative, bypasses React).
+     * Must be called after the container is attached to the DOM.
+     */
+    protected writeSlidesDom(): void {
+        const container = this.containerRef?.current;
+        if (!container) { return; }
+        const slidesEl = container.querySelector('.slides');
+        if (!slidesEl) { return; }
+
+        const deck = PresentationWidget.parseDeckContent(this.deckContent);
+        if (deck.slides.length === 0) {
+            slidesEl.innerHTML = `
+                <section>
+                    <h1>No Slides</h1>
+                    <p>Create a presentation using .deck.md files</p>
+                    <pre>---
+title: My Presentation
+theme: black
+---
+# Slide 1
+Content here
+---
+# Slide 2
+More content</pre>
+                </section>`;
+        } else {
+            slidesEl.innerHTML = deck.slides.map(slide => {
+                const escapedContent = (slide.content ?? '').replace(/<\/script>/g, '<\\/script>');
+                const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
+                return `<section data-markdown=""${notesAttr}><script type="text/template">${escapedContent}<\/script></section>`;
+            }).join('');
         }
     }
 
@@ -206,6 +241,7 @@ export class PresentationWidget extends ReactWidget {
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
+        this.writeSlidesDom();
         this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
     }
 
@@ -251,41 +287,14 @@ export class PresentationWidget extends ReactWidget {
     }
 
     protected render(): React.ReactNode {
-        const parsed = PresentationWidget.parseDeckContent(this.deckContent);
-        
+        // Render only the structural shell. Slide <section> elements are written
+        // imperatively via writeSlidesDom() to avoid React overwriting RevealMarkdown's
+        // DOM mutations (outerHTML replacements) during reconciliation.
         return (
             <div className="presentation-container" ref={this.containerRef}>
                 <div className="reveal">
                     <div className="slides">
-                        {/* Note: RevealMarkdown processes raw markdown via marked.js (sanitize: false).
-                            DOMPurify is no longer applied to slide content — .deck.md files are
-                            trusted workspace files authored by the user or agent, not external input. */}
-                        {parsed.slides.map((slide, i) => (
-                            <section
-                                key={i}
-                                data-markdown=""
-                                data-notes={slide.notes ?? ''}
-                            >
-                                <script type="text/template">{slide.content}</script>
-                            </section>
-                        ))}
-                        {parsed.slides.length === 0 && (
-                            <section>
-                                <h1>No Slides</h1>
-                                <p>Create a presentation using .deck.md files</p>
-                                <pre>
-{`---
-title: My Presentation
-theme: black
----
-# Slide 1
-Content here
----
-# Slide 2
-More content`}
-                                </pre>
-                            </section>
-                        )}
+                        {/* Populated imperatively by writeSlidesDom() */}
                     </div>
                 </div>
             </div>

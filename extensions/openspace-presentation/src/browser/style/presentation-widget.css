@@ -10,10 +10,17 @@
 
 /* Presentation Widget Styles */
 
+/* The Theia widget host is position:absolute — use inset:0 to fill it */
+.openspace-presentation-widget {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
 /* Scope all styles to widget container to avoid Theia conflicts */
 .openspace-presentation-widget .presentation-container {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     background: #1a1a1a;
@@ -22,7 +29,7 @@
 .openspace-presentation-widget .presentation-container .reveal {
     flex: 1;
     width: 100%;
-    height: 100%;
+    min-height: 0;
     font-size: 1.2em;
 }
 
@@ -128,9 +135,7 @@
 
 /* Reveal.js theme overrides for embedded mode */
 .openspace-presentation-widget .presentation-container .reveal {
-    /* Override reveal.js defaults for embedded mode */
-    width: 100% !important;
-    height: 100% !important;
+    /* Let flex handle sizing — don't fight reveal.js's own resize logic */
 }
 
 .openspace-presentation-widget .presentation-container .reveal > .slides > section {
