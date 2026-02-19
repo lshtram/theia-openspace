@@ -13,6 +13,7 @@
     { "path": "./extensions/openspace-settings" },
     { "path": "./extensions/openspace-languages" },
     { "path": "./extensions/openspace-presentation" },
+    { "path": "./extensions/openspace-viewers" },
     { "path": "./extensions/openspace-whiteboard" }
   ],
   "files": [],
