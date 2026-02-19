@@ -154,10 +154,6 @@
     opacity: 0.8;
 }
 
-.openspace-chat-widget .message-bubble-icon {
-    font-size: 14px;
-}
-
 .openspace-chat-widget .message-bubble-timestamp {
     font-size: 11px;
     opacity: 0.6;
@@ -179,6 +175,7 @@
 
 .openspace-chat-widget .message-bubble-user {
     align-self: flex-end;
+    align-items: flex-end;
 }
 
 .openspace-chat-widget .message-bubble-user .message-bubble-header {
@@ -189,7 +186,14 @@
 .openspace-chat-widget .message-bubble-user .message-bubble-content {
     background-color: var(--message-user-bg);
     color: var(--message-user-fg);
-    border-bottom-right-radius: 4px;
+    border-radius: 12px 12px 2px 12px;
+    font-size: 13px;
+}
+
+.openspace-chat-widget .message-bubble-role-icon {
+    display: inline-block;
+    opacity: 0.6;
+    margin-right: 4px;
 }
 
 /* ============================================================================

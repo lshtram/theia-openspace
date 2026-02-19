@@ -187,20 +187,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             data-message-role={message.role}
             aria-label={`${isUser ? 'User' : 'Assistant'} message`}
         >
-            {isFirstInGroup && (
+            {/* Only show assistant header — no header for user messages */}
+            {isFirstInGroup && !isUser && (
                 <div className="message-bubble-header">
                     <span className="message-bubble-role">
-                        {isUser ? (
-                            <>
-                                <span className="message-bubble-icon">&#x1F464;</span>
-                                You
-                            </>
-                        ) : (
-                            <>
-                                <span className="message-bubble-icon">&#x1F916;</span>
-                                Assistant
-                            </>
-                        )}
+                        <svg className="message-bubble-role-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                        Assistant
                     </span>
                     {timestamp && (
                         <span className="message-bubble-timestamp">{timestamp}</span>
