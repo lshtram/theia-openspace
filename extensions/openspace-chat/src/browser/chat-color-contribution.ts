@@ -77,12 +77,12 @@ export class OpenspaceChatColorContribution implements ColorContribution {
             },
             {
                 id: 'openspace.chat.pillBackground',
-                defaults: { light: 'rgba(0,0,0,0.05)', dark: 'rgba(255,255,255,0.06)', hcDark: 'rgba(255,255,255,0.1)', hcLight: 'rgba(0,0,0,0.08)' },
+                defaults: { light: '#0000000D', dark: '#FFFFFF0F', hcDark: '#FFFFFF1A', hcLight: '#00000014' },
                 description: 'OpenSpace Chat: pill/chip background'
             },
             {
                 id: 'openspace.chat.pillBorder',
-                defaults: { light: 'rgba(0,0,0,0.12)', dark: 'rgba(255,255,255,0.10)', hcDark: 'rgba(255,255,255,0.2)', hcLight: 'rgba(0,0,0,0.2)' },
+                defaults: { light: '#0000001F', dark: '#FFFFFF1A', hcDark: '#FFFFFF33', hcLight: '#00000033' },
                 description: 'OpenSpace Chat: pill/chip border'
             },
             {
@@ -97,7 +97,7 @@ export class OpenspaceChatColorContribution implements ColorContribution {
             },
             {
                 id: 'openspace.chat.userBubbleBorder',
-                defaults: { light: '#b8d0ef', dark: 'transparent', hcDark: '#6fc3df', hcLight: '#0078d4' },
+                defaults: { light: '#b8d0ef', dark: '#00000000', hcDark: '#6fc3df', hcLight: '#0078d4' },
                 description: 'OpenSpace Chat: user message bubble border'
             },
             {
@@ -127,7 +127,7 @@ export class OpenspaceChatColorContribution implements ColorContribution {
             },
             {
                 id: 'openspace.chat.sessionActiveBackground',
-                defaults: { light: '#dce8f8', dark: 'rgba(255,255,255,0.04)', hcDark: 'rgba(255,255,255,0.1)', hcLight: '#dce8f8' },
+                defaults: { light: '#dce8f8', dark: '#FFFFFF0A', hcDark: '#FFFFFF1A', hcLight: '#dce8f8' },
                 description: 'OpenSpace Chat: active session row background in tree'
             },
             {
