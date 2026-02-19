@@ -183,6 +183,7 @@
     background-color: var(--message-user-bg);
     color: var(--message-user-fg);
     border-radius: 12px 12px 2px 12px;
+    border: 1px solid var(--theia-openspace-chat-userBubbleBorder);
     font-size: 13px;
 }
 

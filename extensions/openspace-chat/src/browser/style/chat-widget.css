@@ -4,8 +4,8 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    background-color: var(--oc-bg);
+    color: var(--oc-text);
 }
 
 /* ─── Chat header ────────────────────────────────────────────── */
@@ -101,8 +101,8 @@
 }
 
 .openspace-chat-widget .session-list-item.active {
-    background: rgba(0,122,204,0.12);
-    color: var(--oc-text-bright, #fff);
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
 }
 
 .openspace-chat-widget .session-list-item-title {
@@ -191,6 +191,7 @@
     align-self: flex-end;
     background-color: var(--theia-button-background);
     color: var(--theia-button-foreground);
+    border: 1px solid var(--theia-openspace-chat-userBubbleBorder);
 }
 
 .openspace-chat-widget .chat-message-assistant {
@@ -623,8 +624,8 @@
     margin: 6px 0;
     overflow: hidden;
     font-size: 12px;
-    background: #000000;
-    border: 1px solid #333333;
+    background: var(--theia-openspace-chat-bashBackground);
+    border: 1px solid var(--theia-openspace-chat-bashBorder);
 }
 
 .message-bubble .part-tool-bash .part-tool-header {
@@ -632,19 +633,19 @@
     align-items: center;
     gap: 7px;
     padding: 6px 10px;
-    border-bottom: 1px solid #333333;
-    background: #000000;
-    color: #cccccc;
+    border-bottom: 1px solid var(--theia-openspace-chat-bashBorder);
+    background: var(--theia-openspace-chat-bashBackground);
+    color: var(--oc-text, #cccccc);
     cursor: default;
 }
 
 .message-bubble .part-tool-bash .part-tool-header:hover {
-    color: #cccccc;
+    color: var(--oc-text, #cccccc);
 }
 
 .message-bubble .part-tool-cmd {
     font-family: var(--theia-code-font-family, monospace);
-    color: #4ec94e;
+    color: var(--oc-green, #4ec94e);
     padding: 7px 12px;
     white-space: pre-wrap;
     word-break: break-all;
@@ -656,7 +657,7 @@
     padding: 0 12px 8px;
     font-family: var(--theia-code-font-family, monospace);
     font-size: 11px;
-    color: #cccccc;
+    color: var(--oc-text, #cccccc);
     opacity: 0.85;
     white-space: pre-wrap;
     word-break: break-word;
@@ -668,7 +669,7 @@
 .message-bubble .part-reasoning {
     margin: 8px 0;
     padding-left: 10px;
-    border-left: 2px solid var(--oc-border, #333333);
+    border-left: 2px solid var(--theia-openspace-chat-reasoningBorder);
     font-size: 12px;
     color: var(--oc-text-dim, #858585);
 }
@@ -914,13 +915,13 @@
 
 /* ─── Sessions sidebar widget ────────────────────────────────── */
 .openspace-sessions-widget {
-    --oc-bg:        #1e1e1e;
-    --oc-bg-raised: #252526;
-    --oc-bg-hover:  #2a2d2e;
-    --oc-border:    #333333;
-    --oc-text:      #cccccc;
-    --oc-text-dim:  #858585;
-    --oc-accent:    #007acc;
+    --oc-bg:        var(--theia-openspace-chat-background);
+    --oc-bg-raised: var(--theia-openspace-chat-backgroundRaised);
+    --oc-bg-hover:  var(--theia-openspace-chat-backgroundHover);
+    --oc-border:    var(--theia-openspace-chat-border);
+    --oc-text:      var(--theia-openspace-chat-foreground);
+    --oc-text-dim:  var(--theia-openspace-chat-foregroundDim);
+    --oc-accent:    var(--theia-openspace-chat-accent);
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -981,8 +982,8 @@
 }
 
 .openspace-sessions-widget .sessions-widget-item.active {
-    background: rgba(0,122,204,0.1);
-    color: #fff;
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
 }
 
 .openspace-sessions-widget .sessions-widget-item-title {
