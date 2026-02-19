@@ -118,9 +118,9 @@ test('Scenario 3: Hub instructions endpoint exists', async () => {
     expect(instructionsText.length).toBeGreaterThan(100);
     console.log('✓ Instructions content is non-trivial (>100 chars)');
 
-    // Must contain the OpenSpace command syntax marker
-    expect(instructionsText).toContain('%%OS');
-    console.log('✓ Instructions contain %%OS command syntax');
+    // Must contain OpenSpace tool references
+    expect(instructionsText).toContain('openspace.');
+    console.log('✓ Instructions contain openspace tool references');
   } else {
     console.log('✓ Endpoint exists but may require specific parameters');
   }
