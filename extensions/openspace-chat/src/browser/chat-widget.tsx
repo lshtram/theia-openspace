@@ -279,7 +279,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
 const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
     <div className="chat-footer-bar">
         <div className="chat-footer-status">
-            <div className={`status-dot ${isStreaming ? 'connecting' : 'connected'}`} />
+            <div className={`status-dot ${isStreaming ? 'streaming' : 'connected'}`} />
             <span>{isStreaming ? 'Generating...' : 'Ready'}</span>
         </div>
     </div>

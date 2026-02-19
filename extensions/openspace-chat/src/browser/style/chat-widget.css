@@ -850,12 +850,6 @@
     color: var(--oc-text-dim, #858585);
 }
 
-.openspace-chat-widget .chat-footer-separator {
-    width: 1px;
-    height: 12px;
-    background: var(--oc-border, #333);
-}
-
 .openspace-chat-widget .chat-footer-status {
     display: flex;
     align-items: center;
@@ -874,11 +868,7 @@
     box-shadow: 0 0 4px rgba(78,201,78,0.5);
 }
 
-.openspace-chat-widget .status-dot.disconnected {
-    background: #f14c4c;
-}
-
-.openspace-chat-widget .status-dot.connecting {
+.openspace-chat-widget .status-dot.streaming {
     background: #cca700;
 }
 
