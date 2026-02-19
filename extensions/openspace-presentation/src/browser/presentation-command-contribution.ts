@@ -246,7 +246,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
                 label: 'OpenSpace: List Presentations'
             },
             {
-                execute: async (args?: PresentationListArgs) => {
+                execute: async (_args?: PresentationListArgs) => {
                     this.logger.info('[PresentationCommand] Listing presentations');
                     return this.presentationService.listPresentations();
                 }
@@ -349,7 +349,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
                 label: 'OpenSpace: Pause Presentation'
             },
             {
-                execute: async (args?: PresentationPauseArgs) => {
+                execute: async (_args?: PresentationPauseArgs) => {
                     this.logger.info('[PresentationCommand] Pausing presentation');
                     return this.pausePresentation();
                 }
@@ -363,7 +363,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
                 label: 'OpenSpace: Stop Presentation'
             },
             {
-                execute: async (args?: PresentationStopArgs) => {
+                execute: async (_args?: PresentationStopArgs) => {
                     this.logger.info('[PresentationCommand] Stopping presentation');
                     return this.stopPresentation();
                 }

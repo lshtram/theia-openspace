@@ -12,6 +12,8 @@
     "@theia/filesystem": "1.68.2",
     "@theia/workspace": "1.68.2",
     "dompurify": "^3.2.3",
+    "openspace-core": "0.1.0",
+    "openspace-settings": "0.1.0",
     "reveal.js": "^5.2.1"
   },
   "devDependencies": {

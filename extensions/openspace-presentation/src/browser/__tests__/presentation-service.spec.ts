@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -237,5 +238,40 @@ title: Emitter Test
 
             expect(service.getActivePresentation()).to.be.undefined;
         });
+    });
+});
+
+describe('PresentationService.createPresentation — path resolution', () => {
+    let service: PresentationService;
+    let createStub: sinon.SinonStub;
+
+    beforeEach(() => {
+        service = new PresentationService();
+        createStub = sinon.stub().resolves();
+        (service as any).fileService = {
+            create: createStub,
+            createFolder: sinon.stub().resolves(),
+            exists: sinon.stub().resolves(false),
+        };
+        (service as any).workspaceService = {
+            roots: Promise.resolve([{ resource: { toString: () => 'file:///workspace' } }]),
+        };
+        (service as any).preferenceService = {
+            get: sinon.stub().withArgs('openspace.paths.decks').returns('openspace/decks'),
+        };
+        (service as any).logger = { warn: sinon.stub(), info: sinon.stub() };
+    });
+
+    it('creates file under configured folder for bare name', async () => {
+        await service.createPresentation('myslides', 'My Slides');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.include('openspace/decks/myslides.deck.md');
+    });
+
+    it('respects absolute file:// path unchanged', async () => {
+        const abs = 'file:///tmp/myslides.deck.md';
+        await service.createPresentation(abs, 'My Slides');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.equal(abs);
     });
 });

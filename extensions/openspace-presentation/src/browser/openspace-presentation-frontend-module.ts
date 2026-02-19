@@ -8,7 +8,7 @@ import { PresentationOpenHandler } from './presentation-open-handler';
 import { PresentationService } from './presentation-service';
 import { PresentationCommandContribution } from './presentation-command-contribution';
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Register the Presentation Widget
   bind(PresentationWidget).toSelf();
   bind(WidgetFactory)

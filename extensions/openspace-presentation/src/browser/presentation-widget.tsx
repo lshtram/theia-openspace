@@ -132,6 +132,10 @@ export class PresentationWidget extends ReactWidget {
      */
     setContent(content: string): void {
         this.deckContent = content;
+        // Guard: only drive DOM updates when the container is already attached.
+        // If called before React has rendered (containerRef.current === null),
+        // onAfterAttach() will fire later and pick up deckContent at that point.
+        if (!this.containerRef?.current) { return; }
         // Imperatively write slides into the .slides container — outside React's
         // reconciliation scope — so that RevealMarkdown can freely mutate the DOM
         // without React overwriting its changes on the next render cycle.
@@ -169,7 +173,7 @@ More content</pre>
             slidesEl.innerHTML = deck.slides.map(slide => {
                 const escapedContent = (slide.content ?? '').replace(/<\/script>/g, '<\\/script>');
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
-                return `<section data-markdown=""${notesAttr}><script type="text/template">${escapedContent}<\/script></section>`;
+                return `<section data-markdown=""${notesAttr}><script type="text/template">${escapedContent}</script></section>`;
             }).join('');
         }
     }
