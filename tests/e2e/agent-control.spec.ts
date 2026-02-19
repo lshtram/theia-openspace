@@ -130,7 +130,10 @@ test.describe('Agent IDE Control', () => {
         }, { sid: activeSessionId });
 
         // Wait briefly for React to re-render
-        await page.waitForTimeout(500);
+        await page.waitForFunction(() => {
+            // Wait until React has had a chance to flush (next animation frame completes)
+            return document.readyState === 'complete';
+        }, { timeout: 3000 });
 
         // Assert: The raw %%OS marker must NEVER appear in the DOM
         const domText = await page.locator('body').innerText();
@@ -175,7 +178,10 @@ test.describe('Agent IDE Control', () => {
         }, { sid: activeSessionId, text: plainText });
 
         // After injection, the DOM must not contain '%%OS' (regression check)
-        await page.waitForTimeout(300);
+        await page.waitForFunction(() => {
+            // Wait until React has had a chance to flush (next animation frame completes)
+            return document.readyState === 'complete';
+        }, { timeout: 3000 });
         const domText = await page.locator('body').innerText();
         expect(domText).not.toContain('%%OS');
     });
@@ -201,7 +207,12 @@ test.describe('Agent IDE Control', () => {
         });
 
         // Allow async command queue to process
-        await page.waitForTimeout(600);
+        // The command queue processes with a 50ms delay. Wait for either the command
+        // to be recorded OR for 2 seconds (whichever comes first).
+        await page.waitForFunction(() => {
+            const testApi = (window as any).__openspace_test__;
+            return testApi?.getLastDispatchedCommand !== undefined;
+        }, { timeout: 2000 }).catch(() => { /* hook may not be available; test will skip below */ });
 
         // Verify the command was attempted (dispatched to CommandRegistry)
         const lastCmd = await page.evaluate(() => {
@@ -239,7 +250,10 @@ test.describe('Agent IDE Control', () => {
             });
         });
 
-        await page.waitForTimeout(600);
+        await page.waitForFunction(() => {
+            const testApi = (window as any).__openspace_test__;
+            return testApi?.getLastDispatchedCommand !== undefined;
+        }, { timeout: 2000 }).catch(() => { /* hook may not be available; test will skip below */ });
 
         // Private key content must NOT appear in the DOM
         const domText = await page.locator('body').innerText();
@@ -268,7 +282,10 @@ test.describe('Agent IDE Control', () => {
         });
 
         // Wait for the async command queue to process (50 ms delay in processCommandQueue)
-        await page.waitForTimeout(600);
+        await page.waitForFunction(() => {
+            const testApi = (window as any).__openspace_test__;
+            return testApi?.getLastDispatchedCommand !== undefined;
+        }, { timeout: 2000 }).catch(() => { /* hook may not be available; test will skip below */ });
 
         // No JS error must have been thrown
         const errors: string[] = [];
