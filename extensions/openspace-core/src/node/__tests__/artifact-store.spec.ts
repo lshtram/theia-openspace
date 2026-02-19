@@ -72,17 +72,17 @@ describe('ArtifactStore', () => {
             );
         });
 
-        it('serializes concurrent writes to the same file', async () => {
-            const results: number[] = [];
+        it('serializes concurrent writes to the same file (FIFO)', async () => {
+            const completed: number[] = [];
             const p1 = store.write('serial.txt', 'first', { actor: 'agent', reason: 'test' })
-                .then(() => results.push(1));
+                .then(() => completed.push(1));
             const p2 = store.write('serial.txt', 'second', { actor: 'agent', reason: 'test' })
-                .then(() => results.push(2));
+                .then(() => completed.push(2));
             await Promise.all([p1, p2]);
-            // Both should complete (order may vary, but no torn write)
-            assert.strictEqual(results.length, 2);
+            // Queue is FIFO with concurrency 1: both complete, second wins final content
+            assert.strictEqual(completed.length, 2);
             const content = fs.readFileSync(path.join(tmpDir, 'serial.txt'), 'utf-8');
-            assert.ok(content === 'first' || content === 'second');
+            assert.strictEqual(content, 'second', 'Second write (enqueued after first) should be final content');
         });
 
         it('emits FILE_CHANGED event after write', async () => {

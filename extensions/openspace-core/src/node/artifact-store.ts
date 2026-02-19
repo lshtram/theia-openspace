@@ -97,7 +97,8 @@ export class ArtifactStore extends EventEmitter {
     async write(filePath: string, content: string | Buffer, opts: WriteOptions): Promise<void> {
         return this.queue.add(async () => {
             const abs = this.resolvePath(filePath);
-            this.internalWriteInProgress.add(filePath);
+            const normalizedFilePath = filePath.replace(/\\/g, '/');
+            this.internalWriteInProgress.add(normalizedFilePath);
             try {
                 const exists = await fsPromises.access(abs).then(() => true).catch(() => false);
                 await fsPromises.mkdir(path.dirname(abs), { recursive: true });
@@ -118,7 +119,7 @@ export class ArtifactStore extends EventEmitter {
 
                 this.emit('FILE_CHANGED', { path: filePath, actor: opts.actor });
             } finally {
-                setTimeout(() => this.internalWriteInProgress.delete(filePath), 500);
+                setTimeout(() => this.internalWriteInProgress.delete(normalizedFilePath), 500);
             }
         });
     }
