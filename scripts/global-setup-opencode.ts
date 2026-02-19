@@ -70,15 +70,26 @@ async function globalSetup(config: FullConfig) {
   
   if (isRunning) {
     console.log(`[Global Setup] OpenCode server already running at ${OPENCODE_URL}`);
-    return;
+  } else {
+    // Server not running - try to start it
+    try {
+      await startOpenCodeServer();
+    } catch (err) {
+      console.error('[Global Setup] Failed to start OpenCode server:', err);
+      throw err;
+    }
   }
-  
-  // Server not running - try to start it
-  try {
-    await startOpenCodeServer();
-  } catch (err) {
-    console.error('[Global Setup] Failed to start OpenCode server:', err);
-    throw err;
+
+  // Also verify the Theia dev server is reachable (required for browser tests)
+  const isTheiaRunning = await isServerRunning('http://localhost:3000');
+  if (!isTheiaRunning) {
+    console.error('\n[Global Setup] ERROR: Theia dev server is not running on port 3000.');
+    console.error('[Global Setup] Browser-based E2E tests require a running Theia server.');
+    console.error('[Global Setup] Start it with: yarn start:browser');
+    console.error('[Global Setup] Then re-run: npm run test:e2e\n');
+    // Don't throw — let the individual browser tests fail with Playwright's native error.
+    // This message surfaces first so the developer knows what went wrong.
+    console.warn('[Global Setup] Continuing — browser tests will fail. API-only tests will pass.');
   }
 }
 
