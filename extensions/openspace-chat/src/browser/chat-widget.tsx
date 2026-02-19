@@ -299,6 +299,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
+    const [queuedCount, setQueuedCount] = React.useState(0);
+    const messageQueueRef = React.useRef<PromptMessagePart[][]>([]);
+    const isSendingRef = React.useRef(false);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
     // Subscribe to model changes
@@ -487,34 +490,63 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     }, [sessionService, loadSessions, messageService]);
 
     // Handle send message (updated for multi-part input and model selection)
+    // Messages are queued if streaming is active, and drained sequentially.
+    const sendPartsNow = React.useCallback(async (parts: PromptMessagePart[]) => {
+        const activeModel = sessionService.activeModel;
+        const model = activeModel ? (() => {
+            const [providerPart, ...modelParts] = activeModel.split('/');
+            const modelPart = modelParts.join('/');
+            return { providerID: providerPart, modelID: modelPart };
+        })() : undefined;
+
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[ChatWidget] Sending message with model:', model || 'default');
+        }
+        await sessionService.sendMessage(parts as any as MessagePartInput[], model);
+    }, [sessionService]);
+
+    const drainQueue = React.useCallback(async () => {
+        if (isSendingRef.current) return;
+        while (messageQueueRef.current.length > 0) {
+            isSendingRef.current = true;
+            const next = messageQueueRef.current.shift()!;
+            setQueuedCount(messageQueueRef.current.length);
+            try {
+                await sendPartsNow(next);
+            } catch (error) {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error('[ChatWidget] Error sending queued message:', error);
+                }
+            }
+        }
+        isSendingRef.current = false;
+    }, [sendPartsNow]);
+
+    // When streaming ends, drain any queued messages
+    React.useEffect(() => {
+        if (!isStreaming) {
+            drainQueue();
+        }
+    }, [isStreaming, drainQueue]);
+
     const handleSend = React.useCallback(async (parts: PromptMessagePart[]) => {
-        if (parts.length === 0) {
+        if (parts.length === 0) return;
+
+        if (isStreaming || isSendingRef.current) {
+            // Queue for later — input stays enabled so user can keep typing
+            messageQueueRef.current.push(parts);
+            setQueuedCount(messageQueueRef.current.length);
             return;
         }
 
         try {
-            // Get selected model and pass it separately (not in parts metadata)
-            // OpenCode API expects model as top-level parameter: { providerID, modelID }
-            // T3-12: Handle multi-slash model IDs correctly (e.g., "provider/model/version")
-            const activeModel = sessionService.activeModel;
-            const model = activeModel ? (() => {
-                const [providerPart, ...modelParts] = activeModel.split('/');
-                const modelPart = modelParts.join('/');
-                return { providerID: providerPart, modelID: modelPart };
-            })() : undefined;
-
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('[ChatWidget] Sending message with model:', model || 'default');
-            }
-            // PromptInput MessagePart types are compatible with MessagePartInput
-            await sessionService.sendMessage(parts as any as MessagePartInput[], model);
+            await sendPartsNow(parts);
         } catch (error) {
             if (process.env.NODE_ENV !== 'production') {
                 console.error('[ChatWidget] Error sending message:', error);
             }
-            // TODO: Show error to user
         }
-    }, [sessionService]);
+    }, [sessionService, isStreaming, sendPartsNow]);
 
     // handleKeyDown removed - now handled by PromptInput component
 
@@ -561,8 +593,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
-                            disabled={isStreaming}
-                            placeholder="Type your message, @mention files/agents, or attach images..."
+                            disabled={false}
+                            placeholder={queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
                         />
                         <ChatFooter isStreaming={isStreaming} />

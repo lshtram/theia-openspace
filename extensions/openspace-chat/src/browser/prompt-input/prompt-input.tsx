@@ -125,54 +125,71 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
-     * Handle input to detect @ mentions.
+     * Get all text content before the cursor in the editor (across all nodes).
+     * This is needed for @ and / detection to work even with pill spans present.
      */
-    const handleInput = () => {
+    const getTextBeforeCursor = (): string => {
+        const editor = editorRef.current;
+        if (!editor) return '';
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return '';
+        const range = selection.getRangeAt(0);
+        // Create a range from start of editor to cursor position
+        const preRange = document.createRange();
+        preRange.setStart(editor, 0);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        return preRange.toString();
+    };
+
+    // Ref holding the latest handleInput implementation — avoids stale closure in native listener
+    const handleInputRef = React.useRef<() => void>(() => { /* noop */ });
+
+    /**
+     * Handle input to detect @ mentions and / commands.
+     */
+    const handleInput = React.useCallback(() => {
         if (!editorRef.current) return;
 
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
+        const beforeCursor = getTextBeforeCursor();
 
-        const range = selection.getRangeAt(0);
-        const textNode = range.startContainer;
-        
-        if (textNode.nodeType !== Node.TEXT_NODE) return;
-
-        const text = textNode.textContent || '';
-        const cursorPosition = range.startOffset;
-        
-        // Check if we're typing @ or after @
-        const beforeCursor = text.slice(0, cursorPosition);
-        const atIndex = beforeCursor.lastIndexOf('@');
-        
-        if (atIndex >= 0) {
-            const query = beforeCursor.slice(atIndex + 1);
-            
-            // Don't show if there's a space in the query
-            if (!query.includes(' ')) {
-                setTypeaheadQuery(query);
-                setTypeaheadType(query.length === 0 || /^[a-zA-Z]/.test(query) ? 'agent' : 'file');
-                setShowTypeahead(true);
-                setShowSlashMenu(false);
-                setSelectedTypeaheadIndex(0);
-                return;
-            }
+        // @ mention detection — find last @ not preceded by a word character
+        const atMatch = beforeCursor.match(/@([^\s@]*)$/);
+        if (atMatch) {
+            const query = atMatch[1];
+            setTypeaheadQuery(query);
+            setTypeaheadType('agent');
+            setShowTypeahead(true);
+            setShowSlashMenu(false);
+            setSelectedTypeaheadIndex(0);
+            return;
         }
-        
         setShowTypeahead(false);
 
-        // Slash command detection
-        const slashIndex = beforeCursor.lastIndexOf('/');
-        if (slashIndex >= 0 && !beforeCursor.slice(0, slashIndex).trim()) {
-            const query = beforeCursor.slice(slashIndex + 1);
-            if (!query.includes(' ')) {
-                setSlashQuery(query);
-                setShowSlashMenu(true);
-                return;
-            }
+        // Slash command detection — / at start of content or after whitespace only
+        const slashMatch = beforeCursor.match(/(?:^|\s)\/([^\s/]*)$/);
+        if (slashMatch) {
+            const query = slashMatch[1];
+            setSlashQuery(query);
+            setShowSlashMenu(true);
+            return;
         }
         setShowSlashMenu(false);
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Keep ref in sync so the native listener always calls the latest implementation
+    React.useEffect(() => {
+        handleInputRef.current = handleInput;
+    });
+
+    // Attach native input listener once so toolbar-button-dispatched events are caught
+    React.useEffect(() => {
+        const el = editorRef.current;
+        if (!el) return;
+        const handler = () => handleInputRef.current();
+        el.addEventListener('input', handler);
+        return () => el.removeEventListener('input', handler);
+    }, []);
 
     /**
      * Get items for typeahead based on query and type.
@@ -342,21 +359,24 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         }
     };
 
-    /**
-     * Handle drag events.
-     */
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(true);
     };
 
     const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        setIsDragging(false);
+        // Only hide overlay when leaving the container entirely, not child elements
+        const container = e.currentTarget as HTMLDivElement;
+        if (!container.contains(e.relatedTarget as Node)) {
+            setIsDragging(false);
+        }
     };
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(false);
 
         const files = e.dataTransfer.files;
@@ -389,7 +409,12 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     );
 
     return (
-        <div className="prompt-input-container">
+        <div
+            className="prompt-input-container"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
             {/* File Attachments Preview */}
             {fileAttachments.length > 0 && (
                 <div className="prompt-input-file-attachments">
@@ -444,9 +469,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     onKeyDown={handleKeyDown}
                     onInput={handleInput}
                     onPaste={handlePaste}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
                     role="textbox"
                     aria-multiline="true"
                     aria-label="Message input"

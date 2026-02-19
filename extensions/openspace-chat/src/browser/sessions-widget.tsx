@@ -18,6 +18,7 @@ import * as React from '@theia/core/shared/react';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
+import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { Session } from 'openspace-core/lib/common/opencode-protocol';
@@ -198,5 +199,9 @@ export class SessionsWidgetContribution extends AbstractViewContribution<Session
                 rank: 501,
             }
         });
+    }
+
+    async onStart(_app: FrontendApplication): Promise<void> {
+        await this.openView({ activate: false, reveal: true });
     }
 }

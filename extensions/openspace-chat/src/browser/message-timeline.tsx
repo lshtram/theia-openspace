@@ -225,6 +225,14 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             );
                         })
                     )}
+                    {/* Shimmer "thinking" indicator — shown when streaming but no response parts yet */}
+                    {isStreaming && !streamingMessageId && (
+                        <div className="message-timeline-thinking" aria-live="polite" aria-label="Assistant is thinking">
+                            <span className="message-timeline-thinking-dot" />
+                            <span className="message-timeline-thinking-dot" />
+                            <span className="message-timeline-thinking-dot" />
+                        </div>
+                    )}
                     {/* Sentinel element - scroll target for auto-scroll, always rendered */}
                     <div ref={bottomSentinelRef} className="message-timeline-bottom-sentinel" aria-hidden="true" />
                 </div>

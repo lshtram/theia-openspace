@@ -71,7 +71,8 @@ function renderTextPart(part: any, index: number): React.ReactNode {
     );
 }
 
-const BASH_TOOL_NAMES = /^(bash|execute|run_command|run|shell|cmd|terminal)$/i;
+// Matches bash tool variants including Anthropic versioned names (e.g. bash_20250124)
+const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|terminal)$/i;
 
 /** Collapsible tool call block. Detects bash and renders terminal style. */
 const ToolBlock: React.FC<{ part: any; index?: number }> = ({ part }) => {
