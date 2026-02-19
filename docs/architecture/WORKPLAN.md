@@ -28,7 +28,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 3: Agent IDE Control | ✅ COMPLETE | All 11 tasks done; stream interceptor superseded by T3 |
 | Phase T3: MCP Agent Control System | ✅ COMPLETE | Hub MCP server live; stream interceptor removed |
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
-| **Phase 1C: Code Hardening** | 🟡 In progress | 1C.1–1C.4 complete; 1C.5–1C.7 pending |
+| **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ⬜ NOT STARTED | Validate & integrate existing Phase 4 code |
 | **Phase T4: PatchEngine** | ⬜ NOT STARTED | Versioned artifact mutations |
@@ -37,7 +37,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 
-**Next Task:** Phase 1C.5 — Test Infrastructure Fixes
+**Next Task:** Phase 4-Val — Wire Phase 4 into MCP Tools
 
 ---
 
@@ -73,7 +73,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 
 > **Note:** Tasks T1-7 and T1-8 from the original review (stream interceptor block accumulation and brace counting bugs) are **obsolete** — the stream interceptor has been removed by Phase T3. All other hardening items remain.
 
-**Status:** 🟡 In progress  
+**Status:** ✅ COMPLETE
 **Duration estimate:** 14–22 hours  
 **Exit criteria:** All T1 and T2 issues resolved. Security checklist complete. All tests passing. Build clean.  
 **Source:** Full codebase code review — detailed plan in `docs/tasks/PHASE-1C-HARDENING-PLAN.md`
@@ -129,7 +129,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | All tests verify real behavior. No flaky timeouts. All unit and E2E tests pass. |
 | **Dependencies** | 1C.4 |
 | **Estimated effort** | 2–3 hours |
-| **Status** | ⬜ |
+ | **Status** | ✅ |
 
 ### 1C.6 — T3 Minor Fixes (As Time Allows)
 | | |
@@ -138,7 +138,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | T3 issues resolved as time allows. All improvements documented. |
 | **Dependencies** | 1C.5 |
 | **Estimated effort** | 2–4 hours |
-| **Status** | ⬜ |
+ | **Status** | ✅ |
 
 ### 1C.7 — Security Review & Validation
 | | |
@@ -147,8 +147,8 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | Security checklist 10/10 complete. All tests pass. Build clean. Zero TypeScript/lint errors. |
 | **Dependencies** | 1C.6 |
 | **Test requirements** | `yarn build` (zero errors), `yarn lint` (zero errors), `yarn test` (all 446 unit tests pass). Security penetration testing: attempt path traversal, XSS injection, dangerous commands without approval — all must be blocked. |
-| **Estimated effort** | 1–2 hours |
-| **Status** | ⬜ |
+ | **Estimated effort** | 1–2 hours |
+ | **Status** | ✅ |
 
 ---
 
