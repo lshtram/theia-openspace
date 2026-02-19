@@ -482,3 +482,46 @@ describe('OpenSpaceMcpServer — presentation tool registrations', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 7: Whiteboard tool registration — structural verification
+// ---------------------------------------------------------------------------
+
+describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
+    let hubMcpSrc: string;
+
+    before(() => {
+        hubMcpSrc = fs.readFileSync(
+            path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+    });
+
+    const WHITEBOARD_TOOLS = [
+        'openspace.whiteboard.list',
+        'openspace.whiteboard.read',
+        'openspace.whiteboard.create',
+        'openspace.whiteboard.add_shape',
+        'openspace.whiteboard.update_shape',
+        'openspace.whiteboard.delete_shape',
+        'openspace.whiteboard.open',
+        'openspace.whiteboard.camera.set',
+        'openspace.whiteboard.camera.fit',
+        'openspace.whiteboard.camera.get',
+    ];
+
+    for (const toolName of WHITEBOARD_TOOLS) {
+        it(`registers tool "${toolName}"`, () => {
+            expect(hubMcpSrc, `hub-mcp.ts must register "${toolName}"`).to.include(`'${toolName}'`);
+        });
+    }
+
+    it('routes all whiteboard tools through executeViaBridge', () => {
+        for (const toolName of WHITEBOARD_TOOLS) {
+            expect(
+                hubMcpSrc,
+                `"${toolName}" must call executeViaBridge`
+            ).to.include(`executeViaBridge('${toolName}'`);
+        }
+    });
+});

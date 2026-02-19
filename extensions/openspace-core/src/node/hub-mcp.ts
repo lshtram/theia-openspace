@@ -47,7 +47,7 @@ export interface CommandBridgeResult {
 export type BridgeCallback = (command: AgentCommand) => void;
 
 /**
- * OpenSpaceMcpServer — MCP server that registers 17 OpenSpace IDE control tools and
+ * OpenSpaceMcpServer — MCP server that registers 40 OpenSpace IDE control tools and
  * mounts them on the Express app at POST/GET/DELETE /mcp.
  *
  * Architecture (T3):
@@ -133,6 +133,7 @@ export class OpenSpaceMcpServer {
         this.registerTerminalTools(server);
         this.registerFileTools(server);
         this.registerPresentationTools(server);
+        this.registerWhiteboardTools(server);
     }
 
     // ─── Pane Tools (4) ──────────────────────────────────────────────────────
@@ -507,6 +508,112 @@ export class OpenSpaceMcpServer {
             'Toggle fullscreen mode for the active presentation viewer',
             {},
             async (args: any) => this.executeViaBridge('openspace.presentation.toggleFullscreen', args)
+        );
+    }
+
+    // ─── Whiteboard Tools (10) ──────────────────────────────────────────────────
+
+    private registerWhiteboardTools(server: any): void {
+        server.tool(
+            'openspace.whiteboard.list',
+            'List all .whiteboard.json files in the workspace',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.list', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.read',
+            'Read a .whiteboard.json file and return its content and shape records',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.read', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.create',
+            'Create a new .whiteboard.json file, optionally with a title label',
+            {
+                path: z.string().describe('Absolute path for the new .whiteboard.json file'),
+                title: z.string().optional().describe('Optional title text label added to the canvas'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.create', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.add_shape',
+            'Add a shape to a whiteboard canvas',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                type: z.string().describe('Shape type (e.g. rect, ellipse, text, arrow)'),
+                x: z.number().describe('X position on canvas'),
+                y: z.number().describe('Y position on canvas'),
+                width: z.number().optional().describe('Shape width in pixels'),
+                height: z.number().optional().describe('Shape height in pixels'),
+                props: z.record(z.string(), z.unknown()).optional().describe('Additional shape properties (text, color, etc.)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.add_shape', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.update_shape',
+            'Update properties of an existing shape on the whiteboard',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                shapeId: z.string().describe('ID of the shape to update'),
+                props: z.record(z.string(), z.unknown()).describe('Properties to update on the shape'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.update_shape', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.delete_shape',
+            'Remove a shape from the whiteboard by ID',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                shapeId: z.string().describe('ID of the shape to delete'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.delete_shape', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.open',
+            'Open a .whiteboard.json file in the whiteboard viewer pane',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                splitDirection: z.enum(['right', 'left', 'bottom', 'new-tab']).optional()
+                    .describe('Where to open the pane (default: right)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.open', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.camera.set',
+            'Set the whiteboard canvas camera position and zoom level',
+            {
+                x: z.number().describe('Camera X offset'),
+                y: z.number().describe('Camera Y offset'),
+                zoom: z.number().min(0.01).describe('Zoom level (1.0 = 100%)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.camera.set', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.camera.fit',
+            'Fit the whiteboard camera to show all shapes (or specified shapes)',
+            {
+                shapeIds: z.array(z.string()).optional()
+                    .describe('Shape IDs to fit into view; omit to fit all shapes'),
+                padding: z.number().optional().describe('Padding in pixels around the fitted area (default 40)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.camera.fit', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.camera.get',
+            'Get the current whiteboard camera position and zoom level',
+            {},
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.camera.get', args)
         );
     }
 
