@@ -99,6 +99,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // process.env.NODE_ENV is replaced by webpack DefinePlugin at build time,
         // which also dead-code eliminates the entire block in production bundles.
         if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if (typeof (window as any).__openspace_test__ === 'undefined') {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).__openspace_test__ = {};
@@ -301,6 +302,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
+        // Route tool parts to live update (these carry no text delta)
+        const toolParts = (event.data.parts || []).filter((p: any) => p.type === 'tool');
+        if (toolParts.length > 0) {
+            this.sessionService.updateStreamingMessageParts(event.messageId, toolParts);
+        }
+
         // Prefer the explicit delta field from the SDK event (set by opencode-proxy from message.part.updated).
         // Fall back to extracting text from parts for backward compatibility.
         const delta = event.delta || this.extractTextDelta(event.data.parts);
@@ -358,6 +365,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      * Extract text delta from message parts.
      * Returns concatenated text from all text-type parts (SDK Part union type).
      */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private extractTextDelta(parts: Array<any>): string {
         let text = '';
 
@@ -499,8 +507,8 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 success = true;
                 this.logger.debug(`[SyncService] Command executed: ${cmd}`);
             }
-        } catch (err: any) {
-            error = err?.message || String(err);
+        } catch (err: unknown) {
+            error = (err as Error)?.message || String(err);
             this.logger.error(`[SyncService] Command execution failed: ${cmd}`, err);
         }
 

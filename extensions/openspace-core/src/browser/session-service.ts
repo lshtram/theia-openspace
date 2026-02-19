@@ -86,6 +86,8 @@ export interface SessionService extends Disposable {
     // State update methods (for SyncService integration)
     appendMessage(message: Message): void;
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateStreamingMessageParts(messageId: string, toolParts: any[]): void;
     replaceMessage(messageId: string, message: Message): void;
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
@@ -852,7 +854,7 @@ export class SessionServiceImpl implements SessionService {
                 id: `temp-part-${crypto.randomUUID()}`,
                 sessionID: message.sessionID,
                 messageID: message.id
-            } as unknown as Message['parts'][0]);
+            } as unknown as NonNullable<Message['parts']>[0]);
         }
 
         // Update message with new parts
