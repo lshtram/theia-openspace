@@ -86,7 +86,7 @@ function textShape(x: number, y: number, text: string, color = 'black') {
 
 /** Note shape helper (type:"note" — NOT geo) */
 function note(x: number, y: number, text: string, color = 'yellow') {
-    return { type: 'note', x, y, w: 200, h: 80, props: { color, richText: rt(text) } };
+    return { type: 'note', x, y, width: 200, height: 80, props: { color, richText: rt(text) } };
 }
 
 const SCREENSHOT_DIR = path.join(__dirname, '../../test-results/diagrams');
