@@ -262,11 +262,12 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         instructions += `- **Editor tools** (6): \`openspace.editor.open\`, \`openspace.editor.read_file\`, \`openspace.editor.close\`, \`openspace.editor.scroll_to\`, \`openspace.editor.highlight\`, \`openspace.editor.clear_highlight\`\n`;
         instructions += `- **Terminal tools** (5): \`openspace.terminal.create\`, \`openspace.terminal.send\`, \`openspace.terminal.read_output\`, \`openspace.terminal.list\`, \`openspace.terminal.close\`\n`;
         instructions += `- **File tools** (5, direct): \`openspace.file.read\`, \`openspace.file.write\`, \`openspace.file.list\`, \`openspace.file.search\`, \`openspace.file.patch\`\n`;
-        instructions += `- **Presentation tools** (10): \`openspace.presentation.list\`, \`openspace.presentation.read\`, \`openspace.presentation.create\`, \`openspace.presentation.update_slide\`, \`openspace.presentation.open\`, \`openspace.presentation.navigate\`, \`openspace.presentation.play\`, \`openspace.presentation.pause\`, \`openspace.presentation.stop\`, \`openspace.presentation.toggleFullscreen\`\n\n`;
+        instructions += `- **Presentation tools** (10): \`openspace.presentation.list\`, \`openspace.presentation.read\`, \`openspace.presentation.create\`, \`openspace.presentation.update_slide\`, \`openspace.presentation.open\`, \`openspace.presentation.navigate\`, \`openspace.presentation.play\`, \`openspace.presentation.pause\`, \`openspace.presentation.stop\`, \`openspace.presentation.toggleFullscreen\`\n`;
+        instructions += `- **Whiteboard tools** (10): \`openspace.whiteboard.list\`, \`openspace.whiteboard.read\`, \`openspace.whiteboard.create\`, \`openspace.whiteboard.add_shape\`, \`openspace.whiteboard.update_shape\`, \`openspace.whiteboard.delete_shape\`, \`openspace.whiteboard.open\`, \`openspace.whiteboard.camera.set\`, \`openspace.whiteboard.camera.fit\`, \`openspace.whiteboard.camera.get\`\n\n`;
 
         instructions += `## Usage Notes\n\n`;
         instructions += `- File tools (read/write/list/search/patch) operate directly on the filesystem.\n`;
-        instructions += `- IDE-control tools (pane/editor/terminal/presentation) are forwarded to the Theia frontend and return the result.\n`;
+        instructions += `- IDE-control tools (pane/editor/terminal/presentation/whiteboard) are forwarded to the Theia frontend and return the result.\n`;
         instructions += `- IDE tools time out after 30 seconds if the browser does not respond.\n\n`;
 
         instructions += `## Presentation Tools\n\n`;
@@ -280,6 +281,18 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         instructions += `- \`openspace.presentation.pause\` — pause autoplay at current slide\n`;
         instructions += `- \`openspace.presentation.stop\` — stop autoplay and return to first slide\n`;
         instructions += `- \`openspace.presentation.toggleFullscreen\` — toggle fullscreen mode\n\n`;
+
+        instructions += `## Whiteboard Tools\n\n`;
+        instructions += `- \`openspace.whiteboard.list\` — list all .whiteboard.json files in the workspace\n`;
+        instructions += `- \`openspace.whiteboard.read {path}\` — read a whiteboard file and return its shape records\n`;
+        instructions += `- \`openspace.whiteboard.create {path, title?}\` — create a new empty whiteboard (optionally add a title label)\n`;
+        instructions += `- \`openspace.whiteboard.add_shape {path, type, x, y, width?, height?, props?}\` — add a shape; type is one of rect, ellipse, text, arrow\n`;
+        instructions += `- \`openspace.whiteboard.update_shape {path, shapeId, props}\` — update shape properties by ID\n`;
+        instructions += `- \`openspace.whiteboard.delete_shape {path, shapeId}\` — remove a shape by ID\n`;
+        instructions += `- \`openspace.whiteboard.open {path, splitDirection?}\` — open the whiteboard viewer (splitDirection: right|left|bottom|new-tab)\n`;
+        instructions += `- \`openspace.whiteboard.camera.set {x, y, zoom}\` — set camera position and zoom\n`;
+        instructions += `- \`openspace.whiteboard.camera.fit {shapeIds?, padding?}\` — fit camera to all shapes or specified shape IDs\n`;
+        instructions += `- \`openspace.whiteboard.camera.get\` — get current camera position and zoom\n\n`;
 
         // IDE state section
         if (this.state.paneState && this.state.paneState.panes.length > 0) {
