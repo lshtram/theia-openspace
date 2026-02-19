@@ -96,6 +96,8 @@ export interface ImageMessagePart {
  */
 export interface PromptInputProps {
     onSend: (parts: MessagePart[]) => void | Promise<void>;
+    onStop?: () => void;
+    isStreaming?: boolean;
     disabled?: boolean;
     placeholder?: string;
     workspaceRoot?: string;
