@@ -30,14 +30,14 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
-| **Phase 4-Val: Wire Phase 4 into MCP** | 🟡 In progress | Presentation done; whiteboard MCP wiring pending |
+| **Phase 4-Val: Wire Phase 4 into MCP** | ✅ COMPLETE | Presentation done; whiteboard MCP fully wired |
 | **Phase T4: PatchEngine** | ⬜ NOT STARTED | Versioned artifact mutations |
 | **Phase T5: ArtifactStore** | ⬜ NOT STARTED | Atomic writes + audit log |
 | **Phase T6: Voice Modality** | ⬜ NOT STARTED | 3-FSM voice pipeline |
 | Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 
-**Next Task:** Phase 4-Val — Wire Phase 4 into MCP Tools
+**Next Task:** Phase T4: PatchEngine
 
 ---
 
@@ -260,7 +260,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 >
 > **Implementation plan:** `docs/plans/2026-02-19-phase-4val-whiteboard-mcp.md`
 
-**Status:** 🟡 In progress  
+**Status:** ✅ COMPLETE  
 **Duration estimate:** 1 session  
 **Exit criteria:** All whiteboard MCP tools registered and in system prompt. All presentation/whiteboard gaps fixed. 466+ unit tests passing. Build clean.
 
@@ -274,22 +274,22 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 - ✅ Whiteboard: all 10 browser commands implemented
 - ✅ Whiteboard: `WhiteboardOpenHandler` wired (double-click `.whiteboard.json`)
 - ✅ Whiteboard: DI frontend module complete
-- ❌ Whiteboard: **no MCP tools** in hub-mcp.ts (main gap)
-- ❌ Whiteboard: **not in system prompt** in hub.ts
-- ❌ Whiteboard: `listWhiteboards()` is a stub (returns workspace root, not files)
-- ❌ Whiteboard: CSS not built to lib/ and not imported in frontend module
-- ❌ Presentation: `navigate 'first'`/`'last'` silently no-ops in command handler
+- ❌ Whiteboard: **no MCP tools** in hub-mcp.ts (main gap) → ✅ FIXED: 10 tools registered
+- ❌ Whiteboard: **not in system prompt** in hub.ts → ✅ FIXED: Whiteboard Tools section added
+- ❌ Whiteboard: `listWhiteboards()` is a stub (returns workspace root, not files) → ✅ FIXED: recursive scan
+- ❌ Whiteboard: CSS not built to lib/ and not imported in frontend module → ✅ FIXED
+- ❌ Presentation: `navigate 'first'`/`'last'` silently no-ops in command handler → ✅ FIXED
 
 **V&V Targets:**
 - [x] Validate 4.1: `presentation-widget.tsx` renders; reveal.js slides functional
 - [x] Validate 4.2: `.deck.md` double-click opens presentation widget
 - [x] Validate 4.3: All presentation commands wired via MCP
-- [ ] Validate 4.4: whiteboard CSS loads; widget renders
+- [x] Validate 4.4: whiteboard CSS loads; widget renders
 - [x] Validate 4.5: `.whiteboard.json` double-click opens whiteboard widget
-- [ ] Validate 4.6: All whiteboard commands wired via MCP
+- [x] Validate 4.6: All whiteboard commands wired via MCP
 - [x] Wire T3.3: Presentation MCP tools (10) — complete
-- [ ] Wire T3.3: Whiteboard MCP tools (10) — pending Task 4
-- [ ] Modality integration test — covered by hub-mcp.spec.ts regression tests
+- [x] Wire T3.3: Whiteboard MCP tools (10) — complete
+- [x] Modality integration test — covered by hub-mcp.spec.ts regression tests
 
 ### 4V.1 — Validate and fix presentation widget
 | | |
@@ -298,7 +298,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | `navigatePresentation({direction:'first'})` → slide 0. `navigatePresentation({direction:'last'})` → last slide. All 10 presentation MCP tools pass regression tests. |
 | **Dependencies** | Phase T3 complete |
 | **Estimated effort** | 30 min |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 4V.2 — Validate and fix whiteboard widget
 | | |
@@ -307,7 +307,7 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | Widget CSS loads in browser. `listWhiteboards()` returns `.whiteboard.json` files. Tests pass. |
 | **Dependencies** | Phase T3 complete |
 | **Estimated effort** | 30 min |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 4V.3 — Wire whiteboard MCP tools (T3.3)
 | | |
@@ -316,16 +316,16 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 | **Acceptance** | All 10 `openspace.whiteboard.*` tools appear in MCP tools/list. System prompt lists whiteboard tools. 10 regression tests pass. |
 | **Dependencies** | 4V.2 |
 | **Estimated effort** | 1–2 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### 4V.4 — Update WORKPLAN and push
 | | |
 |---|---|
-| **What** | Final verification (466+ tests, build clean), mark all 4V tasks ✅, update phase status to COMPLETE, push branch. |
+| **What** | Final verification (488 tests, build clean), mark all 4V tasks ✅, update phase status to COMPLETE, push branch. |
 | **Acceptance** | WORKPLAN updated. Branch pushed. |
 | **Dependencies** | 4V.3 |
 | **Estimated effort** | 15 min |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ---
 
