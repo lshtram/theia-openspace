@@ -14,7 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { inject, injectable } from '@theia/core/shared/inversify';
+import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { ApplicationShell, WidgetManager } from '@theia/core/lib/browser';
@@ -205,6 +205,20 @@ export class PresentationCommandContribution implements CommandContribution, Key
 
     private autoplayTimer: ReturnType<typeof setInterval> | undefined;
 
+    @postConstruct()
+    protected init(): void {
+        this.widgetManager.onDidCreateWidget(({ factoryId, widget }) => {
+            if (factoryId === PresentationWidget.ID) {
+                (widget as PresentationWidget).onDidDispose(() => {
+                    if (this.autoplayTimer !== undefined) {
+                        clearInterval(this.autoplayTimer);
+                        this.autoplayTimer = undefined;
+                    }
+                });
+            }
+        });
+    }
+
     /**
      * Register all presentation commands.
      */
@@ -353,7 +367,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
     registerKeybindings(registry: KeybindingRegistry): void {
         registry.registerKeybinding({
             command: PresentationCommandIds.TOGGLE_FULLSCREEN,
-            keybinding: 'ctrlcmd+shift+f',
+        keybinding: 'ctrlcmd+shift+alt+f',
         });
     }
 
@@ -425,7 +439,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             clearInterval(this.autoplayTimer);
         }
         this.autoplayTimer = setInterval(() => {
-            this.navigationService?.next();
+            this.navigationService.next();
         }, interval);
         this.presentationService.setPlaybackState({
             ...this.presentationService.getPlaybackState(),
@@ -457,7 +471,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             clearInterval(this.autoplayTimer);
             this.autoplayTimer = undefined;
         }
-        this.navigationService?.slide(0, 0);
+        this.navigationService.slide(0, 0);
         this.presentationService.setPlaybackState({
             isPlaying: false,
             isPaused: false,
