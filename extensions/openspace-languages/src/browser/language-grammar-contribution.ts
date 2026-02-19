@@ -18,6 +18,18 @@ import cppGrammar from 'tm-grammars/grammars/cpp.json';
 import rustGrammar from 'tm-grammars/grammars/rust.json';
 import shellGrammar from 'tm-grammars/grammars/shellscript.json';
 import yamlGrammar from 'tm-grammars/grammars/yaml.json';
+import goGrammar from 'tm-grammars/grammars/go.json';
+import javaGrammar from 'tm-grammars/grammars/java.json';
+import rubyGrammar from 'tm-grammars/grammars/ruby.json';
+import phpGrammar from 'tm-grammars/grammars/php.json';
+import csharpGrammar from 'tm-grammars/grammars/csharp.json';
+import swiftGrammar from 'tm-grammars/grammars/swift.json';
+import kotlinGrammar from 'tm-grammars/grammars/kotlin.json';
+import sqlGrammar from 'tm-grammars/grammars/sql.json';
+import luaGrammar from 'tm-grammars/grammars/lua.json';
+import dartGrammar from 'tm-grammars/grammars/dart.json';
+import tomlGrammar from 'tm-grammars/grammars/toml.json';
+import dockerGrammar from 'tm-grammars/grammars/docker.json';
 
 @injectable()
 export class LanguageGrammarContribution implements LanguageGrammarDefinitionContribution {
@@ -38,6 +50,18 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
         this.registerRust(registry);
         this.registerShell(registry);
         this.registerYaml(registry);
+        this.registerGo(registry);
+        this.registerJava(registry);
+        this.registerRuby(registry);
+        this.registerPhp(registry);
+        this.registerCsharp(registry);
+        this.registerSwift(registry);
+        this.registerKotlin(registry);
+        this.registerSql(registry);
+        this.registerLua(registry);
+        this.registerDart(registry);
+        this.registerToml(registry);
+        this.registerDocker(registry);
     }
 
     private registerGrammar(
@@ -177,6 +201,101 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
             ['YAML', 'yml'],
             YAML_LANG_CONFIG
         );
+    }
+
+    private registerGo(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'go', 'source.go', goGrammar,
+            ['.go'], ['Go'], C_LANG_CONFIG);
+    }
+
+    private registerJava(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'java', 'source.java', javaGrammar,
+            ['.java'], ['Java'], C_LANG_CONFIG);
+    }
+
+    private registerRuby(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'ruby', 'source.ruby', rubyGrammar,
+            ['.rb', '.rbw', '.gemspec'],
+            ['Ruby', 'rb'],
+            RUBY_LANG_CONFIG
+        );
+    }
+
+    private registerPhp(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'php', 'source.php', phpGrammar,
+            ['.php', '.php4', '.php5', '.phtml', '.ctp'],
+            ['PHP'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerCsharp(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'csharp', 'source.cs', csharpGrammar,
+            ['.cs', '.csx'],
+            ['C#', 'csharp'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerSwift(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'swift', 'source.swift', swiftGrammar,
+            ['.swift'],
+            ['Swift'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerKotlin(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'kotlin', 'source.kotlin', kotlinGrammar,
+            ['.kt', '.kts'],
+            ['Kotlin', 'kt'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerSql(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'sql', 'source.sql', sqlGrammar,
+            ['.sql'],
+            ['SQL'],
+            SQL_LANG_CONFIG
+        );
+    }
+
+    private registerLua(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'lua', 'source.lua', luaGrammar,
+            ['.lua'],
+            ['Lua'],
+            LUA_LANG_CONFIG
+        );
+    }
+
+    private registerDart(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'dart', 'source.dart', dartGrammar,
+            ['.dart'],
+            ['Dart'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerToml(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'toml', 'source.toml', tomlGrammar,
+            ['.toml'],
+            ['TOML'],
+            TOML_LANG_CONFIG
+        );
+    }
+
+    private registerDocker(registry: TextmateRegistry): void {
+        monaco.languages.register({
+            id: 'dockerfile',
+            extensions: ['.dockerfile'],
+            filenames: ['Dockerfile'],
+            aliases: ['Dockerfile', 'docker']
+        });
+        registry.registerTextmateGrammarScope('source.dockerfile', {
+            getGrammarDefinition: () => Promise.resolve({ format: 'json' as const, content: dockerGrammar as object })
+        });
+        registry.mapLanguageIdToTextmateGrammar('dockerfile', 'source.dockerfile');
     }
 }
 
@@ -338,6 +457,64 @@ const YAML_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
         { open: '{', close: '}' }, { open: '[', close: ']' },
         { open: '"', close: '"', notIn: ['string'] },
         { open: "'", close: "'", notIn: ['string', 'comment'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '"', close: '"' }, { open: "'", close: "'" }
+    ]
+};
+
+const RUBY_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '#', blockComment: ['=begin', '=end'] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ]
+};
+
+const SQL_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '--', blockComment: ['/*', '*/'] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ]
+};
+
+const LUA_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '--', blockComment: ['--[[', ']]'] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ]
+};
+
+const TOML_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '#' },
+    brackets: [['{', '}'], ['[', ']']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '"', close: '"' }, { open: "'", close: "'" }
     ],
     surroundingPairs: [
         { open: '{', close: '}' }, { open: '[', close: ']' },
