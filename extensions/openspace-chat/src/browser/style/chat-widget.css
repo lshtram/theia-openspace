@@ -417,7 +417,8 @@
 }
 
 .openspace-chat-widget .model-option-indicator {
-    font-size: 8px;
+    display: inline-flex;
+    flex-shrink: 0;
     color: var(--theia-badge-background);
 }
 
