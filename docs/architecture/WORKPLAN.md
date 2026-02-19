@@ -36,6 +36,7 @@ task_id: TheiaOpenspaceWorkplan
 | **Phase T6: Voice Modality** | ⬜ NOT STARTED | 3-FSM voice pipeline |
 | Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
+| Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 
 **Next Task:** Phase T4: PatchEngine
 
@@ -62,6 +63,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 2B.7: Unit Test Infrastructure | 2026-02-18 | chai v4 + mocha v10; 446/446 tests passing; tautological tests replaced |
 | Phase 3: Agent IDE Control | 2026-02-18 | Pane/editor/terminal/file commands; manifest auto-gen; stream interceptor (superseded by T3) |
 | Phase T3: MCP Agent Control System | 2026-02-18 | Hub MCP server (21 tools); stream interceptor removed; opencode.json configured |
+| Phase EW: Editor Windows | 2026-02-19 | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 
 Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCHIVE-2026-02-18.md](./WORKPLAN-ARCHIVE-2026-02-18.md).
 
