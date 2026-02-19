@@ -458,7 +458,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                 tabIndex={0}
                             >
                                 <span className={`typeahead-icon ${item.type}`}>
-                                    {item.type === 'agent' ? '🤖' : '📄'}
+                                    {item.type === 'agent' ? (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                        </svg>
+                                    ) : (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                        </svg>
+                                    )}
                                 </span>
                                 <div className="typeahead-content">
                                     <div className="typeahead-name">
@@ -487,7 +496,27 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     <button
                         type="button"
                         className="prompt-input-icon-btn"
-                        onClick={() => { /* trigger @mention */ }}
+                        onClick={() => {
+                            const el = editorRef.current;
+                            if (!el) return;
+                            el.focus();
+                            // Insert @ at cursor
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                const textNode = document.createTextNode('@');
+                                range.insertNode(textNode);
+                                range.setStartAfter(textNode);
+                                range.setEndAfter(textNode);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            } else {
+                                el.textContent = (el.textContent || '') + '@';
+                            }
+                            // Manually fire input event so handleInput runs
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }}
                         disabled={disabled}
                         title="Mention agent or file (@)"
                     >
@@ -496,7 +525,25 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     <button
                         type="button"
                         className="prompt-input-icon-btn"
-                        onClick={() => { /* trigger / command menu */ }}
+                        onClick={() => {
+                            const el = editorRef.current;
+                            if (!el) return;
+                            el.focus();
+                            const sel = window.getSelection();
+                            if (sel && sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                const textNode = document.createTextNode('/');
+                                range.insertNode(textNode);
+                                range.setStartAfter(textNode);
+                                range.setEndAfter(textNode);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            } else {
+                                el.textContent = (el.textContent || '') + '/';
+                            }
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }}
                         disabled={disabled}
                         title="Commands (/)"
                     >

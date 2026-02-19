@@ -19,7 +19,7 @@
 }
 
 .prompt-input-editor-wrapper:focus-within {
-    border-color: #007acc;
+    border-color: var(--theia-focusBorder, #007acc);
 }
 
 .prompt-input-editor {
@@ -159,11 +159,17 @@
     cursor: not-allowed;
 }
 
+.prompt-input-icon-btn:focus-visible,
+.prompt-input-send-button:focus-visible {
+    outline: 2px solid var(--theia-focusBorder, #007acc);
+    outline-offset: 1px;
+}
+
 /* ─── Send button ───────────────────────────────────────────── */
 .prompt-input-send-button {
     margin-left: auto;
-    background: #007acc;
-    color: #ffffff;
+    background: var(--theia-button-background, #007acc);
+    color: var(--theia-button-foreground, #ffffff);
     border: none;
     cursor: pointer;
     width: 28px;
@@ -178,7 +184,7 @@
 }
 
 .prompt-input-send-button:hover:not(:disabled) {
-    background: #1f8ad2;
+    background: var(--theia-button-hoverBackground, #1f8ad2);
 }
 
 .prompt-input-send-button:disabled {
