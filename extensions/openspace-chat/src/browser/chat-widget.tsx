@@ -203,7 +203,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
                             <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585' }}>No sessions yet.</div>
                         )}
-                        {sessions.map(session => (
+                        {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
                             <div
                                 key={session.id}
                                 className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
