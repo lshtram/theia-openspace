@@ -404,8 +404,11 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         const activeSession = sessionService.activeSession;
         if (!activeSession) return;
         
-        const confirmed = confirm(`Delete session "${activeSession.title}"?`);
-        if (!confirmed) return;
+        const action = await messageService.warn(
+            `Delete session "${activeSession.title}"?`,
+            'Delete', 'Cancel'
+        );
+        if (action !== 'Delete') return;
         
         try {
             await sessionService.deleteSession(activeSession.id);

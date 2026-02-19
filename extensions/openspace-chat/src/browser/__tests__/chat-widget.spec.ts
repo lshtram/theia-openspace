@@ -18,11 +18,18 @@
 
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { act } from 'react';
 import { createRequire } from 'node:module';
+
+// Derive __dirname from import.meta.url (works in ESM at runtime)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore TS1343
+const __dirname_chat = path.dirname(new URL(import.meta.url).pathname);
 
 // Load compiled ChatComponent — avoids tsx/decorator issues in ts-node
 // createRequire(import.meta.url) works in both ESM (runtime) and CJS (ts-node) contexts.
@@ -474,9 +481,8 @@ describe('ChatWidget - Session Management', () => {
         });
 
         it('should call deleteSession after confirm dialog', async () => {
-            // Use direct global assignment — sinon.stub(window, 'confirm') doesn't
-            // intercept bare confirm() calls from compiled CJS modules in this environment
-            (global as any).confirm = () => true;
+            // Mock messageService.warn to return 'Delete' (user confirmed)
+            const warnStub = sinon.stub().resolves('Delete');
             const deleteSession = sinon.stub().resolves();
             const sessionService = createMockSessionService({
                 activeProject: mockProject,
@@ -485,19 +491,37 @@ describe('ChatWidget - Session Management', () => {
                 getSessions: sinon.stub().resolves([mockSession1]),
             });
 
-            const { container, unmount } = renderComponent(sessionService);
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            let root: Root;
+            const msgSvc = { error: sinon.stub(), info: sinon.stub(), warn: warnStub };
+
+            act(() => {
+                root = createRoot(container);
+                root.render(React.createElement(ChatComponent, {
+                    sessionService,
+                    openCodeService: {},
+                    workspaceRoot: '',
+                    messageService: msgSvc,
+                }));
+            });
 
             const deleteBtn = container.querySelector('.delete-session-button') as HTMLButtonElement;
             await act(async () => { deleteBtn.click(); });
 
+            // warnStub was called (confirmation dialog shown)
+            expect(warnStub.called).to.be.true;
+            // deleteSession was called after confirmation
             expect(deleteSession.calledOnce).to.be.true;
             expect(deleteSession.calledWith('session-1')).to.be.true;
 
-            unmount();
+            act(() => root.unmount());
+            container.remove();
         });
 
         it('should NOT call deleteSession when confirm is cancelled', async () => {
-            (global as any).confirm = () => false;
+            // Mock messageService.warn to return 'Cancel' (user cancelled)
+            const warnStub = sinon.stub().resolves('Cancel');
             const deleteSession = sinon.stub().resolves();
             const sessionService = createMockSessionService({
                 activeProject: mockProject,
@@ -505,20 +529,34 @@ describe('ChatWidget - Session Management', () => {
                 deleteSession,
             });
 
-            const { container, unmount } = renderComponent(sessionService);
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            let root: Root;
+            const msgSvc = { error: sinon.stub(), info: sinon.stub(), warn: warnStub };
+
+            act(() => {
+                root = createRoot(container);
+                root.render(React.createElement(ChatComponent, {
+                    sessionService,
+                    openCodeService: {},
+                    workspaceRoot: '',
+                    messageService: msgSvc,
+                }));
+            });
 
             const deleteBtn = container.querySelector('.delete-session-button') as HTMLButtonElement;
             await act(async () => { deleteBtn.click(); });
 
             expect(deleteSession.called).to.be.false;
 
-            unmount();
+            act(() => root.unmount());
+            container.remove();
         });
 
         it('should show error via messageService when deleteSession fails', async () => {
-            (global as any).confirm = () => true;
             const errorStub = sinon.stub();
-            const msgSvc = { error: errorStub, info: sinon.stub(), warn: sinon.stub() };
+            // warn resolves to 'Delete' so the deletion proceeds and hits the error
+            const msgSvc = { error: errorStub, info: sinon.stub(), warn: sinon.stub().resolves('Delete') };
             const deleteSession = sinon.stub().rejects(new Error('Delete failed'));
             const sessionService = createMockSessionService({
                 activeProject: mockProject,
@@ -664,5 +702,19 @@ describe('ChatWidget - Session Management', () => {
 
             unmount();
         });
+    });
+});
+
+describe('ChatWidget - MessageService for delete confirmation (T3-10)', () => {
+    it('should use messageService.warn for delete session confirmation, not window.confirm', () => {
+        const src = fs.readFileSync(
+            path.join(__dirname_chat, '../chat-widget.tsx'),
+            'utf-8'
+        );
+        // Must NOT use window.confirm
+        expect(src).not.to.include('window.confirm');
+        expect(src).not.to.match(/\bconfirm\s*\(/);
+        // Must use messageService.warn
+        expect(src).to.include('messageService.warn');
     });
 });

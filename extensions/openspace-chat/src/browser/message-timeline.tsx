@@ -33,12 +33,6 @@ export interface MessageTimelineProps {
 }
 
 /**
- * Scroll threshold (pixels from bottom) for auto-scroll behavior.
- * If within this threshold, auto-scroll is enabled.
- */
-const AUTO_SCROLL_THRESHOLD = 50;
-
-/**
  * Scroll threshold (pixels from bottom) to consider "scrolled up".
  * Beyond this, we consider the user has intentionally scrolled up.
  */
