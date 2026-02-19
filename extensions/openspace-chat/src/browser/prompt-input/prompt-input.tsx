@@ -36,6 +36,8 @@ const SLASH_COMMANDS = [
 
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
+    onStop,
+    isStreaming = false,
     disabled = false,
     placeholder = 'Type your message, @mention files/agents, or attach images...',
     workspaceRoot: workspaceRootProp
@@ -44,6 +46,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [imageAttachments, setImageAttachments] = React.useState<ImagePart[]>([]);
     const [fileAttachments, setFileAttachments] = React.useState<FilePart[]>([]);
+    const [hasContent, setHasContent] = React.useState(false);
     const [isDragging, setIsDragging] = React.useState(false);
     const [showTypeahead, setShowTypeahead] = React.useState(false);
     const [typeaheadQuery, setTypeaheadQuery] = React.useState('');
@@ -67,7 +70,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     /**
      * Clear all content.
      */
-    const clearEditor = () => {
+    const clearEditor = React.useCallback(() => {
         if (editorRef.current) {
             editorRef.current.innerHTML = '';
         }
@@ -75,7 +78,22 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setFileAttachments([]);
         setShowTypeahead(false);
         setShowSlashMenu(false);
-    };
+        setHasContent(false);
+    }, []);
+
+    /**
+     * Track whether the editor has any content.
+     * Called on every input event on the contenteditable div.
+     */
+    const handleEditorInput = React.useCallback(() => {
+        if (!editorRef.current) {
+            setHasContent(false);
+            return;
+        }
+        const text = editorRef.current.textContent ?? '';
+        const hasAttachments = imageAttachments.length > 0 || fileAttachments.length > 0;
+        setHasContent(text.trim().length > 0 || hasAttachments);
+    }, [imageAttachments, fileAttachments]);
 
     /**
      * Handle keyboard events.
@@ -174,7 +192,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             return;
         }
         setShowSlashMenu(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Keep ref in sync so the native listener always calls the latest implementation
@@ -264,6 +281,12 @@ export const PromptInput: React.FC<PromptInputProps> = ({
      * T3-9: Use workspaceRoot prop instead of hardcoded '/workspace'
      */
     const handleSendClick = () => {
+        // If agent is working and no content typed, treat click as Stop
+        if (isStreaming && !hasContent) {
+            onStop?.();
+            return;
+        }
+
         if (disabled) return;
 
         const prompt = getCurrentPrompt();
@@ -273,7 +296,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
         if (!hasText && !hasAttachments) return;
 
-        // Use prop or fallback to empty string (buildRequestParts handles it)
         const workspaceRoot = workspaceRootProp ?? '';
         const parts = buildRequestParts(prompt, workspaceRoot);
 
@@ -467,7 +489,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     contentEditable={!disabled}
                     data-placeholder={placeholder}
                     onKeyDown={handleKeyDown}
-                    onInput={handleInput}
+                    onInput={() => { handleInput(); handleEditorInput(); }}
                     onPaste={handlePaste}
                     role="textbox"
                     aria-multiline="true"
@@ -650,17 +672,31 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         </svg>
                     </button>
 
-                    <button
-                        type="button"
-                        className="prompt-input-send-button"
-                        onClick={handleSendClick}
-                        disabled={disabled}
-                        title="Send message (Enter)"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-                        </svg>
-                    </button>
+                    {(() => {
+                        const showStop = isStreaming && !hasContent;
+                        return (
+                            <button
+                                type="button"
+                                className={showStop ? 'prompt-input-send-button prompt-input-stop-button' : 'prompt-input-send-button'}
+                                onClick={handleSendClick}
+                                disabled={disabled && !showStop}
+                                title={showStop ? 'Stop generation' : 'Send message (Enter)'}
+                                aria-label={showStop ? 'Stop generation' : 'Send message'}
+                            >
+                                {showStop ? (
+                                    // Stop icon — filled square
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
+                                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    </svg>
+                                ) : (
+                                    // Send icon — arrow up
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                        <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                                    </svg>
+                                )}
+                            </button>
+                        );
+                    })()}
                 </div>
             </div>
         </div>
