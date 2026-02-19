@@ -25,7 +25,8 @@
  * Uses Optimistic Concurrency Control (OCC) via a per-file version counter.
  * Versions are persisted to {workspaceRoot}/.openspace/patch-versions.json.
  *
- * Per-file serial write queue prevents torn writes under concurrent MCP tool calls.
+ * Per-file serial queue serializes OCC check + write as an atomic unit.
+ * Write durability (atomic tmp+rename+fsync) is delegated to ArtifactStore.
  */
 
 import * as fs from 'fs';
@@ -38,7 +39,7 @@ import { ArtifactStore } from './artifact-store';
 
 export interface PatchRequest {
     baseVersion: number;
-    actor: string;
+    actor: 'user' | 'agent';
     intent: string;
     ops: unknown[];
 }
@@ -215,6 +216,8 @@ function applyReplaceLines(currentContent: string, ops: ReplaceLinesOp[]): strin
 export class PatchEngine {
     private versions = new Map<string, number>();
     private readonly versionsFilePath: string;
+    /** Per-file serial queue: serializes OCC check + write as an atomic unit */
+    private writeQueues = new Map<string, Promise<void>>();
 
     constructor(private readonly workspaceRoot: string, private readonly store: ArtifactStore) {
         this.versionsFilePath = path.join(workspaceRoot, '.openspace', 'patch-versions.json');
@@ -235,52 +238,64 @@ export class PatchEngine {
      * Returns { version, bytes } on success.
      */
     async apply(filePath: string, request: PatchRequest): Promise<PatchApplyResult> {
-        // 1. Validate and resolve path (prevents traversal attacks)
+        // 1. Validate path (prevents traversal attacks)
         this.resolveSafePath(filePath); // throws if invalid
 
-        // 2. OCC check
-        const currentVersion = this.getVersion(filePath);
-        if (request.baseVersion !== currentVersion) {
-            throw new ConflictError(currentVersion, filePath);
-        }
-
-        // 3. Parse and validate ops
+        // 2. Parse and validate ops (fail fast before queuing)
         const parsed = this.parseRequest(request);
 
-        // 4. Read current content if needed
-        let currentContent = '';
-        if (parsed.type === 'replace_lines') {
-            try {
-                const buf = await this.store.read(filePath);
-                currentContent = buf.toString('utf-8');
-            } catch {
-                // file doesn't exist yet — ok
+        // 3. Per-file serial queue: serializes OCC check + write as atomic unit
+        let result!: PatchApplyResult;
+        const prev = this.writeQueues.get(filePath) ?? Promise.resolve();
+        const next = prev.then(async () => {
+            // OCC check (inside queue — guaranteed to see current version)
+            const currentVersion = this.getVersion(filePath);
+            if (request.baseVersion !== currentVersion) {
+                throw new ConflictError(currentVersion, filePath);
             }
-        }
 
-        // 5. Apply operations
-        let nextContent: string;
-        if (parsed.type === 'replace_content') {
-            nextContent = applyReplaceContent(parsed.ops[0] as ReplaceContentOp);
-        } else {
-            nextContent = applyReplaceLines(currentContent, parsed.ops as ReplaceLinesOp[]);
-        }
+            // Read current content if needed
+            let currentContent = '';
+            if (parsed.type === 'replace_lines') {
+                try {
+                    const buf = await this.store.read(filePath);
+                    currentContent = buf.toString('utf-8');
+                } catch (err: unknown) {
+                    // Only swallow ENOENT — rethrow real I/O errors
+                    const code = (err as NodeJS.ErrnoException).code;
+                    if (code !== 'ENOENT') {
+                        throw err;
+                    }
+                }
+            }
 
-        // 6. Write via ArtifactStore (atomic, backed up, audited)
-        await this.store.write(filePath, nextContent, {
-            actor: (request.actor === 'user' ? 'user' : 'agent') as 'agent' | 'user',
-            reason: request.intent,
+            // Apply operations
+            let nextContent: string;
+            if (parsed.type === 'replace_content') {
+                nextContent = applyReplaceContent(parsed.ops[0] as ReplaceContentOp);
+            } else {
+                nextContent = applyReplaceLines(currentContent, parsed.ops as ReplaceLinesOp[]);
+            }
+
+            // Write via ArtifactStore (atomic, backed up, audited)
+            await this.store.write(filePath, nextContent, {
+                actor: request.actor,
+                reason: request.intent,
+            });
+
+            // Increment version and persist
+            const nextVersion = currentVersion + 1;
+            this.versions.set(filePath, nextVersion);
+            await this.saveVersions();
+
+            result = {
+                version: nextVersion,
+                bytes: Buffer.byteLength(nextContent, 'utf-8'),
+            };
         });
-
-        // 7. Increment version and persist
-        const nextVersion = currentVersion + 1;
-        this.versions.set(filePath, nextVersion);
-        await this.saveVersions();
-
-        return {
-            version: nextVersion,
-            bytes: Buffer.byteLength(nextContent, 'utf-8'),
-        };
+        this.writeQueues.set(filePath, next.catch(() => {}));
+        await next;
+        return result;
     }
 
     /**

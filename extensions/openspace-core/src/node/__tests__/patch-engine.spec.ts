@@ -101,6 +101,26 @@ describe('PatchEngine', () => {
             const backups = fs.readdirSync(histDir);
             assert.strictEqual(backups.length, 1);
         });
+
+        it('enforces OCC under concurrent applies (second must fail or serialize)', async () => {
+            // Both start with baseVersion 0
+            const p1 = engine.apply('concurrent.txt', {
+                baseVersion: 0, actor: 'agent', intent: 'first',
+                ops: [{ op: 'replace_content', content: 'first' }],
+            });
+            const p2 = engine.apply('concurrent.txt', {
+                baseVersion: 0, actor: 'agent', intent: 'second',
+                ops: [{ op: 'replace_content', content: 'second' }],
+            });
+            // One should succeed, one should throw ConflictError
+            const results = await Promise.allSettled([p1, p2]);
+            const fulfilled = results.filter(r => r.status === 'fulfilled');
+            const rejected = results.filter(r => r.status === 'rejected');
+            assert.strictEqual(fulfilled.length, 1, 'exactly one should succeed');
+            assert.strictEqual(rejected.length, 1, 'exactly one should fail');
+            const reason = (rejected[0] as PromiseRejectedResult).reason;
+            assert.ok(reason instanceof ConflictError, 'rejection should be ConflictError');
+        });
     });
 
     describe('apply() with replace_lines', () => {
