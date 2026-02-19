@@ -19,7 +19,7 @@ import { URI } from '@theia/core/lib/common/uri';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { WhiteboardData, WhiteboardRecord, WhiteboardUtils } from './whiteboard-widget';
+import { WhiteboardData, WhiteboardRecord } from './whiteboard-widget';
 
 /**
  * File extension for whiteboard files.
@@ -115,20 +115,21 @@ export class WhiteboardService {
         }
 
         const uri = new URI(finalPath);
-        const data = WhiteboardUtils.createEmpty();
+
+        // Create a minimal valid TLStoreSnapshot (empty canvas).
+        // tldraw will migrate/populate the required system records (document, pointer,
+        // page, instance, camera, instance_page_state) when the editor mounts.
+        // We intentionally keep this sparse; the editor's integrity-checker fills in
+        // whatever is missing on first open.
+        const emptySnapshot: WhiteboardData = {
+            store: {} as Record<string, unknown>,
+            schema: {
+                schemaVersion: 2,
+                sequences: {}
+            }
+        } as unknown as WhiteboardData;
         
-        // Add title if provided
-        if (title) {
-            data.records.push({
-                id: 'title',
-                type: 'text',
-                text: title,
-                x: 50,
-                y: 50
-            });
-        }
-        
-        const content = JSON.stringify(data, null, 2);
+        const content = JSON.stringify(emptySnapshot, null, 2);
         
         await this.fileService.create(uri, content);
         
@@ -138,14 +139,18 @@ export class WhiteboardService {
 
     /**
      * Add a shape to a whiteboard.
+     * Shapes are added directly to the native TLStoreSnapshot format.
      * @param path The file path
-     * @param shape The shape to add
+     * @param shape The shape record to add (must be a valid tldraw shape record)
      * @returns The updated whiteboard data
      */
     async addShape(path: string, shape: WhiteboardRecord): Promise<WhiteboardData> {
         const { data } = await this.readWhiteboard(path);
         
-        const updatedData = WhiteboardUtils.addShape(data, shape);
+        // Add shape to the store dict (native TLStoreSnapshot format)
+        const store = (data.store ?? {}) as Record<string, unknown>;
+        store[shape.id] = shape;
+        const updatedData = { ...data, store } as unknown as WhiteboardData;
         
         // Save to file
         const uri = new URI(path);
@@ -157,15 +162,16 @@ export class WhiteboardService {
 
     /**
      * Update a shape in a whiteboard.
-     * @param path The file path
-     * @param shapeId The shape ID to update
-     * @param props The properties to update
-     * @returns The updated whiteboard data
      */
     async updateShape(path: string, shapeId: string, props: Partial<WhiteboardRecord>): Promise<WhiteboardData> {
         const { data } = await this.readWhiteboard(path);
         
-        const updatedData = WhiteboardUtils.updateShape(data, shapeId, props);
+        const store = (data.store ?? {}) as Record<string, unknown>;
+        const existing = store[shapeId] as WhiteboardRecord | undefined;
+        if (existing) {
+            store[shapeId] = { ...existing, ...props };
+        }
+        const updatedData = { ...data, store } as unknown as WhiteboardData;
         
         // Save to file
         const uri = new URI(path);
@@ -177,14 +183,13 @@ export class WhiteboardService {
 
     /**
      * Delete a shape from a whiteboard.
-     * @param path The file path
-     * @param shapeId The shape ID to delete
-     * @returns The updated whiteboard data
      */
     async deleteShape(path: string, shapeId: string): Promise<WhiteboardData> {
         const { data } = await this.readWhiteboard(path);
         
-        const updatedData = WhiteboardUtils.removeShape(data, shapeId);
+        const store = { ...(data.store ?? {}) } as Record<string, unknown>;
+        delete store[shapeId];
+        const updatedData = { ...data, store } as unknown as WhiteboardData;
         
         // Save to file
         const uri = new URI(path);
@@ -300,4 +305,36 @@ export interface WhiteboardCameraFitArgs {
 
 export interface WhiteboardCameraGetArgs {
     path?: string;
+}
+
+export interface WhiteboardBatchAddShapesArgs {
+    path: string;
+    shapes: Array<{
+        type: string;
+        x: number;
+        y: number;
+        width?: number;
+        height?: number;
+        props?: Record<string, unknown>;
+    }>;
+}
+
+export interface WhiteboardReplaceArgs {
+    path: string;
+    shapes: Array<{
+        type: string;
+        x: number;
+        y: number;
+        width?: number;
+        height?: number;
+        props?: Record<string, unknown>;
+    }>;
+}
+
+export interface WhiteboardFindShapesArgs {
+    path: string;
+    label?: string;
+    type?: string;
+    tag?: string;
+    limit?: number;
 }

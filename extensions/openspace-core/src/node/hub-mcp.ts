@@ -609,15 +609,15 @@ export class OpenSpaceMcpServer {
 
         server.tool(
             'openspace.whiteboard.add_shape',
-            'Add a shape to a whiteboard canvas',
+            'Add a shape to a whiteboard canvas. Shape type must be a tldraw type: "geo" (for rectangles/ellipses/diamonds — set props.geo), "text" (standalone text), "arrow" (directed line), "note" (sticky note). Colors must be tldraw named colors: black, grey, white, red, light-red, orange, yellow, green, light-green, blue, light-blue, violet, light-violet. For geo shapes use props.richText for text labels. Arrow shapes use props.start/end instead of width/height.',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
-                type: z.string().describe('Shape type (e.g. rect, ellipse, text, arrow)'),
+                type: z.string().describe('tldraw shape type: "geo" | "text" | "arrow" | "note". Use "geo" for rectangles/ellipses, not "rectangle".'),
                 x: z.number().describe('X position on canvas'),
                 y: z.number().describe('Y position on canvas'),
-                width: z.number().optional().describe('Shape width in pixels'),
-                height: z.number().optional().describe('Shape height in pixels'),
-                props: z.record(z.string(), z.unknown()).optional().describe('Additional shape properties (text, color, etc.)'),
+                width: z.number().optional().describe('Shape width in pixels (not used for arrow shapes)'),
+                height: z.number().optional().describe('Shape height in pixels (not used for arrow shapes)'),
+                props: z.record(z.string(), z.unknown()).optional().describe('Shape props. geo: {geo:"rectangle"|"ellipse"|"diamond", color:"blue", fill:"semi", richText:{type:"doc",content:[{type:"paragraph",content:[{type:"text",text:"label"}]}]}}. arrow: {start:{x:0,y:0}, end:{x:100,y:100}, arrowheadEnd:"arrow", color:"black"}. Colors must be named (not hex).'),
             },
             async (args: any) => this.executeViaBridge('openspace.whiteboard.add_shape', args)
         );
@@ -681,6 +681,63 @@ export class OpenSpaceMcpServer {
             'Get the current whiteboard camera position and zoom level',
             {},
             async (args: any) => this.executeViaBridge('openspace.whiteboard.camera.get', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.batch_add_shapes',
+            'Add multiple shapes to a whiteboard in a single call. Much faster than calling add_shape N times. ' +
+            'Each shape follows the same rules as add_shape: type must be "geo"|"text"|"arrow"|"note". ' +
+            'Colors must be tldraw named colors (black/grey/white/red/light-red/orange/yellow/green/light-green/blue/light-blue/violet/light-violet). ' +
+            'Use props.richText for labels: {type:"doc",content:[{type:"paragraph",content:[{type:"text",text:"label"}]}]}. ' +
+            'Arrow shapes use props.start/end instead of width/height.',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                shapes: z.array(z.object({
+                    type: z.string().describe('tldraw shape type: "geo" | "text" | "arrow" | "note"'),
+                    x: z.number().describe('X position'),
+                    y: z.number().describe('Y position'),
+                    width: z.number().optional().describe('Width (not used for arrow or text)'),
+                    height: z.number().optional().describe('Height (not used for arrow or text)'),
+                    props: z.record(z.string(), z.unknown()).optional().describe('Shape props (same as add_shape.props)'),
+                })).describe('Array of shapes to add'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.batch_add_shapes', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.replace',
+            'Atomically clear all shapes from a whiteboard and replace with a new set. ' +
+            'Use this for creating a new diagram or completely replacing an existing one. ' +
+            'Much more efficient than delete_shape N times + add_shape N times. ' +
+            'Shape rules are identical to batch_add_shapes.',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                shapes: z.array(z.object({
+                    type: z.string().describe('tldraw shape type: "geo" | "text" | "arrow" | "note"'),
+                    x: z.number().describe('X position'),
+                    y: z.number().describe('Y position'),
+                    width: z.number().optional(),
+                    height: z.number().optional(),
+                    props: z.record(z.string(), z.unknown()).optional(),
+                })).describe('Complete set of shapes to place on the canvas after clearing'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.replace', args)
+        );
+
+        server.tool(
+            'openspace.whiteboard.find_shapes',
+            'Find shapes on a whiteboard by label text, type, or metadata tag. ' +
+            'Returns compact shape summaries (id, type, position, size, label text). ' +
+            'Use this instead of whiteboard.read when you only need to locate specific shapes, ' +
+            'to avoid receiving the full tldraw store (which can be very large for complex diagrams).',
+            {
+                path: z.string().describe('Absolute path to the .whiteboard.json file'),
+                label: z.string().optional().describe('Substring to match against shape text content (case-insensitive)'),
+                type: z.string().optional().describe('Filter by tldraw shape type (geo, arrow, text, note)'),
+                tag: z.string().optional().describe('Filter by metadata tag stored in shape.meta.tag'),
+                limit: z.number().int().min(1).max(200).optional().describe('Max results to return (default: 50)'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.whiteboard.find_shapes', args)
         );
     }
 
