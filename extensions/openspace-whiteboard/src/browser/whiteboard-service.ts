@@ -51,18 +51,39 @@ export class WhiteboardService {
 
     /**
      * List all whiteboard files in the workspace.
-     * Returns the workspace root path - actual listing would be done via search.
+     * Recursively scans workspace roots for .whiteboard.json files.
      * @returns Array of whiteboard file paths
      */
     async listWhiteboards(): Promise<string[]> {
-        const workspaceRoot = this.workspaceService.workspace;
-        if (!workspaceRoot) {
+        const roots = this.workspaceService.tryGetRoots();
+        if (!roots.length) {
             this.logger.warn('[WhiteboardService] No workspace open');
             return [];
         }
+        const results: string[] = [];
+        for (const root of roots) {
+            await this.scanWhiteboardDir(root.resource, results);
+        }
+        return results;
+    }
 
-        // Return the workspace root for search-based listing
-        return [workspaceRoot.resource.toString()];
+    private async scanWhiteboardDir(uri: URI, results: string[]): Promise<void> {
+        try {
+            const stat = await this.fileService.resolve(uri);
+            if (!stat.isDirectory) { return; }
+            for (const child of (stat.children ?? [])) {
+                if (child.isDirectory) {
+                    const name = child.resource.path.base;
+                    if (!name.startsWith('.') && name !== 'node_modules') {
+                        await this.scanWhiteboardDir(child.resource, results);
+                    }
+                } else if (child.resource.path.base.endsWith(WHITEBOARD_EXTENSION)) {
+                    results.push(child.resource.toString());
+                }
+            }
+        } catch {
+            // ignore unreadable directories
+        }
     }
 
     /**

@@ -19,6 +19,7 @@
  */
 
 import { expect } from 'chai';
+import * as sinon from 'sinon';
 import { WhiteboardService } from '../whiteboard-service';
 import { WhiteboardUtils, WhiteboardData, WhiteboardRecord } from '../whiteboard-widget';
 
@@ -30,6 +31,7 @@ describe('WhiteboardService', () => {
         // Inject stub fileService and workspaceService — unused by tested methods
         (service as any).fileService = {};
         (service as any).workspaceService = {};
+        (service as any).logger = { warn: sinon.stub(), info: sinon.stub() };
     });
 
     describe('getFileExtension', () => {
@@ -209,6 +211,38 @@ describe('WhiteboardService', () => {
 
             expect(centerX).to.equal(125); // (0 + 250) / 2 = 125
             expect(centerY).to.equal(125); // (0 + 250) / 2 = 125
+        });
+    });
+
+    describe('listWhiteboards()', () => {
+        it('should return empty array when no workspace roots exist', async () => {
+            (service as any).workspaceService = { tryGetRoots: sinon.stub().returns([]) };
+            const result = await service.listWhiteboards();
+            expect(result).to.deep.equal([]);
+        });
+
+        it('should return whiteboard files found in workspace', async () => {
+            const wbUri = {
+                toString: () => '/workspace/board.whiteboard.json',
+                path: { base: 'board.whiteboard.json' }
+            };
+            const rootUri = {
+                toString: () => '/workspace',
+                path: { base: 'workspace' }
+            };
+            (service as any).fileService = {
+                resolve: sinon.stub().resolves({
+                    isDirectory: true,
+                    children: [
+                        { isDirectory: false, resource: wbUri }
+                    ]
+                })
+            };
+            (service as any).workspaceService = {
+                tryGetRoots: sinon.stub().returns([{ resource: rootUri }])
+            };
+            const result = await service.listWhiteboards();
+            expect(result).to.include('/workspace/board.whiteboard.json');
         });
     });
 });
