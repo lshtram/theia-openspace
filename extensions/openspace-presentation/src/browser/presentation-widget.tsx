@@ -19,6 +19,9 @@ import { injectable, inject, optional, postConstruct } from '@theia/core/shared/
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
 import Reveal from 'reveal.js';
+import RevealMarkdown from 'reveal.js/plugin/markdown/markdown.esm.js';
+import 'reveal.js/dist/reveal.css';
+import 'reveal.js/dist/theme/black.css';
 import DOMPurify from 'dompurify';
 
 export interface DeckOptions {
@@ -145,6 +148,13 @@ export class PresentationWidget extends ReactWidget {
     }
 
     /**
+     * Get the presentation container element (used for fullscreen toggle)
+     */
+    get revealContainer(): HTMLElement | null {
+        return this.containerRef?.current ?? null;
+    }
+
+    /**
      * Parse deck content from markdown
      */
     static parseDeckContent(markdown: string): DeckData {
@@ -209,38 +219,36 @@ export class PresentationWidget extends ReactWidget {
         super.onBeforeDetach(msg);
     }
 
-    protected initializeReveal(): void {
-        const deckElement = this.containerRef.current?.querySelector('.reveal') as HTMLElement;
-        if (!deckElement) {
-            console.warn('[PresentationWidget] Reveal element not found');
-            return;
-        }
+    protected async initializeReveal(): Promise<void> {
+        const container = this.containerRef?.current;
+        if (!container) { return; }
+        const deckElement = container.querySelector('.reveal');
+        if (!deckElement) { return; }
 
         if (this.revealDeck) {
             this.revealDeck.destroy();
+            this.revealDeck = undefined;
         }
 
-        this.revealDeck = new Reveal(deckElement, {
-            hash: true,
+        const deck = PresentationWidget.parseDeckContent(this.deckContent);
+        const options = deck.options;
+
+        this.revealDeck = new Reveal(deckElement as HTMLElement, {
+            hash: false,
             slideNumber: true,
-            keyboard: false, // Disable to avoid Theia conflicts
-            transition: 'slide',
-            backgroundTransition: 'fade',
+            keyboard: false,
             embedded: true,
             margin: 0.04,
-            width: 1200,
-            height: 700,
-            center: true
+            width: '100%',
+            height: '100%',
+            center: true,
+            transition: options.transition ?? 'slide',
+            backgroundTransition: 'fade',
+            plugins: [RevealMarkdown],
         });
 
-        const deck = this.revealDeck;
-        deck.initialize().then(() => {
-            if (this.revealDeck === deck) {  // only wire if still current
-                this.navigationService?.setReveal(deck);
-            }
-        }).catch((err: Error) => {
-            console.error('[PresentationWidget] Failed to initialize reveal.js:', err);
-        });
+        await this.revealDeck.initialize();
+        this.navigationService.setReveal(this.revealDeck);
     }
 
     protected render(): React.ReactNode {
@@ -250,13 +258,13 @@ export class PresentationWidget extends ReactWidget {
             <div className="presentation-container" ref={this.containerRef}>
                 <div className="reveal">
                     <div className="slides">
-                        {parsed.slides.map((slide, index) => (
-                            <section key={index} data-notes={slide.notes}>
-                                <div 
-                                    className="slide-content"
-                                    // T1-6: Sanitize HTML to prevent XSS attacks
-                                    dangerouslySetInnerHTML={{ __html: this.sanitizeHtml(this.markdownToHtml(slide.content)) }}
-                                />
+                        {parsed.slides.map((slide, i) => (
+                            <section
+                                key={i}
+                                data-markdown=""
+                                data-notes={slide.notes ?? ''}
+                            >
+                                <script type="text/template">{slide.content}</script>
                             </section>
                         ))}
                         {parsed.slides.length === 0 && (
