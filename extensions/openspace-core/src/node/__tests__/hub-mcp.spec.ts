@@ -612,3 +612,78 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
         expect(result.content[0].text).to.include('Error:');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 9: openspace.artifact.getVersion tool
+// ---------------------------------------------------------------------------
+
+describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
+    let workspaceDir: string;
+    let server: OpenSpaceMcpServer;
+
+    beforeEach(() => {
+        workspaceDir = makeTempDir();
+        server = new OpenSpaceMcpServer(workspaceDir);
+    });
+
+    afterEach(() => {
+        priv(server).artifactStore?.close();
+        fs.rmSync(workspaceDir, { recursive: true, force: true });
+    });
+
+    it('openspace.artifact.getVersion is registered in hub-mcp.ts source', () => {
+        const hubMcpSrc = fs.readFileSync(
+            path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+        expect(hubMcpSrc).to.include("'openspace.artifact.getVersion'");
+    });
+
+    it('openspace.artifact.getVersion returns version 0 for unknown file', async () => {
+        const handlers = new Map<string, Function>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        priv(server).registerToolsOn(fakeServer);
+        const handler = handlers.get('openspace.artifact.getVersion')!;
+
+        const result = await handler({ path: 'unknown-file.ts' });
+
+        expect(result.isError).to.be.undefined;
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed).to.have.property('path', 'unknown-file.ts');
+        expect(parsed).to.have.property('version', 0);
+    });
+
+    it('openspace.artifact.getVersion returns updated version after a patch', async () => {
+        const handlers = new Map<string, Function>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        priv(server).registerToolsOn(fakeServer);
+        const getVersionHandler = handlers.get('openspace.artifact.getVersion')!;
+        const patchHandler = handlers.get('openspace.artifact.patch')!;
+
+        // Apply a patch to increment the version
+        await patchHandler({
+            path: 'versioned-artifact.ts',
+            baseVersion: 0,
+            actor: 'agent',
+            intent: 'initial write',
+            ops: [{ op: 'replace_content', content: 'const x = 1;\n' }],
+        });
+
+        // Now getVersion should return 1
+        const result = await getVersionHandler({ path: 'versioned-artifact.ts' });
+        expect(result.isError).to.be.undefined;
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed).to.have.property('version', 1);
+    });
+
+    it('openspace.artifact.getVersion returns isError:true for path traversal', async () => {
+        const handlers = new Map<string, Function>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        priv(server).registerToolsOn(fakeServer);
+        const handler = handlers.get('openspace.artifact.getVersion')!;
+
+        const result = await handler({ path: '../outside.ts' });
+        expect(result.isError).to.be.true;
+        expect(result.content[0].text).to.include('Error:');
+    });
+});

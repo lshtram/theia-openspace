@@ -428,6 +428,24 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
+            'openspace.artifact.getVersion',
+            'Get the current OCC version number for an artifact file. Use this before openspace.artifact.patch to get the correct baseVersion.',
+            {
+                path: z.string().describe('File path relative to workspace root'),
+            },
+            async (args: { path: string }) => {
+                try {
+                    const resolved = this.resolveSafePath(args.path);
+                    const relPath = path.relative(this.workspaceRoot, resolved);
+                    const version = this.patchEngine.getVersion(relPath);
+                    return { content: [{ type: 'text', text: JSON.stringify({ path: relPath, version }) }] };
+                } catch (err: unknown) {
+                    return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
+                }
+            }
+        );
+
+        server.tool(
             'openspace.artifact.patch',
             'Apply an OCC-versioned patch to an artifact file. Provides atomic write with backup, audit log, and version conflict detection. Prefer this over openspace.file.write for important artifact files.',
             {
