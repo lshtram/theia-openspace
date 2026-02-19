@@ -16,7 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
-import { OpenHandler, WidgetManager } from '@theia/core/lib/browser';
+import { OpenHandler, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WhiteboardWidget } from './whiteboard-widget';
@@ -45,6 +45,9 @@ export class WhiteboardOpenHandler implements OpenHandler {
 
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
+
+    @inject(ApplicationShell)
+    protected readonly shell!: ApplicationShell;
 
     @inject(FileService)
     protected readonly fileService!: FileService;
@@ -93,6 +96,12 @@ export class WhiteboardOpenHandler implements OpenHandler {
                 records: []
             }));
         }
+
+        // Add to the main shell area and activate (reveal) it
+        if (!widget.isAttached) {
+            this.shell.addWidget(widget, { area: 'main' });
+        }
+        this.shell.activateWidget(widget.id);
 
         return widget;
     }

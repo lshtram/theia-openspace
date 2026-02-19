@@ -17,9 +17,12 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
 import { ILogger } from '@theia/core/lib/common/logger';
+import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { WhiteboardData, WhiteboardRecord } from './whiteboard-widget';
+import { resolveContentPath } from 'openspace-core/lib/browser/resolve-content-path';
+import { OpenspacePreferences } from 'openspace-settings/lib/browser/openspace-preferences';
 
 /**
  * File extension for whiteboard files.
@@ -41,6 +44,9 @@ export class WhiteboardService {
 
     @inject(ILogger)
     protected readonly logger!: ILogger;
+
+    @inject(PreferenceService)
+    protected readonly preferenceService!: PreferenceService;
 
     /**
      * Get the file extension for whiteboard files.
@@ -107,34 +113,37 @@ export class WhiteboardService {
      * @param title Optional title for the whiteboard
      * @returns The created file path
      */
-    async createWhiteboard(path: string, title?: string): Promise<string> {
-        // Ensure path has correct extension
-        let finalPath = path;
-        if (!finalPath.endsWith(WHITEBOARD_EXTENSION)) {
-            finalPath = `${path}${WHITEBOARD_EXTENSION}`;
+    async createWhiteboard(path: string, _title?: string): Promise<string> {
+        // Resolve to a full URI using the configured default folder
+        const roots = this.workspaceService.tryGetRoots();
+        const workspaceRoot = roots[0]?.resource.toString() ?? 'file:///';
+        const configuredFolder = this.preferenceService.get<string>(
+            OpenspacePreferences.WHITEBOARDS_PATH,
+            'openspace/whiteboards'
+        );
+
+        const resolvedUri = resolveContentPath(path, configuredFolder, workspaceRoot, WHITEBOARD_EXTENSION);
+        const uri = new URI(resolvedUri);
+
+        // Auto-create parent folder if it doesn't exist
+        const parentUri = uri.parent;
+        const parentExists = await this.fileService.exists(parentUri);
+        if (!parentExists) {
+            await this.fileService.createFolder(parentUri);
+            this.logger.info('[WhiteboardService] Created folder:', parentUri.toString());
         }
 
-        const uri = new URI(finalPath);
-
-        // Create a minimal valid TLStoreSnapshot (empty canvas).
-        // tldraw will migrate/populate the required system records (document, pointer,
-        // page, instance, camera, instance_page_state) when the editor mounts.
-        // We intentionally keep this sparse; the editor's integrity-checker fills in
-        // whatever is missing on first open.
+        // Create with minimal empty snapshot
         const emptySnapshot: WhiteboardData = {
             store: {} as Record<string, unknown>,
-            schema: {
-                schemaVersion: 2,
-                sequences: {}
-            }
+            schema: { schemaVersion: 2, sequences: {} }
         } as unknown as WhiteboardData;
-        
+
         const content = JSON.stringify(emptySnapshot, null, 2);
-        
         await this.fileService.create(uri, content);
-        
-        this.logger.info('[WhiteboardService] Created whiteboard:', finalPath);
-        return finalPath;
+
+        this.logger.info('[WhiteboardService] Created whiteboard:', resolvedUri);
+        return resolvedUri;
     }
 
     /**

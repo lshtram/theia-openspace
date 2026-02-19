@@ -320,7 +320,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
                 label: 'OpenSpace: List Whiteboards'
             },
             {
-                execute: async (args?: WhiteboardListArgs) => {
+                execute: async (_args?: WhiteboardListArgs) => {
                     this.logger.info('[WhiteboardCommand] Listing whiteboards');
                     return this.whiteboardService.listWhiteboards();
                 }
@@ -517,21 +517,6 @@ export class WhiteboardCommandContribution implements CommandContribution {
     }
 
     /**
-     * Open a blank whiteboard (no file backing) — useful for quick access from command palette.
-     */
-    protected async openBlankWhiteboard(): Promise<WhiteboardWidget> {
-        const widget = await this.widgetManager.getOrCreateWidget(
-            WhiteboardWidget.ID,
-            { uri: '__blank__' }
-        ) as WhiteboardWidget;
-        if (!widget.isAttached) {
-            this.shell.addWidget(widget, { area: 'main' });
-        }
-        this.shell.activateWidget(widget.id);
-        return widget;
-    }
-
-    /**
      * Open a whiteboard in a widget.
      */
     protected async openWhiteboard(path: string): Promise<{ success: boolean; path: string }> {
@@ -634,7 +619,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
     /**
      * Get current camera state.
      */
-    protected async getCamera(args?: WhiteboardCameraGetArgs): Promise<{ x: number; y: number; zoom: number }> {
+    protected async getCamera(_args?: WhiteboardCameraGetArgs): Promise<{ x: number; y: number; zoom: number }> {
         return this.whiteboardService.getCameraState();
     }
 
