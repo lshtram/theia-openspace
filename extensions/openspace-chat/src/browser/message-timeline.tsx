@@ -197,12 +197,12 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                     {messages.length === 0 ? (
                         /* Empty state — rendered inside the scroll container so the
                            container and sentinel are always present in the DOM */
-                        <div className="message-timeline-empty-content">
-                            <div className="message-timeline-empty-icon">💬</div>
-                            <p className="message-timeline-empty-title">No messages yet</p>
-                            <p className="message-timeline-empty-hint">
-                                Type a message below to start the conversation
-                            </p>
+                        <div className="message-timeline-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32" style={{ opacity: 0.3 }}>
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <div className="message-timeline-empty-title">Start a conversation</div>
+                            <div className="message-timeline-empty-hint">Type a message below, or attach a file with @</div>
                         </div>
                     ) : (
                         messages.map((message, index) => {

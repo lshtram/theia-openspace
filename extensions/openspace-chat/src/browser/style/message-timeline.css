@@ -92,38 +92,31 @@
     gap: var(--message-gap);
 }
 
-/* ============================================================================
-   Empty State
-   ============================================================================ */
-
+/* ─── Empty state ────────────────────────────────────────────── */
 .openspace-chat-widget .message-timeline-empty {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 10px;
     height: 100%;
-}
-
-.openspace-chat-widget .message-timeline-empty-content {
+    min-height: 120px;
+    color: var(--oc-text-dim, #858585);
     text-align: center;
-    opacity: 0.7;
-}
-
-.openspace-chat-widget .message-timeline-empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    padding: 32px 24px;
 }
 
 .openspace-chat-widget .message-timeline-empty-title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
-    margin: 0 0 8px 0;
-    color: var(--theia-foreground);
+    color: var(--oc-text, #ccc);
 }
 
 .openspace-chat-widget .message-timeline-empty-hint {
-    font-size: 13px;
-    margin: 0;
-    color: var(--theia-descriptionForeground);
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+    max-width: 240px;
+    line-height: 1.5;
 }
 
 /* ============================================================================
