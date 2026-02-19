@@ -867,66 +867,48 @@
     display: block;
 }
 
-/* Step parts — progress indicators */
+/* ─── Step parts ─────────────────────────────────────────────── */
 .message-bubble .part-step {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-}
-
-.message-bubble .part-step-icon {
-    font-family: monospace;
-    font-weight: bold;
+    padding: 2px 0;
     font-size: 11px;
-    opacity: 0.6;
+    color: var(--oc-text-dim, #858585);
+    opacity: 0.75;
 }
 
-.message-bubble .part-step-label {
-    font-weight: 500;
+.message-bubble .part-step-start .part-step-label {
+    font-style: italic;
 }
 
-.message-bubble .part-step-finish {
-    opacity: 0.6;
-}
-
-/* File part — file path reference */
+/* ─── File part ──────────────────────────────────────────────── */
 .message-bubble .part-file {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 5px;
+    padding: 3px 8px;
     margin: 2px 0;
-    background: var(--theia-editor-background);
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 3px;
-    font-size: 12px;
-    font-family: var(--theia-code-font-family);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text, #ccc);
 }
 
-.message-bubble .part-file-icon {
-    font-weight: bold;
-    font-size: 10px;
-    opacity: 0.6;
-}
-
-.message-bubble .part-file-path {
-    color: var(--theia-textLink-foreground);
-}
-
-/* Fallback part — small info badge for unhandled types */
+/* ─── Fallback part ──────────────────────────────────────────── */
 .message-bubble .part-fallback {
     display: inline-flex;
+    align-items: center;
     padding: 2px 6px;
-    margin: 2px 0;
-    background: var(--theia-badge-background);
-    color: var(--theia-badge-foreground);
+    margin: 2px 2px;
     border-radius: 3px;
     font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text-dim, #858585);
+    opacity: 0.6;
 }
 

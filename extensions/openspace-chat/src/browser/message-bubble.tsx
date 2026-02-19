@@ -206,44 +206,51 @@ function renderReasoningPart(part: any, index: number): React.ReactNode {
     return <ReasoningBlock key={`reasoning-${index}`} part={part} />;
 }
 
-/** Render step-start part — progress indicator for a named step. */
+/** Render step-start part — subtle inline breadcrumb with SVG chevron. */
 function renderStepStartPart(part: any, index: number): React.ReactNode {
     const name: string = part.name || 'Step';
     return (
         <div key={`step-start-${index}`} className="part-step part-step-start">
-            <span className="part-step-icon">{'>'}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" aria-hidden="true">
+                <path d="m9 18 6-6-6-6"/>
+            </svg>
             <span className="part-step-label">{name}</span>
         </div>
     );
 }
 
-/** Render step-finish part — completion indicator. */
-function renderStepFinishPart(part: any, index: number): React.ReactNode {
+/** Render step-finish part — subtle inline breadcrumb with checkmark. */
+function renderStepFinishPart(_part: any, index: number): React.ReactNode {
     return (
         <div key={`step-finish-${index}`} className="part-step part-step-finish">
-            <span className="part-step-icon">{'>'}</span>
-            <span className="part-step-label">Step completed</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5"/>
+            </svg>
+            <span className="part-step-label">done</span>
         </div>
     );
 }
 
-/** Render file part — file path as a clickable-looking reference. */
+/** Render file part — pill with file SVG icon. */
 function renderFilePart(part: any, index: number): React.ReactNode {
-    const filePath: string = part.filename || part.file || part.url || 'unknown file';
+    const filePath: string = part.filename || part.file || part.url || 'unknown';
     return (
         <div key={`file-${index}`} className="part-file">
-            <span className="part-file-icon">F</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" aria-hidden="true">
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
             <span className="part-file-path">{filePath}</span>
         </div>
     );
 }
 
-/** Render fallback for unhandled part types — small info badge. */
+/** Render fallback for unhandled part types — small pill chip. */
 function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
     return (
-        <div key={`other-${index}`} className="part-fallback">
-            <span className="part-fallback-type">{part.type}</span>
-        </div>
+        <span key={`other-${index}`} className="part-fallback">
+            {part.type}
+        </span>
     );
 }
 
