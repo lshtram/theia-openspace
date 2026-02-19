@@ -33,6 +33,9 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     return defaultFence(tokens, idx, options, env, self);
 };
 
+// Initialize mermaid once at module load — it is a global singleton.
+mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+
 @injectable()
 export class MarkdownViewerWidget extends ReactWidget {
     static readonly ID = 'openspace-markdown-viewer-widget';
@@ -44,6 +47,7 @@ export class MarkdownViewerWidget extends ReactWidget {
     protected content: string = '';
     protected mode: ViewerMode = 'preview';
 
+    // Reserved: used in Task 4 (edit mode auto-save via fileService.write())
     @inject(FileService)
     protected readonly fileService!: FileService;
 
@@ -59,7 +63,6 @@ export class MarkdownViewerWidget extends ReactWidget {
 
     @postConstruct()
     protected init(): void {
-        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
         this.update();
     }
 
@@ -126,9 +129,5 @@ export class MarkdownViewerWidget extends ReactWidget {
                 console.warn('[MarkdownViewerWidget] Mermaid render error:', err);
             });
         }, 0);
-    }
-
-    protected onBeforeDetach(msg: Message): void {
-        super.onBeforeDetach(msg);
     }
 }
