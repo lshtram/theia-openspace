@@ -58,7 +58,7 @@
 }
 
 .prompt-pill[data-type="file"] {
-    background: var(--theia-textLink-activeForeground);
+    background: var(--theia-textLink-activeForeground, var(--oc-accent));
     color: white;
 }
 
@@ -188,7 +188,7 @@
 }
 
 .prompt-input-send-button:disabled {
-    background: rgba(0,122,204,0.3);
+    background: color-mix(in srgb, var(--oc-accent) 30%, transparent);
     cursor: not-allowed;
 }
 
@@ -196,7 +196,7 @@
 .prompt-input-drag-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0,122,204,0.08);
+    background: color-mix(in srgb, var(--oc-accent) 8%, transparent);
     border: 2px dashed var(--oc-accent);
     border-radius: 6px;
     display: flex;
@@ -306,7 +306,7 @@
 }
 
 .typeahead-item.selected {
-    background: rgba(0,122,204,0.12);
+    background: color-mix(in srgb, var(--oc-accent) 12%, transparent);
 }
 
 .typeahead-icon {
