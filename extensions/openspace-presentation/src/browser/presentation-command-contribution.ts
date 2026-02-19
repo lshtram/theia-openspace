@@ -134,7 +134,7 @@ export const PresentationArgumentSchemas = {
         properties: {
             direction: {
                 type: 'string',
-                enum: ['prev', 'next'],
+                enum: ['prev', 'next', 'first', 'last'],
                 description: 'Navigation direction'
             },
             slideIndex: {
@@ -444,6 +444,13 @@ export class PresentationCommandContribution implements CommandContribution, Key
                 this.navigationService.next();
             } else if (args.direction === 'prev') {
                 this.navigationService.prev();
+            } else if (args.direction === 'first') {
+                this.navigationService.slide(0, 0);
+                this.presentationService.setPlaybackState({ ...state, currentSlide: 0 });
+            } else if (args.direction === 'last') {
+                const lastIndex = Math.max(0, (state.totalSlides ?? 1) - 1);
+                this.navigationService.slide(lastIndex, 0);
+                this.presentationService.setPlaybackState({ ...state, currentSlide: lastIndex });
             }
         }
     }

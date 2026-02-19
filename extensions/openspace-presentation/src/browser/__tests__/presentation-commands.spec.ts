@@ -100,5 +100,11 @@ describe('PresentationCommandContribution Exports', () => {
             expect(PresentationArgumentSchemas.navigate.properties.direction.enum).to.include('prev');
             expect(PresentationArgumentSchemas.navigate.properties.direction.enum).to.include('next');
         });
+
+        it('should advertise first and last as valid navigate directions', () => {
+            const directions = PresentationArgumentSchemas.navigate.properties.direction.enum as string[];
+            expect(directions).to.include('first');
+            expect(directions).to.include('last');
+        });
     });
 });
