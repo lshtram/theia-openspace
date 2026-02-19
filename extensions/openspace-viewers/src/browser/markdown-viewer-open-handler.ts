@@ -5,7 +5,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
-import { OpenHandler, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
+import { OpenHandler, WidgetManager, ApplicationShell, OpenerOptions } from '@theia/core/lib/browser';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { MarkdownViewerWidget } from './markdown-viewer-widget';
@@ -18,6 +18,8 @@ const DECK_SUFFIX = '.deck.md';
 export class MarkdownViewerOpenHandler implements OpenHandler {
 
     readonly id = 'openspace-markdown-viewer-open-handler';
+
+    private readonly splitCounters = new Map<string, number>();
 
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
@@ -40,10 +42,29 @@ export class MarkdownViewerOpenHandler implements OpenHandler {
         return matched ? HANDLER_PRIORITY : 0;
     }
 
-    async open(uri: URI): Promise<MarkdownViewerWidget> {
+    async open(uri: URI, options?: OpenerOptions & {
+        widgetOptions?: ApplicationShell.WidgetOptions;
+        forceNewWidget?: boolean;
+    }): Promise<MarkdownViewerWidget> {
+        // When forcing a new widget (e.g. split), use a counter suffix so
+        // WidgetManager.getOrCreateWidget sees a unique key and creates a
+        // fresh instance rather than returning the existing one.
+        let widgetOptions: ApplicationShell.WidgetOptions;
+        let factoryOptions: { uri: string; counter?: number };
+        if (options?.forceNewWidget) {
+            const uriStr = uri.toString();
+            const counter = (this.splitCounters.get(uriStr) ?? 0) + 1;
+            this.splitCounters.set(uriStr, counter);
+            factoryOptions = { uri: uriStr, counter };
+            widgetOptions = options.widgetOptions ?? { area: 'main' };
+        } else {
+            factoryOptions = { uri: uri.toString() };
+            widgetOptions = options?.widgetOptions ?? { area: 'main' };
+        }
+
         const widget = await this.widgetManager.getOrCreateWidget(
             MarkdownViewerWidget.ID,
-            { uri: uri.toString() }
+            factoryOptions
         ) as MarkdownViewerWidget;
 
         widget.uri = uri.toString();
@@ -58,7 +79,7 @@ export class MarkdownViewerOpenHandler implements OpenHandler {
         }
 
         if (!widget.isAttached) {
-            await this.shell.addWidget(widget, { area: 'main' });
+            await this.shell.addWidget(widget, widgetOptions);
         }
         await this.shell.activateWidget(widget.id);
 
@@ -66,7 +87,7 @@ export class MarkdownViewerOpenHandler implements OpenHandler {
     }
 
     async findByUri(uri: URI): Promise<MarkdownViewerWidget | undefined> {
-        const widgets = await this.widgetManager.getWidgets(MarkdownViewerWidget.ID);
+        const widgets = this.widgetManager.getWidgets(MarkdownViewerWidget.ID);
         return widgets.find(w => (w as MarkdownViewerWidget).uri === uri.toString()) as
             MarkdownViewerWidget | undefined;
     }

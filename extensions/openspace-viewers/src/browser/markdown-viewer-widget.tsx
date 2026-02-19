@@ -15,6 +15,8 @@ import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-mo
 import { IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecycle';
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { StatefulWidget } from '@theia/core/lib/browser/shell/shell-layout-restorer';
+import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
+import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
 import MarkdownIt from 'markdown-it';
 import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
@@ -43,10 +45,10 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 // Initialize mermaid once at module load — it is a global singleton.
 mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
 
-console.log('[MarkdownViewerWidget] BUILD v7 — tab icon swap + dblclick toggle');
+console.log('[MarkdownViewerWidget] BUILD v8 — tab icon swap + dblclick toggle');
 
 @injectable()
-export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget {
+export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget, NavigatableWidget, ExtractableWidget {
     static readonly ID = 'openspace-markdown-viewer-widget';
     static readonly LABEL = 'Markdown Viewer';
     private static readonly ICON_PREVIEW = 'codicon codicon-markdown';
@@ -54,6 +56,18 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget 
 
     /** URI of the file being viewed. Set by the open handler. */
     public uri: string = '';
+
+    // NavigatableWidget
+    getResourceUri(): URI | undefined {
+        return this.uri ? new URI(this.uri) : undefined;
+    }
+    createMoveToUri(resourceUri: URI): URI | undefined {
+        return resourceUri;
+    }
+
+    // ExtractableWidget
+    readonly isExtractable = true;
+    secondaryWindow: Window | undefined = undefined;
 
     protected content: string = '';
     protected mode: ViewerMode = 'preview';

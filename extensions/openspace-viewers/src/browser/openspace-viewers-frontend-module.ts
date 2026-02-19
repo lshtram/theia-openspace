@@ -10,6 +10,8 @@ import { CommandContribution } from '@theia/core/lib/common/command';
 import { MarkdownViewerWidget } from './markdown-viewer-widget';
 import { MarkdownViewerOpenHandler } from './markdown-viewer-open-handler';
 import { MarkdownViewerToolbarContribution } from './markdown-viewer-toolbar-contribution';
+import { MarkdownViewerSplitContribution } from './markdown-viewer-split-contribution';
+import { SplitEditorContribution } from '@theia/editor/lib/browser/split-editor-contribution';
 
 export default new ContainerModule((bind) => {
     // Widget factory — options must carry uri so restored widgets can reload content
@@ -31,8 +33,12 @@ export default new ContainerModule((bind) => {
         .whenTargetNamed(MarkdownViewerWidget.ID);
 
     // Open handler
-    bind(MarkdownViewerOpenHandler).toSelf();
+    bind(MarkdownViewerOpenHandler).toSelf().inSingletonScope();
     bind(OpenHandler).toService(MarkdownViewerOpenHandler);
+
+    // Split contribution — enables "Split Right/Down/Up/Left" context menu items
+    bind(MarkdownViewerSplitContribution).toSelf().inSingletonScope();
+    bind(SplitEditorContribution).toService(MarkdownViewerSplitContribution);
 
     // Toolbar toggle
     bind(MarkdownViewerToolbarContribution).toSelf().inSingletonScope();
