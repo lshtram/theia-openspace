@@ -12,6 +12,12 @@ import cssGrammar from 'tm-grammars/grammars/css.json';
 import scssGrammar from 'tm-grammars/grammars/scss.json';
 import jsonGrammar from 'tm-grammars/grammars/json.json';
 import mdGrammar from 'tm-grammars/grammars/markdown.json';
+import pythonGrammar from 'tm-grammars/grammars/python.json';
+import cGrammar from 'tm-grammars/grammars/c.json';
+import cppGrammar from 'tm-grammars/grammars/cpp.json';
+import rustGrammar from 'tm-grammars/grammars/rust.json';
+import shellGrammar from 'tm-grammars/grammars/shellscript.json';
+import yamlGrammar from 'tm-grammars/grammars/yaml.json';
 
 @injectable()
 export class LanguageGrammarContribution implements LanguageGrammarDefinitionContribution {
@@ -26,6 +32,12 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
         this.registerScss(registry);
         this.registerJson(registry);
         this.registerMarkdown(registry);
+        this.registerPython(registry);
+        this.registerC(registry);
+        this.registerCpp(registry);
+        this.registerRust(registry);
+        this.registerShell(registry);
+        this.registerYaml(registry);
     }
 
     private registerGrammar(
@@ -118,6 +130,54 @@ export class LanguageGrammarContribution implements LanguageGrammarDefinitionCon
             MARKDOWN_LANG_CONFIG
         );
     }
+
+    private registerPython(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'python', 'source.python', pythonGrammar,
+            ['.py', '.pyw', '.pyi', '.rpy'],
+            ['Python', 'py'],
+            PYTHON_LANG_CONFIG
+        );
+    }
+
+    private registerC(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'c', 'source.c', cGrammar,
+            ['.c', '.h'],
+            ['C'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerCpp(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'cpp', 'source.cpp', cppGrammar,
+            ['.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++', '.inl'],
+            ['C++', 'cpp'],
+            C_LANG_CONFIG
+        );
+    }
+
+    private registerRust(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'rust', 'source.rust', rustGrammar,
+            ['.rs'],
+            ['Rust', 'rs'],
+            RUST_LANG_CONFIG
+        );
+    }
+
+    private registerShell(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'shellscript', 'source.shell', shellGrammar,
+            ['.sh', '.bash', '.zsh', '.fish', '.command'],
+            ['Shell Script', 'bash', 'sh', 'zsh'],
+            SHELL_LANG_CONFIG
+        );
+    }
+
+    private registerYaml(registry: TextmateRegistry): void {
+        this.registerGrammar(registry, 'yaml', 'source.yaml', yamlGrammar,
+            ['.yml', '.yaml'],
+            ['YAML', 'yml'],
+            YAML_LANG_CONFIG
+        );
+    }
 }
 
 // ── Language configurations ──────────────────────────────────────────────────
@@ -193,5 +253,94 @@ const MARKDOWN_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
     autoClosingPairs: [
         { open: '{', close: '}' }, { open: '[', close: ']' },
         { open: '(', close: ')' }, { open: '`', close: '`' }
+    ]
+};
+
+const PYTHON_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '#', blockComment: ["'''", "'''"] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string', 'comment'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }, { open: '`', close: '`' }
+    ],
+    indentationRules: {
+        increaseIndentPattern: /^\s*[\:\(\[\{](\s*(#.*)?)?\s*$/,
+        decreaseIndentPattern: /^\s*((\belse:\s*)|((\bexcept|\bfinally|\belse)\b.*:))\s*/
+    }
+};
+
+const C_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: "'", close: "'", notIn: ['string', 'comment'] },
+        { open: '"', close: '"', notIn: ['string'] },
+        { open: '/**', close: ' */', notIn: ['string'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }
+    ],
+    indentationRules: {
+        increaseIndentPattern: /^((?!\/\/).)*\{[^}"']*$/,
+        decreaseIndentPattern: /^((?!.*?\/\*).*\*\/)?\s*\}.*$/
+    }
+};
+
+const RUST_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')'], ['<', '>']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string', 'comment'] },
+        { open: '/**', close: ' */', notIn: ['string'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }, { open: '<', close: '>' }
+    ],
+    indentationRules: {
+        increaseIndentPattern: /^((?!\/\/).)*\{[^}"']*$/,
+        decreaseIndentPattern: /^((?!.*?\/\*).*\*\/)?\s*\}.*$/
+    }
+};
+
+const SHELL_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '#' },
+    brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string', 'comment'] },
+        { open: '`', close: '`', notIn: ['string', 'comment'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '(', close: ')' }, { open: '"', close: '"' },
+        { open: "'", close: "'" }, { open: '`', close: '`' }
+    ]
+};
+
+const YAML_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
+    comments: { lineComment: '#' },
+    brackets: [['{', '}'], ['[', ']']],
+    autoClosingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string', 'comment'] }
+    ],
+    surroundingPairs: [
+        { open: '{', close: '}' }, { open: '[', close: ']' },
+        { open: '"', close: '"' }, { open: "'", close: "'" }
     ]
 };
