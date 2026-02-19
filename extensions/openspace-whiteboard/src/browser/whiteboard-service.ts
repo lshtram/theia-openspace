@@ -16,6 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { WhiteboardData, WhiteboardRecord, WhiteboardUtils } from './whiteboard-widget';
@@ -38,6 +39,9 @@ export class WhiteboardService {
     @inject(WorkspaceService)
     protected readonly workspaceService!: WorkspaceService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     /**
      * Get the file extension for whiteboard files.
      */
@@ -53,7 +57,7 @@ export class WhiteboardService {
     async listWhiteboards(): Promise<string[]> {
         const workspaceRoot = this.workspaceService.workspace;
         if (!workspaceRoot) {
-            console.warn('[WhiteboardService] No workspace open');
+            this.logger.warn('[WhiteboardService] No workspace open');
             return [];
         }
 
@@ -107,7 +111,7 @@ export class WhiteboardService {
         
         await this.fileService.create(uri, content);
         
-        console.log('[WhiteboardService] Created whiteboard:', finalPath);
+        this.logger.info('[WhiteboardService] Created whiteboard:', finalPath);
         return finalPath;
     }
 
@@ -126,7 +130,7 @@ export class WhiteboardService {
         const uri = new URI(path);
         await this.fileService.write(uri, JSON.stringify(updatedData, null, 2));
         
-        console.log('[WhiteboardService] Added shape:', shape.id, 'to', path);
+        this.logger.info('[WhiteboardService] Added shape:', shape.id, 'to', path);
         return updatedData;
     }
 
@@ -146,7 +150,7 @@ export class WhiteboardService {
         const uri = new URI(path);
         await this.fileService.write(uri, JSON.stringify(updatedData, null, 2));
         
-        console.log('[WhiteboardService] Updated shape:', shapeId, 'in', path);
+        this.logger.info('[WhiteboardService] Updated shape:', shapeId, 'in', path);
         return updatedData;
     }
 
@@ -165,7 +169,7 @@ export class WhiteboardService {
         const uri = new URI(path);
         await this.fileService.write(uri, JSON.stringify(updatedData, null, 2));
         
-        console.log('[WhiteboardService] Deleted shape:', shapeId, 'from', path);
+        this.logger.info('[WhiteboardService] Deleted shape:', shapeId, 'from', path);
         return updatedData;
     }
 

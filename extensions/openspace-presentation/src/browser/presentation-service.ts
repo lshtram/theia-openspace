@@ -17,6 +17,7 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
 import { Disposable, Emitter } from '@theia/core/lib/common';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { FileStat } from '@theia/filesystem/lib/common/files';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
@@ -40,6 +41,9 @@ export class PresentationService {
     @inject(WorkspaceService)
     protected readonly workspaceService!: WorkspaceService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     /**
      * Get the file extension for presentation files.
      */
@@ -54,7 +58,7 @@ export class PresentationService {
     async listPresentations(): Promise<string[]> {
         const roots = await this.workspaceService.roots;
         if (!roots.length) {
-            console.warn('[PresentationService] No workspace open');
+            this.logger.warn('[PresentationService] No workspace open');
             return [];
         }
         const results: string[] = [];
@@ -124,7 +128,7 @@ export class PresentationService {
         
         await this.fileService.create(uri, content);
         
-        console.log('[PresentationService] Created presentation:', finalPath);
+        this.logger.info('[PresentationService] Created presentation:', finalPath);
         return finalPath;
     }
 
@@ -179,7 +183,7 @@ export class PresentationService {
         const uri = new URI(path);
         await this.fileService.write(uri, newContent);
         
-        console.log('[PresentationService] Updated slide', slideIndex, 'in', path);
+        this.logger.info('[PresentationService] Updated slide', String(slideIndex), 'in', path);
 
         // Fire live-reload event directly — fileService.write() does not cause
         // onDidFilesChange to fire (that event is for external filesystem changes only).

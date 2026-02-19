@@ -32,6 +32,4 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
   bind(PresentationCommandContribution).toSelf();
   bind(CommandContribution).toService(PresentationCommandContribution);
   bind(KeybindingContribution).toService(PresentationCommandContribution);
-
-  console.log('[OpenSpacePresentation] Frontend module loaded');
 });

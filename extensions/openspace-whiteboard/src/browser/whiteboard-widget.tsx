@@ -15,9 +15,10 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
-import { injectable, postConstruct } from '@theia/core/shared/inversify';
+import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
+import { ILogger } from '@theia/core/lib/common/logger';
 
 export interface WhiteboardData {
     schema: { version: number };
@@ -52,6 +53,9 @@ export class WhiteboardWidget extends ReactWidget {
 
     // T2-22: Expose URI for findByUri comparison (public property)
     public uri: string = '';
+
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
 
     constructor() {
         super();
@@ -94,7 +98,7 @@ export class WhiteboardWidget extends ReactWidget {
             this.whiteboardData = data;
             this.update();
         } catch (err) {
-            console.error('[WhiteboardWidget] Failed to parse whiteboard JSON:', err);
+            this.logger.error('[WhiteboardWidget] Failed to parse whiteboard JSON:', err);
             this.whiteboardData = {
                 schema: { version: 1 },
                 records: []
@@ -150,12 +154,12 @@ export class WhiteboardWidget extends ReactWidget {
     protected initializeWhiteboard(): void {
         // The iframe approach is used to isolate React versions
         // This ensures tldraw's React 19 doesn't conflict with Theia's React 18
-        console.log('[WhiteboardWidget] Initializing whiteboard with iframe isolation');
+        this.logger.info('[WhiteboardWidget] Initializing whiteboard with iframe isolation');
     }
 
     protected cleanupWhiteboard(): void {
         // Cleanup iframe if needed
-        console.log('[WhiteboardWidget] Cleaning up whiteboard');
+        this.logger.info('[WhiteboardWidget] Cleaning up whiteboard');
     }
 
     protected render(): React.ReactNode {
@@ -180,7 +184,7 @@ export class WhiteboardWidget extends ReactWidget {
         
         // Auto-save would be triggered here when file service is connected
         if (this.autoSaveEnabled && this.currentFilePath) {
-            console.log('[WhiteboardWidget] Auto-saving to:', this.currentFilePath);
+            this.logger.info('[WhiteboardWidget] Auto-saving to:', this.currentFilePath);
         }
     }
 }
@@ -199,7 +203,9 @@ const WhiteboardIframe: React.FC<WhiteboardIframeProps> = ({ initialData, onData
     React.useEffect(() => {
         // For now, show a placeholder since we don't have a standalone tldraw page
         // In production, this would load: /tldraw-standalone.html?data=base64
-        console.log('[WhiteboardIframe] Initialized with data:', initialData);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[WhiteboardIframe] Initialized with data:', initialData);
+        }
     }, [initialData]);
 
     // Listen for messages from iframe with origin validation (T2-21)
@@ -213,7 +219,9 @@ const WhiteboardIframe: React.FC<WhiteboardIframeProps> = ({ initialData, onData
             ];
 
             if (!allowedOrigins.includes(event.origin)) {
-                console.warn('[WhiteboardWidget] Rejected postMessage from untrusted origin:', event.origin);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.warn('[WhiteboardWidget] Rejected postMessage from untrusted origin:', event.origin);
+                }
                 return;
             }
 

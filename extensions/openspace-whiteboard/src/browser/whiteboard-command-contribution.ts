@@ -16,6 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { URI } from '@theia/core/lib/common/uri';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WidgetManager } from '@theia/core/lib/browser';
@@ -236,6 +237,9 @@ export class WhiteboardCommandContribution implements CommandContribution {
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     /**
      * Register all whiteboard commands.
      */
@@ -248,7 +252,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args?: WhiteboardListArgs) => {
-                    console.log('[WhiteboardCommand] Listing whiteboards');
+                    this.logger.info('[WhiteboardCommand] Listing whiteboards');
                     return this.whiteboardService.listWhiteboards();
                 }
             }
@@ -262,7 +266,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardReadArgs) => {
-                    console.log('[WhiteboardCommand] Reading whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Reading whiteboard:', args.path);
                     return this.whiteboardService.readWhiteboard(args.path);
                 }
             }
@@ -276,7 +280,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardCreateArgs) => {
-                    console.log('[WhiteboardCommand] Creating whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Creating whiteboard:', args.path);
                     return this.whiteboardService.createWhiteboard(args.path, args.title);
                 }
             }
@@ -290,7 +294,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardAddShapeArgs) => {
-                    console.log('[WhiteboardCommand] Adding shape to whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Adding shape to whiteboard:', args.path);
                     const shape: WhiteboardRecord = {
                         id: `shape-${Date.now()}`,
                         type: args.type,
@@ -313,7 +317,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardUpdateShapeArgs) => {
-                    console.log('[WhiteboardCommand] Updating shape:', args.shapeId, 'in whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Updating shape:', args.shapeId, 'in whiteboard:', args.path);
                     return this.whiteboardService.updateShape(args.path, args.shapeId, args.props);
                 }
             }
@@ -327,7 +331,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardDeleteShapeArgs) => {
-                    console.log('[WhiteboardCommand] Deleting shape:', args.shapeId, 'from whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Deleting shape:', args.shapeId, 'from whiteboard:', args.path);
                     return this.whiteboardService.deleteShape(args.path, args.shapeId);
                 }
             }
@@ -341,7 +345,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardOpenArgs) => {
-                    console.log('[WhiteboardCommand] Opening whiteboard:', args.path);
+                    this.logger.info('[WhiteboardCommand] Opening whiteboard:', args.path);
                     return this.openWhiteboard(args.path);
                 }
             }
@@ -355,7 +359,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardCameraSetArgs) => {
-                    console.log('[WhiteboardCommand] Setting camera:', args);
+                    this.logger.info('[WhiteboardCommand] Setting camera:', String(args));
                     return this.setCamera(args);
                 }
             }
@@ -369,7 +373,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardCameraFitArgs) => {
-                    console.log('[WhiteboardCommand] Fitting camera:', args);
+                    this.logger.info('[WhiteboardCommand] Fitting camera:', String(args));
                     return this.fitCamera(args);
                 }
             }
@@ -383,7 +387,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args?: WhiteboardCameraGetArgs) => {
-                    console.log('[WhiteboardCommand] Getting camera state');
+                    this.logger.info('[WhiteboardCommand] Getting camera state');
                     return this.getCamera(args);
                 }
             }
@@ -437,7 +441,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
         // Get the current whiteboard data
         const activePath = args.path || this.whiteboardService.getActiveWhiteboard();
         if (!activePath) {
-            console.warn('[WhiteboardCommand] No active whiteboard for camera fit');
+            this.logger.warn('[WhiteboardCommand] No active whiteboard for camera fit');
             return;
         }
 

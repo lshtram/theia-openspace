@@ -17,6 +17,7 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
 import { OpenHandler, WidgetManager } from '@theia/core/lib/browser';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WhiteboardWidget } from './whiteboard-widget';
 
@@ -47,6 +48,9 @@ export class WhiteboardOpenHandler implements OpenHandler {
 
     @inject(FileService)
     protected readonly fileService!: FileService;
+
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
 
     /**
      * Check if this handler can handle the given URI.
@@ -82,7 +86,7 @@ export class WhiteboardOpenHandler implements OpenHandler {
             widget.loadFromJson(content);
             widget.setFilePath(uri.toString());
         } catch (error) {
-            console.error('[WhiteboardOpenHandler] Failed to load file content:', error);
+            this.logger.error('[WhiteboardOpenHandler] Failed to load file content:', error);
             // Load empty whiteboard on error
             widget.loadFromJson(JSON.stringify({
                 schema: { version: 1 },

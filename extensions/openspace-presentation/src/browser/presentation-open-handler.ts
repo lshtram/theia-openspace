@@ -17,6 +17,7 @@
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
 import { OpenHandler, WidgetManager } from '@theia/core/lib/browser';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { PresentationWidget } from './presentation-widget';
 
@@ -47,6 +48,9 @@ export class PresentationOpenHandler implements OpenHandler {
 
     @inject(FileService)
     protected readonly fileService!: FileService;
+
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
 
     /**
      * Check if this handler can handle the given URI.
@@ -81,7 +85,7 @@ export class PresentationOpenHandler implements OpenHandler {
             const content = await this.readFileContent(uri);
             widget.setContent(content);
         } catch (error) {
-            console.error('[PresentationOpenHandler] Failed to load file content:', error);
+            this.logger.error('[PresentationOpenHandler] Failed to load file content:', error);
             widget.setContent('# Error\n\nFailed to load presentation content.');
         }
 

@@ -255,7 +255,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     // Subscribe to model changes
     React.useEffect(() => {
         const disposable = sessionService.onActiveModelChanged(model => {
-            console.debug('[ChatWidget] Active model changed:', model);
+            if (process.env.NODE_ENV !== 'production') {
+                console.debug('[ChatWidget] Active model changed:', model);
+            }
         });
         return () => disposable.dispose();
     }, [sessionService]);
@@ -269,7 +271,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             const sessions = await sessionService.getSessions();
             setSessions(sessions);
         } catch (error) {
-            console.error('[ChatWidget] Error loading sessions:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error loading sessions:', error);
+            }
             setSessionLoadError(error instanceof Error ? error.message : String(error));
         } finally {
             // Minimum display time to prevent flicker
@@ -284,18 +288,26 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     React.useEffect(() => {
         if (workspaceRoot && !sessionService.activeProject && !hasAutoSelectedRef.current) {
             hasAutoSelectedRef.current = true;
-            console.debug('[ChatWidget] Auto-selecting project for workspace:', workspaceRoot);
+            if (process.env.NODE_ENV !== 'production') {
+                console.debug('[ChatWidget] Auto-selecting project for workspace:', workspaceRoot);
+            }
             sessionService.autoSelectProjectByWorkspace(workspaceRoot)
                 .then(success => {
                     if (success) {
-                        console.debug('[ChatWidget] Project auto-selected successfully');
+                        if (process.env.NODE_ENV !== 'production') {
+                            console.debug('[ChatWidget] Project auto-selected successfully');
+                        }
                         loadSessions();
                     } else {
-                        console.warn('[ChatWidget] Could not auto-select project for workspace:', workspaceRoot);
+                        if (process.env.NODE_ENV !== 'production') {
+                            console.warn('[ChatWidget] Could not auto-select project for workspace:', workspaceRoot);
+                        }
                     }
                 })
                 .catch(err => {
-                    console.error('[ChatWidget] Error auto-selecting project:', err);
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.error('[ChatWidget] Error auto-selecting project:', err);
+                    }
                 });
         }
     }, [workspaceRoot]); // Only depend on workspaceRoot
@@ -383,7 +395,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             await loadSessions();
             setShowSessionList(false);
         } catch (error) {
-            console.error('[ChatWidget] Error creating session:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error creating session:', error);
+            }
             messageService.error(`Failed to create session: ${error}`);
         }
     }, [sessionService, loadSessions, messageService]);
@@ -394,7 +408,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             await sessionService.setActiveSession(sessionId);
             setShowSessionList(false);
         } catch (error) {
-            console.error('[ChatWidget] Error switching session:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error switching session:', error);
+            }
             messageService.error(`Failed to switch session: ${error}`);
         }
     }, [sessionService, messageService]);
@@ -414,7 +430,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             await sessionService.deleteSession(activeSession.id);
             await loadSessions();
         } catch (error) {
-            console.error('[ChatWidget] Error deleting session:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error deleting session:', error);
+            }
             messageService.error(`Failed to delete session: ${error}`);
         }
     }, [sessionService, loadSessions, messageService]);
@@ -436,11 +454,15 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                 return { providerID: providerPart, modelID: modelPart };
             })() : undefined;
 
-            console.log('[ChatWidget] Sending message with model:', model || 'default');
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[ChatWidget] Sending message with model:', model || 'default');
+            }
             // PromptInput MessagePart types are compatible with MessagePartInput
             await sessionService.sendMessage(parts as any as MessagePartInput[], model);
         } catch (error) {
-            console.error('[ChatWidget] Error sending message:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error sending message:', error);
+            }
             // TODO: Show error to user
         }
     }, [sessionService]);

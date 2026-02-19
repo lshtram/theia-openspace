@@ -18,6 +18,7 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { Disposable } from '@theia/core';
+import { ILogger } from '@theia/core/lib/common/logger';
 import * as React from '@theia/core/shared/react';
 import { createRoot } from '@theia/core/shared/react-dom/client';
 import { OpenCodeService } from '../common/opencode-protocol';
@@ -48,6 +49,9 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
     @inject(OpenCodeSyncService)
     protected readonly syncService!: OpenCodeSyncService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     private manager: PermissionDialogManager | null = null;
     private dialogContainer: HTMLElement | null = null;
     private permissionEventDisposable: Disposable | null = null;
@@ -64,7 +68,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
      */
     onStart(app: FrontendApplication): void {
         // Create manager
-        this.manager = new PermissionDialogManager(this.openCodeService);
+        this.manager = new PermissionDialogManager(this.openCodeService, this.logger);
 
         // Subscribe to permission events from sync service
         this.subscribeToPermissionEvents();
@@ -75,7 +79,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
         // Expose test helper (E2E test support)
         this.exposeTestHelper();
 
-        console.debug('[PermissionDialogContribution] Permission dialog system initialized');
+        this.logger.debug('[PermissionDialogContribution] Permission dialog system initialized');
     }
 
     /**
@@ -94,7 +98,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
             }
         });
 
-        console.debug('[PermissionDialogContribution] Subscribed to permission events');
+        this.logger.debug('[PermissionDialogContribution] Subscribed to permission events');
     }
 
     /**
@@ -116,7 +120,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
         this.root = createRoot(this.dialogContainer);
         this.root.render(element);
 
-        console.debug('[PermissionDialogContribution] Dialog component rendered');
+        this.logger.debug('[PermissionDialogContribution] Dialog component rendered');
     }
 
     /**
@@ -153,7 +157,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
                     }
                 }
             });
-            console.info('[PermissionDialogContribution] Test helper exposed on window.__openspace_test__');
+            this.logger.info('[PermissionDialogContribution] Test helper exposed on window.__openspace_test__');
         }
     }
 
@@ -191,6 +195,6 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
             this.permissionEventDisposable = null;
         }
 
-        console.debug('[PermissionDialogContribution] Permission dialog system disposed');
+        this.logger.debug('[PermissionDialogContribution] Permission dialog system disposed');
     }
 }

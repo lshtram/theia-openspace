@@ -115,9 +115,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
             this.logger.info('[BridgeContribution] Registered as MCP command bridge');
         } catch (error: any) {
             if (error.name === 'TypeError' || error.message.includes('fetch')) {
-                console.warn('[BridgeContribution] Warning: Hub not available, bridge not registered');
+                this.logger.warn('[BridgeContribution] Warning: Hub not available, bridge not registered');
             } else {
-                console.error('[BridgeContribution] Error registering bridge:', error);
+                this.logger.error('[BridgeContribution] Error registering bridge:', error);
             }
         }
     }
@@ -137,7 +137,7 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
      * 2. On each change, call publishState with throttling
      */
     private subscribeToPaneState(): void {
-        console.info('[BridgeContribution] Subscribing to pane state changes...');
+        this.logger.info('[BridgeContribution] Subscribing to pane state changes...');
         
         this.paneService.onPaneLayoutChanged((snapshot: PaneStateSnapshot) => {
             this.publishState(snapshot);
@@ -180,12 +180,12 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            console.debug(`[BridgeContribution] Published pane state: ${state.panes.length} panes`);
+            this.logger.debug(`[BridgeContribution] Published pane state: ${state.panes.length} panes`);
         } catch (error: any) {
             if (error.name === 'TypeError' || error.message.includes('fetch')) {
-                console.warn('[BridgeContribution] Warning: Hub not available, state not published');
+                this.logger.warn('[BridgeContribution] Warning: Hub not available, state not published');
             } else {
-                console.error('[BridgeContribution] Error publishing state:', error);
+                this.logger.error('[BridgeContribution] Error publishing state:', error);
             }
         }
     }

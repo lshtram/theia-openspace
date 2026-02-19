@@ -18,6 +18,7 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { ApplicationShell, WidgetManager } from '@theia/core/lib/browser';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { PresentationService, 
     PresentationListArgs, 
     PresentationReadArgs, 
@@ -203,6 +204,9 @@ export class PresentationCommandContribution implements CommandContribution, Key
     @inject(PresentationNavigationService)
     protected readonly navigationService!: PresentationNavigationService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     private autoplayTimer: ReturnType<typeof setInterval> | undefined;
 
     @postConstruct()
@@ -243,7 +247,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args?: PresentationListArgs) => {
-                    console.log('[PresentationCommand] Listing presentations');
+                    this.logger.info('[PresentationCommand] Listing presentations');
                     return this.presentationService.listPresentations();
                 }
             }
@@ -257,7 +261,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationReadArgs) => {
-                    console.log('[PresentationCommand] Reading presentation:', args.path);
+                    this.logger.info('[PresentationCommand] Reading presentation:', args.path);
                     return this.presentationService.readPresentation(args.path);
                 }
             }
@@ -271,7 +275,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationCreateArgs) => {
-                    console.log('[PresentationCommand] Creating presentation:', args.path);
+                    this.logger.info('[PresentationCommand] Creating presentation:', args.path);
                     return this.presentationService.createPresentation(
                         args.path,
                         args.title,
@@ -290,7 +294,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationUpdateSlideArgs) => {
-                    console.log('[PresentationCommand] Updating slide:', args.slideIndex, 'in', args.path);
+                    this.logger.info('[PresentationCommand] Updating slide:', String(args.slideIndex), 'in', args.path);
                     return this.presentationService.updateSlide(args.path, args.slideIndex, args.content);
                 }
             }
@@ -304,7 +308,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationOpenArgs) => {
-                    console.log('[PresentationCommand] Opening presentation:', args.path);
+                    this.logger.info('[PresentationCommand] Opening presentation:', args.path);
                     return this.openPresentation(args);
                 }
             }
@@ -318,7 +322,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationNavigateArgs) => {
-                    console.log('[PresentationCommand] Navigating presentation:', args);
+                    this.logger.info('[PresentationCommand] Navigating presentation:', String(args));
                     return this.navigatePresentation(args);
                 }
             }
@@ -332,7 +336,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args?: PresentationPlayArgs) => {
-                    console.log('[PresentationCommand] Playing presentation');
+                    this.logger.info('[PresentationCommand] Playing presentation');
                     return this.playPresentation(args ?? {});
                 }
             }
@@ -346,7 +350,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args?: PresentationPauseArgs) => {
-                    console.log('[PresentationCommand] Pausing presentation');
+                    this.logger.info('[PresentationCommand] Pausing presentation');
                     return this.pausePresentation();
                 }
             }
@@ -360,7 +364,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args?: PresentationStopArgs) => {
-                    console.log('[PresentationCommand] Stopping presentation');
+                    this.logger.info('[PresentationCommand] Stopping presentation');
                     return this.stopPresentation();
                 }
             }

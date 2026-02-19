@@ -29,6 +29,4 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
   // Register the Command Contribution
   bind(WhiteboardCommandContribution).toSelf();
   bind(CommandContribution).toService(WhiteboardCommandContribution);
-
-  console.log('[OpenSpaceWhiteboard] Frontend module loaded');
 });

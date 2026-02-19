@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import { Emitter, Event, Disposable } from '@theia/core';
+import { ILogger } from '@theia/core/lib/common/logger';
 import { PermissionNotification, OpenCodeService } from '../common/opencode-protocol';
 
 /**
@@ -45,7 +46,8 @@ export class PermissionDialogManager implements Disposable {
     private readonly TIMEOUT_MS = 60000;
 
     constructor(
-        private readonly openCodeService: OpenCodeService
+        private readonly openCodeService: OpenCodeService,
+        private readonly logger?: ILogger
     ) {}
 
     /**
@@ -135,7 +137,7 @@ export class PermissionDialogManager implements Disposable {
         const { projectId, sessionId, permissionId } = this.current;
 
         if (!projectId || !sessionId || !permissionId) {
-            console.warn('[PermissionDialogManager] Missing required fields for grant');
+            this.logger?.warn('[PermissionDialogManager] Missing required fields for grant');
             await this.processNextRequest();
             return;
         }
@@ -143,9 +145,9 @@ export class PermissionDialogManager implements Disposable {
         try {
             // Call backend to grant permission
             await this.openCodeService.grantPermission(projectId, sessionId, permissionId);
-            console.debug(`[PermissionDialogManager] Permission granted: ${permissionId}`);
+            this.logger?.debug(`[PermissionDialogManager] Permission granted: ${permissionId}`);
         } catch (error) {
-            console.error('[PermissionDialogManager] Error granting permission:', error);
+            this.logger?.error('[PermissionDialogManager] Error granting permission:', error);
         } finally {
             // Always move to next request
             await this.processNextRequest();
@@ -163,7 +165,7 @@ export class PermissionDialogManager implements Disposable {
             return;
         }
 
-        console.debug(`[PermissionDialogManager] Permission denied: ${this.current.permissionId}`);
+        this.logger?.debug(`[PermissionDialogManager] Permission denied: ${this.current.permissionId}`);
         
         // Denial is implicit (backend times out if no grant received)
         await this.processNextRequest();
@@ -214,7 +216,7 @@ export class PermissionDialogManager implements Disposable {
         this.clearTimeout();
 
         this.timeoutHandle = setTimeout(() => {
-            console.warn(`[PermissionDialogManager] Permission request timed out: ${this.current?.permissionId}`);
+            this.logger?.warn(`[PermissionDialogManager] Permission request timed out: ${this.current?.permissionId}`);
             this.deny(); // Auto-deny on timeout
         }, this.TIMEOUT_MS);
     }
