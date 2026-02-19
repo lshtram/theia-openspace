@@ -64,19 +64,25 @@ const TEST_DECK_PATH = path.join(WORKSPACE_ROOT, '_e2e-test-presentation.deck.md
 
 test.describe('Presentation MCP Tools', () => {
 
+    // Retain a reference to the Theia browser page opened in beforeAll.
+    // This is critical: if the Page object is garbage-collected, the bridge
+    // disconnects and all executeViaBridge calls time out.
+    let theiaBridgePage: import('@playwright/test').Page | undefined;
+
     // Ensure the Theia bridge is connected before running tests that go through
     // executeViaBridge (all presentation tools, including create/read/list/update_slide).
     test.beforeAll(async ({ browser }) => {
-        const page = await browser.newPage();
-        await page.goto('http://localhost:3000');
-        await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-        // Keep the page open (don't close) so the bridge stays connected during the suite.
-        // afterAll will clean up.
+        theiaBridgePage = await browser.newPage();
+        await theiaBridgePage.goto('http://localhost:3000');
+        await theiaBridgePage.waitForSelector('#theia-app-shell', { timeout: 30000 });
+        // theiaBridgePage is intentionally kept open (not closed here).
+        // afterAll closes it so the bridge disconnects cleanly at suite end.
     });
 
-    // Clean up the test deck file after each test run
+    // Clean up the test deck file and close the bridge page after each test run
     test.afterAll(async () => {
         try { fs.unlinkSync(TEST_DECK_PATH); } catch { /* already gone */ }
+        try { await theiaBridgePage?.close(); } catch { /* ignore */ }
     });
 
     // -------------------------------------------------------------------------
