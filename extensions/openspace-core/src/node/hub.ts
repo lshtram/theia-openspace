@@ -253,12 +253,25 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         instructions += `- **Pane tools** (4): \`openspace.pane.open\`, \`openspace.pane.close\`, \`openspace.pane.focus\`, \`openspace.pane.list\`\n`;
         instructions += `- **Editor tools** (6): \`openspace.editor.open\`, \`openspace.editor.read_file\`, \`openspace.editor.close\`, \`openspace.editor.scroll_to\`, \`openspace.editor.highlight\`, \`openspace.editor.clear_highlight\`\n`;
         instructions += `- **Terminal tools** (5): \`openspace.terminal.create\`, \`openspace.terminal.send\`, \`openspace.terminal.read_output\`, \`openspace.terminal.list\`, \`openspace.terminal.close\`\n`;
-        instructions += `- **File tools** (5, direct): \`openspace.file.read\`, \`openspace.file.write\`, \`openspace.file.list\`, \`openspace.file.search\`, \`openspace.file.patch\`\n\n`;
+        instructions += `- **File tools** (5, direct): \`openspace.file.read\`, \`openspace.file.write\`, \`openspace.file.list\`, \`openspace.file.search\`, \`openspace.file.patch\`\n`;
+        instructions += `- **Presentation tools** (10): \`openspace.presentation.list\`, \`openspace.presentation.read\`, \`openspace.presentation.create\`, \`openspace.presentation.update_slide\`, \`openspace.presentation.open\`, \`openspace.presentation.navigate\`, \`openspace.presentation.play\`, \`openspace.presentation.pause\`, \`openspace.presentation.stop\`, \`openspace.presentation.toggleFullscreen\`\n\n`;
 
         instructions += `## Usage Notes\n\n`;
         instructions += `- File tools (read/write/list/search/patch) operate directly on the filesystem.\n`;
-        instructions += `- IDE-control tools (pane/editor/terminal) are forwarded to the Theia frontend and return the result.\n`;
+        instructions += `- IDE-control tools (pane/editor/terminal/presentation) are forwarded to the Theia frontend and return the result.\n`;
         instructions += `- IDE tools time out after 30 seconds if the browser does not respond.\n\n`;
+
+        instructions += `## Presentation Tools\n\n`;
+        instructions += `- \`openspace.presentation.list\` — list all .deck.md files in the workspace\n`;
+        instructions += `- \`openspace.presentation.read {path}\` — read a presentation and its slides\n`;
+        instructions += `- \`openspace.presentation.create {path, title, slides[]}\` — create a new presentation\n`;
+        instructions += `- \`openspace.presentation.update_slide {path, slideIndex, content}\` — update one slide\n`;
+        instructions += `- \`openspace.presentation.open {path, splitDirection?}\` — open the presentation viewer (splitDirection: right|left|bottom|new-tab)\n`;
+        instructions += `- \`openspace.presentation.navigate {direction|slideIndex}\` — go to next/prev/first/last slide or a specific index\n`;
+        instructions += `- \`openspace.presentation.play {interval?}\` — start autoplay (default 5s per slide)\n`;
+        instructions += `- \`openspace.presentation.pause\` — pause autoplay at current slide\n`;
+        instructions += `- \`openspace.presentation.stop\` — stop autoplay and return to first slide\n`;
+        instructions += `- \`openspace.presentation.toggleFullscreen\` — toggle fullscreen mode\n\n`;
 
         // IDE state section
         if (this.state.paneState && this.state.paneState.panes.length > 0) {
