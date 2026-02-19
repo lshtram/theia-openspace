@@ -30,7 +30,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
-| **Phase 4-Val: Wire Phase 4 into MCP** | ⬜ NOT STARTED | Validate & integrate existing Phase 4 code |
+| **Phase 4-Val: Wire Phase 4 into MCP** | 🟡 In progress | Presentation done; whiteboard MCP wiring pending |
 | **Phase T4: PatchEngine** | ⬜ NOT STARTED | Versioned artifact mutations |
 | **Phase T5: ArtifactStore** | ⬜ NOT STARTED | Atomic writes + audit log |
 | **Phase T6: Voice Modality** | ⬜ NOT STARTED | 3-FSM voice pipeline |
@@ -256,53 +256,75 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 
 ## Phase 4-Validation: Wire Phase 4 into MCP Tools
 
-> **Context:** Phase 4 code (presentation-widget.tsx: 342 lines, whiteboard-widget.tsx: 317 lines) exists and is substantive but has NOT been validated or wired into the MCP tool system. The original Phase 4 tasks (4.1–4.6) are 🔶 DONE-NOT-VALIDATED. This validation phase makes the code production-ready and connects it to the MCP agent control path.
+> **Context:** Phase 4 presentation code was completed and wired (MCP tools, system prompt, live reload). Whiteboard browser code is complete but MCP wiring is missing. This phase completes the whiteboard MCP wiring and fixes remaining gaps in both modalities.
+>
+> **Implementation plan:** `docs/plans/2026-02-19-phase-4val-whiteboard-mcp.md`
 
-**Status:** ⬜ NOT STARTED  
-**Duration estimate:** 1–2 sessions  
-**Exit criteria:** Presentation and whiteboard widgets work correctly. All Phase 4 commands callable as MCP tools. Integration test passes.
+**Status:** 🟡 In progress  
+**Duration estimate:** 1 session  
+**Exit criteria:** All whiteboard MCP tools registered and in system prompt. All presentation/whiteboard gaps fixed. 466+ unit tests passing. Build clean.
+
+**Actual status as of 2026-02-19:**
+- ✅ Presentation: all 10 MCP tools registered in hub-mcp.ts
+- ✅ Presentation: system prompt has full `## Presentation Tools` section
+- ✅ Presentation: `listPresentations()` real recursive scan
+- ✅ Presentation: live-reload via `onDidChange` emitter + file watching
+- ✅ Presentation: `PresentationOpenHandler` wired (double-click `.deck.md`)
+- ✅ Presentation: DI frontend module complete
+- ✅ Whiteboard: all 10 browser commands implemented
+- ✅ Whiteboard: `WhiteboardOpenHandler` wired (double-click `.whiteboard.json`)
+- ✅ Whiteboard: DI frontend module complete
+- ❌ Whiteboard: **no MCP tools** in hub-mcp.ts (main gap)
+- ❌ Whiteboard: **not in system prompt** in hub.ts
+- ❌ Whiteboard: `listWhiteboards()` is a stub (returns workspace root, not files)
+- ❌ Whiteboard: CSS not built to lib/ and not imported in frontend module
+- ❌ Presentation: `navigate 'first'`/`'last'` silently no-ops in command handler
 
 **V&V Targets:**
-- [ ] Validate 4.1: `presentation-widget.tsx` renders correctly; reveal.js slides functional
-- [ ] Validate 4.2: `.deck.md` double-click opens presentation widget (not text editor)
-- [ ] Validate 4.3: All presentation commands work via command palette
-- [ ] Validate 4.4: `whiteboard-widget.tsx` renders tldraw canvas; user can draw shapes
-- [ ] Validate 4.5: `.whiteboard.json` double-click opens whiteboard widget
-- [ ] Validate 4.6: All whiteboard commands work via command palette
-- [ ] Wire T3.3: Presentation MCP tools (`openspace.presentation.*`) callable and functional
-- [ ] Wire T3.3: Whiteboard MCP tools (`openspace.whiteboard.*`) callable and functional
-- [ ] Modality integration test: agent creates presentation and whiteboard via MCP tools
+- [x] Validate 4.1: `presentation-widget.tsx` renders; reveal.js slides functional
+- [x] Validate 4.2: `.deck.md` double-click opens presentation widget
+- [x] Validate 4.3: All presentation commands wired via MCP
+- [ ] Validate 4.4: whiteboard CSS loads; widget renders
+- [x] Validate 4.5: `.whiteboard.json` double-click opens whiteboard widget
+- [ ] Validate 4.6: All whiteboard commands wired via MCP
+- [x] Wire T3.3: Presentation MCP tools (10) — complete
+- [ ] Wire T3.3: Whiteboard MCP tools (10) — pending Task 4
+- [ ] Modality integration test — covered by hub-mcp.spec.ts regression tests
 
 ### 4V.1 — Validate and fix presentation widget
 | | |
 |---|---|
-| **What** | Run the existing presentation widget code. Fix any build errors or runtime issues. Verify: reveal.js renders inside ReactWidget, slide navigation works (keyboard + programmatic), `.deck.md` open handler works, PresentationService and PresentationCommandContribution are correctly wired into DI. |
-| **Acceptance** | Opening a `.deck.md` file shows a rendered presentation. Arrow keys navigate slides. All presentation commands work from command palette. |
+| **What** | Fix navigate first/last directions silently no-opping in `navigatePresentation()`. All other presentation wiring is complete. |
+| **Acceptance** | `navigatePresentation({direction:'first'})` → slide 0. `navigatePresentation({direction:'last'})` → last slide. All 10 presentation MCP tools pass regression tests. |
 | **Dependencies** | Phase T3 complete |
+| **Estimated effort** | 30 min |
 | **Status** | ⬜ |
 
 ### 4V.2 — Validate and fix whiteboard widget
 | | |
 |---|---|
-| **What** | Run the existing whiteboard widget code. Fix any build errors or runtime issues. Verify: tldraw canvas renders and is interactive, `.whiteboard.json` open handler works, WhiteboardService and WhiteboardCommandContribution are correctly wired. postMessage origin validation must be added (security requirement from 1C.2). |
-| **Acceptance** | Opening a `.whiteboard.json` shows an interactive whiteboard. User can draw shapes, type text, make connections. State persists to file on save. All whiteboard commands work from command palette. |
-| **Dependencies** | Phase T3 complete, 4V.1 |
+| **What** | Fix CSS not loading (add build copy step + frontend module import). Fix `listWhiteboards()` stub (implement real recursive scan like `listPresentations()`). |
+| **Acceptance** | Widget CSS loads in browser. `listWhiteboards()` returns `.whiteboard.json` files. Tests pass. |
+| **Dependencies** | Phase T3 complete |
+| **Estimated effort** | 30 min |
 | **Status** | ⬜ |
 
-### 4V.3 — Wire presentation and whiteboard MCP tools (T3.3)
+### 4V.3 — Wire whiteboard MCP tools (T3.3)
 | | |
 |---|---|
-| **What** | Implement MCP tool handlers for presentation and whiteboard tools in `hub-mcp.ts` (stub T3.3 was deferred). Presentation tools: `openspace.presentation.list`, `.read`, `.create`, `.update_slide`, `.open`, `.navigate`, `.play`, `.pause`, `.stop`. Whiteboard tools: `openspace.whiteboard.list`, `.read`, `.create`, `.add_shape`, `.update_shape`, `.delete_shape`, `.open`, `.camera.set`, `.camera.fit`, `.camera.get`. All tools route via CommandBridge → CommandRegistry → widget commands. All tools return structured `{ content: [{type:'text', text:...}] }` response. |
-| **Acceptance** | Agent can call `openspace.presentation.create` → creates `.deck.md` → `openspace.presentation.open` → widget opens. Agent can call `openspace.whiteboard.create` → creates `.whiteboard.json` → `openspace.whiteboard.add_shape` → shape appears. All tools in MCP tools/list. |
-| **Dependencies** | 4V.2, Phase T3 complete |
+| **What** | Add `registerWhiteboardTools()` (10 tools) to `hub-mcp.ts`. Add whiteboard to `generateInstructions()` system prompt in `hub.ts`. Add regression tests in `hub-mcp.spec.ts`. |
+| **Acceptance** | All 10 `openspace.whiteboard.*` tools appear in MCP tools/list. System prompt lists whiteboard tools. 10 regression tests pass. |
+| **Dependencies** | 4V.2 |
+| **Estimated effort** | 1–2 hours |
 | **Status** | ⬜ |
 
-### 4V.4 — Modality integration test
+### 4V.4 — Update WORKPLAN and push
 | | |
 |---|---|
-| **What** | End-to-end test: agent creates a presentation via MCP tools → user sees slides. Agent creates a whiteboard and adds basic shapes → user sees diagram. Both coexist in the IDE as tabs. |
-| **Acceptance** | Full round-trip from MCP tool call to visible modality surface. |
+| **What** | Final verification (466+ tests, build clean), mark all 4V tasks ✅, update phase status to COMPLETE, push branch. |
+| **Acceptance** | WORKPLAN updated. Branch pushed. |
 | **Dependencies** | 4V.3 |
+| **Estimated effort** | 15 min |
 | **Status** | ⬜ |
 
 ---
