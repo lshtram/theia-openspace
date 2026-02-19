@@ -20,6 +20,7 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { MessageService } from '@theia/core/lib/common/message-service';
+import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
 import { Message, MessagePartInput, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
@@ -73,7 +74,7 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
         });
     }
 
-    protected override onAfterAttach(msg: any): void {
+    protected override onAfterAttach(msg: LuminoMessage): void {
         super.onAfterAttach(msg);
         // T3-9: Re-render when workspace changes (resolves asynchronously after attach)
         const listener = this.workspaceService.onWorkspaceChanged(() => {
@@ -85,7 +86,7 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
     /**
      * Handle widget activation - focus the input element
      */
-    protected onActivateRequest(msg: any): void {
+    protected onActivateRequest(msg: LuminoMessage): void {
         super.onActivateRequest(msg);
         // Focus will be handled by the React component
         // The widget itself doesn't need to do anything special
@@ -291,7 +292,7 @@ const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
  * T3-10: Added messageService prop for dialogs
  * Exported for unit testing.
  */
-export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService: _openCodeService, workspaceRoot, messageService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
@@ -502,6 +503,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         if (process.env.NODE_ENV !== 'production') {
             console.log('[ChatWidget] Sending message with model:', model || 'default');
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await sessionService.sendMessage(parts as any as MessagePartInput[], model);
     }, [sessionService]);
 
@@ -593,6 +595,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
+                            onStop={() => sessionService.abort()}
+                            isStreaming={isStreaming}
                             disabled={false}
                             placeholder={queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
