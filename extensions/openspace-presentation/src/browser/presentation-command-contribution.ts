@@ -350,10 +350,10 @@ export class PresentationCommandContribution implements CommandContribution {
             splitDirection === 'new-tab' ? 'tab-after'   :
             'split-right'; // default
 
-        this.shell.addWidget(widget, { area, mode });
+        await this.shell.addWidget(widget, { area, mode });
 
         widget.setContent(content);
-        await widget.activate();
+        await this.shell.activateWidget(widget.id);
 
         this.presentationService.setActivePresentation(path);
         this.presentationService.setPlaybackState({
