@@ -145,6 +145,20 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onDeleteSession,
     onToggleDropdown
 }) => {
+    const [showMenu, setShowMenu] = React.useState(false);
+    const menuRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!showMenu) return;
+        const handleOutside = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setShowMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutside);
+        return () => document.removeEventListener('mousedown', handleOutside);
+    }, [showMenu]);
+
     return (
         <div className="chat-header-bar">
             {/* Session title — clicking opens dropdown */}
@@ -222,20 +236,42 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                 </svg>
             </button>
 
-            {/* Delete session */}
-            {activeSession && (
+            {/* More actions (…) button with dropdown */}
+            <div style={{ position: 'relative' }} ref={menuRef}>
                 <button
                     type="button"
                     className="oc-icon-btn"
-                    onClick={onDeleteSession}
-                    title="Delete session"
-                    aria-label="Delete session"
+                    onClick={() => setShowMenu(m => !m)}
+                    title="More actions"
+                    aria-label="More actions"
+                    aria-haspopup="true"
+                    aria-expanded={showMenu}
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
                     </svg>
                 </button>
-            )}
+                {showMenu && (
+                    <div className="chat-header-menu" role="menu">
+                        {activeSession && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onDeleteSession(); }}
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                </svg>
+                                Delete session
+                            </button>
+                        )}
+                        {!activeSession && (
+                            <div className="chat-header-menu-empty">No actions</div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
