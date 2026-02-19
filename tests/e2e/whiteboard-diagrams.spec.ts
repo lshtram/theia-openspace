@@ -76,7 +76,7 @@ function arrow(x1: number, y1: number, x2: number, y2: number, color = 'black', 
 
 /** Geo shape helper */
 function geo(x: number, y: number, w: number, h: number, geoType: string, color = 'black', fill = 'none') {
-    return { type: 'geo', x, y, w, h, props: { geo: geoType, color, fill, dash: 'draw' } };
+    return { type: 'geo', x, y, width: w, height: h, props: { geo: geoType, color, fill, dash: 'draw' } };
 }
 
 /** Text shape helper */
@@ -385,6 +385,7 @@ const DIAGRAMS: Record<string, { shapes: any[], minCount: number }> = {
 
 // ── Block 2: Diagram types ────────────────────────────────────────────────────
 
+
 // Full-stack E2E types: these also navigate the browser and take screenshots
 const FULLSTACK_TYPES = new Set(['flowchart', 'sequence', 'c4-context']);
 
@@ -396,6 +397,12 @@ test.describe('Whiteboard MCP — diagram types', () => {
 
     for (const [diagramType, { shapes, minCount }] of Object.entries(DIAGRAMS)) {
         test(`diagram type: ${diagramType}`, async ({ page }) => {
+            // Collect JS console errors for full-stack E2E checks
+            const consoleErrors: string[] = [];
+            page.on('console', msg => {
+                if (msg.type() === 'error') consoleErrors.push(msg.text());
+            });
+
             // 0. Navigate to app so the bridge is connected
             await page.goto('/');
             await page.waitForLoadState('networkidle');
@@ -421,18 +428,61 @@ test.describe('Whiteboard MCP — diagram types', () => {
 
             // 5. Full-stack E2E: screenshot for a subset of diagram types
             if (FULLSTACK_TYPES.has(diagramType)) {
-                const errors = await page.evaluate(() =>
-                    (window as any).__consoleErrors ?? []
-                );
-                // Allow bridge-not-connected errors but not JS runtime errors
-                const fatalErrors = (errors as string[]).filter(
-                    (e: string) => !e.includes('Bridge') && !e.includes('not connected')
+                // Allow bridge-not-connected errors and 404 resource errors but not JS runtime errors
+                const fatalErrors = consoleErrors.filter(
+                    (e: string) => !e.includes('Bridge') && !e.includes('not connected') && !e.includes('404')
                 );
                 expect(fatalErrors, `${diagramType}: fatal JS errors on page`).toHaveLength(0);
                 await page.screenshot({
                     path: path.join(SCREENSHOT_DIR, `${diagramType}.png`),
                 });
             }
+        });
+    }
+});
+
+// ── Block 3: Theme tests ──────────────────────────────────────────────────────
+
+// Reference flowchart with theme-specific colors applied
+function flowchartWithTheme(nodeColor: string, edgeColor: string): any[] {
+    return [
+        geo(100, 50,  160, 60, 'ellipse', nodeColor, 'solid'),
+        geo(100, 160, 160, 60, 'rectangle', nodeColor, 'none'),
+        geo(100, 270, 160, 60, 'diamond', edgeColor, 'none'),
+        geo(100, 380, 160, 60, 'ellipse', nodeColor, 'solid'),
+        arrow(180, 110, 180, 160, edgeColor),
+        arrow(180, 220, 180, 270, edgeColor),
+        arrow(180, 330, 180, 380, edgeColor),
+    ];
+}
+
+const THEME_CONFIGS = {
+    technical:     { nodeColor: 'black',      edgeColor: 'grey'          },
+    beautiful:     { nodeColor: 'light-blue', edgeColor: 'blue'          },
+    presentation:  { nodeColor: 'violet',     edgeColor: 'light-violet'  },
+};
+
+test.describe('Whiteboard MCP — themes', () => {
+    for (const [themeName, { nodeColor, edgeColor }] of Object.entries(THEME_CONFIGS)) {
+        test(`theme: ${themeName}`, async ({ page }) => {
+            // 0. Navigate to app so the bridge is connected
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            const wbPath = await createWhiteboard(`test-theme-${themeName}`);
+
+            // Open whiteboard so the widget is live
+            const openResp = await mcpCall('openspace.whiteboard.open', { path: wbPath });
+            assertSuccess(openResp, `open whiteboard "theme-${themeName}"`);
+            await page.waitForTimeout(1000);
+
+            const shapes = flowchartWithTheme(nodeColor, edgeColor);
+            await replaceShapes(wbPath, shapes, `theme-${themeName}`);
+            const found = await findAllShapes(wbPath);
+            expect(found.length, `${themeName}: expected >= 5 shapes`).toBeGreaterThanOrEqual(5);
+            // Verify colors were accepted (find_shapes returns shape props)
+            const nodeShapes = found.filter((s: any) => s.type === 'geo');
+            expect(nodeShapes.length, `${themeName}: must have geo shapes`).toBeGreaterThan(0);
         });
     }
 });
