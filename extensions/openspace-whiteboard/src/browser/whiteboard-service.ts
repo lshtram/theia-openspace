@@ -147,7 +147,11 @@ export class WhiteboardService {
         } as unknown as WhiteboardData;
 
         const content = JSON.stringify(emptySnapshot, null, 2);
-        await this.fileService.create(uri, content);
+        try {
+            await this.fileService.create(uri, content);
+        } catch (err) {
+            throw new Error(`[WhiteboardService] Failed to create whiteboard '${resolvedUri}': ${(err as Error).message}`);
+        }
 
         this.logger.info('[WhiteboardService] Created whiteboard:', resolvedUri);
         return resolvedUri;

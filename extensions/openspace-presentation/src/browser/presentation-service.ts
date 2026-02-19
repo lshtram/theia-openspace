@@ -134,7 +134,7 @@ export class PresentationService {
             'openspace/decks'
         );
 
-        const resolvedUri = resolveContentPath(path, configuredFolder, workspaceRoot, '.deck.md');
+        const resolvedUri = resolveContentPath(path, configuredFolder, workspaceRoot, DECK_EXTENSION);
         const uri = new URI(resolvedUri);
 
         // Auto-create parent folder if it doesn't exist
@@ -150,7 +150,11 @@ export class PresentationService {
         }
 
         const content = this.buildDeckContent(title, slides, options);
-        await this.fileService.create(uri, content);
+        try {
+            await this.fileService.create(uri, content);
+        } catch (err) {
+            throw new Error(`[PresentationService] Failed to create presentation '${resolvedUri}': ${(err as Error).message}`);
+        }
 
         this.logger.info('[PresentationService] Created presentation:', resolvedUri);
         return resolvedUri;
