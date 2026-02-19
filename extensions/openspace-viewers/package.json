@@ -1,0 +1,32 @@
+{
+  "name": "openspace-viewers",
+  "version": "0.1.0",
+  "license": "MIT",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/openspace-viewers-frontend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2",
+    "@theia/editor": "1.68.2",
+    "@theia/filesystem": "1.68.2",
+    "@theia/monaco": "1.68.2",
+    "@theia/workspace": "1.68.2",
+    "dompurify": "^3.2.3",
+    "markdown-it": "^14.1.0",
+    "mermaid": "^11.4.1"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/markdown-it": "^14.1.2",
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "build": "tsc && mkdir -p lib/browser/style && cp src/browser/style/*.css lib/browser/style/",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "watch": "tsc --watch",
+    "test": "cd ../.. && mocha --spec 'extensions/openspace-viewers/src/**/__tests__/*.spec.ts'"
+  }
+}

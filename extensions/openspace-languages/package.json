@@ -1,0 +1,25 @@
+{
+  "name": "openspace-languages",
+  "version": "0.1.0",
+  "license": "MIT",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/openspace-languages-frontend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2",
+    "@theia/monaco": "1.68.2",
+    "@theia/monaco-editor-core": "1.68.2",
+    "tm-grammars": "^1.30.10"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "watch": "tsc --watch"
+  }
+}

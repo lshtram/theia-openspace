@@ -16,7 +16,7 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
-import { OpenHandler, WidgetManager } from '@theia/core/lib/browser';
+import { OpenHandler, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { PresentationWidget } from './presentation-widget';
@@ -45,6 +45,9 @@ export class PresentationOpenHandler implements OpenHandler {
 
     @inject(WidgetManager)
     protected readonly widgetManager!: WidgetManager;
+
+    @inject(ApplicationShell)
+    protected readonly shell!: ApplicationShell;
 
     @inject(FileService)
     protected readonly fileService!: FileService;
@@ -88,6 +91,11 @@ export class PresentationOpenHandler implements OpenHandler {
             this.logger.error('[PresentationOpenHandler] Failed to load file content:', error);
             widget.setContent('# Error\n\nFailed to load presentation content.');
         }
+
+        if (!widget.isAttached) {
+            await this.shell.addWidget(widget, { area: 'main' });
+        }
+        await this.shell.activateWidget(widget.id);
 
         return widget;
     }
