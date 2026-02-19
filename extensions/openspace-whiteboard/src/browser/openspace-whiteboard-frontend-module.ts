@@ -1,6 +1,7 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { WidgetFactory, OpenHandler } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common/command';
+import './style/whiteboard-widget.css';
 import { WhiteboardWidget, WhiteboardUtils } from './whiteboard-widget';
 import { WhiteboardOpenHandler } from './whiteboard-open-handler';
 import { WhiteboardService } from './whiteboard-service';
