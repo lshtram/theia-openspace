@@ -10141,6 +10141,11 @@ tldts@^7.0.5:
   dependencies:
     tldts-core "^7.0.23"
 
+tm-grammars@^1.30.10:
+  version "1.30.10"
+  resolved "https://registry.yarnpkg.com/tm-grammars/-/tm-grammars-1.30.10.tgz#cf0c9073137b664ccad0e076d43e67455456b4df"
+  integrity sha512-Ebz9ffPbNxklyDWa+jN8yhLaU9EU3OQ016EYTwyoEqfUfvprx6eQGSeJHyS4xTj0Q897n5XSbAfbR8iLUa+59A==
+
 tmp@^0.2.4:
   version "0.2.5"
   resolved "https://registry.npmjs.org/tmp/-/tmp-0.2.5.tgz"

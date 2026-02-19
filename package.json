@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build-summary.js",
     "build:verbose": "yarn build:extensions && yarn build:browser",
-    "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-settings build",
+    "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-settings build && yarn --silent --cwd extensions/openspace-languages build",
     "build:browser": "yarn --silent --cwd browser-app build",
     "build:electron": "yarn --cwd electron-app build",
     "start:browser": "yarn --cwd browser-app start",
