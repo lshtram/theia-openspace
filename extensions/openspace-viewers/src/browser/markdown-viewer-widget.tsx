@@ -7,10 +7,10 @@ import * as React from '@theia/core/shared/react';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
+import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { URI } from '@theia/core/lib/common/uri';
 import { MonacoEditor, MonacoEditorServices } from '@theia/monaco/lib/browser/monaco-editor';
-import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
 import MarkdownIt from 'markdown-it';
 import mermaid from 'mermaid';
@@ -51,8 +51,11 @@ export class MarkdownViewerWidget extends ReactWidget {
     protected content: string = '';
     protected mode: ViewerMode = 'preview';
     protected monacoEditor: MonacoEditor | undefined;
+    /** Guards against concurrent async invocations of mountMonacoEditor. */
+    protected mountingEditor: boolean = false;
+    /** Editor-scoped disposables — cleared on every destroyMonacoEditor() call. */
+    protected editorDisposables = new DisposableCollection();
 
-    // Reserved: used in Task 4 (edit mode auto-save via fileService.write())
     @inject(FileService)
     protected readonly fileService!: FileService;
 
@@ -150,7 +153,7 @@ export class MarkdownViewerWidget extends ReactWidget {
             <div
                 className="markdown-viewer-editor-container"
                 ref={(el) => {
-                    if (el && !this.monacoEditor) {
+                    if (el && !this.monacoEditor && !this.mountingEditor) {
                         this.mountMonacoEditor(el).catch(err =>
                             console.error('[MarkdownViewerWidget] Monaco mount failed:', err)
                         );
@@ -161,42 +164,53 @@ export class MarkdownViewerWidget extends ReactWidget {
     }
 
     protected async mountMonacoEditor(container: HTMLDivElement): Promise<void> {
-        if (!this.uri) { return; }
+        if (!this.uri || this.mountingEditor) { return; }
+        this.mountingEditor = true;
+        try {
+            const uri = new URI(this.uri);
+            // loadModel returns MonacoEditorModel directly — no IReference to manage.
+            // MonacoEditor.create() acquires its own managed reference internally.
+            const document = await this.textModelService.loadModel(uri);
 
-        const uri = new URI(this.uri);
-        const reference = await this.textModelService.createModelReference(uri);
-        const document = reference.object as MonacoEditorModel;
+            this.monacoEditor = await MonacoEditor.create(
+                uri,
+                document,
+                container,
+                this.monacoEditorServices,
+                {
+                    language: 'markdown',
+                    autoSizing: false,
+                    minHeight: -1,
+                }
+            );
 
-        this.monacoEditor = await MonacoEditor.create(
-            uri,
-            document,
-            container,
-            this.monacoEditorServices,
-            {
-                language: 'markdown',
-                autoSizing: false,
-                minHeight: -1,
-            }
-        );
+            // Layout to fill container after mount
+            this.monacoEditor.getControl().layout();
 
-        // Layout to fill container after mount
-        this.monacoEditor.getControl().layout();
-
-        // Auto-save on content change, debounced 1 second
-        let saveTimer: ReturnType<typeof setTimeout> | undefined;
-        this.toDispose.push(
-            this.monacoEditor.document.onDidChangeContent(() => {
-                if (saveTimer) { clearTimeout(saveTimer); }
-                saveTimer = setTimeout(() => {
-                    this.saveCurrentContent().catch(err =>
-                        console.warn('[MarkdownViewerWidget] Auto-save failed:', err)
-                    );
-                }, 1000);
-            })
-        );
+            // Auto-save: debounced 1s. Listener registered on editorDisposables
+            // (not this.toDispose) so it is cleared each time destroyMonacoEditor()
+            // is called, preventing listener accumulation across edit sessions.
+            let saveTimer: ReturnType<typeof setTimeout> | undefined;
+            this.editorDisposables.push(
+                this.monacoEditor.document.onDidChangeContent(() => {
+                    if (saveTimer) { clearTimeout(saveTimer); }
+                    saveTimer = setTimeout(() => {
+                        this.saveCurrentContent().catch(err =>
+                            console.warn('[MarkdownViewerWidget] Auto-save failed:', err)
+                        );
+                    }, 1000);
+                })
+            );
+        } finally {
+            this.mountingEditor = false;
+        }
     }
 
     protected destroyMonacoEditor(): void {
+        // Dispose editor-scoped listeners first, then reset the collection
+        // so the next edit session starts clean.
+        this.editorDisposables.dispose();
+        this.editorDisposables = new DisposableCollection();
         if (this.monacoEditor) {
             this.monacoEditor.dispose();
             this.monacoEditor = undefined;
