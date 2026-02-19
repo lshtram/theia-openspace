@@ -207,6 +207,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
 
     @postConstruct()
     protected init(): void {
+        // Clean up autoplay timer when the presentation widget is destroyed
         this.widgetManager.onDidCreateWidget(({ factoryId, widget }) => {
             if (factoryId === PresentationWidget.ID) {
                 (widget as PresentationWidget).onDidDispose(() => {
@@ -215,6 +216,14 @@ export class PresentationCommandContribution implements CommandContribution, Key
                         this.autoplayTimer = undefined;
                     }
                 });
+            }
+        });
+
+        // Live reload: when the active .deck.md changes on disk, push new content to widget
+        this.presentationService.onDidChange(({ path, content }) => {
+            const widget = this.widgetManager.tryGetWidget<PresentationWidget>(PresentationWidget.ID);
+            if (widget && widget.uri === path) {
+                widget.setContent(content);
             }
         });
     }

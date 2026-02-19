@@ -16,7 +16,9 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
+import { Disposable, Emitter } from '@theia/core/lib/common';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { FileStat } from '@theia/filesystem/lib/common/files';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { PresentationWidget, DeckData, DeckOptions } from './presentation-widget';
 
@@ -46,20 +48,40 @@ export class PresentationService {
     }
 
     /**
-     * List all presentation files in the workspace.
-     * Returns the workspace root path - actual listing would be done via search.
-     * @returns Array of presentation file paths
+     * List all .deck.md presentation files in the workspace.
+     * @returns Array of absolute presentation file paths
      */
     async listPresentations(): Promise<string[]> {
-        const workspaceRoot = this.workspaceService.workspace;
-        if (!workspaceRoot) {
+        const roots = await this.workspaceService.roots;
+        if (!roots.length) {
             console.warn('[PresentationService] No workspace open');
             return [];
         }
+        const results: string[] = [];
+        for (const root of roots) {
+            await this.collectDeckFiles(root.resource, results);
+        }
+        return results;
+    }
 
-        // Return the workspace root for search-based listing
-        // The BridgeContribution handles search-based listing for commands
-        return [workspaceRoot.resource.toString()];
+    private async collectDeckFiles(dirUri: URI, results: string[]): Promise<void> {
+        let stat: FileStat;
+        try {
+            stat = await this.fileService.resolve(dirUri);
+        } catch {
+            return; // not readable — skip
+        }
+        if (!stat.children) { return; }
+        for (const child of stat.children) {
+            const name = child.resource.path.base;
+            if (child.isDirectory) {
+                // Skip node_modules and hidden dirs
+                if (name === 'node_modules' || name.startsWith('.')) { continue; }
+                await this.collectDeckFiles(child.resource, results);
+            } else if (name.endsWith(DECK_EXTENSION)) {
+                results.push(child.resource.toString());
+            }
+        }
     }
 
     /**
@@ -190,10 +212,60 @@ export class PresentationService {
     };
 
     /**
-     * Set the active presentation path.
+     * Emitter for file change events on the active presentation.
+     */
+    private readonly onDidChangeEmitter = new Emitter<{ path: string; content: string }>();
+
+    /**
+     * Event fired when the active .deck.md file changes on disk.
+     */
+    readonly onDidChange = this.onDidChangeEmitter.event;
+
+    /**
+     * Disposable for the current file watch.
+     */
+    private watchDisposable: Disposable | undefined;
+
+    /**
+     * Set the active presentation path and start watching for file changes.
      */
     setActivePresentation(path: string | undefined): void {
         this.activePresentationPath = path;
+        if (path) {
+            this.startWatching(path);
+        } else {
+            this.watchDisposable?.dispose();
+            this.watchDisposable = undefined;
+        }
+    }
+
+    private startWatching(path: string): void {
+        // Clean up previous watch
+        this.watchDisposable?.dispose();
+
+        const uri = new URI(path);
+        const watchDisposable = this.fileService.watch(uri);
+        const listener = this.fileService.onDidFilesChange(event => {
+            const changed = event.changes.find(c =>
+                c.resource.toString() === uri.toString()
+            );
+            if (!changed) { return; }
+            this.reloadActiveWidget(path);
+        });
+
+        this.watchDisposable = Disposable.create(() => {
+            watchDisposable.dispose();
+            listener.dispose();
+        });
+    }
+
+    private async reloadActiveWidget(path: string): Promise<void> {
+        try {
+            const { content } = await this.readPresentation(path);
+            this.onDidChangeEmitter.fire({ path, content });
+        } catch {
+            // File deleted or unreadable — ignore
+        }
     }
 
     /**
