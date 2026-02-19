@@ -30,4 +30,9 @@ describe('resolveContentPath', () => {
         const result = resolveContentPath('subdir/myboard', 'openspace/whiteboards', workspaceRoot, '.whiteboard.json');
         expect(result).to.equal('file:///workspace/subdir/myboard.whiteboard.json');
     });
+
+    it('appends extension to absolute /unix path that lacks it', () => {
+        const result = resolveContentPath('/tmp/myboard', 'openspace/whiteboards', workspaceRoot, '.whiteboard.json');
+        expect(result).to.equal('/tmp/myboard.whiteboard.json');
+    });
 });

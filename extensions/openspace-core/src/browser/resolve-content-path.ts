@@ -32,6 +32,6 @@ export function resolveContentPath(
     }
 
     // Bare name — place under the configured folder
-    const folder = configuredFolder.replace(/\/$/, '');
+    const folder = configuredFolder.replace(/^\//, '').replace(/\/$/, '');
     return `${root}/${folder}/${withExt}`;
 }
