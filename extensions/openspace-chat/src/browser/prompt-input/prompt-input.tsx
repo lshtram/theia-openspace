@@ -47,7 +47,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [isDragging, setIsDragging] = React.useState(false);
     const [showTypeahead, setShowTypeahead] = React.useState(false);
     const [typeaheadQuery, setTypeaheadQuery] = React.useState('');
-    const [typeaheadPosition, setTypeaheadPosition] = React.useState({ top: 0, left: 0 });
     const [selectedTypeaheadIndex, setSelectedTypeaheadIndex] = React.useState(0);
     const [typeaheadType, setTypeaheadType] = React.useState<'agent' | 'file' | null>(null);
     const [showSlashMenu, setShowSlashMenu] = React.useState(false);
@@ -75,6 +74,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setImageAttachments([]);
         setFileAttachments([]);
         setShowTypeahead(false);
+        setShowSlashMenu(false);
     };
 
     /**
@@ -155,14 +155,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 setShowTypeahead(true);
                 setShowSlashMenu(false);
                 setSelectedTypeaheadIndex(0);
-                
-                // Calculate position for dropdown
-                const rect = range.getBoundingClientRect();
-                const editorRect = editorRef.current.getBoundingClientRect();
-                setTypeaheadPosition({
-                    top: rect.bottom - editorRect.top + 5,
-                    left: rect.left - editorRect.left
-                });
                 return;
             }
         }
@@ -474,7 +466,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 {showTypeahead && typeaheadItems.length > 0 && (
                     <div 
                         className="prompt-input-typeahead"
-                        style={{ top: typeaheadPosition.top, left: typeaheadPosition.left }}
                     >
                         {typeaheadItems.map((item, index) => (
                             <div
@@ -584,7 +575,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                 sel.removeAllRanges();
                                 sel.addRange(range);
                             } else {
-                                el.textContent = (el.textContent || '') + '@';
+                                el.appendChild(document.createTextNode('@'));
                             }
                             // Manually fire input event so handleInput runs
                             el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -612,7 +603,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                 sel.removeAllRanges();
                                 sel.addRange(range);
                             } else {
-                                el.textContent = (el.textContent || '') + '/';
+                                el.appendChild(document.createTextNode('/'));
                             }
                             el.dispatchEvent(new Event('input', { bubbles: true }));
                         }}
