@@ -8,6 +8,10 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { URI } from '@theia/core/lib/common/uri';
+import { MonacoEditor, MonacoEditorServices } from '@theia/monaco/lib/browser/monaco-editor';
+import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
+import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
 import MarkdownIt from 'markdown-it';
 import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
@@ -46,10 +50,17 @@ export class MarkdownViewerWidget extends ReactWidget {
 
     protected content: string = '';
     protected mode: ViewerMode = 'preview';
+    protected monacoEditor: MonacoEditor | undefined;
 
     // Reserved: used in Task 4 (edit mode auto-save via fileService.write())
     @inject(FileService)
     protected readonly fileService!: FileService;
+
+    @inject(MonacoEditorServices)
+    protected readonly monacoEditorServices!: MonacoEditorServices;
+
+    @inject(MonacoTextModelService)
+    protected readonly textModelService!: MonacoTextModelService;
 
     constructor() {
         super();
@@ -70,12 +81,22 @@ export class MarkdownViewerWidget extends ReactWidget {
     setContent(content: string): void {
         this.content = content;
         this.mode = 'preview';
+        this.destroyMonacoEditor();
         this.update();
     }
 
     /** Called by the toolbar toggle contribution. */
     toggleMode(): void {
-        this.mode = this.mode === 'preview' ? 'edit' : 'preview';
+        if (this.mode === 'preview') {
+            this.mode = 'edit';
+        } else {
+            // Capture current editor content before destroying
+            if (this.monacoEditor) {
+                this.content = this.monacoEditor.document.getText();
+            }
+            this.destroyMonacoEditor();
+            this.mode = 'preview';
+        }
         this.update();
     }
 
@@ -100,14 +121,16 @@ export class MarkdownViewerWidget extends ReactWidget {
         }
     }
 
+    protected onBeforeDetach(msg: Message): void {
+        this.destroyMonacoEditor();
+        super.onBeforeDetach(msg);
+    }
+
     protected render(): React.ReactNode {
         if (this.mode === 'preview') {
             return this.renderPreview();
         }
-        // Edit mode placeholder — Monaco wiring added in Task 4
-        return (
-            <div className="markdown-viewer-editor-container" />
-        );
+        return this.renderEditor();
     }
 
     protected renderPreview(): React.ReactNode {
@@ -120,6 +143,71 @@ export class MarkdownViewerWidget extends ReactWidget {
                 ref={el => { if (el) { this.runMermaid(); } }}
             />
         );
+    }
+
+    protected renderEditor(): React.ReactNode {
+        return (
+            <div
+                className="markdown-viewer-editor-container"
+                ref={(el) => {
+                    if (el && !this.monacoEditor) {
+                        this.mountMonacoEditor(el).catch(err =>
+                            console.error('[MarkdownViewerWidget] Monaco mount failed:', err)
+                        );
+                    }
+                }}
+            />
+        );
+    }
+
+    protected async mountMonacoEditor(container: HTMLDivElement): Promise<void> {
+        if (!this.uri) { return; }
+
+        const uri = new URI(this.uri);
+        const reference = await this.textModelService.createModelReference(uri);
+        const document = reference.object as MonacoEditorModel;
+
+        this.monacoEditor = await MonacoEditor.create(
+            uri,
+            document,
+            container,
+            this.monacoEditorServices,
+            {
+                language: 'markdown',
+                autoSizing: false,
+                minHeight: -1,
+            }
+        );
+
+        // Layout to fill container after mount
+        this.monacoEditor.getControl().layout();
+
+        // Auto-save on content change, debounced 1 second
+        let saveTimer: ReturnType<typeof setTimeout> | undefined;
+        this.toDispose.push(
+            this.monacoEditor.document.onDidChangeContent(() => {
+                if (saveTimer) { clearTimeout(saveTimer); }
+                saveTimer = setTimeout(() => {
+                    this.saveCurrentContent().catch(err =>
+                        console.warn('[MarkdownViewerWidget] Auto-save failed:', err)
+                    );
+                }, 1000);
+            })
+        );
+    }
+
+    protected destroyMonacoEditor(): void {
+        if (this.monacoEditor) {
+            this.monacoEditor.dispose();
+            this.monacoEditor = undefined;
+        }
+    }
+
+    protected async saveCurrentContent(): Promise<void> {
+        if (!this.monacoEditor || !this.uri) { return; }
+        const text = this.monacoEditor.document.getText();
+        const uri = new URI(this.uri);
+        await this.fileService.write(uri, text);
     }
 
     /** Run mermaid.run() after DOM settles. */
