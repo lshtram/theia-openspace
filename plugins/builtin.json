@@ -1,0 +1,27 @@
+[
+  {
+    "id": "redhat.vscode-yaml",
+    "version": "latest",
+    "description": "YAML language support"
+  },
+  {
+    "id": "mhutchie.git-graph",
+    "version": "latest",
+    "description": "Git history graph (vscode.git is not on Open VSX)"
+  },
+  {
+    "id": "esbenp.prettier-vscode",
+    "version": "latest",
+    "description": "Code formatter"
+  },
+  {
+    "id": "yzhang.markdown-all-in-one",
+    "version": "latest",
+    "description": "Markdown editing and preview"
+  },
+  {
+    "id": "ms-python.python",
+    "version": "latest",
+    "description": "Python language support"
+  }
+]
