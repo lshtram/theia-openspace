@@ -20,6 +20,12 @@ import '../style/prompt-input.css';
 // Simple unique ID generator
 const generateId = () => crypto.randomUUID();
 
+// B07: Structured history entry — stores both plain text (for dedup) and innerHTML (for pill restoration)
+interface HistoryEntry {
+    text: string;   // plain text content (for dedup comparison)
+    html: string;   // innerHTML snapshot (for full restoration with pills)
+}
+
 // Maximum number of prompt history entries to keep
 const MAX_HISTORY = 100;
 
@@ -78,7 +84,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [slashQuery, setSlashQuery] = React.useState('');
     const [selectedSlashIndex, setSelectedSlashIndex] = React.useState(0);
     // Task 20: Prompt history state
-    const [historyEntries, setHistoryEntries] = React.useState<string[]>([]);
+    // B07: Store both text and innerHTML so pills restore correctly
+    const [historyEntries, setHistoryEntries] = React.useState<HistoryEntry[]>([]);
     const [historyIndex, setHistoryIndex] = React.useState(-1);
     const [savedDraft, setSavedDraft] = React.useState('');
     // Task 21: Shell mode state
@@ -350,11 +357,21 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         e.preventDefault();
                         const newIndex = historyIndex + 1;
                         if (historyIndex === -1) {
-                            setSavedDraft(editorRef.current?.textContent || '');
+                            // B07: Save innerHTML so pills in the draft survive round-trip
+                            setSavedDraft(editorRef.current?.innerHTML || '');
                         }
                         setHistoryIndex(newIndex);
                         if (editorRef.current) {
-                            editorRef.current.textContent = historyEntries[newIndex];
+                            // B07: Restore innerHTML to bring pills back as interactive elements
+                            const entry = historyEntries[newIndex];
+                            editorRef.current.innerHTML = entry.html;
+                            // Move cursor to end of restored content
+                            const range = document.createRange();
+                            const sel = window.getSelection();
+                            range.selectNodeContents(editorRef.current);
+                            range.collapse(false);
+                            sel?.removeAllRanges();
+                            sel?.addRange(range);
                         }
                         handleEditorInput();
                         return;
@@ -369,9 +386,26 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     setHistoryIndex(newIndex);
                     if (editorRef.current) {
                         if (newIndex === -1) {
-                            editorRef.current.textContent = savedDraft;
+                            // B07: Restore draft innerHTML so pills come back as interactive elements
+                            editorRef.current.innerHTML = savedDraft;
+                            // Move cursor to end of restored content
+                            const draftRange = document.createRange();
+                            const draftSel = window.getSelection();
+                            draftRange.selectNodeContents(editorRef.current);
+                            draftRange.collapse(false);
+                            draftSel?.removeAllRanges();
+                            draftSel?.addRange(draftRange);
                         } else {
-                            editorRef.current.textContent = historyEntries[newIndex];
+                            // B07: Restore innerHTML to bring pills back as interactive elements
+                            const entry = historyEntries[newIndex];
+                            editorRef.current.innerHTML = entry.html;
+                            // Move cursor to end of restored content
+                            const range = document.createRange();
+                            const sel = window.getSelection();
+                            range.selectNodeContents(editorRef.current);
+                            range.collapse(false);
+                            sel?.removeAllRanges();
+                            sel?.addRange(range);
                         }
                     }
                     handleEditorInput();
@@ -571,9 +605,11 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         if (disabled) return;
 
         // Task 20: Save to prompt history before clearing
+        // B07: Save both text and innerHTML so pills restore correctly
         const rawText = editorRef.current?.textContent?.trim() || '';
-        if (rawText && rawText !== historyEntries[0]) {
-            setHistoryEntries(prev => [rawText, ...prev].slice(0, MAX_HISTORY));
+        const rawHtml = editorRef.current?.innerHTML || '';
+        if (rawText && rawText !== historyEntries[0]?.text) {
+            setHistoryEntries(prev => [{ text: rawText, html: rawHtml }, ...prev].slice(0, MAX_HISTORY));
         }
         setHistoryIndex(-1);
         setSavedDraft('');
