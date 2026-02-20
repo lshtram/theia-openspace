@@ -789,6 +789,64 @@ function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
     );
 }
 
+// ─── TurnGroup ─────────────────────────────────────────────────────────────
+interface TurnGroupProps {
+    isStreaming: boolean;
+    durationSecs: number;
+    children: React.ReactNode;
+}
+
+/**
+ * TurnGroup — wraps intermediate parts (tool calls, reasoning) in a collapsible
+ * container. While streaming, always shown expanded with a sidebar accent line.
+ * After completion, collapsed by default with a "Show steps · Xs" header.
+ */
+const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, children }) => {
+    const [expanded, setExpanded] = React.useState(false);
+
+    // While streaming: always show expanded, no collapse UI
+    if (isStreaming) {
+        return (
+            <div className="turn-group turn-group-streaming">
+                <div className="turn-group-sidebar" />
+                <div className="turn-group-body">{children}</div>
+            </div>
+        );
+    }
+
+    // After completion: collapsed header with toggle
+    return (
+        <div className={`turn-group ${expanded ? 'turn-group-open' : 'turn-group-closed'}`}>
+            <button
+                type="button"
+                className="turn-group-header"
+                onClick={() => setExpanded(v => !v)}
+                aria-expanded={expanded}
+            >
+                <svg
+                    className={`turn-group-chevron ${expanded ? 'expanded' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    width="12" height="12" aria-hidden="true"
+                >
+                    <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <span className="turn-group-label">{expanded ? 'Hide steps' : 'Show steps'}</span>
+                {durationSecs > 0 && (
+                    <span className="turn-group-duration">· {formatElapsed(durationSecs)}</span>
+                )}
+            </button>
+            {expanded && (
+                <div className="turn-group-sidebar-wrap">
+                    <div className="turn-group-sidebar" />
+                    <div className="turn-group-body">{children}</div>
+                </div>
+            )}
+        </div>
+    );
+};
+// ────────────────────────────────────────────────────────────────────────────
+
 /** Retry banner — shows error message, countdown, and attempt number. */
 const RetryBanner: React.FC<{ retryInfo: { message: string; attempt: number; next: number } }> = ({ retryInfo }) => {
     const [secondsLeft, setSecondsLeft] = React.useState(() =>
@@ -940,8 +998,39 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     }, [createdMs, completedMs, timerShouldRun, now]);
     // ─────────────────────────────────────────────────────────────────
 
-    // Group parts for context tool grouping only (no steps segmentation)
-    const groupedParts = React.useMemo(() => groupParts(parts), [parts]);
+    // Separate parts into intermediate (tool/reasoning) and final text.
+    // Only applied for assistant messages that have at least one intermediate part.
+    // If there are no intermediate parts, render everything flat as before.
+    const hasIntermediateParts = React.useMemo(
+        () => !isUser && parts.some(p => p.type === 'tool' || p.type === 'reasoning'),
+        [isUser, parts]
+    );
+
+    // The intermediate parts: everything that is not a text part
+    const intermediateParts = React.useMemo(
+        () => hasIntermediateParts ? parts.filter(p => p.type !== 'text') : [],
+        [hasIntermediateParts, parts]
+    );
+
+    // The final text part with its original index (last text part in the parts array)
+    const finalTextPartWithIndex = React.useMemo(() => {
+        if (!hasIntermediateParts) return null;
+        const textParts = parts
+            .map((p, i) => ({ part: p, index: i }))
+            .filter(({ part }) => part.type === 'text');
+        return textParts.at(-1) ?? null;
+    }, [hasIntermediateParts, parts]);
+
+    // For the TurnGroup body: apply context-tool grouping to the intermediate parts
+    const groupedIntermediateParts = React.useMemo(
+        () => hasIntermediateParts ? groupParts(intermediateParts) : [],
+        [hasIntermediateParts, intermediateParts]
+    );
+    // For flat rendering (no intermediate parts): group all parts as before
+    const groupedAllParts = React.useMemo(
+        () => !hasIntermediateParts ? groupParts(parts) : [],
+        [hasIntermediateParts, parts]
+    );
 
     return (
         <article
@@ -975,12 +1064,31 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 </div>
             )}
             <div className="message-bubble-content">
-                {groupedParts.map((group, gi) => {
-                    if (group.type === 'context-group') {
-                        return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
-                    }
-                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
-                })}
+                {hasIntermediateParts ? (
+                    <>
+                        {/* Intermediate parts (tool calls + reasoning) wrapped in TurnGroup */}
+                        {groupedIntermediateParts.length > 0 && (
+                            <TurnGroup isStreaming={isStreaming} durationSecs={0}>
+                                {groupedIntermediateParts.map((group, gi) => {
+                                    if (group.type === 'context-group') {
+                                        return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                                    }
+                                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+                                })}
+                            </TurnGroup>
+                        )}
+                        {/* Final text response — rendered outside the TurnGroup */}
+                        {finalTextPartWithIndex && renderTextPart(finalTextPartWithIndex.part, finalTextPartWithIndex.index)}
+                    </>
+                ) : (
+                    // No intermediate parts — render all parts flat as before
+                    groupedAllParts.map((group, gi) => {
+                        if (group.type === 'context-group') {
+                            return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                        }
+                        return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+                    })
+                )}
                 {/* Retry banner — shown when session is retrying */}
                 {retryInfo && <RetryBanner retryInfo={retryInfo} />}
                 {/* Streaming cursor */}

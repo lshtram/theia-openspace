@@ -1779,3 +1779,86 @@
 .openspace-chat-widget .part-retry-attempt {
     color: var(--oc-text-dim, #858585);
 }
+
+/* ─── Turn Group (intermediate steps wrapper) ─────────────────── */
+.openspace-chat-widget .turn-group {
+    position: relative;
+    margin: 4px 0 8px 0;
+}
+
+.openspace-chat-widget .turn-group-streaming {
+    display: flex;
+    gap: 0;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    align-self: stretch;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .turn-group-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    font-size: 11px;
+    font-family: inherit;
+    text-align: left;
+    border-radius: 3px;
+    width: 100%;
+}
+
+.openspace-chat-widget .turn-group-header:hover {
+    color: var(--theia-foreground, var(--oc-text, #ccc));
+}
+
+.openspace-chat-widget .turn-group-chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.openspace-chat-widget .turn-group-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.openspace-chat-widget .turn-group-label {
+    font-weight: 500;
+}
+
+.openspace-chat-widget .turn-group-duration {
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap {
+    display: flex;
+    gap: 0;
+    margin-top: 4px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-body {
+    flex: 1;
+    min-width: 0;
+}
