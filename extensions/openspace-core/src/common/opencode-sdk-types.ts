@@ -2786,7 +2786,7 @@ export type FindSymbolsResponses = {
     /**
      * Symbols
      */
-    200: Array<Symbol>;
+    200: Array<symbol>;
 };
 export type FindSymbolsResponse = FindSymbolsResponses[keyof FindSymbolsResponses];
 export type FileListData = {
@@ -3376,5 +3376,5 @@ export type EventSubscribeResponses = {
 };
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses];
 export type ClientOptions = {
-    baseUrl: `${string}://${string}` | (string & {});
+    baseUrl: `${string}://${string}` | (string & Record<never, never>);
 };

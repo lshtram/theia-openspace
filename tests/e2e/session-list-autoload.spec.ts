@@ -192,7 +192,7 @@ test.skip('Test 4: Empty state shows helpful message when no sessions exist', as
 // TEST 5: Event Listener Cleanup - No memory leaks on widget close
 // ============================================================================
 
-test.skip('Test 5: Event listeners cleaned up when widget closes (no memory leaks)', async ({ page }) => {
+test.skip('Test 5: Event listeners cleaned up when widget closes (no memory leaks)', async ({ page: _page }) => {
   // SKIPPED: Memory leak detection requires browser DevTools profiling
   // Event listener cleanup is already tested in unit tests (useEffect cleanup)
   console.log('⊘ Test 5 skipped - memory leak detection requires manual profiling');

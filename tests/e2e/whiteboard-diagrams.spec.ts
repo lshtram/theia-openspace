@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * E2E Test Suite: Whiteboard Diagram MCP Tools
  *
@@ -14,7 +15,7 @@
  * Note shape: type:"note" (NOT type:"geo", props.geo:"note").
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { mcpCall } from './helpers/mcp';
@@ -38,6 +39,9 @@ function parseResult(response: any): any {
 /** Workspace root — whiteboards must use absolute paths. */
 const WORKSPACE_ROOT = '/Users/Shared/dev/theia-openspace';
 
+/** Track all whiteboard files created during the run so afterAll can delete them. */
+const createdWhiteboardFiles: string[] = [];
+
 /** Create a fresh whiteboard and return its absolute path. */
 async function createWhiteboard(name: string): Promise<string> {
     // Use a timestamp suffix so each run creates a unique file (avoid "file exists" errors)
@@ -45,7 +49,38 @@ async function createWhiteboard(name: string): Promise<string> {
     const wbPath = path.join(WORKSPACE_ROOT, `${name}-${ts}.whiteboard.json`);
     const resp = await mcpCall('openspace.whiteboard.create', { path: wbPath });
     assertSuccess(resp, `create whiteboard "${name}"`);
+    createdWhiteboardFiles.push(wbPath);
     return wbPath;
+}
+
+/**
+ * Poll find_shapes until the tldraw editor is ready (widget initialised) or timeout.
+ * Replaces magic `waitForTimeout(1000)` with a condition-based wait.
+ */
+async function waitForWidgetReady(wbPath: string, timeoutMs = 5000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const resp = await mcpCall('openspace.whiteboard.find_shapes', { path: wbPath });
+        if (resp.result && resp.result.isError !== true) {
+            return; // widget is ready
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error(`Whiteboard widget at "${wbPath}" did not become ready within ${timeoutMs}ms`);
+}
+
+/** Delete all whiteboard files created during this test run. */
+function cleanupWhiteboardFiles(): void {
+    for (const filePath of createdWhiteboardFiles) {
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        } catch (_) {
+            // Ignore cleanup errors — test output is more important
+        }
+    }
+    createdWhiteboardFiles.length = 0;
 }
 
 /** Replace all shapes on a whiteboard and assert success. */
@@ -85,6 +120,7 @@ function textShape(x: number, y: number, text: string, color = 'black') {
 }
 
 /** Note shape helper (type:"note" — NOT geo) */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function note(x: number, y: number, text: string, color = 'yellow') {
     return { type: 'note', x, y, width: 200, height: 80, props: { color, richText: rt(text) } };
 }
@@ -282,10 +318,10 @@ const DIAGRAMS: Record<string, { shapes: any[], minCount: number }> = {
     'c4-container': {
         minCount: 5,
         shapes: [
-            geo(50,  50,  500, 350, 'rectangle', 'grey', 'none'),  // System boundary
-            geo(80,  100, 160, 100, 'rectangle', 'blue', 'none'),  // Web app container
-            geo(280, 100, 160, 100, 'rectangle', 'blue', 'none'),  // API container
-            geo(480, 100, 160, 100, 'rectangle', 'blue', 'none'),  // DB container
+            geo(50,  50,  620, 350, 'rectangle', 'grey', 'none'),  // System boundary (x=50..670)
+            geo(80,  100, 160, 100, 'rectangle', 'blue', 'none'),  // Web app container (x=80..240)
+            geo(280, 100, 160, 100, 'rectangle', 'blue', 'none'),  // API container (x=280..440)
+            geo(480, 100, 160, 100, 'rectangle', 'blue', 'none'),  // DB container (x=480..640 — inside boundary)
             textShape(90, 110, '[Web App]\nReact'),
             textShape(290, 110, '[API]\nNode.js'),
             textShape(490, 110, '[DB]\nPostgres'),
@@ -395,6 +431,11 @@ test.describe('Whiteboard MCP — diagram types', () => {
         fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
     });
 
+    // Clean up whiteboard files created during this describe block
+    test.afterAll(() => {
+        cleanupWhiteboardFiles();
+    });
+
     for (const [diagramType, { shapes, minCount }] of Object.entries(DIAGRAMS)) {
         test(`diagram type: ${diagramType}`, async ({ page }) => {
             // Collect JS console errors for full-stack E2E checks
@@ -413,8 +454,10 @@ test.describe('Whiteboard MCP — diagram types', () => {
             // 2. Open it so a widget is live (required for replace/find_shapes)
             const openResp = await mcpCall('openspace.whiteboard.open', { path: wbPath });
             assertSuccess(openResp, `open whiteboard "${diagramType}"`);
-            // Give the widget time to initialise the tldraw editor
-            await page.waitForTimeout(1000);
+            // Wait until the tldraw editor is ready (widget initialised).
+            // Polling calls may log transient errors; clear them before the real check.
+            await waitForWidgetReady(wbPath);
+            consoleErrors.length = 0; // discard any errors from the polling phase
 
             // 3. Replace with the diagram
             await replaceShapes(wbPath, shapes, diagramType);
@@ -463,6 +506,11 @@ const THEME_CONFIGS = {
 };
 
 test.describe('Whiteboard MCP — themes', () => {
+    // Clean up whiteboard files created during this describe block
+    test.afterAll(() => {
+        cleanupWhiteboardFiles();
+    });
+
     for (const [themeName, { nodeColor, edgeColor }] of Object.entries(THEME_CONFIGS)) {
         test(`theme: ${themeName}`, async ({ page }) => {
             // 0. Navigate to app so the bridge is connected
@@ -474,7 +522,8 @@ test.describe('Whiteboard MCP — themes', () => {
             // Open whiteboard so the widget is live
             const openResp = await mcpCall('openspace.whiteboard.open', { path: wbPath });
             assertSuccess(openResp, `open whiteboard "theme-${themeName}"`);
-            await page.waitForTimeout(1000);
+            // Wait until the tldraw editor is ready (widget initialised)
+            await waitForWidgetReady(wbPath);
 
             const shapes = flowchartWithTheme(nodeColor, edgeColor);
             await replaceShapes(wbPath, shapes, `theme-${themeName}`);

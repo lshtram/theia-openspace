@@ -4,6 +4,8 @@
 
 **Goal:** Fix chat auto-scroll so the viewport always follows new content; move the chat widget to the right sidebar with float-to-window support; add `sourcePaneId` to `pane.open` so the agent can split a specific existing pane.
 
+
+
 **Architecture:**
 - Auto-scroll: two targeted fixes in `message-timeline.tsx` — unconditional scroll on new message, reliable scroll during streaming
 - Chat placement: change `area` to `'right'` in `chat-view-contribution.ts`; implement `ExtractableWidget` on `ChatWidget` so the user can pop it into a floating OS window via Theia's `SecondaryWindowHandler`

@@ -47,7 +47,7 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
      * Called when the application starts.
      * Opens the chat widget in the right sidebar.
      */
-    async onStart(app: FrontendApplication): Promise<void> {
+    async onStart(_app: FrontendApplication): Promise<void> {
         console.debug('[ChatViewContribution] onStart called, opening chat widget');
         await this.openView({ activate: false, reveal: true });
     }

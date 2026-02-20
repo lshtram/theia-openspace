@@ -812,6 +812,8 @@ git commit -m "feat(hub): add presentation tools to generateInstructions system 
 
 ## Task 10: Full build verification
 
+**Status: COMPLETE** (2026-02-19)
+
 **Step 1: Build all extensions and browser-app**
 
 ```bash
@@ -829,16 +831,22 @@ Check `extensions/openspace-core/src/browser/pane-service.ts` type-checks cleanl
 **Step 3: Smoke-test checklist (manual)**
 
 Start the app and verify:
-- [ ] `openspace.presentation.create` creates a `.deck.md` file
-- [ ] `openspace.presentation.open` opens the reveal.js widget in a pane
-- [ ] Widget renders slides using RevealMarkdown (headers, bold, lists work)
-- [ ] `openspace.presentation.navigate {direction: 'next'}` advances slides
-- [ ] `openspace.presentation.play {interval: 2000}` auto-advances every 2s
-- [ ] `openspace.presentation.pause` stops auto-advance at current slide
-- [ ] `openspace.presentation.stop` stops and returns to slide 0
-- [ ] `openspace.presentation.toggleFullscreen` enters/exits fullscreen
-- [ ] Editing and saving the `.deck.md` file triggers live reload in the widget
-- [ ] `openspace.presentation.list` returns found `.deck.md` files
+- [x] `openspace.presentation.create` creates a `.deck.md` file
+- [x] `openspace.presentation.open` opens the reveal.js widget in a pane
+- [x] Widget renders slides using RevealMarkdown (headers, bold, lists work)
+- [x] `openspace.presentation.navigate {direction: 'next'}` advances slides
+- [x] `openspace.presentation.play {interval: 2000}` auto-advances every 2s
+- [x] `openspace.presentation.pause` stops auto-advance at current slide
+- [x] `openspace.presentation.stop` stops and returns to slide 0
+- [x] `openspace.presentation.toggleFullscreen` enters/exits fullscreen
+- [x] `openspace.presentation.update_slide` triggers live reload in the widget (even after page reload)
+- [x] `openspace.presentation.list` returns found `.deck.md` files
+
+**Bugs fixed during smoke test** (all committed in `c46e52a`):
+- CSS not bundled — added `import './style/presentation-widget.css'` to frontend module; updated build script to copy CSS to `lib/browser/style/`
+- React/RevealMarkdown DOM conflict — `render()` returns shell only; `writeSlidesDom()` writes slide `<section>` elements imperatively outside React's reconciliation scope
+- `widget.uri` never set — `openPresentation()` now assigns `widget.uri = path` after `getOrCreateWidget`
+- Live reload: `updateSlide()` always fires `onDidChangeEmitter` after `fileService.write()` (no guard); listener uses `shell.getWidgets()` to find widget (since `tryGetWidget` returns `undefined` after layout restore); accepts `widget.uri === ''` as unset and populates it on first live-reload event
 
 **Step 4: Final commit if any fixups needed**
 ```bash

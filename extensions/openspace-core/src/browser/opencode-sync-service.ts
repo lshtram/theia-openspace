@@ -303,6 +303,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         }
 
         // Route tool parts to live update (these carry no text delta)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toolParts = (event.data.parts || []).filter((p: any) => p.type === 'tool');
         if (toolParts.length > 0) {
             this.sessionService.updateStreamingMessageParts(event.messageId, toolParts);

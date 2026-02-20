@@ -19,7 +19,7 @@ import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/com
 import { ILogger } from '@theia/core/lib/common/logger';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
-import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
+import { TerminalWidget, TerminalWidgetOptions } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { TerminalRingBuffer, sanitizeOutput, isDangerous } from './terminal-ring-buffer';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import * as path from 'path';
@@ -404,18 +404,11 @@ export class TerminalCommandContribution implements CommandContribution {
                 }
             }
 
-            const options: any = {
+            const options: TerminalWidgetOptions = {
                 title: args.title || 'OpenSpace Terminal',
+                ...(args.cwd ? { cwd: path.normalize(args.cwd) } : {}),
+                ...(args.shellPath ? { shellPath: path.normalize(args.shellPath) } : {}),
             };
-
-            if (args.cwd) {
-                options.cwd = path.normalize(args.cwd);
-            }
-
-            // Use validated shellPath or default
-            if (args.shellPath) {
-                options.shellPath = path.normalize(args.shellPath);
-            }
 
             const widget = await this.terminalService.newTerminal(options);
             await widget.start();

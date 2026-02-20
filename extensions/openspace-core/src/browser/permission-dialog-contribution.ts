@@ -21,7 +21,8 @@ import { Disposable } from '@theia/core';
 import { ILogger } from '@theia/core/lib/common/logger';
 import * as React from '@theia/core/shared/react';
 import { createRoot } from '@theia/core/shared/react-dom/client';
-import { OpenCodeService } from '../common/opencode-protocol';
+import type { Root as ReactRoot } from 'react-dom/client';
+import { OpenCodeService, PermissionNotification } from '../common/opencode-protocol';
 import { OpenCodeSyncService } from './opencode-sync-service';
 import { PermissionDialogManager } from './permission-dialog-manager';
 import { PermissionDialog } from './permission-dialog';
@@ -55,7 +56,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
     private manager: PermissionDialogManager | null = null;
     private dialogContainer: HTMLElement | null = null;
     private permissionEventDisposable: Disposable | null = null;
-    private root: any | null = null;
+    private root: ReactRoot | null = null;
 
     @postConstruct()
     protected init(): void {
@@ -105,7 +106,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
      * Render PermissionDialog component into DOM.
      * Creates a container div and appends to document body.
      */
-    private renderDialog(app: FrontendApplication): void {
+    private renderDialog(_app: FrontendApplication): void {
         if (!this.manager) {
             return;
         }
@@ -151,7 +152,7 @@ export class PermissionDialogContribution implements FrontendApplicationContribu
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             Object.assign((window as any).__openspace_test__, {
-                injectPermissionEvent: (event: any) => {
+                injectPermissionEvent: (event: PermissionNotification) => {
                     if (this.manager) {
                         this.manager.handlePermissionEvent(event);
                     }

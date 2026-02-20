@@ -401,7 +401,7 @@ export class FileCommandContribution implements CommandContribution {
             }
 
             // T2-20: Check file size before reading
-            const size = (stat as any).size;
+            const size = (stat as { size?: number }).size;
             if (size !== undefined && size > MAX_FILE_SIZE) {
                 this.logger.warn(`[FileCommand] File too large: ${args.path} (${size} bytes, max ${MAX_FILE_SIZE})`);
                 return { 
@@ -471,7 +471,7 @@ export class FileCommandContribution implements CommandContribution {
 
             // Get children from the resolved stat
             const children = stat.children || [];
-            const files: FileInfo[] = children.map((child: any) => ({
+            const files: FileInfo[] = children.map(child => ({
                 name: child.name,
                 path: child.resource.path.toString(),
                 isDirectory: child.isDirectory,

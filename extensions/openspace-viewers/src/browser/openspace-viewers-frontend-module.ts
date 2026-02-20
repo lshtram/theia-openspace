@@ -7,6 +7,7 @@ import { ContainerModule } from '@theia/core/shared/inversify';
 import './style/markdown-viewer-widget.css';
 import { WidgetFactory, OpenHandler } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common/command';
+import URI from '@theia/core/lib/common/uri';
 import { MarkdownViewerWidget } from './markdown-viewer-widget';
 import { MarkdownViewerOpenHandler } from './markdown-viewer-open-handler';
 import { MarkdownViewerToolbarContribution } from './markdown-viewer-toolbar-contribution';
@@ -23,7 +24,7 @@ export default new ContainerModule((bind) => {
                 const widget = context.container.get<MarkdownViewerWidget>(MarkdownViewerWidget);
                 if (options?.uri) {
                     widget.uri = options.uri;
-                    const uriObj = new (require('@theia/core/lib/common/uri').URI)(options.uri);
+                    const uriObj = new URI(options.uri);
                     widget.title.label = uriObj.path.base;
                     widget.title.caption = uriObj.path.base;
                 }

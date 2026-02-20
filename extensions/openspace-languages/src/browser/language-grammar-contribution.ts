@@ -319,7 +319,7 @@ const TS_JS_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
     ],
     indentationRules: {
         increaseIndentPattern: /^((?!\/\/).)*(\{[^}"'`]*|\([^)"'`]*|\[[^\]"'`]*)$/,
-        decreaseIndentPattern: /^((?!.*?\/\*).*\*\/)?\s*[\}\])].*$/
+        decreaseIndentPattern: /^((?!.*?\/\*).*\*\/)?\s*[}\])].*$/
     }
 };
 
@@ -389,7 +389,7 @@ const PYTHON_LANG_CONFIG: monaco.languages.LanguageConfiguration = {
         { open: "'", close: "'" }, { open: '`', close: '`' }
     ],
     indentationRules: {
-        increaseIndentPattern: /^\s*[\:\(\[\{](\s*(#.*)?)?\s*$/,
+        increaseIndentPattern: /^\s*[:([{](\s*(#.*)?)?\s*$/,
         decreaseIndentPattern: /^\s*((\belse:\s*)|((\bexcept|\bfinally|\belse)\b.*:))\s*/
     }
 };

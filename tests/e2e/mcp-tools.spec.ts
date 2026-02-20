@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * E2E Test Suite: MCP Tools Smoke Tests (Tier 2)
  *
@@ -18,7 +19,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { mcpJsonRpc, MCP_URL } from './helpers/mcp';
+import { mcpJsonRpc } from './helpers/mcp';
 
 /**
  * Expected tool names registered by OpenSpaceMcpServer.

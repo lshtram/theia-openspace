@@ -113,8 +113,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
             }
 
             this.logger.info('[BridgeContribution] Registered as MCP command bridge');
-        } catch (error: any) {
-            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+        } catch (error: unknown) {
+            const err = error as Error;
+            if (err.name === 'TypeError' || err.message.includes('fetch')) {
                 this.logger.warn('[BridgeContribution] Warning: Hub not available, bridge not registered');
             } else {
                 this.logger.error('[BridgeContribution] Error registering bridge:', error);
@@ -181,8 +182,9 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
             }
 
             this.logger.debug(`[BridgeContribution] Published pane state: ${state.panes.length} panes`);
-        } catch (error: any) {
-            if (error.name === 'TypeError' || error.message.includes('fetch')) {
+        } catch (error: unknown) {
+            const err = error as Error;
+            if (err.name === 'TypeError' || err.message.includes('fetch')) {
                 this.logger.warn('[BridgeContribution] Warning: Hub not available, state not published');
             } else {
                 this.logger.error('[BridgeContribution] Error publishing state:', error);

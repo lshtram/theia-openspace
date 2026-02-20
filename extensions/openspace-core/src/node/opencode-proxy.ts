@@ -735,7 +735,7 @@ export class OpenCodeProxy implements OpenCodeService {
             } else if (event.type === 'file.watcher.updated') {
                 filePath = event.properties.file;
             } else {
-                this.logger.debug(`[OpenCodeProxy] Unhandled file event type: ${(event as any).type}`);
+                this.logger.debug(`[OpenCodeProxy] Unhandled file event type: ${(event as { type?: unknown }).type}`);
                 return;
             }
 

@@ -22,6 +22,7 @@ import { ILogger } from '@theia/core/lib/common/logger';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { Widget } from '@lumino/widgets';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
+import { TerminalWidgetOptions } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { EditorWidget } from '@theia/editor/lib/browser';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
@@ -268,7 +269,7 @@ export class PaneServiceImpl implements PaneService {
 
             if (args.type === 'terminal') {
                 // Open a new terminal in the bottom panel
-                const options: any = {
+                const options: TerminalWidgetOptions = {
                     title: args.title || args.contentId || 'Agent Terminal',
                 };
                 const widget = await this.terminalService.newTerminal(options);
@@ -510,8 +511,9 @@ export class PaneServiceImpl implements PaneService {
         const tabs: TabInfo[] = [];
         
         // Check if this is a tabbed widget (has currentWidget)
-        if ((widget as any).currentWidget) {
-            const currentWidget = (widget as any).currentWidget;
+        const tabbedWidget = widget as Widget & { currentWidget?: Widget };
+        if (tabbedWidget.currentWidget) {
+            const currentWidget = tabbedWidget.currentWidget;
             if (currentWidget && !currentWidget.isDisposed) {
                 tabs.push({
                     id: currentWidget.id,

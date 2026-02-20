@@ -20,6 +20,7 @@
  * Required: 5 E2E scenarios minimum
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, expect, request } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:3000';
@@ -265,7 +266,7 @@ test('Comprehensive: All core APIs are accessible', async () => {
   ];
   
   let successCount = 0;
-  let failureCount = 0;
+  let _failureCount = 0;
   
   for (const endpoint of endpoints) {
     try {
@@ -284,11 +285,11 @@ test('Comprehensive: All core APIs are accessible', async () => {
         successCount++;
         console.log(`✓ ${endpoint.name}: ${response.status()}`);
       } else {
-        failureCount++;
+        _failureCount++;
         console.log(`✗ ${endpoint.name}: ${response.status()}`);
       }
     } catch (error) {
-      failureCount++;
+      _failureCount++;
       console.log(`✗ ${endpoint.name}: ${error}`);
     }
   }

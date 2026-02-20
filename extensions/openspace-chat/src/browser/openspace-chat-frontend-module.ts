@@ -16,7 +16,7 @@ import './style/chat-widget.css';
 import './style/message-timeline.css';
 import './style/prompt-input.css';
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // Chat agent
     bind(ChatAgent).to(OpenspaceChatAgent).inSingletonScope();
     console.log('[OpenSpaceChat] Chat agent registered');

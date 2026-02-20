@@ -5,9 +5,9 @@
  * This is a requirement for integration tests that communicate with the backend.
  */
 
-import { chromium, FullConfig } from '@playwright/test';
+import { FullConfig } from '@playwright/test';
 import * as http from 'http';
-import { execSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 
 const OPENCODE_PORT = 7890;
 const OPENCODE_URL = `http://localhost:${OPENCODE_PORT}`;
@@ -62,7 +62,7 @@ function startOpenCodeServer(): Promise<void> {
   });
 }
 
-async function globalSetup(config: FullConfig) {
+async function globalSetup(_config: FullConfig) {
   console.log('[Global Setup] Checking OpenCode server...');
   
   // Check if server is already running

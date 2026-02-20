@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -82,7 +83,7 @@ describe('PaneService', () => {
         mockShell = {
             activeWidget: undefined,
             getWidgetById: () => undefined,
-            getWidgets: (area: string) => {
+            getWidgets: (_area: string) => {
                 // Default empty array, but can be overridden in tests
                 return [];
             },
@@ -149,7 +150,7 @@ describe('PaneService', () => {
 
         it('should open terminal in bottom panel', async () => {
             // Arrange
-            (mockShell as any).addWidget = async (widget: Widget, options: any) => {};
+            (mockShell as any).addWidget = async (_widget: Widget, _options: any) => {};
 
             // Act
             const result = await paneService.openContent({
@@ -164,7 +165,7 @@ describe('PaneService', () => {
 
         it('should respect split direction option', async () => {
             // Arrange
-            (mockShell as any).addWidget = async (widget: Widget, options: any) => {};
+            (mockShell as any).addWidget = async (_widget: Widget, _options: any) => {};
 
             // Act
             const result = await paneService.openContent({
@@ -240,7 +241,7 @@ describe('PaneService', () => {
                 if (id === 'test-pane') return mockWidget;
                 return undefined;
             };
-            (mockShell as any).closeWidget = async (widget: Widget) => true;
+            (mockShell as any).closeWidget = async (_widget: Widget) => true;
 
             // Act
             const result = await paneService.closeContent({
@@ -273,7 +274,7 @@ describe('PaneService', () => {
                 if (id === 'focus-pane') return mockWidget;
                 return undefined;
             };
-            (mockShell as any).activateWidget = async (id: string) => true;
+            (mockShell as any).activateWidget = async (_id: string) => true;
 
             // Act
             const result = await paneService.focusContent({
@@ -301,7 +302,7 @@ describe('PaneService', () => {
     describe('listPanes', () => {
         it('should return empty array when no panes exist', async () => {
             // Arrange - no widgets (getWidgets returns empty array)
-            (mockShell as any).getWidgets = (area: string) => [];
+            (mockShell as any).getWidgets = (_area: string) => [];
 
             // Act
             const panes = await paneService.listPanes();

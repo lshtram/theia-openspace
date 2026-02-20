@@ -9,12 +9,12 @@ import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/li
 import { ApplicationShell, Widget } from '@theia/core/lib/browser';
 import { MarkdownViewerWidget } from './markdown-viewer-widget';
 
-export namespace MarkdownViewerCommands {
-    export const TOGGLE_MODE: Command = {
+export const MarkdownViewerCommands = {
+    TOGGLE_MODE: {
         id: 'openspace.markdownViewer.toggleMode',
         label: 'Toggle Preview/Edit',
-    };
-}
+    } as Command,
+};
 
 @injectable()
 export class MarkdownViewerToolbarContribution

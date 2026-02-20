@@ -891,6 +891,7 @@ export class SessionServiceImpl implements SessionService {
         const parts = [...(message.parts || [])];
 
         for (const incoming of toolParts) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const existingIndex = parts.findIndex(p => (p as any).id === incoming.id);
             if (existingIndex >= 0) {
                 // Replace existing part with updated state

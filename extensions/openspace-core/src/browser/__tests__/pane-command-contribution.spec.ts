@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -71,7 +72,7 @@ class MockPaneService implements PaneService {
         return { success: false };
     }
 
-    trackAgentPane(paneId: string, pinned?: boolean): void {}
+    trackAgentPane(_paneId: string, _pinned?: boolean): void {}
     getAgentPanes(): any[] { return []; }
 }
 

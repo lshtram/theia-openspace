@@ -242,7 +242,6 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
         return (
             <div
                 className="markdown-viewer-preview"
-                // eslint-disable-next-line react/no-danger
                 dangerouslySetInnerHTML={{ __html: html }}
                 ref={el => { if (el) { this.runMermaid(); } }}
             />

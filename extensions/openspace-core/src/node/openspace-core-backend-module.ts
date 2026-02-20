@@ -22,7 +22,7 @@ class OpenCodeProxyLifecycle implements BackendApplicationContribution {
     }
 }
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Bind the OpenCode server URL
   bind<string>(OpenCodeServerUrl).toConstantValue(DEFAULT_OPENCODE_URL).whenTargetIsDefault();
 

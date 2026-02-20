@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -80,8 +81,6 @@ describe('OpenSpaceMcpServer — resolveCommand()', () => {
 
     it('resolves a pending command promise with the result', async () => {
         const requestId = 'req-resolve-001';
-        let resolvedValue: CommandBridgeResult | undefined;
-
         // Manually inject a pending entry to simulate in-flight bridge call
         const p = new Promise<CommandBridgeResult>((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('timeout')), 5000);
@@ -91,7 +90,7 @@ describe('OpenSpaceMcpServer — resolveCommand()', () => {
         const result = makeResult({ requestId });
         server.resolveCommand(requestId, result);
 
-        resolvedValue = await p;
+        const resolvedValue = await p;
         expect(resolvedValue).to.equal(result);
         expect(priv(server).pendingCommands.has(requestId)).to.be.false;
     });
@@ -574,13 +573,13 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
 
     it('ConflictError (wrong baseVersion) returns isError:true from the MCP tool handler', async () => {
         // Capture the actual openspace.artifact.patch handler by passing a fake server
-        const handlers = new Map<string, Function>();
-        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        const handlers = new Map<string, (args: unknown) => Promise<unknown>>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => { handlers.set(name, handler); } };
         priv(server).registerToolsOn(fakeServer);
         const handler = handlers.get('openspace.artifact.patch')!;
 
         // Call handler with a baseVersion that will never match (file version is 0)
-        const result = await handler({
+        const result: any = await handler({
             path: 'new-file.ts',
             baseVersion: 99, // wrong — current version is 0
             actor: 'agent',
@@ -594,13 +593,13 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
 
     it('path traversal returns isError:true from the MCP tool handler', async () => {
         // Capture the actual openspace.artifact.patch handler by passing a fake server
-        const handlers = new Map<string, Function>();
-        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        const handlers = new Map<string, (args: unknown) => Promise<unknown>>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => { handlers.set(name, handler); } };
         priv(server).registerToolsOn(fakeServer);
         const handler = handlers.get('openspace.artifact.patch')!;
 
         // Call handler with a path-traversal path
-        const result = await handler({
+        const result: any = await handler({
             path: '../outside.txt',
             baseVersion: 0,
             actor: 'agent',
@@ -640,12 +639,12 @@ describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
     });
 
     it('openspace.artifact.getVersion returns version 0 for unknown file', async () => {
-        const handlers = new Map<string, Function>();
-        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        const handlers = new Map<string, (args: unknown) => Promise<unknown>>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => { handlers.set(name, handler); } };
         priv(server).registerToolsOn(fakeServer);
         const handler = handlers.get('openspace.artifact.getVersion')!;
 
-        const result = await handler({ path: 'unknown-file.ts' });
+        const result: any = await handler({ path: 'unknown-file.ts' });
 
         expect(result.isError).to.be.undefined;
         const parsed = JSON.parse(result.content[0].text);
@@ -654,8 +653,8 @@ describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
     });
 
     it('openspace.artifact.getVersion returns updated version after a patch', async () => {
-        const handlers = new Map<string, Function>();
-        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        const handlers = new Map<string, (args: unknown) => Promise<unknown>>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => { handlers.set(name, handler); } };
         priv(server).registerToolsOn(fakeServer);
         const getVersionHandler = handlers.get('openspace.artifact.getVersion')!;
         const patchHandler = handlers.get('openspace.artifact.patch')!;
@@ -670,19 +669,19 @@ describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
         });
 
         // Now getVersion should return 1
-        const result = await getVersionHandler({ path: 'versioned-artifact.ts' });
+        const result: any = await getVersionHandler({ path: 'versioned-artifact.ts' });
         expect(result.isError).to.be.undefined;
         const parsed = JSON.parse(result.content[0].text);
         expect(parsed).to.have.property('version', 1);
     });
 
     it('openspace.artifact.getVersion returns isError:true for path traversal', async () => {
-        const handlers = new Map<string, Function>();
-        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: Function) => { handlers.set(name, handler); } };
+        const handlers = new Map<string, (args: unknown) => Promise<unknown>>();
+        const fakeServer = { tool: (name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => { handlers.set(name, handler); } };
         priv(server).registerToolsOn(fakeServer);
         const handler = handlers.get('openspace.artifact.getVersion')!;
 
-        const result = await handler({ path: '../outside.ts' });
+        const result: any = await handler({ path: '../outside.ts' });
         expect(result.isError).to.be.true;
         expect(result.content[0].text).to.include('Error:');
     });

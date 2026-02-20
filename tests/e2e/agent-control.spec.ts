@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * E2E Test Suite: Agent IDE Control (Tier 2)
  *
@@ -97,7 +98,7 @@ test.describe('Agent IDE Control', () => {
         });
         test.skip(!hasInjectHook, 'injectMessageEvent hook not available — SyncService may not have wired yet');
 
-        const sessionId = await getActiveSessionId(page);
+        const _sessionId = await getActiveSessionId(page);
 
         // Get the actual active session ID from the SessionService if one exists
         const activeSessionId = await page.evaluate(() => {

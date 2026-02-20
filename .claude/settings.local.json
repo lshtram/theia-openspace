@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(xargs:*)",
-      "Bash(yarn build:*)"
+      "Bash(yarn build:*)",
+      "WebSearch"
     ]
   }
 }

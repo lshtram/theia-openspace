@@ -168,7 +168,6 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     React.useEffect(() => {
         bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
         // Only run once on mount
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Determine message groups

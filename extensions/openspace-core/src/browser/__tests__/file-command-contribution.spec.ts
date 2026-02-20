@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -58,13 +59,13 @@ class MockFileService {
             ]
         };
     }
-    async read(uri: any) {
+    async read(_uri: any) {
         return { value: 'file content', encoding: 'utf-8' };
     }
-    async write(uri: any, content: string) {
+    async write(_uri: any, _content: string) {
         return;
     }
-    async createFolder(uri: any) {
+    async createFolder(_uri: any) {
         return;
     }
 }

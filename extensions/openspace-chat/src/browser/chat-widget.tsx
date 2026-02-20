@@ -161,20 +161,20 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     }, [showMenu]);
 
     return (
-        <div className="chat-header-bar">
+        <div className="chat-header-bar session-header">
             {/* Session title — clicking opens dropdown */}
             <div className="session-selector">
                 <button
                     type="button"
-                    className={`chat-header-title oc-icon-btn ${activeSession ? '' : 'no-session'}`}
+                     className={`chat-header-title oc-icon-btn session-dropdown-button ${activeSession ? '' : 'no-session'}`}
                     style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 6px', borderRadius: 3, textAlign: 'left' }}
                     onClick={onToggleDropdown}
                     data-test-sessions-count={sessions.length}
                     aria-haspopup="listbox"
                     aria-expanded={showSessionList}
-                    title={activeSession?.title ?? 'No session'}
+                    title={activeSession?.title ?? 'No Session'}
                 >
-                    {activeSession ? activeSession.title : 'No session'}
+                    {activeSession ? activeSession.title : 'No Session'}
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
                         <path d="m6 9 6 6 6-6"/>
                     </svg>
@@ -184,11 +184,11 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                     <div className="session-list-dropdown" role="listbox" aria-label="Session list">
                         {!sessionService.activeProject && (
                             <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585' }}>
-                                No project open.
+                                No project selected
                             </div>
                         )}
                         {sessionService.activeProject && isLoadingSessions && (
-                            <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div className="session-list-loading" style={{ padding: '8px 12px', fontSize: 12, color: '#858585', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
                                     <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                                 </svg>
@@ -198,7 +198,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         {sessionService.activeProject && sessionLoadError && (
                             <div style={{ padding: '8px 12px', fontSize: 12, color: '#f14c4c' }}>
                                 {sessionLoadError}
-                                <button type="button" onClick={onLoadSessions} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#007acc', cursor: 'pointer', fontSize: 12 }}>Retry</button>
+                                <button type="button" className="retry-button" onClick={onLoadSessions} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#007acc', cursor: 'pointer', fontSize: 12 }}>Retry</button>
                             </div>
                         )}
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
@@ -227,7 +227,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
             {/* New session */}
             <button
                 type="button"
-                className="oc-icon-btn"
+                className="oc-icon-btn new-session-button"
                 onClick={onNewSession}
                 title="New session"
                 aria-label="New session"
@@ -236,6 +236,21 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
             </button>
+
+            {/* Delete session — only visible when a session is active */}
+            {activeSession && (
+                <button
+                    type="button"
+                    className="oc-icon-btn delete-session-button"
+                    onClick={onDeleteSession}
+                    title="Delete session"
+                    aria-label="Delete session"
+                >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                </button>
+            )}
 
             {/* More actions (…) button with dropdown */}
             <div style={{ position: 'relative' }} ref={menuRef}>

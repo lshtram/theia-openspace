@@ -58,6 +58,43 @@
 - Test file changes only
 - `.opencode/` context updates
 
+## Build & Deploy Gotchas (Discovered 2026-02-19)
+
+### CRITICAL: The Server Runs From a Worktree, Not the Main Repo
+
+**The Theia backend (port 3000) runs from `.worktrees/whiteboard-direct-mount/`, NOT from the repo root.**
+
+Verify with: `ps aux | grep main.js`
+
+Expected output shows:
+```
+node .../theia-openspace/.worktrees/whiteboard-direct-mount/browser-app/lib/backend/main.js --port 3000
+```
+
+**Consequence**: Rebuilding in the repo root (`browser-app/build`, `extensions/*/build`) has ZERO effect on the running app. The user will see no change after a hard-reload.
+
+**Rule for every agent**: Before touching ANY build step, run `ps aux | grep main.js` to find which directory the server is serving from. Build there.
+
+**Correct build sequence (targeting the worktree)**:
+```bash
+yarn --cwd .worktrees/whiteboard-direct-mount/extensions/<ext-name> build
+yarn --cwd .worktrees/whiteboard-direct-mount/browser-app build
+# Then user does Cmd+Shift+R in browser
+```
+
+**How to apply a source fix to the worktree**: The fix must be applied to both the main repo (for git history) and the worktree (for the running server). Check if they differ with `diff extensions/foo/src/... .worktrees/whiteboard-direct-mount/extensions/foo/src/...`.
+
+### Webpack Bundles Are Split Across Chunks
+
+The browser frontend is NOT a single `bundle.js`. Webpack splits it into many chunk files named after their source path. Searching `bundle.js` for a symbol from `extensions/openspace-presentation/` will find nothing.
+
+The presentation widget code lives in:
+```
+browser-app/lib/frontend/extensions_openspace-presentation_lib_browser_openspace-presentation-frontend-module_js-data_-33a5b6.js
+```
+
+**Rule**: After a webpack rebuild, grep the chunk file named after the extension, not `bundle.js`.
+
 ## Critical Runtime Patterns (Discovered 2026-02-17)
 
 ### Pattern: Circular DI Dependencies in Theia Extensions
