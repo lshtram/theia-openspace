@@ -255,6 +255,40 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     // SDK messages use time.created (number timestamp in ms)
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
+    // ── Elapsed timer ──────────────────────────────────────────────────
+    const [elapsedSecs, setElapsedSecs] = React.useState(0);
+    const streamStartRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        if (!isStreaming) return;
+        // Record start time on first streaming tick
+        if (streamStartRef.current === null) {
+            streamStartRef.current = Date.now();
+        }
+        const id = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - streamStartRef.current!) / 1000);
+            setElapsedSecs(elapsed);
+        }, 1000);
+        return () => clearInterval(id);
+    }, [isStreaming]);
+
+    // Reset timer when a new message starts (message.id changes)
+    const prevMessageIdRef = React.useRef(message.id);
+    React.useEffect(() => {
+        if (prevMessageIdRef.current !== message.id) {
+            prevMessageIdRef.current = message.id;
+            streamStartRef.current = null;
+            setElapsedSecs(0);
+        }
+    }, [message.id]);
+
+    const formatElapsed = (secs: number): string => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+    // ─────────────────────────────────────────────────────────────────
+
     // Check if there are any renderable parts (non-empty)
     const hasParts = parts.length > 0;
 
@@ -280,8 +314,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         </svg>
                         Assistant
                     </span>
-                    {timestamp && (
-                        <span className="message-bubble-timestamp">{timestamp}</span>
+                    {/* Show elapsed timer while streaming or after it finishes; fall back to wall-clock */}
+                    {(isStreaming || elapsedSecs > 0) ? (
+                        <span className="message-bubble-timestamp message-bubble-elapsed">
+                            {formatElapsed(elapsedSecs)}
+                        </span>
+                    ) : (
+                        timestamp && <span className="message-bubble-timestamp">{timestamp}</span>
                     )}
                 </div>
             )}
