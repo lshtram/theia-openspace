@@ -148,6 +148,19 @@ export interface CommandInfo {
 }
 
 /**
+ * Agent info (API response from GET /agent — returns Agent.Info[]).
+ * Shape matches the OpenCode server's Agent.Info zod schema.
+ */
+export interface AgentInfo {
+    name: string;
+    description?: string;
+    model?: {
+        modelID: string;
+        providerID: string;
+    };
+}
+
+/**
  * Agent (API response).
  */
 export interface Agent {
@@ -227,6 +240,12 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Command methods
     listCommands(directory?: string): Promise<CommandInfo[]>;
+
+    // File search with query
+    searchFiles(sessionId: string, query: string, limit?: number): Promise<string[]>;
+
+    // Agent list
+    listAgents(directory?: string): Promise<AgentInfo[]>;
 
     // Question methods
     listPendingQuestions(projectId: string, sessionId: string): Promise<SDKTypes.QuestionRequest[]>;

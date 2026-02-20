@@ -31,6 +31,7 @@ import {
     FileStatus,
     FileContent,
     Agent,
+    AgentInfo,
     Provider,
     AppConfig,
     CommandInfo,
@@ -414,6 +415,21 @@ export class OpenCodeProxy implements OpenCodeService {
         // OpenCode API: GET /command
         const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
         return this.get<CommandInfo[]>('/command', queryParams);
+    }
+
+    async searchFiles(sessionId: string, query: string, limit = 20): Promise<string[]> {
+        // OpenCode API: GET /session/:id/find/file?query=...&dirs=false&limit=20
+        return this.get<string[]>(`/session/${encodeURIComponent(sessionId)}/find/file`, {
+            query,
+            dirs: 'false',
+            limit: String(limit),
+        });
+    }
+
+    async listAgents(directory?: string): Promise<AgentInfo[]> {
+        // OpenCode API: GET /agent (returns list of all agents)
+        const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
+        return this.get<AgentInfo[]>('/agent', queryParams);
     }
 
     // =========================================================================

@@ -14,7 +14,7 @@ import * as React from '@theia/core/shared/react';
 import { parseFromDOM } from './parse-from-dom';
 import { buildRequestParts } from './build-request-parts';
 import type { PromptInputProps, Prompt, ImagePart, FilePart } from './types';
-import type { CommandInfo } from 'openspace-core/lib/common/opencode-protocol';
+import type { CommandInfo, AgentInfo } from 'openspace-core/lib/common/opencode-protocol';
 import '../style/prompt-input.css';
 
 // Simple unique ID generator
@@ -61,7 +61,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     disabled = false,
     placeholder = 'Type your message, @mention files/agents, or attach images...',
     workspaceRoot: workspaceRootProp,
-    openCodeService
+    openCodeService,
+    sessionId
 }) => {
     const editorRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -94,11 +95,81 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         return () => { cancelled = true; };
     }, [openCodeService]);
 
+    // B04/B05: Server agents fetched from GET /agent
+    const [serverAgents, setServerAgents] = React.useState<AgentInfo[]>([]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        openCodeService?.listAgents?.()
+            .then(agents => { if (!cancelled) setServerAgents(agents); })
+            .catch(() => { /* use hardcoded fallback */ });
+        return () => { cancelled = true; };
+    }, [openCodeService]);
+
     // B03: Merge builtin + server commands (builtin first)
     const allSlashCommands = React.useMemo(() => [
         ...BUILTIN_SLASH_COMMANDS,
         ...serverCommands.map(c => ({ name: `/${c.name}`, description: c.description || '', local: false as const }))
     ], [serverCommands]);
+
+    // B04/B05: Computed typeahead items (state-driven for async file search)
+    const [typeaheadItems, setTypeaheadItems] = React.useState<Array<{ type: 'agent' | 'file'; name: string; description?: string }>>([]);
+    // Separate state tracks whether a query has been resolved (to show "no results" message)
+    const [typeaheadResolved, setTypeaheadResolved] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!typeaheadType) {
+            setTypeaheadItems([]);
+            setTypeaheadResolved(false);
+            return;
+        }
+
+        // Agents: filter serverAgents (with AVAILABLE_AGENTS as fallback if server list is empty)
+        const agentSource = serverAgents.length > 0 ? serverAgents : AVAILABLE_AGENTS;
+        const matchedAgents = agentSource
+            .filter(agent => fuzzyMatch(typeaheadQuery, agent.name))
+            .map(agent => ({ type: 'agent' as const, name: agent.name, description: agent.description }));
+
+        // Just typed '@' with no query — show agents only, no file search
+        if (typeaheadQuery.length === 0) {
+            setTypeaheadItems(matchedAgents);
+            setTypeaheadResolved(true);
+            return;
+        }
+
+        // Show matched agents immediately; file results will be appended after debounce
+        setTypeaheadItems(matchedAgents);
+        setTypeaheadResolved(false);
+
+        if (!sessionId || !openCodeService?.searchFiles) {
+            // No file search available — resolve immediately with agents only
+            setTypeaheadResolved(true);
+            return;
+        }
+
+        // Debounce file search by 250ms to avoid a request per keystroke
+        let cancelled = false;
+        const debounceTimer = setTimeout(() => {
+            openCodeService.searchFiles(sessionId, typeaheadQuery)
+                .then(files => {
+                    if (cancelled) return;
+                    const fileItems = files.map(f => ({ type: 'file' as const, name: f }));
+                    setTypeaheadItems([...matchedAgents, ...fileItems]);
+                    setTypeaheadResolved(true);
+                })
+                .catch(() => {
+                    if (!cancelled) {
+                        // File search failed — keep agents-only result
+                        setTypeaheadResolved(true);
+                    }
+                });
+        }, 250);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(debounceTimer);
+        };
+    }, [typeaheadType, typeaheadQuery, serverAgents, sessionId, openCodeService]);
 
     /**
      * Get the current prompt from editor and attachments.
@@ -194,22 +265,20 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
         // Handle typeahead navigation
         if (showTypeahead) {
-            const items = getTypeaheadItems();
-            
             switch (e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
-                    setSelectedTypeaheadIndex(prev => (prev + 1) % items.length);
+                    setSelectedTypeaheadIndex(prev => (prev + 1) % typeaheadItems.length);
                     return;
                 case 'ArrowUp':
                     e.preventDefault();
-                    setSelectedTypeaheadIndex(prev => (prev - 1 + items.length) % items.length);
+                    setSelectedTypeaheadIndex(prev => (prev - 1 + typeaheadItems.length) % typeaheadItems.length);
                     return;
                 case 'Enter':
                 case 'Tab':
                     e.preventDefault();
-                    if (items[selectedTypeaheadIndex]) {
-                        insertTypeaheadItem(items[selectedTypeaheadIndex]);
+                    if (typeaheadItems[selectedTypeaheadIndex]) {
+                        insertTypeaheadItem(typeaheadItems[selectedTypeaheadIndex]);
                     }
                     return;
                 case 'Escape':
@@ -400,30 +469,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         handleInput();
         handleEditorInput();
     }, [handleEditorInput, handleInput]);
-
-    /**
-     * Get items for typeahead based on query and type.
-     * Task 19: Uses fuzzy matching for agents and shows "no files found" hint.
-     */
-    const getTypeaheadItems = (): Array<{ type: 'agent' | 'file'; name: string; description?: string }> => {
-        if (!typeaheadType) return [];
-
-        if (typeaheadType === 'agent') {
-            const matchedAgents = AVAILABLE_AGENTS
-                .filter(agent => fuzzyMatch(typeaheadQuery, agent.name))
-                .map(agent => ({ type: 'agent' as const, name: agent.name, description: agent.description }));
-
-            // If query is non-empty and no agents match, show a "no files found" hint
-            if (matchedAgents.length === 0 && typeaheadQuery.length > 0) {
-                return [{ type: 'file' as const, name: 'No files found', description: `No agents or files matching "${typeaheadQuery}"` }];
-            }
-
-            return matchedAgents;
-        }
-
-        // For files, we would search the workspace - not yet implemented
-        return [];
-    };
 
     /**
      * Insert a typeahead item into the editor.
@@ -679,7 +724,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setFileAttachments(prev => prev.filter(f => f.path !== filePath));
     };
 
-    const typeaheadItems = getTypeaheadItems();
     const filteredSlashCommands = allSlashCommands.filter(c =>
         c.name.toLowerCase().includes(slashQuery.toLowerCase())
     );
@@ -737,11 +781,18 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             )}
 
             {/* Typeahead Dropdown – rendered outside editor-wrapper to avoid overflow:hidden clipping */}
-            {showTypeahead && typeaheadItems.length > 0 && (
+            {showTypeahead && (typeaheadItems.length > 0 || (typeaheadResolved && typeaheadQuery.length > 0)) && (
                 <div 
                     className="prompt-input-typeahead"
                 >
-                    {typeaheadItems.map((item, index) => (
+                    {typeaheadItems.length === 0 && typeaheadResolved ? (
+                        <div className="typeahead-item typeahead-empty">
+                            <div className="typeahead-content">
+                                <div className="typeahead-description">{`No agents or files matching "${typeaheadQuery}"`}</div>
+                            </div>
+                        </div>
+                    ) : (
+                        typeaheadItems.map((item, index) => (
                         <div
                             key={`${item.type}-${item.name}`}
                             className={`typeahead-item ${index === selectedTypeaheadIndex ? 'selected' : ''}`}
@@ -777,7 +828,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                                 )}
                             </div>
                         </div>
-                    ))}
+                    )))}
                 </div>
             )}
 

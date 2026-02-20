@@ -96,6 +96,7 @@ export interface ImageMessagePart {
  * Props for the PromptInput component.
  * T3-9: Added workspaceRoot prop to avoid hardcoded path.
  * B03: Added openCodeService to fetch server slash commands.
+ * B04/B05: Added sessionId for file search.
  */
 export interface PromptInputProps {
     onSend: (parts: MessagePart[]) => void | Promise<void>;
@@ -105,4 +106,6 @@ export interface PromptInputProps {
     placeholder?: string;
     workspaceRoot?: string;
     openCodeService?: OpenCodeService;
+    /** Active session ID for file search via @mention */
+    sessionId?: string;
 }
