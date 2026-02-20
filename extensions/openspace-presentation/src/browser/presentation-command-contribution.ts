@@ -411,9 +411,13 @@ export class PresentationCommandContribution implements CommandContribution, Key
 
         widget.uri = path;
 
-        await this.shell.addWidget(widget, { area, mode });
-
+        // Set content BEFORE addWidget so that when onAfterAttach fires
+        // (synchronously during addWidget), deckContent is already populated
+        // and writeSlidesDom() renders real slides instead of the placeholder.
+        // This mirrors the file-click path in PresentationOpenHandler.
         widget.setContent(content);
+
+        await this.shell.addWidget(widget, { area, mode });
         await this.shell.activateWidget(widget.id);
 
         this.presentationService.setActivePresentation(path);
