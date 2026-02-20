@@ -63,6 +63,8 @@ const fuzzyMatch = (query: string, target: string): boolean => {
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
     onCommand,
+    onBuiltinCommand,
+    onShellCommand,
     onStop,
     isStreaming = false,
     disabled = false,
@@ -571,36 +573,49 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
-     * Select a slash command: clear editor and execute it (B03).
-     * Local/builtin commands are handled client-side.
-     * Server commands are routed via onCommand → POST /session/:id/command.
+     * Select a slash command from the popover (B03).
+     *
+     * Following the OpenCode reference client architecture:
+     * - Builtin commands: execute immediately via onBuiltinCommand (no text sent).
+     * - Custom/server commands: insert "/<trigger> " into editor so user can add arguments.
+     *   The command is dispatched on Enter via handleSendClick.
      */
     const selectSlashCommand = (cmd: { name: string; description: string; local?: boolean; agent?: string }) => {
-        // Clear the editor text
-        if (editorRef.current) {
-            editorRef.current.textContent = '';
-        }
         setShowSlashMenu(false);
-        setHasContent(false);
 
         if (cmd.local) {
-            // Builtin command: send as a regular message (existing behavior for /clear, /compact, /help)
-            const workspaceRoot = workspaceRootProp ?? '';
-            const parts = buildRequestParts(
-                [{ type: 'text', content: cmd.name, start: 0, end: cmd.name.length }],
-                workspaceRoot
-            );
-            onSend(parts);
-        } else {
-            // Server command: route via onCommand so it hits POST /session/:id/command
+            // Builtin: clear editor and execute immediately
+            if (editorRef.current) {
+                editorRef.current.textContent = '';
+            }
+            setHasContent(false);
             const commandName = cmd.name.startsWith('/') ? cmd.name.slice(1) : cmd.name;
-            onCommand?.(commandName, '', cmd.agent);
+            onBuiltinCommand?.(commandName);
+        } else {
+            // Custom/server: place "/<trigger> " into editor for user to add arguments
+            const trigger = cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`;
+            const text = `${trigger} `;
+            if (editorRef.current) {
+                editorRef.current.textContent = text;
+                // Place cursor at end
+                const range = document.createRange();
+                const sel = window.getSelection();
+                range.selectNodeContents(editorRef.current);
+                range.collapse(false);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+            }
+            setHasContent(true);
         }
     };
 
     /**
-     * Handle send button click.
-     * T3-9: Use workspaceRoot prop instead of hardcoded '/workspace'
+     * Handle send button click (or Enter key).
+     *
+     * Three dispatch paths (matching the OpenCode reference client):
+     * 1. Shell mode: execute the command via onShellCommand callback
+     * 2. Slash command: text starts with "/" and matches a server command → onCommand
+     * 3. Regular chat: everything else → onSend
      */
     const handleSendClick = () => {
         // If agent is working and no content typed, treat click as Stop
@@ -622,12 +637,44 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setSavedDraft('');
 
         const prompt = getCurrentPrompt();
-        
+
         const hasText = prompt.some(p => p.type === 'text' && p.content.trim().length > 0);
         const hasAttachments = prompt.some(p => p.type === 'file' || p.type === 'agent' || p.type === 'image');
 
         if (!hasText && !hasAttachments) return;
 
+        // Path 1: Shell mode — execute command directly via backend
+        if (shellMode && rawText) {
+            clearEditor();
+            setShellMode(false);
+            onShellCommand?.(rawText);
+            return;
+        }
+
+        // Path 2: Slash command — text starts with "/" and matches a server command
+        if (rawText.startsWith('/')) {
+            const [cmdToken, ...argTokens] = rawText.split(' ');
+            const commandName = cmdToken.slice(1); // remove leading "/"
+            const matchedCommand = serverCommands.find(c => c.name === commandName);
+            if (matchedCommand) {
+                const args = argTokens.join(' ').trim();
+                clearEditor();
+                onCommand?.(commandName, args, matchedCommand.agent);
+                if (shellMode) setShellMode(false);
+                return;
+            }
+            // No match — also check builtins typed manually
+            const builtinMatch = BUILTIN_SLASH_COMMANDS.find(c => c.name === `/${commandName}` || c.name === commandName);
+            if (builtinMatch) {
+                clearEditor();
+                onBuiltinCommand?.(commandName);
+                if (shellMode) setShellMode(false);
+                return;
+            }
+            // No match at all — fall through to regular chat
+        }
+
+        // Path 3: Regular chat message
         const workspaceRoot = workspaceRootProp ?? '';
         const parts = buildRequestParts(prompt, workspaceRoot);
 

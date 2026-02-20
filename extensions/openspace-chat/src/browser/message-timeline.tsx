@@ -17,7 +17,8 @@
 import * as React from '@theia/core/shared/react';
 import { Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import type { SessionService } from 'openspace-core/lib/browser/session-service';
-import { MessageBubble } from './message-bubble';
+import { MessageBubble, TurnGroup } from './message-bubble';
+import type { ShellOutput } from './chat-widget';
 
 /**
  * Props for the MessageTimeline component.
@@ -25,6 +26,8 @@ import { MessageBubble } from './message-bubble';
 export interface MessageTimelineProps {
     /** Array of messages to display */
     messages: Message[];
+    /** Locally-executed shell command outputs to display inline */
+    shellOutputs?: ShellOutput[];
     /** Whether a message is currently streaming */
     isStreaming: boolean;
     /** ID of the message currently being streamed, if any */
@@ -60,6 +63,41 @@ const TextShimmer: React.FC<{ text: string }> = ({ text }) => (
 );
 
 /**
+ * ShellOutputBlock - Renders the output of a locally-executed shell command.
+ * Shows the command that was run, its stdout/stderr, and exit code.
+ */
+const ShellOutputBlock: React.FC<{ output: ShellOutput }> = ({ output }) => {
+    const isRunning = output.exitCode === -1;
+    const hasError = output.exitCode !== 0 && !isRunning;
+    const outputText = (output.stdout + (output.stderr ? (output.stdout ? '\n' : '') + output.stderr : '')).trimEnd();
+
+    return (
+        <div className={`shell-output-block ${hasError ? 'shell-output-error' : ''}`}>
+            <div className="shell-output-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+                <code className="shell-output-command">{'!'}{output.command}</code>
+                {!isRunning && (
+                    <span className={`shell-output-exit ${hasError ? 'shell-output-exit-error' : 'shell-output-exit-ok'}`}>
+                        exit {output.exitCode}
+                    </span>
+                )}
+                {isRunning && (
+                    <span className="shell-output-running">running...</span>
+                )}
+            </div>
+            {outputText && (
+                <pre className="shell-output-content">{outputText}</pre>
+            )}
+            {output.error && (
+                <div className="shell-output-error-msg">{output.error}</div>
+            )}
+        </div>
+    );
+};
+
+/**
  * Scroll threshold (pixels from bottom) to consider "scrolled up".
  */
 const SCROLLED_UP_THRESHOLD = 50;
@@ -80,6 +118,7 @@ const PROGRAMMATIC_SCROLL_WINDOW = 250;
  */
 export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     messages,
+    shellOutputs = [],
     isStreaming,
     streamingMessageId,
     openCodeService,
@@ -206,6 +245,42 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         return { isFirst, isLast };
     };
 
+    /**
+     * Build a grouped rendering plan for all messages.
+     * Consecutive assistant messages are batched: all but the last are "intermediate steps"
+     * and get rendered inside a single shared TurnGroup. The last is the "final answer"
+     * and renders as a normal MessageBubble.
+     *
+     * Each entry is one of:
+     *  - { kind: 'user', index }           — a user message, render normally
+     *  - { kind: 'assistant-run', indices } — a run of assistant messages;
+     *                                          indices[0..n-2] are intermediate, indices[n-1] is final
+     */
+    type RenderItem =
+        | { kind: 'user'; index: number }
+        | { kind: 'assistant-run'; indices: number[] };
+
+    const renderPlan = React.useMemo<RenderItem[]>(() => {
+        const plan: RenderItem[] = [];
+        let i = 0;
+        while (i < messages.length) {
+            if (messages[i].role !== 'assistant') {
+                plan.push({ kind: 'user', index: i });
+                i++;
+            } else {
+                // Collect all consecutive assistant messages
+                const run: number[] = [];
+                while (i < messages.length && messages[i].role === 'assistant') {
+                    run.push(i);
+                    i++;
+                }
+                plan.push({ kind: 'assistant-run', indices: run });
+            }
+        }
+        return plan;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages]);
+
     return (
         <div className="message-timeline">
             <div
@@ -226,28 +301,94 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             <div className="message-timeline-empty-hint">Type a message below, or attach a file with @</div>
                         </div>
                     ) : (
-                        messages.map((message, index) => {
-                            const isUser = message.role === 'user';
-                            const isMessageStreaming = isStreaming && streamingMessageId === message.id;
-                            const { isFirst, isLast } = getMessageGroupInfo(index);
+                        renderPlan.map((item, planIdx) => {
+                            if (item.kind === 'user') {
+                                const index = item.index;
+                                const message = messages[index];
+                                const { isFirst, isLast } = getMessageGroupInfo(index);
+                                return (
+                                    <MessageBubble
+                                        key={message.id}
+                                        message={message}
+                                        isUser={true}
+                                        isStreaming={false}
+                                        isFirstInGroup={isFirst}
+                                        isLastInGroup={isLast}
+                                        openCodeService={openCodeService}
+                                        sessionService={sessionService}
+                                        pendingPermissions={pendingPermissions}
+                                        onReplyPermission={onReplyPermission}
+                                        onOpenFile={onOpenFile}
+                                    />
+                                );
+                            }
+
+                            // assistant-run
+                            const { indices } = item;
+                            const finalIndex = indices[indices.length - 1];
+                            const finalMessage = messages[finalIndex];
+                            const isRunStreaming = isStreaming && indices.some(i => streamingMessageId === messages[i].id);
+
+                            // Compute total duration for the TurnGroup header (sum of all intermediate messages' durations)
+                            const totalDurationSecs = indices.slice(0, -1).reduce((sum, idx) => {
+                                const m = messages[idx];
+                                const c = m.time?.created;
+                                const d = (m.time as any)?.completed;
+                                if (!c || !d) return sum;
+                                const cMs = typeof c === 'number' ? c : new Date(c).getTime();
+                                const dMs = typeof d === 'number' ? d : new Date(d).getTime();
+                                return sum + Math.max(0, Math.floor((dMs - cMs) / 1000));
+                            }, 0);
 
                             return (
-                                <MessageBubble
-                                    key={message.id}
-                                    message={message}
-                                    isUser={isUser}
-                                    isStreaming={isMessageStreaming}
-                                    isFirstInGroup={isFirst}
-                                    isLastInGroup={isLast}
-                                    openCodeService={openCodeService}
-                                    sessionService={sessionService}
-                                    pendingPermissions={pendingPermissions}
-                                    onReplyPermission={onReplyPermission}
-                                    onOpenFile={onOpenFile}
-                                />
+                                <React.Fragment key={`run-${planIdx}`}>
+                                    {/* Intermediate steps: all messages before the last, wrapped in one TurnGroup */}
+                                    {indices.length > 1 && (
+                                        <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs}>
+                                            {indices.slice(0, -1).map(idx => {
+                                                const m = messages[idx];
+                                                const isMessageStreaming = isStreaming && streamingMessageId === m.id;
+                                                return (
+                                                    <MessageBubble
+                                                        key={m.id}
+                                                        message={m}
+                                                        isUser={false}
+                                                        isStreaming={isMessageStreaming}
+                                                        isFirstInGroup={false}
+                                                        isLastInGroup={false}
+                                                        isIntermediateStep={true}
+                                                        openCodeService={openCodeService}
+                                                        sessionService={sessionService}
+                                                        pendingPermissions={pendingPermissions}
+                                                        onReplyPermission={onReplyPermission}
+                                                        onOpenFile={onOpenFile}
+                                                    />
+                                                );
+                                            })}
+                                        </TurnGroup>
+                                    )}
+                                    {/* Final answer: last assistant message in the run, rendered normally */}
+                                    <MessageBubble
+                                        key={finalMessage.id}
+                                        message={finalMessage}
+                                        isUser={false}
+                                        isStreaming={isStreaming && streamingMessageId === finalMessage.id}
+                                        isFirstInGroup={true}
+                                        isLastInGroup={true}
+                                        openCodeService={openCodeService}
+                                        sessionService={sessionService}
+                                        pendingPermissions={pendingPermissions}
+                                        onReplyPermission={onReplyPermission}
+                                        onOpenFile={onOpenFile}
+                                    />
+                                </React.Fragment>
                             );
                         })
                     )}
+                    {/* Shell command outputs — rendered at the bottom of the timeline */}
+                    {shellOutputs.map(entry => (
+                        <ShellOutputBlock key={entry.id} output={entry} />
+                    ))}
                     {/* Character shimmer "Thinking" indicator — shown when streaming but no response parts yet */}
                     {isStreaming && !streamingMessageId && (
                         <TextShimmer text="Thinking" />

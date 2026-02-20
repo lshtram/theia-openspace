@@ -505,3 +505,91 @@
     background: var(--oc-bg-hover, #2a2d2e);
     border-color: var(--oc-border-focus, #007acc);
 }
+
+/* ============================================================================
+   Shell Output Block — inline display of ! shell command results
+   ============================================================================ */
+
+.openspace-chat-widget .shell-output-block {
+    margin: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-code, #1e1e1e);
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.openspace-chat-widget .shell-output-block.shell-output-error {
+    border-color: rgba(241, 76, 76, 0.4);
+}
+
+.openspace-chat-widget .shell-output-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--oc-bg-raised, #252526);
+    border-bottom: 1px solid var(--oc-border, #333);
+    color: var(--oc-text-dimmed, #888);
+    font-size: 12px;
+}
+
+.openspace-chat-widget .shell-output-command {
+    color: var(--oc-text, #ccc);
+    font-family: var(--theia-code-font-family, 'Menlo', 'Consolas', monospace);
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .shell-output-exit {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .shell-output-exit-ok {
+    color: #4ec9b0;
+    background: rgba(78, 201, 176, 0.1);
+}
+
+.openspace-chat-widget .shell-output-exit-error {
+    color: #f14c4c;
+    background: rgba(241, 76, 76, 0.1);
+}
+
+.openspace-chat-widget .shell-output-running {
+    font-size: 11px;
+    color: var(--oc-accent, #007acc);
+    animation: shell-running-pulse 1.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes shell-running-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+.openspace-chat-widget .shell-output-content {
+    margin: 0;
+    padding: 10px 12px;
+    color: var(--oc-text, #ccc);
+    font-family: var(--theia-code-font-family, 'Menlo', 'Consolas', monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.openspace-chat-widget .shell-output-error-msg {
+    padding: 6px 12px;
+    color: #f14c4c;
+    font-size: 12px;
+    border-top: 1px solid rgba(241, 76, 76, 0.2);
+    background: rgba(241, 76, 76, 0.06);
+}

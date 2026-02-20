@@ -20,6 +20,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as childProcess from 'child_process';
 import { createParser, ParsedEvent, ParseEvent } from 'eventsource-parser';
 import {
     OpenCodeService,
@@ -302,8 +303,14 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.getSession(_projectId, sessionId);
     }
 
-    async compactSession(_projectId: string, sessionId: string): Promise<Session> {
-        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/compact`, {});
+    async compactSession(_projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session> {
+        // OpenCode API: POST /session/:id/summarize
+        const body: Record<string, unknown> = {};
+        if (model) {
+            body['providerID'] = model.providerID;
+            body['modelID'] = model.modelID;
+        }
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/summarize`, body);
     }
 
     async revertSession(_projectId: string, sessionId: string): Promise<Session> {
@@ -417,14 +424,17 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<CommandInfo[]>('/command', queryParams);
     }
 
-    async sessionCommand(sessionId: string, command: string, args: string, agent: string, model: { providerID: string; modelID: string }): Promise<void> {
+    async sessionCommand(sessionId: string, command: string, args: string, agent: string, model?: { providerID: string; modelID: string }): Promise<void> {
         // OpenCode API: POST /session/:id/command
-        await this.post<unknown>(`/session/${encodeURIComponent(sessionId)}/command`, {
+        const body: Record<string, unknown> = {
             command,
             arguments: args,
             agent,
-            model: `${model.providerID}/${model.modelID}`,
-        });
+        };
+        if (model) {
+            body['model'] = `${model.providerID}/${model.modelID}`;
+        }
+        await this.post<unknown>(`/session/${encodeURIComponent(sessionId)}/command`, body);
     }
 
     async searchFiles(_sessionId: string, query: string, limit = 20): Promise<string[]> {
@@ -1037,5 +1047,56 @@ export class OpenCodeProxy implements OpenCodeService {
                 error: `Path validation error: ${err instanceof Error ? err.message : String(err)}`
             };
         }
+    }
+
+    /**
+     * Execute a shell command on the backend using child_process.exec.
+     * Used by the shell mode (!) in the chat prompt input.
+     * Commands are run with a 30-second timeout and 1MB output limit.
+     */
+    async executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }> {
+        const MAX_OUTPUT = 1024 * 1024; // 1MB
+        const TIMEOUT = 30_000; // 30 seconds
+
+        return new Promise(resolve => {
+            try {
+                const child = childProcess.exec(command, {
+                    cwd,
+                    timeout: TIMEOUT,
+                    maxBuffer: MAX_OUTPUT,
+                    shell: '/bin/bash',
+                    env: { ...process.env, TERM: 'dumb' },
+                }, (error, stdout, stderr) => {
+                    if (error) {
+                        // exec error (timeout, signal, etc.)
+                        resolve({
+                            stdout: stdout || '',
+                            stderr: stderr || error.message,
+                            exitCode: error.code !== undefined ? (typeof error.code === 'number' ? error.code : 1) : 1,
+                            error: error.killed ? 'Command timed out' : undefined,
+                        });
+                    } else {
+                        resolve({
+                            stdout: stdout || '',
+                            stderr: stderr || '',
+                            exitCode: 0,
+                        });
+                    }
+                });
+
+                // Safety: if the child somehow doesn't exit, force-kill after timeout + buffer
+                const safetyTimer = setTimeout(() => {
+                    try { child.kill('SIGKILL'); } catch { /* ignore */ }
+                }, TIMEOUT + 5000);
+                child.on('exit', () => clearTimeout(safetyTimer));
+            } catch (err) {
+                resolve({
+                    stdout: '',
+                    stderr: err instanceof Error ? err.message : String(err),
+                    exitCode: 1,
+                    error: 'Failed to execute command',
+                });
+            }
+        });
     }
 }

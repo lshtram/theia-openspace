@@ -50,6 +50,12 @@ export interface MessageBubbleProps {
     };
     /** Callback to open a file in the editor when a file path subtitle is clicked */
     onOpenFile?: (filePath: string) => void;
+    /**
+     * When true, this message is an intermediate step in a multi-turn run and is being
+     * rendered inside an outer TurnGroup managed by MessageTimeline. Parts are rendered
+     * flat (no inner TurnGroup, no header) so they fold into the outer group cleanly.
+     */
+    isIntermediateStep?: boolean;
 }
 
 // ─── Context tool names (grouped into "Gathered context" collapsible) ────────
@@ -765,31 +771,13 @@ function renderToolPart(
     return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} onOpenFile={onOpenFile} />;
 }
 
-/** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet. */
+/** Reasoning block — renders reasoning text inline, no sub-header or nested toggle. */
 const ReasoningBlock: React.FC<{ part: any }> = ({ part }) => {
-    const [expanded, setExpanded] = React.useState(false);
     const text: string = part.text || part.reasoning || '';
-    const hasNoText = !text;
+    if (!text) return null;
     return (
-        <div className="part-reasoning" data-expanded={expanded ? 'true' : 'false'}>
-            <div
-                className="part-reasoning-header"
-                onClick={() => text && setExpanded(e => !e)}
-                aria-expanded={expanded}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' && text) { setExpanded(x => !x); } }}
-            >
-                <svg className="part-reasoning-chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
-                    <path d="m9 18 6-6-6-6"/>
-                </svg>
-                <span className={hasNoText ? 'part-reasoning-label oc-shimmer' : 'part-reasoning-label'}>
-                    {hasNoText ? 'Thinking...' : 'Thinking Process'}
-                </span>
-            </div>
-            {text && (
-                <div className="part-reasoning-body">{text}</div>
-            )}
+        <div className="part-reasoning-inline">
+            {text}
         </div>
     );
 };
@@ -822,7 +810,7 @@ function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
 }
 
 // ─── TurnGroup ─────────────────────────────────────────────────────────────
-interface TurnGroupProps {
+export interface TurnGroupProps {
     isStreaming: boolean;
     durationSecs: number;
     children: React.ReactNode;
@@ -833,7 +821,7 @@ interface TurnGroupProps {
  * container. While streaming, always shown expanded with a sidebar accent line.
  * After completion, collapsed by default with a "Show steps · Xs" header.
  */
-const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, children }) => {
+export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, children }) => {
     const [expanded, setExpanded] = React.useState(false);
 
     // While streaming: always show expanded, no collapse UI
@@ -994,6 +982,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     onReplyPermission,
     retryInfo,
     onOpenFile,
+    isIntermediateStep = false,
 }) => {
     const parts = message.parts || [];
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
@@ -1071,6 +1060,22 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
         () => !hasIntermediateParts ? groupParts(parts) : [],
         [hasIntermediateParts, parts]
     );
+
+    // When rendered as an intermediate step (inside an outer TurnGroup from the timeline),
+    // render all parts flat — no article wrapper, no header, no inner TurnGroup.
+    if (isIntermediateStep) {
+        const allGrouped = groupParts(parts);
+        return (
+            <div className="message-bubble-intermediate">
+                {allGrouped.map((group, gi) => {
+                    if (group.type === 'context-group') {
+                        return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                    }
+                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
+                })}
+            </div>
+        );
+    }
 
     return (
         <article
@@ -1169,6 +1174,8 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
     if (prev.retryInfo !== next.retryInfo) return false;
     // Re-render when onOpenFile callback changes
     if (prev.onOpenFile !== next.onOpenFile) return false;
+    // Re-render when intermediate step status changes
+    if (prev.isIntermediateStep !== next.isIntermediateStep) return false;
     // No changes — skip re-render
     return true;
 });

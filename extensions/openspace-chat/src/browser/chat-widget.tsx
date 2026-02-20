@@ -127,6 +127,22 @@ interface ChatComponentProps {
     openerService: OpenerService;
 }
 
+/**
+ * A locally-executed shell command result displayed inline in the chat timeline.
+ * These are NOT persisted to the server — they live only in the client session.
+ */
+export interface ShellOutput {
+    id: string;
+    command: string;
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    error?: string;
+    timestamp: number;
+    /** Index into the messages array after which this output should appear */
+    afterMessageIndex: number;
+}
+
 // T7: ChatHeaderBar — unified single-bar header replacing the 2-bar layout
 interface ChatHeaderBarProps {
     showSessionList: boolean;
@@ -352,6 +368,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const messageQueueRef = React.useRef<PromptMessagePart[][]>([]);
     const isSendingRef = React.useRef(false);
     const disposablesRef = React.useRef<Disposable[]>([]);
+    // Shell mode: locally-executed command outputs displayed inline in the timeline
+    const [shellOutputs, setShellOutputs] = React.useState<ShellOutput[]>([]);
 
     // Subscribe to model changes
     React.useEffect(() => {
@@ -633,9 +651,75 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         const model = activeModel ? (() => {
             const [providerPart, ...modelParts] = activeModel.split('/');
             return { providerID: providerPart, modelID: modelParts.join('/') };
-        })() : { providerID: 'anthropic', modelID: 'claude-sonnet-4-5' };
-        await openCodeService.sessionCommand(session.id, command, args, agent ?? 'codegen', model);
+        })() : undefined;
+        await openCodeService.sessionCommand(session.id, command, args, agent ?? 'general', model);
     }, [sessionService, openCodeService]);
+
+    // Handle builtin slash commands (executed locally, never sent to server as text)
+    const handleBuiltinCommand = React.useCallback((command: string) => {
+        switch (command) {
+            case 'clear':
+                // Create a new session (like OpenCode's /new)
+                sessionService.createSession().catch(err => {
+                    console.error('[ChatWidget] Failed to create new session for /clear:', err);
+                });
+                break;
+            case 'compact': {
+                // Summarize/compact the current session
+                const session = sessionService.activeSession;
+                const project = sessionService.activeProject;
+                if (session && project) {
+                    const activeModel = sessionService.activeModel;
+                    const model = activeModel ? (() => {
+                        const [providerPart, ...modelParts] = activeModel.split('/');
+                        return { providerID: providerPart, modelID: modelParts.join('/') };
+                    })() : undefined;
+                    openCodeService.compactSession(project.id, session.id, model).catch(err => {
+                        console.error('[ChatWidget] Failed to compact session:', err);
+                    });
+                }
+                break;
+            }
+            case 'help':
+                // Show available commands — nothing to send; the slash menu itself is /help
+                // For now, just focus the input so user can type "/" to see commands
+                break;
+            default:
+                console.warn(`[ChatWidget] Unknown builtin command: /${command}`);
+        }
+    }, [sessionService, openCodeService]);
+
+    // Handle shell command execution via ! shell mode
+    const handleShellCommand = React.useCallback(async (command: string) => {
+        const cwd = workspaceRoot || '/';
+        // Create a placeholder entry immediately so the user sees the command
+        const id = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const placeholderEntry: ShellOutput = {
+            id,
+            command,
+            stdout: '',
+            stderr: '',
+            exitCode: -1,
+            timestamp: Date.now(),
+            afterMessageIndex: messages.length - 1,
+        };
+        setShellOutputs(prev => [...prev, placeholderEntry]);
+
+        try {
+            const result = await openCodeService.executeShellCommand(command, cwd);
+            setShellOutputs(prev => prev.map(entry =>
+                entry.id === id
+                    ? { ...entry, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, error: result.error }
+                    : entry
+            ));
+        } catch (err) {
+            setShellOutputs(prev => prev.map(entry =>
+                entry.id === id
+                    ? { ...entry, stderr: err instanceof Error ? err.message : String(err), exitCode: 1, error: 'RPC error' }
+                    : entry
+            ));
+        }
+    }, [openCodeService, workspaceRoot, messages.length]);
 
     const drainQueue = React.useCallback(async () => {
         if (isSendingRef.current) return;
@@ -719,6 +803,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     <>
                         <MessageTimeline
                             messages={messages}
+                            shellOutputs={shellOutputs}
                             isStreaming={isStreaming}
                             streamingMessageId={streamingMessageId}
                             openCodeService={openCodeService}
@@ -753,6 +838,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         <PromptInput
                             onSend={handleSend}
                             onCommand={handleCommand}
+                            onBuiltinCommand={handleBuiltinCommand}
+                            onShellCommand={handleShellCommand}
                             onStop={() => sessionService.abort()}
                             isStreaming={isStreaming}
                             disabled={pendingQuestions.length > 0}

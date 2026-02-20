@@ -209,7 +209,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     abortSession(projectId: string, sessionId: string): Promise<Session>;
     shareSession(projectId: string, sessionId: string): Promise<Session>;
     unshareSession(projectId: string, sessionId: string): Promise<Session>;
-    compactSession(projectId: string, sessionId: string): Promise<Session>;
+    compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session>;
     revertSession(projectId: string, sessionId: string): Promise<Session>;
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session>;
@@ -243,7 +243,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     listCommands(directory?: string): Promise<CommandInfo[]>;
 
     // Execute a slash command via POST /session/:id/command
-    sessionCommand(sessionId: string, command: string, args: string, agent: string, model: { providerID: string; modelID: string }): Promise<void>;
+    sessionCommand(sessionId: string, command: string, args: string, agent: string, model?: { providerID: string; modelID: string }): Promise<void>;
 
     // File search with query
     searchFiles(sessionId: string, query: string, limit?: number): Promise<string[]>;
@@ -258,6 +258,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Path validation (Node-side, uses fs.realpath for symlink resolution)
     validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }>;
+
+    // Shell command execution (Node-side, uses child_process.exec)
+    executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }>;
 }
 
 /**
