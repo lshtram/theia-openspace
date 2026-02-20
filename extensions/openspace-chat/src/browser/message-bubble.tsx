@@ -1039,20 +1039,27 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
         [isUser, parts]
     );
 
-    // The intermediate parts: everything that is not a text part
-    const intermediateParts = React.useMemo(
-        () => hasIntermediateParts ? parts.filter(p => p.type !== 'text') : [],
-        [hasIntermediateParts, parts]
-    );
-
-    // The final text part with its original index (last text part in the parts array)
-    const finalTextPartWithIndex = React.useMemo(() => {
-        if (!hasIntermediateParts) return null;
-        const textParts = parts
-            .map((p, i) => ({ part: p, index: i }))
-            .filter(({ part }) => part.type === 'text');
-        return textParts.at(-1) ?? null;
+    // Index of the last text part — everything before this is "intermediate"
+    const lastTextPartIndex = React.useMemo(() => {
+        if (!hasIntermediateParts) return -1;
+        let idx = -1;
+        parts.forEach((p, i) => { if (p.type === 'text') idx = i; });
+        return idx;
     }, [hasIntermediateParts, parts]);
+
+    // All parts except the last text part (which is the final answer).
+    // When there is no text part yet (mid-stream), all parts are intermediate.
+    const intermediateParts = React.useMemo(() => {
+        if (!hasIntermediateParts) return [];
+        if (lastTextPartIndex < 0) return [...parts]; // no final text yet — show everything
+        return parts.filter((_, i) => i !== lastTextPartIndex);
+    }, [hasIntermediateParts, parts, lastTextPartIndex]);
+
+    // Only the last text part is the "final answer" — rendered outside the TurnGroup
+    const finalTextPartWithIndex = React.useMemo(() => {
+        if (!hasIntermediateParts || lastTextPartIndex < 0) return null;
+        return { part: parts[lastTextPartIndex], index: lastTextPartIndex };
+    }, [hasIntermediateParts, parts, lastTextPartIndex]);
 
     // For the TurnGroup body: apply context-tool grouping to the intermediate parts
     const groupedIntermediateParts = React.useMemo(
