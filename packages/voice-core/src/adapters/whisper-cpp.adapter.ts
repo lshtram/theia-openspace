@@ -49,8 +49,8 @@ export class WhisperCppAdapter implements SttProvider {
         const stdout: Buffer[] = [];
         const stderr: Buffer[] = [];
 
-        proc.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
-        proc.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+        proc.stdout!.on('data', (chunk: Buffer) => stdout.push(chunk));
+        proc.stderr!.on('data', (chunk: Buffer) => stderr.push(chunk));
 
         proc.on('error', (err) => reject(new Error(`whisper.cpp spawn failed: ${err.message}`)));
         proc.on('close', (code) => {
