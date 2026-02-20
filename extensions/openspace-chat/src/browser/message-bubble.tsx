@@ -908,14 +908,15 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
     // ── Elapsed timer using server timestamps ─────────────────────────
-    // Driven entirely by message timestamps, NOT the isStreaming prop.
-    // If time.created exists but time.completed does NOT → timer runs.
+    // Primarily driven by message timestamps: timer runs when time.created exists
+    // but time.completed does NOT. Also gated on isStreaming to ensure the timer
+    // stops immediately on abort (where completed timestamp may never be set).
     // This prevents flicker when streamingMessageId goes undefined between SSE events.
     const created = message.time?.created;
     const completed = (message.time as any)?.completed;
     const createdMs = created ? (typeof created === 'number' ? created : new Date(created).getTime()) : 0;
     const completedMs = completed ? (typeof completed === 'number' ? completed : new Date(completed).getTime()) : 0;
-    const timerShouldRun = !isUser && !!createdMs && !completedMs;
+    const timerShouldRun = !isUser && !!createdMs && !completedMs && isStreaming;
 
     const [now, setNow] = React.useState(Date.now());
 
