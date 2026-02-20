@@ -161,3 +161,10 @@
 .openspace-presentation-widget .presentation-container .reveal.focused .future {
     opacity: 0.3;
 }
+
+/* Edit mode: Monaco editor fills the widget */
+.openspace-presentation-widget .presentation-editor-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
