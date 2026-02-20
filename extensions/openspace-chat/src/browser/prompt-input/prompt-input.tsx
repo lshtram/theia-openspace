@@ -105,6 +105,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setShowTypeahead(false);
         setShowSlashMenu(false);
         setHasContent(false);
+        setHistoryIndex(-1);
+        setSavedDraft('');
+        setShellMode(false);
     }, []);
 
     /**
@@ -163,6 +166,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
      * Handle keyboard events.
      */
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        // Ctrl+U — clear the prompt
+        if (e.key.toLowerCase() === 'u' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+            e.preventDefault();
+            clearEditor();
+            return;
+        }
+
         // Handle typeahead navigation
         if (showTypeahead) {
             const items = getTypeaheadItems();

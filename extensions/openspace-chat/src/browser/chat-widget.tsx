@@ -20,6 +20,8 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { MessageService } from '@theia/core/lib/common/message-service';
+import { OpenerService, open as openWithOpener } from '@theia/core/lib/browser';
+import { URI } from '@theia/core/lib/common/uri';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
@@ -50,6 +52,9 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
 
     @inject(MessageService)
     protected readonly messageService!: MessageService;
+
+    @inject(OpenerService)
+    protected readonly openerService!: OpenerService;
 
     constructor() {
         super();
@@ -109,6 +114,7 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
             openCodeService={this.openCodeService}
             workspaceRoot={this.getWorkspaceRoot()}
             messageService={this.messageService}
+            openerService={this.openerService}
         />;
     }
 }
@@ -118,6 +124,7 @@ interface ChatComponentProps {
     openCodeService: OpenCodeService;
     workspaceRoot: string;
     messageService: MessageService;
+    openerService: OpenerService;
 }
 
 // T7: ChatHeaderBar — unified single-bar header replacing the 2-bar layout
@@ -330,7 +337,7 @@ const ChatFooter: React.FC<{ isStreaming: boolean; streamingStatus: string }> = 
  * T3-10: Added messageService prop for dialogs
  * Exported for unit testing.
  */
-export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
@@ -591,6 +598,16 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         }
     }, [sessionService, messageService]);
 
+    const handleOpenFile = React.useCallback((filePath: string) => {
+        try {
+            const uri = new URI(filePath);
+            openWithOpener(openerService, uri);
+        } catch (e) {
+            console.error('[ChatWidget] Failed to open file:', filePath, e);
+            messageService.warn(`Could not open file: ${filePath}`);
+        }
+    }, [openerService, messageService]);
+
     // Handle send message (updated for multi-part input and model selection)
     // Messages are queued if streaming is active, and drained sequentially.
     const sendPartsNow = React.useCallback(async (parts: PromptMessagePart[]) => {
@@ -696,6 +713,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             sessionService={sessionService}
                             pendingPermissions={pendingPermissions}
                             onReplyPermission={handleReplyPermission}
+                            onOpenFile={handleOpenFile}
                         />
 
                         {/* QuestionDock — shown when the server asks a question */}

@@ -37,6 +37,8 @@ export interface MessageTimelineProps {
     pendingPermissions?: PermissionNotification[];
     /** Callback to reply to a permission request */
     onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
+    /** Callback to open a file in the editor when a file path subtitle is clicked */
+    onOpenFile?: (filePath: string) => void;
 }
 
 /**
@@ -84,6 +86,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     sessionService,
     pendingPermissions,
     onReplyPermission,
+    onOpenFile,
 }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const bottomSentinelRef = React.useRef<HTMLDivElement>(null);
@@ -240,6 +243,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                     sessionService={sessionService}
                                     pendingPermissions={pendingPermissions}
                                     onReplyPermission={onReplyPermission}
+                                    onOpenFile={onOpenFile}
                                 />
                             );
                         })

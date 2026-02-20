@@ -48,6 +48,8 @@ export interface MessageBubbleProps {
         attempt: number;
         next: number; // Unix timestamp (ms) of next retry
     };
+    /** Callback to open a file in the editor when a file path subtitle is clicked */
+    onOpenFile?: (filePath: string) => void;
 }
 
 // ─── Context tool names (grouped into "Gathered context" collapsible) ────────
@@ -59,6 +61,10 @@ const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|termi
 // Matches task/subagent tool names
 const TASK_TOOL_NAMES = /^(task|Task)$/;
 
+/** Returns true if the string looks like an absolute file path (no whitespace — excludes shell commands). */
+const isFilePath = (s: string): boolean =>
+    (s.startsWith('/') || /^[A-Za-z]:\\/.test(s)) && !/\s/.test(s);
+
 /**
  * Render a single message part based on its type.
  */
@@ -68,13 +74,14 @@ function renderPart(
     openCodeService?: OpenCodeService,
     sessionService?: SessionService,
     pendingPermissions?: PermissionNotification[],
-    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void,
+    onOpenFile?: (filePath: string) => void
 ): React.ReactNode {
     switch (part.type) {
         case 'text':
             return renderTextPart(part, index);
         case 'tool':
-            return renderToolPart(part, index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+            return renderToolPart(part, index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
         case 'reasoning':
             return renderReasoningPart(part, index);
         case 'step-start':
@@ -213,7 +220,8 @@ const ToolBlock: React.FC<{
     index?: number;
     pendingPermissions?: PermissionNotification[];
     onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
-}> = ({ part, pendingPermissions, onReplyPermission }) => {
+    onOpenFile?: (filePath: string) => void;
+}> = ({ part, pendingPermissions, onReplyPermission, onOpenFile }) => {
     const [expanded, setExpanded] = React.useState(false);
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
@@ -315,9 +323,20 @@ const ToolBlock: React.FC<{
                     </>
                 ) : (
                     subtitle && (
-                        <span className="part-tool-subtitle" title={subtitle}>
-                            {subtitle}
-                        </span>
+                        onOpenFile && isFilePath(subtitle) ? (
+                            <button
+                                type="button"
+                                className="part-tool-subtitle part-tool-file-link"
+                                onClick={e => { e.stopPropagation(); onOpenFile(subtitle); }}
+                                title={`Open ${subtitle}`}
+                            >
+                                {subtitle}
+                            </button>
+                        ) : (
+                            <span className="part-tool-subtitle" title={subtitle}>
+                                {subtitle}
+                            </span>
+                        )
                     )
                 )}
 
@@ -433,7 +452,8 @@ const TaskToolBlock: React.FC<{
     part: any;
     openCodeService?: OpenCodeService;
     sessionService?: SessionService;
-}> = ({ part, openCodeService, sessionService }) => {
+    onOpenFile?: (filePath: string) => void;
+}> = ({ part, openCodeService, sessionService, onOpenFile }) => {
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
         (state && typeof state === 'object' ? (state.status || state.type || 'completed') : 'completed');
@@ -580,9 +600,20 @@ const TaskToolBlock: React.FC<{
                                 {info.name}
                             </span>
                             {info.subtitle && (
-                                <span className="part-task-tool-item-subtitle" title={info.subtitle}>
-                                    {info.subtitle}
-                                </span>
+                                onOpenFile && isFilePath(info.subtitle) ? (
+                                    <button
+                                        type="button"
+                                        className="part-task-tool-item-subtitle part-tool-file-link"
+                                        onClick={e => { e.stopPropagation(); onOpenFile(info.subtitle); }}
+                                        title={`Open ${info.subtitle}`}
+                                    >
+                                        {info.subtitle}
+                                    </button>
+                                ) : (
+                                    <span className="part-task-tool-item-subtitle" title={info.subtitle}>
+                                        {info.subtitle}
+                                    </span>
+                                )
                             )}
                         </div>
                     );
@@ -719,7 +750,8 @@ function renderToolPart(
     openCodeService?: OpenCodeService,
     sessionService?: SessionService,
     pendingPermissions?: PermissionNotification[],
-    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void,
+    onOpenFile?: (filePath: string) => void
 ): React.ReactNode {
     // TodoWrite tool → always-expanded checklist
     if (/^(todowrite|TodoWrite|todo_write)$/i.test(part.tool || '')) {
@@ -727,10 +759,10 @@ function renderToolPart(
     }
     // Task tool → always-expanded TaskToolBlock with child session rendering
     if (TASK_TOOL_NAMES.test(part.tool || '')) {
-        return <TaskToolBlock key={part.id || `tool-${index}`} part={part} openCodeService={openCodeService} sessionService={sessionService} />;
+        return <TaskToolBlock key={part.id || `tool-${index}`} part={part} openCodeService={openCodeService} sessionService={sessionService} onOpenFile={onOpenFile} />;
     }
     // Individual rendering — grouping is done at the message level
-    return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} />;
+    return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} onOpenFile={onOpenFile} />;
 }
 
 /** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet. */
@@ -788,6 +820,64 @@ function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
         </span>
     );
 }
+
+// ─── TurnGroup ─────────────────────────────────────────────────────────────
+interface TurnGroupProps {
+    isStreaming: boolean;
+    durationSecs: number;
+    children: React.ReactNode;
+}
+
+/**
+ * TurnGroup — wraps intermediate parts (tool calls, reasoning) in a collapsible
+ * container. While streaming, always shown expanded with a sidebar accent line.
+ * After completion, collapsed by default with a "Show steps · Xs" header.
+ */
+const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, children }) => {
+    const [expanded, setExpanded] = React.useState(false);
+
+    // While streaming: always show expanded, no collapse UI
+    if (isStreaming) {
+        return (
+            <div className="turn-group turn-group-streaming">
+                <div className="turn-group-sidebar" />
+                <div className="turn-group-body">{children}</div>
+            </div>
+        );
+    }
+
+    // After completion: collapsed header with toggle
+    return (
+        <div className={`turn-group ${expanded ? 'turn-group-open' : 'turn-group-closed'}`}>
+            <button
+                type="button"
+                className="turn-group-header"
+                onClick={() => setExpanded(v => !v)}
+                aria-expanded={expanded}
+            >
+                <svg
+                    className={`turn-group-chevron ${expanded ? 'expanded' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    width="12" height="12" aria-hidden="true"
+                >
+                    <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <span className="turn-group-label">{expanded ? 'Hide steps' : 'Show steps'}</span>
+                {durationSecs > 0 && (
+                    <span className="turn-group-duration">· {formatElapsed(durationSecs)}</span>
+                )}
+            </button>
+            {expanded && (
+                <div className="turn-group-sidebar-wrap">
+                    <div className="turn-group-sidebar" />
+                    <div className="turn-group-body">{children}</div>
+                </div>
+            )}
+        </div>
+    );
+};
+// ────────────────────────────────────────────────────────────────────────────
 
 /** Retry banner — shows error message, countdown, and attempt number. */
 const RetryBanner: React.FC<{ retryInfo: { message: string; attempt: number; next: number } }> = ({ retryInfo }) => {
@@ -903,19 +993,21 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     pendingPermissions,
     onReplyPermission,
     retryInfo,
+    onOpenFile,
 }) => {
     const parts = message.parts || [];
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
     // ── Elapsed timer using server timestamps ─────────────────────────
-    // Driven entirely by message timestamps, NOT the isStreaming prop.
-    // If time.created exists but time.completed does NOT → timer runs.
+    // Primarily driven by message timestamps: timer runs when time.created exists
+    // but time.completed does NOT. Also gated on isStreaming to ensure the timer
+    // stops immediately on abort (where completed timestamp may never be set).
     // This prevents flicker when streamingMessageId goes undefined between SSE events.
     const created = message.time?.created;
     const completed = (message.time as any)?.completed;
     const createdMs = created ? (typeof created === 'number' ? created : new Date(created).getTime()) : 0;
     const completedMs = completed ? (typeof completed === 'number' ? completed : new Date(completed).getTime()) : 0;
-    const timerShouldRun = !isUser && !!createdMs && !completedMs;
+    const timerShouldRun = !isUser && !!createdMs && !completedMs && isStreaming;
 
     const [now, setNow] = React.useState(Date.now());
 
@@ -939,8 +1031,39 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     }, [createdMs, completedMs, timerShouldRun, now]);
     // ─────────────────────────────────────────────────────────────────
 
-    // Group parts for context tool grouping only (no steps segmentation)
-    const groupedParts = React.useMemo(() => groupParts(parts), [parts]);
+    // Separate parts into intermediate (tool/reasoning) and final text.
+    // Only applied for assistant messages that have at least one intermediate part.
+    // If there are no intermediate parts, render everything flat as before.
+    const hasIntermediateParts = React.useMemo(
+        () => !isUser && parts.some(p => p.type === 'tool' || p.type === 'reasoning'),
+        [isUser, parts]
+    );
+
+    // The intermediate parts: everything that is not a text part
+    const intermediateParts = React.useMemo(
+        () => hasIntermediateParts ? parts.filter(p => p.type !== 'text') : [],
+        [hasIntermediateParts, parts]
+    );
+
+    // The final text part with its original index (last text part in the parts array)
+    const finalTextPartWithIndex = React.useMemo(() => {
+        if (!hasIntermediateParts) return null;
+        const textParts = parts
+            .map((p, i) => ({ part: p, index: i }))
+            .filter(({ part }) => part.type === 'text');
+        return textParts.at(-1) ?? null;
+    }, [hasIntermediateParts, parts]);
+
+    // For the TurnGroup body: apply context-tool grouping to the intermediate parts
+    const groupedIntermediateParts = React.useMemo(
+        () => hasIntermediateParts ? groupParts(intermediateParts) : [],
+        [hasIntermediateParts, intermediateParts]
+    );
+    // For flat rendering (no intermediate parts): group all parts as before
+    const groupedAllParts = React.useMemo(
+        () => !hasIntermediateParts ? groupParts(parts) : [],
+        [hasIntermediateParts, parts]
+    );
 
     return (
         <article
@@ -974,12 +1097,31 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 </div>
             )}
             <div className="message-bubble-content">
-                {groupedParts.map((group, gi) => {
-                    if (group.type === 'context-group') {
-                        return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
-                    }
-                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
-                })}
+                {hasIntermediateParts ? (
+                    <>
+                        {/* Intermediate parts (tool calls + reasoning) wrapped in TurnGroup */}
+                        {groupedIntermediateParts.length > 0 && (
+                            <TurnGroup isStreaming={isStreaming} durationSecs={0}>
+                                {groupedIntermediateParts.map((group, gi) => {
+                                    if (group.type === 'context-group') {
+                                        return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                                    }
+                                     return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
+                                })}
+                            </TurnGroup>
+                        )}
+                        {/* Final text response — rendered outside the TurnGroup */}
+                        {finalTextPartWithIndex && renderTextPart(finalTextPartWithIndex.part, finalTextPartWithIndex.index)}
+                    </>
+                ) : (
+                    // No intermediate parts — render all parts flat as before
+                    groupedAllParts.map((group, gi) => {
+                        if (group.type === 'context-group') {
+                            return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                        }
+                        return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
+                    })
+                )}
                 {/* Retry banner — shown when session is retrying */}
                 {retryInfo && <RetryBanner retryInfo={retryInfo} />}
                 {/* Streaming cursor */}
@@ -1018,6 +1160,8 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
     if (prev.onReplyPermission !== next.onReplyPermission) return false;
     // Re-render when retry info changes
     if (prev.retryInfo !== next.retryInfo) return false;
+    // Re-render when onOpenFile callback changes
+    if (prev.onOpenFile !== next.onOpenFile) return false;
     // No changes — skip re-render
     return true;
 });

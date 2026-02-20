@@ -543,11 +543,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onQuestionEvent(event: QuestionNotification): void {
         try {
-            this.logger.debug(`[SyncService] Question event: ${event.type}, requestId=${event.requestId}`);
+            this.logger.debug(`[SyncService] Question event: type=${event.type}, requestId=${event.requestId}, sessionId=${event.sessionId}`);
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                this.logger.debug('[SyncService] Ignoring question event for non-active session');
+                this.logger.debug(`[SyncService] Ignoring question event for non-active session: event.sessionId=${event.sessionId}`);
                 return;
             }
 

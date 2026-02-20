@@ -452,6 +452,11 @@ export class SessionServiceImpl implements SessionService {
 
             // Load messages for the new session
             await this.loadMessages();
+            if (signal.aborted) { return; }
+
+            // Load any pending questions that were created before the SSE connection
+            // (e.g., questions from a previous server session that are still unanswered)
+            await this.loadPendingQuestions(sessionId);
             
         } catch (error: unknown) {
             const err = error as Error;
@@ -862,6 +867,31 @@ export class SessionServiceImpl implements SessionService {
         } finally {
             // T2-11: Clear loading state using counter
             this.decrementLoading();
+        }
+    }
+
+    /**
+     * Load pending questions for a session from the REST API.
+     * This handles questions that were created before the SSE connection was established
+     * (e.g., from a previous server session that are still awaiting an answer).
+     *
+     * @param sessionId - The session ID to load pending questions for
+     */
+    private async loadPendingQuestions(sessionId: string): Promise<void> {
+        if (!this._activeProject) {
+            return;
+        }
+        try {
+            const questions = await this.openCodeService.listPendingQuestions(this._activeProject.id, sessionId);
+            if (questions.length > 0) {
+                this.logger.info(`[SessionService] Loaded ${questions.length} pending question(s) for session ${sessionId}`);
+                for (const q of questions) {
+                    this.addPendingQuestion(q);
+                }
+            }
+        } catch (error) {
+            // Non-fatal: if listing questions fails, we fall back to SSE-only delivery
+            this.logger.warn('[SessionService] Failed to load pending questions (non-fatal):', error);
         }
     }
 

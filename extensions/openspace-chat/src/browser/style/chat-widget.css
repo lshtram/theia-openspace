@@ -631,6 +631,24 @@
     font-family: var(--theia-code-font-family, monospace);
 }
 
+.openspace-chat-widget .part-tool-file-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    opacity: 0.75;
+}
+
+.openspace-chat-widget .part-tool-file-link:hover {
+    text-decoration: underline;
+    opacity: 1;
+    color: var(--theia-textLink-foreground, var(--oc-accent, #007acc));
+}
+
 .openspace-chat-widget .part-tool-trailing {
     display: flex;
     align-items: center;
@@ -930,7 +948,7 @@
     border-radius: 4px;
     overflow: hidden;
     margin: 8px 0;
-    border: 1px solid var(--theia-widget-border, var(--theia-contrastBorder, #e0e0e0));
+    border: 1px solid var(--oc-border, #e0e0e0);
 }
 
 .message-bubble .md-code-header {
@@ -938,10 +956,10 @@
     justify-content: space-between;
     align-items: center;
     padding: 4px 10px;
-    background: var(--theia-editorGroupHeader-tabsBackground, var(--theia-sideBar-background, #f3f3f3));
-    border-bottom: 1px solid var(--theia-widget-border, var(--theia-contrastBorder, #e0e0e0));
+    background: var(--oc-bg-raised, #f3f3f3);
+    border-bottom: 1px solid var(--oc-border, #e0e0e0);
     font-size: 11px;
-    color: var(--theia-descriptionForeground, #616161);
+    color: var(--oc-text-dim, #616161);
 }
 
 .message-bubble .md-code-copy {
@@ -954,11 +972,11 @@
 .message-bubble .md-code-body {
     margin: 0;
     padding: 12px 14px;
-    background: var(--theia-textCodeBlock-background, var(--theia-editor-background, #f5f5f5));
+    background: var(--oc-bg-code, #f5f5f5);
     overflow-x: auto;
     font-family: var(--theia-code-font-family, monospace);
     font-size: 12px;
-    color: var(--theia-editor-foreground, #333333);
+    color: var(--oc-text, #333333);
     line-height: 1.5;
     white-space: pre;
 }
@@ -966,7 +984,7 @@
 /* ─── Syntax highlighting (highlight.js token classes) ───────── */
 /* Token colors use Theia CSS vars with VS Code Light+ fallbacks  */
 .message-bubble .md-code-body .hljs {
-    color: var(--theia-editor-foreground, #333333);
+    color: var(--oc-text, #333333);
     background: transparent;
 }
 
@@ -1031,16 +1049,16 @@
 }
 
 .message-bubble .md-code-body .hljs-tag {
-    color: var(--theia-editor-foreground, #800000);
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-name {
-    color: var(--theia-symbolIcon-keywordForeground, #800000);
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-selector-id,
 .message-bubble .md-code-body .hljs-selector-class {
-    color: var(--theia-symbolIcon-colorForeground, #800000);
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-meta,
@@ -1778,4 +1796,87 @@
 
 .openspace-chat-widget .part-retry-attempt {
     color: var(--oc-text-dim, #858585);
+}
+
+/* ─── Turn Group (intermediate steps wrapper) ─────────────────── */
+.openspace-chat-widget .turn-group {
+    position: relative;
+    margin: 4px 0 8px 0;
+}
+
+.openspace-chat-widget .turn-group-streaming {
+    display: flex;
+    gap: 0;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    align-self: stretch;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .turn-group-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    font-size: 11px;
+    font-family: inherit;
+    text-align: left;
+    border-radius: 3px;
+    width: 100%;
+}
+
+.openspace-chat-widget .turn-group-header:hover {
+    color: var(--theia-foreground, var(--oc-text, #ccc));
+}
+
+.openspace-chat-widget .turn-group-chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.openspace-chat-widget .turn-group-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.openspace-chat-widget .turn-group-label {
+    font-weight: 500;
+}
+
+.openspace-chat-widget .turn-group-duration {
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap {
+    display: flex;
+    gap: 0;
+    margin-top: 4px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-body {
+    flex: 1;
+    min-width: 0;
 }

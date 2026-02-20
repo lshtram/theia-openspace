@@ -407,7 +407,7 @@ slideNumber: "c/t"
   padding: 3px 8px;
 }
 
-/* ── Utility: centered content ──────────────────────────────── */
+/* ── Utility: centered content ───────────────────────────────── */
 .reveal .centered {
   text-align: center;
   width: 100%;
@@ -478,23 +478,21 @@ Note: JWT shows up everywhere — REST APIs, SPAs, mobile apps. Most devs use it
 ---
 
 <!-- ============================================================
-  SLIDE 2 — WHY THIS MATTERS
+  SLIDE 2 — WHY THIS MATTERS (Visual Atmosphere)
   ============================================================
   Purpose: Motivate the audience before the mechanics. Answer "why
   should I care?" before answering "how does it work?"
 
+  VISUAL PATTERN: Use a background image that metaphorically relates
+  to your concept. This slide sets the mood before diving into details.
+
   HOW TO ADAPT:
   - Change the highlight-box question to your concept's central tension
-    (e.g., "Why can't the server just check sessions in the database?")
-  - Replace the context bullets with the real-world situations where
-    your concept is the right solution
-  - Fragment items so each lands separately — let the "aha" build
-
-  GOOD MOTIVATING QUESTIONS FOR OTHER CONCEPTS:
-  - "Why doesn't the server remember who you are between requests?"
-  - "Why do we need tokens at all if we already have cookies?"
-  - "What breaks at scale that makes stateless auth necessary?"
+  - Replace the context bullets with real-world situations
+  - Pick a background image that evokes your concept's theme
   ============================================================ -->
+
+<!-- .slide: data-background-image="https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1920" data-background-opacity="0.3" -->
 
 ## Why This Matters
 
@@ -527,15 +525,6 @@ Note: Show of hands — who has used jwt.sign or jwt.verify without fully unders
   - .highlight-box carries the analogy — keep it to 3–5 sentences max
   - The two bullet points should name the EXACT properties the analogy
     demonstrates (here: self-contained + no central lookup)
-
-  ANALOGY PATTERN FOR TECHNICAL CONCEPTS:
-  "The [thing that creates] gives you a [token/key/artifact] when you [entry condition].
-   [The thing that verifies] can check [the artifact] without [the expensive thing]."
-
-  GOOD ANALOGIES FOR OTHER CONCEPTS:
-  - Public-key crypto: "A padlock you can share publicly — only YOUR key opens it"
-  - Event sourcing: "A bank statement — don't ask 'what's the balance?', replay the history"
-  - Service mesh: "A post office sorting system — senders don't route, the mesh does"
   ============================================================ -->
 
 ## The Core Idea
@@ -561,16 +550,8 @@ Note: Keep coming back to the wristband. Every JWT mechanic has a direct analogy
   auto-animate will carry the heading into the next two slides,
   creating a sense of progressive disclosure through the mechanism.
 
-  HOW TO ADAPT:
-  - Replace the header/payload/signature breakdown with the structural
-    parts of YOUR concept
-  - The color-coded .jwt-part spans are defined in the CSS above —
-    rename or recolor them for your concept's parts
-  - The two-column layout shows the raw format + labeled breakdown
-
-  AUTO-ANIMATE NOTE:
-  The h2 "How It Works" heading text must be IDENTICAL across slides 4–6
-  for RevealJS to animate it smoothly. Only the subtitle tag changes.
+  VISUAL PATTERN: Use color-coded spans to visually distinguish parts.
+  The visual separation helps viewers track which part you're discussing.
   ============================================================ -->
 
 <!-- .slide: data-auto-animate -->
@@ -628,14 +609,8 @@ Note: The payload is just Base64 encoded — not encrypted. Anyone can decode it
   Purpose: Show how the token is created and why the signature
   is the mechanism that makes the whole thing trustworthy.
 
-  HOW TO ADAPT:
-  - Replace the jwt.sign code with the "creation" step of YOUR concept
-  - The formula line should show YOUR concept's core operation as a one-liner
-  - Keep data-auto-animate on this slide so the h2 heading animates
-    smoothly from slide 4
-
-  NOTE: The h2 text "How It Works" must stay identical to slide 4
-  for RevealJS auto-animate to morph it across slides.
+  VISUAL PATTERN: Highlight the "formula" in a styled box to make
+  it visually distinct from code blocks. This is the core concept.
   ============================================================ -->
 
 <!-- .slide: data-auto-animate -->
@@ -670,12 +645,8 @@ Note: The secret key is what the wristband stamp is. Anyone can look at a wristb
   Purpose: The "aha" moment — show that verification requires NO
   database lookup. The server recomputes the signature and compares.
 
-  HOW TO ADAPT:
-  - This is the payoff slide for the auto-animate trilogy
-  - Show the verification step for YOUR concept (the "check" operation)
-  - Emphasize what makes the verification CHEAP or SCALABLE compared
-    to the naive approach (database lookup, central service call, etc.)
-  - Fragment the numbered steps so they build one at a time
+  VISUAL PATTERN: Use numbered steps with fragments to build the
+  understanding progressively. Each step should be visually clear.
   ============================================================ -->
 
 <!-- .slide: data-auto-animate -->
@@ -709,17 +680,8 @@ Note: This is why JWT is "stateless" — the server doesn't store sessions. The 
   Purpose: Show a complete, production-relevant implementation so the
   audience can immediately apply what they've learned.
 
-  HOW TO ADAPT:
-  - Replace the Express middleware with the idiomatic "usage pattern"
-    for YOUR concept in YOUR stack
-  - data-line-numbers highlights guide attention through the code —
-    use the pipe-separated format "1|5-7|9|11-13|14-18" to step through
-  - The comment above the code block should name the framework/library
-  - Keep the code realistic but minimal — strip anything not essential
-
-  DATA-LINE-NUMBERS SYNTAX:
-  "1-3"   = highlight lines 1 to 3 continuously
-  "1|5|9" = step through line 1, then 5, then 9 on key presses
+  VISUAL PATTERN: Use data-line-numbers to step through the code.
+  This guides the viewer's attention through the logic flow.
   ============================================================ -->
 
 ## Real Code Example
@@ -755,20 +717,13 @@ Note: Line 12 is where all the magic happens — jwt.verify both decrypts AND va
 ---
 
 <!-- ============================================================
-  SLIDE 8 — COMMON PITFALLS
+  SLIDE 8 — COMMON PITFALLS (Visual Summary Pattern)
   ============================================================
   Purpose: Inoculate the audience against the mistakes everyone makes
   when they first use this concept in production.
 
-  HOW TO ADAPT:
-  - Replace each pitfall with the real gotchas for YOUR concept
-  - Order from most-common to most-dangerous
-  - Each pitfall should state the mistake AND why it matters
-  - Use .tag-warning for security/correctness risks
-  - Fragment so the audience can absorb one mistake at a time
-
-  PITFALL STRUCTURE:
-  <span class="tag tag-warning">Category</span> **The mistake** — why it goes wrong
+  VISUAL PATTERN: When you have many items, use tags to categorize
+  each pitfall. This adds color and makes scanning easier.
   ============================================================ -->
 
 ## Common Pitfalls
@@ -788,20 +743,13 @@ Note: The localStorage one causes the most incidents in the wild. If you remembe
 ---
 
 <!-- ============================================================
-  SLIDE 9 — MENTAL MODEL
+  SLIDE 9 — MENTAL MODEL (Summary Slide Pattern)
   ============================================================
   Purpose: Give the audience one sentence they can carry out of the
   room and use to explain this concept to anyone.
 
-  HOW TO ADAPT:
-  - Replace the single-sentence mental model with yours — it should
-    compress the entire concept into one memorable formulation
-  - The highlight-box should contain JUST that sentence (large, centered)
-  - Restate the analogy briefly — this is the "lock it in" moment
-  - Do NOT add new information on this slide. Consolidation only.
-
-  MENTAL MODEL FORMULA:
-  "[Concept] is [what it is] that lets [who] [do what] without [the expensive/complex thing]."
+  VISUAL PATTERN: This is a "3×5" summary slide — ultra-concise
+  bullets that crystallize the key takeaways. Follows a detailed slide.
   ============================================================ -->
 
 ## Mental Model
@@ -823,35 +771,24 @@ Note: If someone can repeat this analogy tomorrow morning, the session worked.
 ---
 
 <!-- ============================================================
-  SLIDE 10 — SUMMARY
+  SLIDE 10 — SUMMARY (3×5 Pattern Example)
   ============================================================
   Purpose: Bookend the session with a checkable list of what the
-  audience now understands. The gradient background mirrors slide 1
-  to signal "we've come full circle."
+  audience now understands.
 
-  HOW TO ADAPT:
-  - Replace the checklist items with YOUR concept's learning outcomes
-  - Each item should be a concrete capability: "I can now [do/explain/...]"
-  - Use fragment so items appear one at a time — gives a sense of
-    accumulation and lets the audience mentally tick each box
-  - The gradient should match or mirror the title slide's gradient
-  - The tags at the bottom should echo the three tags from slide 1
-
-  CHECKLIST STRUCTURE:
-  Each item = a thing the audience can now DO or EXPLAIN,
-  not just a fact they now KNOW.
+  VISUAL PATTERN: After detailed slides, use ultra-short bullets.
+  Maximum 5 words per bullet, 3-5 bullets total. This is the takeaway.
   ============================================================ -->
 
 <!-- .slide: data-background-gradient="linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" -->
 
 ## What You Now Understand
 
-- **Why JWTs exist** — stateless HTTP needs a way to carry identity between requests without a central session store <!-- .element: class="fragment fade-up" -->
-- **The three-part structure** — header (algorithm), payload (claims), signature (proof of integrity) <!-- .element: class="fragment fade-up" -->
-- **How signing works** — HMAC of header + payload with a secret produces an unforgeable stamp <!-- .element: class="fragment fade-up" -->
-- **How verification works** — recompute the signature and compare; no database required <!-- .element: class="fragment fade-up" -->
-- **How to implement it** — `jwt.sign` to issue, `jwt.verify` in middleware to protect routes <!-- .element: class="fragment fade-up" -->
-- **What can go wrong** — localStorage XSS, missing expiry, shared secrets, unhandled error types <!-- .element: class="fragment fade-up" -->
+- **Stateless auth** — no session database needed <!-- .element: class="fragment fade-up" -->
+- **Three-part structure** — header, payload, signature <!-- .element: class="fragment fade-up" -->
+- **Signing formula** — HMAC with secret key <!-- .element: class="fragment fade-up" -->
+- **Verification** — recompute and compare <!-- .element: class="fragment fade-up" -->
+- **Five pitfalls** — storage, expiry, secrets, errors, PII <!-- .element: class="fragment fade-up" -->
 
 <div style="margin-top: 1.2em; text-align: center;" class="fragment fade-up">
   <span class="tag tag-primary">Stateless Auth</span>
