@@ -145,7 +145,7 @@
 }
 
 .openspace-chat-widget .session-status-spinner {
-    color: var(--oc-text-dim, #858585);
+    color: var(--oc-accent, #007acc);
 }
 
 .openspace-chat-widget .session-status-dash {
@@ -1299,6 +1299,10 @@
 
 .openspace-sessions-widget .sessions-spin {
     animation: sessions-spin 1s linear infinite;
+}
+
+.openspace-chat-widget .oc-spin {
+    animation: oc-spin 1s linear infinite;
 }
 
 
