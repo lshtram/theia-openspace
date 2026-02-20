@@ -10,7 +10,9 @@
   "workspaces": [
     "browser-app",
     "electron-app",
-    "extensions/*"
+    "extensions/*",
+    "packages/*",
+    "openspace-voice-vscode"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
