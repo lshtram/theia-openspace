@@ -17,17 +17,25 @@ configs[0].module.rules.push({
 }); */
 
 // Suppress known harmless warnings from Monaco Editor
-configs.forEach(config => {
-    // Persistent filesystem cache — survives between builds
-    // Cuts warm build time from ~45s to ~5s when dependencies haven't changed
+// Persistent filesystem cache — survives between builds
+// Cuts warm build time from ~45s to ~5s when dependencies haven't changed
+function applyFilesystemCache(config) {
     config.cache = {
         type: 'filesystem',
         cacheDirectory: path.resolve(__dirname, '.webpack-cache'),
         buildDependencies: {
-            // Invalidate cache when webpack config changes
-            config: [__filename, path.resolve(__dirname, 'gen-webpack.config.js')],
+            // Invalidate cache when any webpack config changes
+            config: [
+                __filename,
+                path.resolve(__dirname, 'gen-webpack.config.js'),
+                path.resolve(__dirname, 'gen-webpack.node.config.js'),
+            ],
         },
     };
+}
+
+configs.forEach(config => {
+    applyFilesystemCache(config);
 
     config.ignoreWarnings = [
         // Suppress Monaco Editor worker dynamic require warnings
@@ -58,6 +66,8 @@ configs.forEach(config => {
         };
     }
 });
+
+applyFilesystemCache(nodeConfig.config);
 
 module.exports = [
     ...configs,
