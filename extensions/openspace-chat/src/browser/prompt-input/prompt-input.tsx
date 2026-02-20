@@ -705,6 +705,77 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 </div>
             )}
 
+            {/* Typeahead Dropdown – rendered outside editor-wrapper to avoid overflow:hidden clipping */}
+            {showTypeahead && typeaheadItems.length > 0 && (
+                <div 
+                    className="prompt-input-typeahead"
+                >
+                    {typeaheadItems.map((item, index) => (
+                        <div
+                            key={`${item.type}-${item.name}`}
+                            className={`typeahead-item ${index === selectedTypeaheadIndex ? 'selected' : ''}`}
+                            onClick={() => insertTypeaheadItem(item)}
+                            onMouseEnter={() => setSelectedTypeaheadIndex(index)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    insertTypeaheadItem(item);
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                        >
+                            <span className={`typeahead-icon ${item.type}`}>
+                                {item.type === 'agent' ? (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                    </svg>
+                                ) : (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                )}
+                            </span>
+                            <div className="typeahead-content">
+                                <div className="typeahead-name">
+                                    {item.type === 'agent' ? `@${item.name}` : item.name}
+                                </div>
+                                {item.description && (
+                                    <div className="typeahead-description">{item.description}</div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Slash Command Menu – rendered outside editor-wrapper to avoid overflow:hidden clipping */}
+            {showSlashMenu && filteredSlashCommands.length > 0 && (
+                <div className="prompt-input-typeahead" role="listbox" aria-label="Commands">
+                    {filteredSlashCommands.map((cmd, index) => (
+                        <div
+                            key={cmd.name}
+                            className={`typeahead-item ${index === selectedSlashIndex ? 'selected' : ''}`}
+                            onClick={() => selectSlashCommand(cmd)}
+                            onMouseEnter={() => setSelectedSlashIndex(index)}
+                            role="option"
+                            tabIndex={0}
+                        >
+                            <span className="typeahead-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                                </svg>
+                            </span>
+                            <div className="typeahead-content">
+                                <div className="typeahead-name">{cmd.name}</div>
+                                <div className="typeahead-description">{cmd.description}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="prompt-input-editor-wrapper">
                 {/* Shell Mode Indicator (Task 21) */}
                 {shellMode && (
@@ -742,77 +813,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                         <div className="prompt-input-drag-overlay-text">Drop files or images</div>
-                    </div>
-                )}
-
-                {/* Typeahead Dropdown */}
-                {showTypeahead && typeaheadItems.length > 0 && (
-                    <div 
-                        className="prompt-input-typeahead"
-                    >
-                        {typeaheadItems.map((item, index) => (
-                            <div
-                                key={`${item.type}-${item.name}`}
-                                className={`typeahead-item ${index === selectedTypeaheadIndex ? 'selected' : ''}`}
-                                onClick={() => insertTypeaheadItem(item)}
-                                onMouseEnter={() => setSelectedTypeaheadIndex(index)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        insertTypeaheadItem(item);
-                                    }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                            >
-                                <span className={`typeahead-icon ${item.type}`}>
-                                    {item.type === 'agent' ? (
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-                                        </svg>
-                                    ) : (
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-                                            <polyline points="14 2 14 8 20 8"/>
-                                        </svg>
-                                    )}
-                                </span>
-                                <div className="typeahead-content">
-                                    <div className="typeahead-name">
-                                        {item.type === 'agent' ? `@${item.name}` : item.name}
-                                    </div>
-                                    {item.description && (
-                                        <div className="typeahead-description">{item.description}</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Slash Command Menu */}
-                {showSlashMenu && filteredSlashCommands.length > 0 && (
-                    <div className="prompt-input-typeahead" role="listbox" aria-label="Commands">
-                        {filteredSlashCommands.map((cmd, index) => (
-                            <div
-                                key={cmd.name}
-                                className={`typeahead-item ${index === selectedSlashIndex ? 'selected' : ''}`}
-                                onClick={() => selectSlashCommand(cmd)}
-                                onMouseEnter={() => setSelectedSlashIndex(index)}
-                                role="option"
-                                tabIndex={0}
-                            >
-                                <span className="typeahead-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-                                    </svg>
-                                </span>
-                                <div className="typeahead-content">
-                                    <div className="typeahead-name">{cmd.name}</div>
-                                    <div className="typeahead-description">{cmd.description}</div>
-                                </div>
-                            </div>
-                        ))}
                     </div>
                 )}
 
