@@ -163,6 +163,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
      * Handle keyboard events.
      */
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        // Ctrl+U — clear the prompt
+        if (e.key === 'u' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+            e.preventDefault();
+            clearEditor();
+            return;
+        }
+
         // Handle typeahead navigation
         if (showTypeahead) {
             const items = getTypeaheadItems();
