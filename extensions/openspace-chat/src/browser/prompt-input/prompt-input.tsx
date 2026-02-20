@@ -614,12 +614,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setHistoryIndex(-1);
         setSavedDraft('');
 
-        // Task 21: In shell mode, prepend '!' to indicate shell command
-        if (shellMode && editorRef.current) {
-            const editorText = editorRef.current.textContent || '';
-            editorRef.current.textContent = '!' + editorText;
-        }
-
         const prompt = getCurrentPrompt();
         
         const hasText = prompt.some(p => p.type === 'text' && p.content.trim().length > 0);
