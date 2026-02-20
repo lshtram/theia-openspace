@@ -1,0 +1,28 @@
+{
+  "name": "@openspace-ai/voice-core",
+  "version": "1.0.0",
+  "description": "Platform-agnostic STT/TTS core for OpenSpace voice extensions",
+  "license": "MIT",
+  "repository": "https://github.com/openspace-ai/theia-openspace",
+  "engines": { "node": ">=18" },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": ["lib/**"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib tsconfig.tsbuildinfo",
+    "test": "mocha --require ts-node/register 'src/**/*.spec.ts'"
+  },
+  "devDependencies": {
+    "typescript": "~5.4.5",
+    "ts-node": "^10.9.0",
+    "mocha": "^10.0.0",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "@types/sinon": "^17.0.0",
+    "sinon": "^19.0.0"
+  },
+  "optionalDependencies": {
+    "kokoro-js": "^1.0.0"
+  }
+}

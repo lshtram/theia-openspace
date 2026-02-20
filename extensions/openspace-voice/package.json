@@ -12,7 +12,7 @@
   ],
   "dependencies": {
     "@theia/core": "1.68.2",
-    "openspace-core": "0.0.1"
+    "openspace-core": "0.1.0"
   },
   "devDependencies": {
     "rimraf": "^5.0.0",
