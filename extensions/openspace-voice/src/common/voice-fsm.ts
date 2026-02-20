@@ -1,27 +1,24 @@
 // extensions/openspace-voice/src/common/voice-fsm.ts
+// Types re-exported from @openspace-ai/voice-core; Theia-specific validator functions kept here.
 
-export type AudioState = 'idle' | 'listening' | 'processing' | 'error';
-export type AudioTrigger = 'startCapture' | 'stopCapture' | 'transcriptReady' | 'sttError' | 'reset';
+export type {
+  AudioState,
+  AudioTrigger,
+  NarrationState,
+  NarrationTrigger,
+  SessionState,
+  SessionTrigger,
+} from '@openspace-ai/voice-core';
+
+export { VoiceFsmError } from '@openspace-ai/voice-core';
+import { VoiceFsmError } from '@openspace-ai/voice-core';
+import type { AudioState, AudioTrigger, NarrationState, NarrationTrigger, SessionState, SessionTrigger } from '@openspace-ai/voice-core';
+
+// Theia-specific: these are also in voice-core as full FSM classes,
+// but the browser FSMs use the functional validator pattern.
 
 export type TranscriptState = 'empty' | 'interim' | 'final' | 'editable' | 'sent';
 export type TranscriptTrigger = 'interimChunk' | 'finalize' | 'enableEdit' | 'submit' | 'cancel' | 'newUtterance';
-
-export type NarrationState = 'idle' | 'queued' | 'processing' | 'playing' | 'paused';
-export type NarrationTrigger = 'enqueue' | 'startProcessing' | 'audioReady' | 'pause' | 'resume' | 'complete';
-
-export type SessionState = 'inactive' | 'active' | 'suspended';
-export type SessionTrigger = 'enable' | 'disable' | 'pushToTalkStart' | 'pushToTalkEnd';
-
-export class VoiceFsmError extends Error {
-  constructor(
-    public readonly fsm: string,
-    public readonly from: string,
-    public readonly trigger: string,
-  ) {
-    super(`VoiceFSM[${fsm}]: invalid transition ${from}:${trigger}`);
-    this.name = 'VoiceFsmError';
-  }
-}
 
 function fail(fsm: string, from: string, trigger: string): never {
   throw new VoiceFsmError(fsm, from, trigger);

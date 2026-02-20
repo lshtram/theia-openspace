@@ -125,7 +125,8 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                     ttsProvider: {
                         kind: 'tts', id: 'error-stub',
                         isAvailable: async () => false,
-                        synthesize: async () => ({ audio: new Uint8Array(0) }),
+                        synthesize: async () => ({ audio: new Uint8Array(0), sampleRate: 24000 }),
+                        dispose: async () => { /* no-op */ },
                     },
                     llmCaller: passthroughLlm,
                 });

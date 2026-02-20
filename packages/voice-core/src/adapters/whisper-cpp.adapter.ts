@@ -35,7 +35,7 @@ export class WhisperCppAdapter implements SttProvider {
       os.tmpdir(),
       `whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`
     );
-    const wavBuffer = buildWavBuffer(request.audio, request.sampleRate, 1);
+    const wavBuffer = buildWavBuffer(request.audio, request.sampleRate ?? 16000, 1);
     fs.writeFileSync(tmpFile, wavBuffer);
 
     try {

@@ -1,6 +1,6 @@
 // extensions/openspace-voice/src/node/voice-backend-service.ts
-import type { NarrationMode } from '../common/voice-policy';
-import type { SttProvider, TtsProvider } from '../common/voice-providers';
+import type { NarrationMode } from '@openspace-ai/voice-core';
+import type { SttProvider, TtsProvider } from '@openspace-ai/voice-core';
 import { NarrationPreprocessor, type LlmCaller } from './narration-preprocessor';
 
 export interface TranscribeSpeechRequest {

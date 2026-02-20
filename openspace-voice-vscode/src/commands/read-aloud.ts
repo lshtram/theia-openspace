@@ -42,7 +42,7 @@ export function registerReadAloudCommand(
           try {
             const result = await deps.ttsAdapter.synthesize({ text, language, voice, speed });
             if (token.isCancellationRequested) return;
-            await playPcmAudio(result.audio, result.sampleRate);
+            await playPcmAudio(result.audio, result.sampleRate ?? 24000);
           } catch (err) {
             vscode.window.showErrorMessage(`Read aloud failed: ${(err as Error).message}`);
           }

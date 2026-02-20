@@ -1,6 +1,6 @@
 // extensions/openspace-voice/src/node/stt/stt-provider-selector.ts
-import type { SttProvider, SttTranscriptionRequest, SttTranscriptionResult } from '../../common/voice-providers';
-import { WhisperCppAdapter } from './whisper-cpp-adapter';
+import type { SttProvider, SttTranscriptionRequest, SttTranscriptionResult } from '@openspace-ai/voice-core';
+import { WhisperCppAdapter } from '@openspace-ai/voice-core';
 
 // Fallback: pass-through stub (returns placeholder text)
 class BrowserNativeSttStub implements SttProvider {

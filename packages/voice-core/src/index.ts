@@ -3,7 +3,7 @@
 // Types
 export type { SttProvider, SttTranscriptionRequest, SttTranscriptionResult, CancellationToken } from './providers/stt-provider.interface';
 export type { TtsProvider, TtsSynthesisRequest, TtsSynthesisResult } from './providers/tts-provider.interface';
-export type { VoicePolicy, NarrationMode, AudioState, NarrationState, SessionState } from './fsm/types';
+export type { VoicePolicy, NarrationMode, AudioState, AudioTrigger, NarrationState, NarrationTrigger, SessionState, SessionTrigger } from './fsm/types';
 export { DEFAULT_VOICE_POLICY, NARRATION_MODES, VoiceFsmError } from './fsm/types';
 
 // Adapters

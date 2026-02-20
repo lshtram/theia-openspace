@@ -1,9 +1,9 @@
 // src/providers/stt-provider.interface.ts
 
 export interface SttTranscriptionRequest {
-  audio: Uint8Array;   // raw 16-bit PCM samples (little-endian)
-  sampleRate: number;  // e.g. 16000 — needed for WAV header construction
-  language: string;    // BCP-47 e.g. 'en-US'
+  audio: Uint8Array;         // raw 16-bit PCM samples (little-endian)
+  sampleRate?: number;       // e.g. 16000 — defaults to 16000 if omitted
+  language: string;          // BCP-47 e.g. 'en-US'
 }
 
 export interface SttTranscriptionResult {

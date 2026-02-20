@@ -1,8 +1,8 @@
 // extensions/openspace-voice/src/__tests__/voice-backend-service.spec.ts
 import { assert } from 'chai';
 import { VoiceBackendService } from '../node/voice-backend-service';
-import type { SttProvider } from '../common/voice-providers';
-import type { TtsProvider } from '../common/voice-providers';
+import type { SttProvider } from '@openspace-ai/voice-core';
+import type { TtsProvider } from '@openspace-ai/voice-core';
 import type { LlmCaller } from '../node/narration-preprocessor';
 
 const mockStt: SttProvider = {
@@ -16,7 +16,8 @@ const mockTts: TtsProvider = {
   kind: 'tts',
   id: 'mock-tts',
   isAvailable: async () => true,
-  synthesize: async (_req) => ({ audio: new Uint8Array([1, 2, 3]) }),
+  synthesize: async (_req) => ({ audio: new Uint8Array([1, 2, 3]), sampleRate: 24000 }),
+  dispose: async () => { /* no-op */ },
 };
 
 const mockLlm: LlmCaller = async (_prompt, text) => JSON.stringify({

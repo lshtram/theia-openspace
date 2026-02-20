@@ -11,7 +11,7 @@ export interface TtsSynthesisRequest {
 
 export interface TtsSynthesisResult {
   audio: Uint8Array;    // raw 16-bit PCM samples at 24 kHz (Kokoro output rate)
-  sampleRate: number;   // always 24000 for Kokoro
+  sampleRate?: number;  // 24000 for Kokoro; optional for backward compatibility
 }
 
 export interface TtsProvider {

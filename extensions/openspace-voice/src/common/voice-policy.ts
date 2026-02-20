@@ -1,7 +1,8 @@
 // extensions/openspace-voice/src/common/voice-policy.ts
+// Theia-specific policy: extends voice-core's VoicePolicy with narrationPrompts field.
 
-export const NARRATION_MODES = ['narrate-off', 'narrate-everything', 'narrate-summary'] as const;
-export type NarrationMode = (typeof NARRATION_MODES)[number];
+export { NARRATION_MODES } from '@openspace-ai/voice-core';
+export type { NarrationMode } from '@openspace-ai/voice-core';
 
 export interface NarrationPrompts {
   everything: string;
@@ -25,7 +26,7 @@ Add emotion fields where appropriate: excited, concerned, happy, thoughtful, neu
 
 export interface VoicePolicy {
   enabled: boolean;
-  narrationMode: NarrationMode;
+  narrationMode: import('@openspace-ai/voice-core').NarrationMode;
   speed: number;          // 0.5–2.0
   voice: string;          // TTS voice ID
   language: string;       // BCP-47
@@ -44,6 +45,7 @@ export const DEFAULT_VOICE_POLICY: VoicePolicy = {
 export function resolveVoicePolicy(overrides: Partial<VoicePolicy> = {}): VoicePolicy {
   const policy = { ...DEFAULT_VOICE_POLICY, ...overrides };
 
+  const NARRATION_MODES = ['narrate-off', 'narrate-everything', 'narrate-summary'] as const;
   if (!NARRATION_MODES.includes(policy.narrationMode)) {
     throw new Error(`narrationMode must be one of: ${NARRATION_MODES.join(', ')}`);
   }

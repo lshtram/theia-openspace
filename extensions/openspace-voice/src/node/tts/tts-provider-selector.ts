@@ -1,14 +1,15 @@
 // extensions/openspace-voice/src/node/tts/tts-provider-selector.ts
-import type { TtsProvider, TtsSynthesisRequest, TtsSynthesisResult } from '../../common/voice-providers';
-import { KokoroAdapter } from './kokoro-adapter';
+import type { TtsProvider, TtsSynthesisRequest, TtsSynthesisResult } from '@openspace-ai/voice-core';
+import { KokoroAdapter } from '@openspace-ai/voice-core';
 
 class BrowserSpeechSynthesisStub implements TtsProvider {
   readonly kind = 'tts' as const;
   readonly id = 'browser-synth-stub';
   async isAvailable(): Promise<boolean> { return true; }
   async synthesize(_request: TtsSynthesisRequest): Promise<TtsSynthesisResult> {
-    return { audio: new Uint8Array(0) };
+    return { audio: new Uint8Array(0), sampleRate: 24000 };
   }
+  async dispose(): Promise<void> { /* no-op */ }
 }
 
 export interface TtsProviderSelectorOptions {
