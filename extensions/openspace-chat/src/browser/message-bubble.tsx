@@ -61,8 +61,9 @@ const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|termi
 // Matches task/subagent tool names
 const TASK_TOOL_NAMES = /^(task|Task)$/;
 
-/** Returns true if the string looks like an absolute file path. */
-const isFilePath = (s: string): boolean => s.startsWith('/') || /^[A-Za-z]:\\/.test(s);
+/** Returns true if the string looks like an absolute file path (no whitespace — excludes shell commands). */
+const isFilePath = (s: string): boolean =>
+    (s.startsWith('/') || /^[A-Za-z]:\\/.test(s)) && !/\s/.test(s);
 
 /**
  * Render a single message part based on its type.
@@ -451,7 +452,8 @@ const TaskToolBlock: React.FC<{
     part: any;
     openCodeService?: OpenCodeService;
     sessionService?: SessionService;
-}> = ({ part, openCodeService, sessionService }) => {
+    onOpenFile?: (filePath: string) => void;
+}> = ({ part, openCodeService, sessionService, onOpenFile }) => {
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
         (state && typeof state === 'object' ? (state.status || state.type || 'completed') : 'completed');
@@ -598,9 +600,20 @@ const TaskToolBlock: React.FC<{
                                 {info.name}
                             </span>
                             {info.subtitle && (
-                                <span className="part-task-tool-item-subtitle" title={info.subtitle}>
-                                    {info.subtitle}
-                                </span>
+                                onOpenFile && isFilePath(info.subtitle) ? (
+                                    <button
+                                        type="button"
+                                        className="part-task-tool-item-subtitle part-tool-file-link"
+                                        onClick={e => { e.stopPropagation(); onOpenFile(info.subtitle); }}
+                                        title={`Open ${info.subtitle}`}
+                                    >
+                                        {info.subtitle}
+                                    </button>
+                                ) : (
+                                    <span className="part-task-tool-item-subtitle" title={info.subtitle}>
+                                        {info.subtitle}
+                                    </span>
+                                )
                             )}
                         </div>
                     );
@@ -746,7 +759,7 @@ function renderToolPart(
     }
     // Task tool → always-expanded TaskToolBlock with child session rendering
     if (TASK_TOOL_NAMES.test(part.tool || '')) {
-        return <TaskToolBlock key={part.id || `tool-${index}`} part={part} openCodeService={openCodeService} sessionService={sessionService} />;
+        return <TaskToolBlock key={part.id || `tool-${index}`} part={part} openCodeService={openCodeService} sessionService={sessionService} onOpenFile={onOpenFile} />;
     }
     // Individual rendering — grouping is done at the message level
     return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} onOpenFile={onOpenFile} />;

@@ -604,8 +604,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             openWithOpener(openerService, uri);
         } catch (e) {
             console.error('[ChatWidget] Failed to open file:', filePath, e);
+            messageService.warn(`Could not open file: ${filePath}`);
         }
-    }, [openerService]);
+    }, [openerService, messageService]);
 
     // Handle send message (updated for multi-part input and model selection)
     // Messages are queued if streaming is active, and drained sequentially.
