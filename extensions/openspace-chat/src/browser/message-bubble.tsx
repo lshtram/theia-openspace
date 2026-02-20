@@ -48,6 +48,8 @@ export interface MessageBubbleProps {
         attempt: number;
         next: number; // Unix timestamp (ms) of next retry
     };
+    /** Callback to open a file in the editor when a file path subtitle is clicked */
+    onOpenFile?: (filePath: string) => void;
 }
 
 // ─── Context tool names (grouped into "Gathered context" collapsible) ────────
@@ -59,6 +61,9 @@ const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|termi
 // Matches task/subagent tool names
 const TASK_TOOL_NAMES = /^(task|Task)$/;
 
+/** Returns true if the string looks like an absolute file path. */
+const isFilePath = (s: string): boolean => s.startsWith('/') || /^[A-Za-z]:\\/.test(s);
+
 /**
  * Render a single message part based on its type.
  */
@@ -68,13 +73,14 @@ function renderPart(
     openCodeService?: OpenCodeService,
     sessionService?: SessionService,
     pendingPermissions?: PermissionNotification[],
-    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void,
+    onOpenFile?: (filePath: string) => void
 ): React.ReactNode {
     switch (part.type) {
         case 'text':
             return renderTextPart(part, index);
         case 'tool':
-            return renderToolPart(part, index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+            return renderToolPart(part, index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
         case 'reasoning':
             return renderReasoningPart(part, index);
         case 'step-start':
@@ -213,7 +219,8 @@ const ToolBlock: React.FC<{
     index?: number;
     pendingPermissions?: PermissionNotification[];
     onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
-}> = ({ part, pendingPermissions, onReplyPermission }) => {
+    onOpenFile?: (filePath: string) => void;
+}> = ({ part, pendingPermissions, onReplyPermission, onOpenFile }) => {
     const [expanded, setExpanded] = React.useState(false);
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
@@ -315,9 +322,20 @@ const ToolBlock: React.FC<{
                     </>
                 ) : (
                     subtitle && (
-                        <span className="part-tool-subtitle" title={subtitle}>
-                            {subtitle}
-                        </span>
+                        onOpenFile && isFilePath(subtitle) ? (
+                            <button
+                                type="button"
+                                className="part-tool-subtitle part-tool-file-link"
+                                onClick={e => { e.stopPropagation(); onOpenFile(subtitle); }}
+                                title={`Open ${subtitle}`}
+                            >
+                                {subtitle}
+                            </button>
+                        ) : (
+                            <span className="part-tool-subtitle" title={subtitle}>
+                                {subtitle}
+                            </span>
+                        )
                     )
                 )}
 
@@ -719,7 +737,8 @@ function renderToolPart(
     openCodeService?: OpenCodeService,
     sessionService?: SessionService,
     pendingPermissions?: PermissionNotification[],
-    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void,
+    onOpenFile?: (filePath: string) => void
 ): React.ReactNode {
     // TodoWrite tool → always-expanded checklist
     if (/^(todowrite|TodoWrite|todo_write)$/i.test(part.tool || '')) {
@@ -730,7 +749,7 @@ function renderToolPart(
         return <TaskToolBlock key={part.id || `tool-${index}`} part={part} openCodeService={openCodeService} sessionService={sessionService} />;
     }
     // Individual rendering — grouping is done at the message level
-    return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} />;
+    return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} onOpenFile={onOpenFile} />;
 }
 
 /** Collapsible reasoning block. Collapsed by default. Shows shimmer when no text yet. */
@@ -961,6 +980,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     pendingPermissions,
     onReplyPermission,
     retryInfo,
+    onOpenFile,
 }) => {
     const parts = message.parts || [];
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
@@ -1073,7 +1093,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                                     if (group.type === 'context-group') {
                                         return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
                                     }
-                                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+                                     return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
                                 })}
                             </TurnGroup>
                         )}
@@ -1086,7 +1106,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                         if (group.type === 'context-group') {
                             return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
                         }
-                        return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission);
+                        return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
                     })
                 )}
                 {/* Retry banner — shown when session is retrying */}
@@ -1127,6 +1147,8 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
     if (prev.onReplyPermission !== next.onReplyPermission) return false;
     // Re-render when retry info changes
     if (prev.retryInfo !== next.retryInfo) return false;
+    // Re-render when onOpenFile callback changes
+    if (prev.onOpenFile !== next.onOpenFile) return false;
     // No changes — skip re-render
     return true;
 });
