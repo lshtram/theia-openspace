@@ -213,6 +213,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     replyPermission(projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void>;
 
     // Question methods
+    listPendingQuestions(projectId: string, sessionId: string): Promise<SDKTypes.QuestionRequest[]>;
     answerQuestion(projectId: string, requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<boolean>;
     rejectQuestion(projectId: string, requestId: string): Promise<boolean>;
 

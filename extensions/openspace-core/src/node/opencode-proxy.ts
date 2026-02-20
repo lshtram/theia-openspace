@@ -914,7 +914,7 @@ export class OpenCodeProxy implements OpenCodeService {
                     question: q
                 };
                 this._client.onQuestionEvent(notification);
-                this.logger.debug(`[OpenCodeProxy] Forwarded question.asked: ${q.id}`);
+                this.logger.debug(`[OpenCodeProxy] Forwarded question.asked to client: ${q.id}, sessionId=${q.sessionID}`);
             } else if (event.type === 'question.replied') {
                 const props = event.properties;
                 const notification: QuestionNotification = {
@@ -944,6 +944,11 @@ export class OpenCodeProxy implements OpenCodeService {
     // =========================================================================
     // Question Methods
     // =========================================================================
+
+    async listPendingQuestions(_projectId: string, sessionId: string): Promise<import('../common/opencode-sdk-types').QuestionRequest[]> {
+        const all = await this.get<import('../common/opencode-sdk-types').QuestionRequest[]>('/question');
+        return (all || []).filter(q => q.sessionID === sessionId);
+    }
 
     async answerQuestion(_projectId: string, requestId: string, answers: import('../common/opencode-sdk-types').QuestionAnswer[]): Promise<boolean> {
         return this.post<boolean>(`/question/${encodeURIComponent(requestId)}/reply`, { answers });
