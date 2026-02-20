@@ -18,6 +18,14 @@ import * as React from '@theia/core/shared/react';
 import { injectable, inject, optional, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
+import { DisposableCollection } from '@theia/core/lib/common/disposable';
+import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { URI } from '@theia/core/lib/common/uri';
+import { MonacoEditor, MonacoEditorServices } from '@theia/monaco/lib/browser/monaco-editor';
+import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
+import { IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecycle';
+import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
+import { attachTabDblClickToggle } from 'openspace-core/lib/browser/tab-dblclick-toggle';
 import Reveal from 'reveal.js';
 import RevealMarkdown from 'reveal.js/plugin/markdown/markdown.esm.js';
 import 'reveal.js/dist/reveal.css';
@@ -38,6 +46,8 @@ export interface DeckData {
     options: DeckOptions;
     slides: SlideData[];
 }
+
+export type PresentationMode = 'presentation' | 'edit';
 
 /**
  * Navigation service for programmatic slide control
@@ -100,16 +110,32 @@ export class PresentationNavigationService {
 export class PresentationWidget extends ReactWidget {
     static readonly ID = 'openspace-presentation-widget';
     static readonly LABEL = 'Presentation';
+    private static readonly ICON_PRESENTATION = 'fa fa-play-circle';
+    private static readonly ICON_EDIT = 'codicon codicon-edit';
 
     protected revealDeck: Reveal | undefined;
     protected deckContent: string = '';
     protected containerRef: React.RefObject<HTMLDivElement>;
-    
+    protected mode: PresentationMode = 'presentation';
+    protected monacoEditor: MonacoEditor | undefined;
+    protected monacoModelRef: IReference<MonacoEditorModel> | undefined;
+    protected mountingEditor: boolean = false;
+    protected editorDisposables = new DisposableCollection();
+
     // T2-22: Store the URI for findByUri comparison
     public uri: string = '';
 
     @inject(PresentationNavigationService) @optional()
     protected readonly navigationService!: PresentationNavigationService;
+
+    @inject(MonacoEditorServices)
+    protected readonly monacoEditorServices!: MonacoEditorServices;
+
+    @inject(MonacoTextModelService)
+    protected readonly textModelService!: MonacoTextModelService;
+
+    @inject(FileService)
+    protected readonly fileService!: FileService;
 
     constructor() {
         super();
@@ -186,6 +212,109 @@ More content</pre>
     }
 
     /**
+     * Get the current mode ('presentation' or 'edit').
+     */
+    getMode(): PresentationMode {
+        return this.mode;
+    }
+
+    /**
+     * Toggle between presentation mode (Reveal.js) and edit mode (Monaco).
+     */
+    toggleMode(): void {
+        if (this.mode === 'presentation') {
+            this.mode = 'edit';
+            // Tear down reveal so it doesn't fight Monaco over the DOM
+            if (this.revealDeck) {
+                this.revealDeck.destroy();
+                this.revealDeck = undefined;
+                this.navigationService?.setReveal(undefined);
+            }
+        } else {
+            // Capture any edits before destroying Monaco
+            if (this.monacoEditor) {
+                this.deckContent = this.monacoEditor.document.getText();
+            }
+            this.destroyMonacoEditor();
+            this.mode = 'presentation';
+        }
+        this.title.iconClass = this.mode === 'edit'
+            ? PresentationWidget.ICON_EDIT
+            : PresentationWidget.ICON_PRESENTATION;
+        this.update();
+    }
+
+    /**
+     * Destroy the Monaco editor and all associated disposables.
+     */
+    protected destroyMonacoEditor(): void {
+        this.editorDisposables.dispose();
+        this.editorDisposables = new DisposableCollection();
+        if (this.monacoEditor) {
+            this.monacoEditor.dispose();
+            this.monacoEditor = undefined;
+        }
+        if (this.monacoModelRef) {
+            this.monacoModelRef.dispose();
+            this.monacoModelRef = undefined;
+        }
+    }
+
+    /**
+     * Mount a Monaco editor into the given container element.
+     */
+    protected async mountMonacoEditor(container: HTMLDivElement): Promise<void> {
+        if (!this.uri || this.mountingEditor) { return; }
+        this.mountingEditor = true;
+        try {
+            const uri = new URI(this.uri);
+            const ref = await this.textModelService.createModelReference(uri);
+            this.monacoModelRef = ref;
+            ref.object.suppressOpenEditorWhenDirty = true;
+            const loadedDoc = await ref.object.load();
+            const textModel = loadedDoc.textEditorModel;
+
+            this.monacoEditor = await MonacoEditor.create(
+                uri,
+                ref.object,
+                container,
+                this.monacoEditorServices,
+                {
+                    model: textModel,
+                    language: 'markdown',
+                    autoSizing: false,
+                    minHeight: -1,
+                }
+            );
+            this.monacoEditor.getControl().layout();
+
+            let saveTimer: ReturnType<typeof setTimeout> | undefined;
+            this.editorDisposables.push(
+                this.monacoEditor.document.onDidChangeContent(() => {
+                    if (saveTimer) { clearTimeout(saveTimer); }
+                    saveTimer = setTimeout(() => {
+                        this.saveCurrentContent().catch(err =>
+                            console.warn('[PresentationWidget] Auto-save failed:', err)
+                        );
+                    }, 1000);
+                })
+            );
+        } finally {
+            this.mountingEditor = false;
+        }
+    }
+
+    /**
+     * Save the current Monaco editor content to disk.
+     */
+    protected async saveCurrentContent(): Promise<void> {
+        if (!this.monacoEditor || !this.uri) { return; }
+        const text = this.monacoEditor.document.getText();
+        const uri = new URI(this.uri);
+        await this.fileService.write(uri, text);
+    }
+
+    /**
      * Get the presentation container element (used for fullscreen toggle)
      */
     get revealContainer(): HTMLElement | null {
@@ -245,11 +374,22 @@ More content</pre>
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
-        this.writeSlidesDom();
-        this.initializeReveal().catch(err => console.error('[PresentationWidget] Failed to initialize reveal.js:', err));
+        if (this.mode === 'presentation') {
+            this.writeSlidesDom();
+            this.initializeReveal().catch(err =>
+                console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
+            );
+        }
+        const disposable = attachTabDblClickToggle(
+            this.node,
+            () => this.title.label,
+            () => this.toggleMode(),
+        );
+        this.toDisposeOnDetach.push(disposable);
     }
 
     protected onBeforeDetach(msg: Message): void {
+        this.destroyMonacoEditor();
         if (this.revealDeck) {
             this.revealDeck.destroy();
             this.revealDeck = undefined;
@@ -291,6 +431,13 @@ More content</pre>
     }
 
     protected render(): React.ReactNode {
+        if (this.mode === 'edit') {
+            return this.renderEditor();
+        }
+        return this.renderPresentation();
+    }
+
+    protected renderPresentation(): React.ReactNode {
         // Render only the structural shell. Slide <section> elements are written
         // imperatively via writeSlidesDom() to avoid React overwriting RevealMarkdown's
         // DOM mutations (outerHTML replacements) during reconciliation.
@@ -302,6 +449,21 @@ More content</pre>
                     </div>
                 </div>
             </div>
+        );
+    }
+
+    protected renderEditor(): React.ReactNode {
+        return (
+            <div
+                className="presentation-editor-container"
+                ref={(el) => {
+                    if (el && !this.monacoEditor && !this.mountingEditor) {
+                        this.mountMonacoEditor(el as HTMLDivElement).catch(err =>
+                            console.error('[PresentationWidget] Monaco mount failed:', err)
+                        );
+                    }
+                }}
+            />
         );
     }
 
