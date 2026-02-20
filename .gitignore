@@ -54,6 +54,9 @@ tmp/
 browser-app/
 electron-app/
 
+# Webpack filesystem cache
+browser-app/.webpack-cache/
+
 # Build artifacts (screenshots, logs)
 *.png
 build-output.log
