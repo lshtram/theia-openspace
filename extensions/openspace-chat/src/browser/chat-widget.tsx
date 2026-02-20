@@ -625,6 +625,18 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         await sessionService.sendMessage(parts as any as MessagePartInput[], model);
     }, [sessionService]);
 
+    // Handle slash command execution via POST /session/:id/command
+    const handleCommand = React.useCallback(async (command: string, args: string, agent?: string) => {
+        const session = sessionService.activeSession;
+        if (!session) return;
+        const activeModel = sessionService.activeModel;
+        const model = activeModel ? (() => {
+            const [providerPart, ...modelParts] = activeModel.split('/');
+            return { providerID: providerPart, modelID: modelParts.join('/') };
+        })() : { providerID: 'anthropic', modelID: 'claude-sonnet-4-5' };
+        await openCodeService.sessionCommand(session.id, command, args, agent ?? 'codegen', model);
+    }, [sessionService, openCodeService]);
+
     const drainQueue = React.useCallback(async () => {
         if (isSendingRef.current) return;
         while (messageQueueRef.current.length > 0) {
@@ -740,6 +752,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
+                            onCommand={handleCommand}
                             onStop={() => sessionService.abort()}
                             isStreaming={isStreaming}
                             disabled={pendingQuestions.length > 0}

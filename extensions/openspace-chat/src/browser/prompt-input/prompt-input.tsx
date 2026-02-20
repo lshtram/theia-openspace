@@ -62,6 +62,7 @@ const fuzzyMatch = (query: string, target: string): boolean => {
 
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
+    onCommand,
     onStop,
     isStreaming = false,
     disabled = false,
@@ -116,7 +117,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     // B03: Merge builtin + server commands (builtin first)
     const allSlashCommands = React.useMemo(() => [
         ...BUILTIN_SLASH_COMMANDS,
-        ...serverCommands.map(c => ({ name: `/${c.name}`, description: c.description || '', local: false as const }))
+        ...serverCommands.map(c => ({ name: `/${c.name}`, description: c.description || '', local: false as const, agent: c.agent }))
     ], [serverCommands]);
 
     // B04/B05: Computed typeahead items (state-driven for async file search)
@@ -571,10 +572,10 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
     /**
      * Select a slash command: clear editor and execute it (B03).
-     * Local/builtin commands are handled client-side via onSend (preserving existing behavior).
-     * Server commands are sent as messages via onSend.
+     * Local/builtin commands are handled client-side.
+     * Server commands are routed via onCommand → POST /session/:id/command.
      */
-    const selectSlashCommand = (cmd: { name: string; description: string }) => {
+    const selectSlashCommand = (cmd: { name: string; description: string; local?: boolean; agent?: string }) => {
         // Clear the editor text
         if (editorRef.current) {
             editorRef.current.textContent = '';
@@ -582,13 +583,19 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         setShowSlashMenu(false);
         setHasContent(false);
 
-        // Execute the command by sending it as a message
-        const workspaceRoot = workspaceRootProp ?? '';
-        const parts = buildRequestParts(
-            [{ type: 'text', content: cmd.name, start: 0, end: cmd.name.length }],
-            workspaceRoot
-        );
-        onSend(parts);
+        if (cmd.local) {
+            // Builtin command: send as a regular message (existing behavior for /clear, /compact, /help)
+            const workspaceRoot = workspaceRootProp ?? '';
+            const parts = buildRequestParts(
+                [{ type: 'text', content: cmd.name, start: 0, end: cmd.name.length }],
+                workspaceRoot
+            );
+            onSend(parts);
+        } else {
+            // Server command: route via onCommand so it hits POST /session/:id/command
+            const commandName = cmd.name.startsWith('/') ? cmd.name.slice(1) : cmd.name;
+            onCommand?.(commandName, '', cmd.agent);
+        }
     };
 
     /**

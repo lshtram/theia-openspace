@@ -242,6 +242,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     // Command methods
     listCommands(directory?: string): Promise<CommandInfo[]>;
 
+    // Execute a slash command via POST /session/:id/command
+    sessionCommand(sessionId: string, command: string, args: string, agent: string, model: { providerID: string; modelID: string }): Promise<void>;
+
     // File search with query
     searchFiles(sessionId: string, query: string, limit?: number): Promise<string[]>;
 

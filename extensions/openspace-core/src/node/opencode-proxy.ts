@@ -417,6 +417,16 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<CommandInfo[]>('/command', queryParams);
     }
 
+    async sessionCommand(sessionId: string, command: string, args: string, agent: string, model: { providerID: string; modelID: string }): Promise<void> {
+        // OpenCode API: POST /session/:id/command
+        await this.post<unknown>(`/session/${encodeURIComponent(sessionId)}/command`, {
+            command,
+            arguments: args,
+            agent,
+            model: `${model.providerID}/${model.modelID}`,
+        });
+    }
+
     async searchFiles(_sessionId: string, query: string, limit = 20): Promise<string[]> {
         // OpenCode API: GET /find/file?query=...&limit=20
         return this.get<string[]>(`/find/file`, {

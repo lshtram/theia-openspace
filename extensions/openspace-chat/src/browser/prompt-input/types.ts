@@ -103,6 +103,8 @@ export interface AgentMessagePart {
  */
 export interface PromptInputProps {
     onSend: (parts: MessagePart[]) => void | Promise<void>;
+    /** Called when a server-side slash command is selected (routed to POST /session/:id/command). */
+    onCommand?: (command: string, args: string, agent?: string) => void | Promise<void>;
     onStop?: () => void;
     isStreaming?: boolean;
     disabled?: boolean;
