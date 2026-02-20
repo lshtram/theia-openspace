@@ -289,6 +289,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     };
     // ─────────────────────────────────────────────────────────────────
 
+    // ── Show Steps collapsible ─────────────────────────────────────
+    const wasStreamingRef = React.useRef(false);
+    const [showStepsOpen, setShowStepsOpen] = React.useState(false);
+
+    React.useEffect(() => {
+        if (isStreaming) {
+            wasStreamingRef.current = true;
+        }
+    }, [isStreaming]);
+    // ─────────────────────────────────────────────────────────────────
+
     // Check if there are any renderable parts (non-empty)
     const hasParts = parts.length > 0;
 
@@ -325,18 +336,67 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </div>
             )}
             <div className="message-bubble-content">
-                {hasParts
-                    ? parts.map((part, i) => renderPart(part, i))
-                    : '\u00A0'
-                }
-                {streamingText && (
-                    <div className="part-text">{streamingText}</div>
-                )}
-                {isStreaming && (
-                    <span className="message-streaming-cursor" aria-hidden="true">
-                        &#x258B;
-                    </span>
-                )}
+                {(() => {
+                    if (!hasParts) {
+                        return (
+                            <>
+                                {'\u00A0'}
+                                {streamingText && <div className="part-text">{streamingText}</div>}
+                                {isStreaming && <span className="message-streaming-cursor" aria-hidden="true">&#x258B;</span>}
+                            </>
+                        );
+                    }
+
+                    // Find the last text part index
+                    const lastTextIdx = parts.reduce<number>((acc, p, i) => p.type === 'text' ? i : acc, -1);
+                    const stepParts = lastTextIdx >= 0 ? parts.slice(0, lastTextIdx) : parts;
+                    const finalTextPart = lastTextIdx >= 0 ? parts[lastTextIdx] : null;
+
+                    // During streaming or if never streamed: show all parts inline
+                    if (isStreaming || !wasStreamingRef.current) {
+                        return (
+                            <>
+                                {parts.map((part, i) => renderPart(part, i))}
+                                {streamingText && <div className="part-text">{streamingText}</div>}
+                                {isStreaming && <span className="message-streaming-cursor" aria-hidden="true">&#x258B;</span>}
+                            </>
+                        );
+                    }
+
+                    // After streaming: collapse step parts, show only final text
+                    const hasSteps = stepParts.length > 0;
+                    return (
+                        <>
+                            {hasSteps && (
+                                <div className="show-steps-toggle">
+                                    <button
+                                        type="button"
+                                        className="show-steps-button"
+                                        onClick={() => setShowStepsOpen(o => !o)}
+                                        aria-expanded={showStepsOpen}
+                                    >
+                                        <svg
+                                            className={`show-steps-chevron${showStepsOpen ? ' open' : ''}`}
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                            width="10" height="10" aria-hidden="true"
+                                        >
+                                            <path d="m9 18 6-6-6-6"/>
+                                        </svg>
+                                        {showStepsOpen ? 'Hide steps' : 'Show steps'}
+                                    </button>
+                                    {showStepsOpen && (
+                                        <div className="show-steps-content">
+                                            {stepParts.map((part, i) => renderPart(part, i))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {finalTextPart !== null && renderPart(finalTextPart, lastTextIdx)}
+                            {streamingText && <div className="part-text">{streamingText}</div>}
+                        </>
+                    );
+                })()}
             </div>
         </article>
     );

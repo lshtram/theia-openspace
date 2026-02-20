@@ -446,3 +446,43 @@
     font-variant-numeric: tabular-nums;
     color: var(--oc-accent, #007acc);
 }
+
+/* ── Show Steps toggle ────────────────────────────────────────── */
+.show-steps-toggle {
+    margin-bottom: 8px;
+}
+
+.show-steps-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim));
+    font-size: 11px;
+    font-family: var(--theia-ui-font-family);
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color 0.1s, background 0.1s;
+}
+
+.show-steps-button:hover {
+    color: var(--theia-foreground, var(--oc-text));
+    background: rgba(255,255,255,0.06);
+}
+
+.show-steps-chevron {
+    transition: transform 0.15s ease;
+    transform: rotate(0deg);
+}
+
+.show-steps-chevron.open {
+    transform: rotate(90deg);
+}
+
+.show-steps-content {
+    margin-top: 6px;
+    padding-left: 4px;
+    border-left: 2px solid rgba(255,255,255,0.08);
+}
