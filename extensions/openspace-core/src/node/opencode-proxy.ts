@@ -33,6 +33,7 @@ import {
     Agent,
     Provider,
     AppConfig,
+    CommandInfo,
     SessionNotification,
     MessageNotification,
     FileNotification,
@@ -403,6 +404,16 @@ export class OpenCodeProxy implements OpenCodeService {
         const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
         const response = await this.get<{ providers: import('../common/opencode-protocol').ProviderWithModels[] }>('/config/providers', queryParams);
         return response.providers || [];
+    }
+
+    // =========================================================================
+    // Command Methods
+    // =========================================================================
+
+    async listCommands(directory?: string): Promise<CommandInfo[]> {
+        // OpenCode API: GET /command
+        const queryParams: Record<string, string | undefined> = directory !== undefined ? { directory } : {};
+        return this.get<CommandInfo[]>('/command', queryParams);
     }
 
     // =========================================================================

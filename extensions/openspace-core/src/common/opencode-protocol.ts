@@ -135,6 +135,19 @@ export interface ProviderWithModels {
 }
 
 /**
+ * Command info (API response from GET /command).
+ */
+export interface CommandInfo {
+    name: string;
+    description?: string;
+    agent?: string;
+    model?: string;
+    source?: 'command' | 'mcp' | 'skill';
+    subtask?: boolean;
+    hints?: string[];
+}
+
+/**
  * Agent (API response).
  */
 export interface Agent {
@@ -211,6 +224,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Permission methods
     replyPermission(projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void>;
+
+    // Command methods
+    listCommands(directory?: string): Promise<CommandInfo[]>;
 
     // Question methods
     listPendingQuestions(projectId: string, sessionId: string): Promise<SDKTypes.QuestionRequest[]>;

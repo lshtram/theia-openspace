@@ -745,6 +745,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             disabled={pendingQuestions.length > 0}
                             placeholder={pendingQuestions.length > 0 ? 'Answer the question above to continue...' : queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
+                            openCodeService={openCodeService}
                         />
                         <ChatFooter isStreaming={isStreaming} streamingStatus={streamingStatus} />
                     </>

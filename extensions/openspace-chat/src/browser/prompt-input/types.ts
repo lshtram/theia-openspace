@@ -5,6 +5,8 @@
  * that can contain text, file references, agent mentions, and images.
  */
 
+import type { OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
+
 /**
  * A prompt is an array of content parts representing a complete user message.
  */
@@ -93,6 +95,7 @@ export interface ImageMessagePart {
 /**
  * Props for the PromptInput component.
  * T3-9: Added workspaceRoot prop to avoid hardcoded path.
+ * B03: Added openCodeService to fetch server slash commands.
  */
 export interface PromptInputProps {
     onSend: (parts: MessagePart[]) => void | Promise<void>;
@@ -101,4 +104,5 @@ export interface PromptInputProps {
     disabled?: boolean;
     placeholder?: string;
     workspaceRoot?: string;
+    openCodeService?: OpenCodeService;
 }

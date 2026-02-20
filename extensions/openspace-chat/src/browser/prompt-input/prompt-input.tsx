@@ -14,6 +14,7 @@ import * as React from '@theia/core/shared/react';
 import { parseFromDOM } from './parse-from-dom';
 import { buildRequestParts } from './build-request-parts';
 import type { PromptInputProps, Prompt, ImagePart, FilePart } from './types';
+import type { CommandInfo } from 'openspace-core/lib/common/opencode-protocol';
 import '../style/prompt-input.css';
 
 // Simple unique ID generator
@@ -30,11 +31,11 @@ const AVAILABLE_AGENTS = [
     { name: 'janitor', description: 'QA and validation' },
 ];
 
-// Available slash commands
-const SLASH_COMMANDS = [
-    { name: '/clear', description: 'Clear the current session messages' },
-    { name: '/help', description: 'Show available commands' },
-    { name: '/compact', description: 'Compact conversation to save context' },
+// Builtin slash commands (handled client-side, always shown first)
+const BUILTIN_SLASH_COMMANDS: Array<{ name: string; description: string; local: true }> = [
+    { name: '/clear', description: 'Clear the current session messages', local: true },
+    { name: '/compact', description: 'Compact conversation to save context', local: true },
+    { name: '/help', description: 'Show available commands', local: true },
 ];
 
 /**
@@ -59,7 +60,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     isStreaming = false,
     disabled = false,
     placeholder = 'Type your message, @mention files/agents, or attach images...',
-    workspaceRoot: workspaceRootProp
+    workspaceRoot: workspaceRootProp,
+    openCodeService
 }) => {
     const editorRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -80,6 +82,23 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [savedDraft, setSavedDraft] = React.useState('');
     // Task 21: Shell mode state
     const [shellMode, setShellMode] = React.useState(false);
+
+    // B03: Server-side slash commands fetched from GET /command
+    const [serverCommands, setServerCommands] = React.useState<CommandInfo[]>([]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        openCodeService?.listCommands?.()
+            .then(cmds => { if (!cancelled) setServerCommands(cmds); })
+            .catch(() => { /* use builtin fallback only */ });
+        return () => { cancelled = true; };
+    }, [openCodeService]);
+
+    // B03: Merge builtin + server commands (builtin first)
+    const allSlashCommands = React.useMemo(() => [
+        ...BUILTIN_SLASH_COMMANDS,
+        ...serverCommands.map(c => ({ name: `/${c.name}`, description: c.description || '', local: false as const }))
+    ], [serverCommands]);
 
     /**
      * Get the current prompt from editor and attachments.
@@ -459,7 +478,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
-     * Select a slash command: clear editor and execute it via onSend (Task 18).
+     * Select a slash command: clear editor and execute it (B03).
+     * Local/builtin commands are handled client-side via onSend (preserving existing behavior).
+     * Server commands are sent as messages via onSend.
      */
     const selectSlashCommand = (cmd: { name: string; description: string }) => {
         // Clear the editor text
@@ -659,7 +680,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     const typeaheadItems = getTypeaheadItems();
-    const filteredSlashCommands = SLASH_COMMANDS.filter(c =>
+    const filteredSlashCommands = allSlashCommands.filter(c =>
         c.name.toLowerCase().includes(slashQuery.toLowerCase())
     );
     const showStop = isStreaming && !hasContent;
