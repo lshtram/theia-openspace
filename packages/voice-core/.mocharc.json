@@ -1,0 +1,9 @@
+{
+  "require": ["ts-node/register/transpile-only"],
+  "extensions": ["ts"],
+  "spec": "src/**/*.spec.ts",
+  "timeout": 10000,
+  "color": true,
+  "reporter": "spec",
+  "node-option": ["no-warnings"]
+}

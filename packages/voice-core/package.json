@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf lib tsconfig.tsbuildinfo",
-    "test": "mocha --require ts-node/register 'src/**/*.spec.ts'"
+    "test": "mocha"
   },
   "devDependencies": {
     "typescript": "~5.4.5",
