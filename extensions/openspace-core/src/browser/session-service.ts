@@ -147,6 +147,8 @@ export class SessionServiceImpl implements SessionService {
     private _currentStreamingStatus = '';
     private _lastStatusChangeTime = 0;
     private _statusChangeTimeout: ReturnType<typeof setTimeout> | undefined;
+    private _streamingDoneTimer: ReturnType<typeof setTimeout> | undefined;
+    private readonly STREAMING_DONE_DELAY_MS = 500;
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -704,6 +706,10 @@ export class SessionServiceImpl implements SessionService {
             throw error;
         } finally {
             this._streamingMessageId = undefined;
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
+            }
             this._isStreaming = false;
             this.onIsStreamingChangedEmitter.fire(false);
             this.resetStreamingStatus();
@@ -750,6 +756,10 @@ export class SessionServiceImpl implements SessionService {
         } finally {
             // Always clear streaming state
             this._streamingMessageId = undefined;
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
+            }
             this._isStreaming = false;
             this.onIsStreamingChangedEmitter.fire(false);
             this.resetStreamingStatus();
@@ -929,6 +939,11 @@ export class SessionServiceImpl implements SessionService {
         // Track which message is streaming
         if (!isDone) {
             this._streamingMessageId = messageId;
+            // Cancel any pending done timer when new streaming activity arrives
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
+            }
             if (!this._isStreaming) {
                 this._isStreaming = true;
                 this.onIsStreamingChangedEmitter.fire(true);
@@ -982,9 +997,17 @@ export class SessionServiceImpl implements SessionService {
         if (isDone) {
             this.onMessageStreamingEmitter.fire({ messageId, delta, isDone: true });
             this._streamingMessageId = undefined;
-            this._isStreaming = false;
-            this.onIsStreamingChangedEmitter.fire(false);
-            this.resetStreamingStatus();
+            // Don't set isStreaming=false immediately — wait STREAMING_DONE_DELAY_MS
+            // to avoid flicker when a new message starts right after this one completes.
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+            }
+            this._streamingDoneTimer = setTimeout(() => {
+                this._streamingDoneTimer = undefined;
+                this._isStreaming = false;
+                this.onIsStreamingChangedEmitter.fire(false);
+                this.resetStreamingStatus();
+            }, this.STREAMING_DONE_DELAY_MS);
         }
     }
 
@@ -1116,6 +1139,11 @@ export class SessionServiceImpl implements SessionService {
 
         // Track streaming state
         this._streamingMessageId = messageId;
+        // Cancel any pending done timer when new streaming activity arrives
+        if (this._streamingDoneTimer) {
+            clearTimeout(this._streamingDoneTimer);
+            this._streamingDoneTimer = undefined;
+        }
         if (!this._isStreaming) {
             this._isStreaming = true;
             this.onIsStreamingChangedEmitter.fire(true);
@@ -1335,6 +1363,10 @@ export class SessionServiceImpl implements SessionService {
         if (this._statusChangeTimeout) {
             clearTimeout(this._statusChangeTimeout);
             this._statusChangeTimeout = undefined;
+        }
+        if (this._streamingDoneTimer) {
+            clearTimeout(this._streamingDoneTimer);
+            this._streamingDoneTimer = undefined;
         }
 
         // Dispose all emitters
