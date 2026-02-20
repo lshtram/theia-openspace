@@ -930,7 +930,7 @@
     border-radius: 4px;
     overflow: hidden;
     margin: 8px 0;
-    border: 1px solid var(--oc-border, #333);
+    border: 1px solid var(--oc-border, #e0e0e0);
 }
 
 .message-bubble .md-code-header {
@@ -938,10 +938,10 @@
     justify-content: space-between;
     align-items: center;
     padding: 4px 10px;
-    background: #111;
-    border-bottom: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #f3f3f3);
+    border-bottom: 1px solid var(--oc-border, #e0e0e0);
     font-size: 11px;
-    color: var(--oc-text-dim, #858585);
+    color: var(--oc-text-dim, #616161);
 }
 
 .message-bubble .md-code-copy {
@@ -954,111 +954,112 @@
 .message-bubble .md-code-body {
     margin: 0;
     padding: 12px 14px;
-    background: #1e1e1e;
+    background: var(--oc-bg-code, #f5f5f5);
     overflow-x: auto;
     font-family: var(--theia-code-font-family, monospace);
     font-size: 12px;
-    color: var(--oc-text, #ccc);
+    color: var(--oc-text, #333333);
     line-height: 1.5;
     white-space: pre;
 }
 
 /* ─── Syntax highlighting (highlight.js token classes) ───────── */
+/* Token colors use Theia CSS vars with VS Code Light+ fallbacks  */
 .message-bubble .md-code-body .hljs {
-    color: var(--oc-text, #ccc);
+    color: var(--oc-text, #333333);
     background: transparent;
 }
 
 .message-bubble .md-code-body .hljs-comment,
 .message-bubble .md-code-body .hljs-quote {
-    color: #6a9955;
+    color: var(--theia-editorInlayHint-foreground, #008000);
     font-style: italic;
 }
 
 .message-bubble .md-code-body .hljs-keyword,
 .message-bubble .md-code-body .hljs-selector-tag {
-    color: #c586c0;
+    color: var(--theia-symbolIcon-keywordForeground, #0000ff);
 }
 
 .message-bubble .md-code-body .hljs-built_in,
 .message-bubble .md-code-body .hljs-type {
-    color: #4ec9b0;
+    color: var(--theia-symbolIcon-classForeground, #267f99);
 }
 
 .message-bubble .md-code-body .hljs-literal,
 .message-bubble .md-code-body .hljs-symbol,
 .message-bubble .md-code-body .hljs-bullet {
-    color: #569cd6;
+    color: var(--theia-symbolIcon-constantForeground, #0070c1);
 }
 
 .message-bubble .md-code-body .hljs-number {
-    color: #b5cea8;
+    color: var(--theia-symbolIcon-numberForeground, #09885a);
 }
 
 .message-bubble .md-code-body .hljs-string,
 .message-bubble .md-code-body .hljs-regexp {
-    color: #ce9178;
+    color: var(--theia-symbolIcon-stringForeground, #a31515);
 }
 
 .message-bubble .md-code-body .hljs-title,
 .message-bubble .md-code-body .hljs-section {
-    color: #dcdcaa;
+    color: var(--theia-symbolIcon-functionForeground, #795e26);
 }
 
 .message-bubble .md-code-body .hljs-class .hljs-title,
 .message-bubble .md-code-body .hljs-title.class_ {
-    color: #4ec9b0;
+    color: var(--theia-symbolIcon-classForeground, #267f99);
 }
 
 .message-bubble .md-code-body .hljs-function .hljs-title,
 .message-bubble .md-code-body .hljs-title.function_ {
-    color: #dcdcaa;
+    color: var(--theia-symbolIcon-functionForeground, #795e26);
 }
 
 .message-bubble .md-code-body .hljs-params {
-    color: #9cdcfe;
+    color: var(--theia-symbolIcon-variableForeground, #001080);
 }
 
 .message-bubble .md-code-body .hljs-attr,
 .message-bubble .md-code-body .hljs-attribute {
-    color: #9cdcfe;
+    color: var(--theia-symbolIcon-variableForeground, #001080);
 }
 
 .message-bubble .md-code-body .hljs-variable,
 .message-bubble .md-code-body .hljs-template-variable {
-    color: #9cdcfe;
+    color: var(--theia-symbolIcon-variableForeground, #001080);
 }
 
 .message-bubble .md-code-body .hljs-tag {
-    color: #808080;
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-name {
-    color: #569cd6;
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-selector-id,
 .message-bubble .md-code-body .hljs-selector-class {
-    color: #d7ba7d;
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
 }
 
 .message-bubble .md-code-body .hljs-meta,
 .message-bubble .md-code-body .hljs-meta-keyword {
-    color: #569cd6;
+    color: var(--theia-symbolIcon-keywordForeground, #0000ff);
 }
 
 .message-bubble .md-code-body .hljs-meta-string {
-    color: #ce9178;
+    color: var(--theia-symbolIcon-stringForeground, #a31515);
 }
 
 .message-bubble .md-code-body .hljs-deletion {
-    color: #ce9178;
-    background: rgba(215, 58, 73, 0.15);
+    color: var(--theia-gitDecoration-deletedResourceForeground, #a31515);
+    background: rgba(215, 58, 73, 0.1);
 }
 
 .message-bubble .md-code-body .hljs-addition {
-    color: #b5cea8;
-    background: rgba(40, 167, 69, 0.15);
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+    background: rgba(40, 167, 69, 0.1);
 }
 
 .message-bubble .md-code-body .hljs-emphasis {
@@ -1070,24 +1071,18 @@
 }
 
 .message-bubble .md-code-body .hljs-link {
-    color: #569cd6;
+    color: var(--theia-textLink-foreground, #0070c1);
     text-decoration: underline;
 }
 
-.message-bubble .md-code-body .hljs-subst {
-    color: var(--oc-text, #ccc);
+.message-bubble .md-code-body .hljs-subst,
+.message-bubble .md-code-body .hljs-operator,
+.message-bubble .md-code-body .hljs-punctuation {
+    color: var(--theia-editor-foreground, #333333);
 }
 
 .message-bubble .md-code-body .hljs-property {
-    color: #9cdcfe;
-}
-
-.message-bubble .md-code-body .hljs-operator {
-    color: var(--oc-text, #ccc);
-}
-
-.message-bubble .md-code-body .hljs-punctuation {
-    color: var(--oc-text, #ccc);
+    color: var(--theia-symbolIcon-variableForeground, #001080);
 }
 
 /* ─── Chat footer status bar ─────────────────────────────────── */
