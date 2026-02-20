@@ -417,11 +417,10 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<CommandInfo[]>('/command', queryParams);
     }
 
-    async searchFiles(sessionId: string, query: string, limit = 20): Promise<string[]> {
-        // OpenCode API: GET /session/:id/find/file?query=...&dirs=false&limit=20
-        return this.get<string[]>(`/session/${encodeURIComponent(sessionId)}/find/file`, {
+    async searchFiles(_sessionId: string, query: string, limit = 20): Promise<string[]> {
+        // OpenCode API: GET /find/file?query=...&limit=20
+        return this.get<string[]>(`/find/file`, {
             query,
-            dirs: 'false',
             limit: String(limit),
         });
     }
