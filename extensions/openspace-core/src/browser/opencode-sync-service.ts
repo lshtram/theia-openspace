@@ -302,6 +302,16 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
+        // Ensure streaming tracker and message stub exist before routing any parts.
+        // message.created may arrive after the first partial in some race conditions.
+        if (!this.streamingMessages.has(event.messageId)) {
+            this.logger.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
+            this.streamingMessages.set(event.messageId, { text: '' });
+            if (event.data.info) {
+                this.sessionService.appendMessage(event.data.info);
+            }
+        }
+
         // Route tool parts to live update (these carry no text delta)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toolParts = (event.data.parts || []).filter((p: any) => p.type === 'tool');
@@ -318,19 +328,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
-        // Get or create streaming message tracker
-        let stream = this.streamingMessages.get(event.messageId);
-        if (!stream) {
-            // Received partial before created — auto-initialize tracking
-            this.logger.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
-            stream = { text: '' };
-            this.streamingMessages.set(event.messageId, stream);
-
-            // Also ensure the message exists in SessionService (append a stub if missing)
-            if (event.data.info) {
-                this.sessionService.appendMessage(event.data.info);
-            }
-        }
+        const stream = this.streamingMessages.get(event.messageId)!;
 
         // Append delta to accumulated text
         stream.text += delta;
