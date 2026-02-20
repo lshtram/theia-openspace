@@ -113,6 +113,50 @@
     margin-right: 8px;
 }
 
+/* ─── Session status indicators ──────────────────────────────── */
+.openspace-chat-widget .session-status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .session-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .session-status-dot.permissions {
+    background: #cca700;
+    box-shadow: 0 0 4px rgba(204, 167, 0, 0.4);
+}
+
+.openspace-chat-widget .session-status-dot.error {
+    background: #f14c4c;
+    box-shadow: 0 0 4px rgba(241, 76, 76, 0.4);
+}
+
+.openspace-chat-widget .session-status-dot.unseen {
+    background: #007acc;
+    box-shadow: 0 0 4px rgba(0, 122, 204, 0.4);
+}
+
+.openspace-chat-widget .session-status-spinner {
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .session-status-dash {
+    display: block;
+    width: 8px;
+    height: 1px;
+    background: var(--oc-text-dim, #858585);
+    opacity: 0.35;
+    border-radius: 1px;
+}
+
 .openspace-chat-widget .session-list-item-time {
     font-size: 10px;
     color: var(--oc-text-dim, #858585);
@@ -523,151 +567,232 @@
    Message Part Styles (MVP rendering for SDK Part types)
    ============================================================================ */
 
-/* Text part — basic pre-wrap text rendering */
+/* Text part — markdown-rendered content */
 .message-bubble .part-text {
-    white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.5;
 }
 
-/* ─── Tool call block — minimalist collapsible ───────────────── */
-.message-bubble .part-tool {
-    margin: 3px 0;
-    font-size: 12px;
+/* ─── Tool card (BasicTool pattern) ─────────────────────────── */
+.openspace-chat-widget .part-tool {
+    border-radius: 6px;
+    border: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #1e1e1e);
+    overflow: hidden;
+    margin: 2px 0;
 }
 
-.message-bubble .part-tool-header {
+.openspace-chat-widget .part-tool[data-state="running"] {
+    border-color: var(--oc-border-focus, #007acc44);
+}
+
+.openspace-chat-widget .part-tool[data-state="error"] {
+    border-color: #f14c4c44;
+}
+
+.openspace-chat-widget .part-tool-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0;
-    cursor: pointer;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 28px;
     user-select: none;
-    color: var(--oc-text-dim, #858585);
-    transition: color 0.1s;
 }
 
-.message-bubble .part-tool-header:hover {
-    color: var(--theia-foreground);
+.openspace-chat-widget .part-tool-header:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
-.message-bubble .part-tool-chevron {
-    margin-left: auto;
-    opacity: 0.4;
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-}
-
-.message-bubble .part-tool[data-expanded="true"] .part-tool-chevron {
-    transform: rotate(90deg);
-}
-
-.message-bubble .part-tool-icon {
-    width: 14px;
-    height: 14px;
+.openspace-chat-widget .part-tool-icon {
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    opacity: 0.6;
     color: var(--oc-text-dim, #858585);
 }
 
-.message-bubble .part-tool[data-state="completed"] .part-tool-icon {
-    color: var(--oc-green, #4ec94e);
-    opacity: 0.7;
+.openspace-chat-widget .part-tool-name {
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-.message-bubble .part-tool[data-state="error"] .part-tool-icon {
+.openspace-chat-widget .part-tool-subtitle {
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+    font-family: var(--theia-code-font-family, monospace);
+}
+
+.openspace-chat-widget .part-tool-trailing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool-chevron {
+    opacity: 0.4;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool[data-expanded="true"] .part-tool-chevron {
+    transform: rotate(90deg);
+}
+
+.openspace-chat-widget .part-tool-error-icon {
     color: #f14c4c;
 }
 
-.message-bubble .part-tool-name {
-    font-family: var(--theia-code-font-family, monospace);
-    font-size: 12px;
+/* ─── Task tool block (subagent/subtask) — always expanded ──── */
+.openspace-chat-widget .part-task-tool {
+    border-color: var(--oc-border, #333);
 }
 
-.message-bubble .part-tool-body {
-    display: none;
-    padding: 6px 0 6px 22px;
-    border-left: 1px solid var(--oc-border, #333);
-    margin-left: 6px;
+.openspace-chat-widget .part-task-tool .part-tool-header:hover {
+    background: transparent;
 }
 
-.message-bubble .part-tool[data-expanded="true"] .part-tool-body {
-    display: block;
-}
-
-.message-bubble .part-tool-io {
-    margin: 0;
-    padding: 6px 10px;
-    font-size: 11px;
-    font-family: var(--theia-code-font-family, monospace);
-    line-height: 1.4;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 200px;
+.openspace-chat-widget .part-task-tool-body {
+    max-height: 300px;
     overflow-y: auto;
-    background: var(--theia-editor-background, #1e1e1e);
-    border: 1px solid var(--oc-border, #333);
-    border-radius: 3px;
-    color: var(--theia-editor-foreground, #ccc);
+    padding: 4px 0;
 }
 
-.message-bubble .part-tool-io + .part-tool-io {
-    margin-top: 4px;
-}
-
-/* ─── Bash block — terminal style ───────────────────────────── */
-.message-bubble .part-tool-bash {
-    border-radius: 4px;
-    margin: 6px 0;
-    overflow: hidden;
-    font-size: 12px;
-    background: var(--theia-openspace-chat-bashBackground);
-    border: 1px solid var(--theia-openspace-chat-bashBorder);
-}
-
-.message-bubble .part-tool-bash .part-tool-header {
+.openspace-chat-widget .part-task-tool-item {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--theia-openspace-chat-bashBorder);
-    background: var(--theia-openspace-chat-bashBackground);
-    color: var(--oc-text, #cccccc);
-    cursor: default;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    min-height: 24px;
 }
 
-.message-bubble .part-tool-bash .part-tool-header:hover {
-    color: var(--oc-text, #cccccc);
+.openspace-chat-widget .part-task-tool-item:not(:last-child) {
+    border-bottom: 1px solid color-mix(in srgb, var(--oc-border, #333) 50%, transparent);
 }
 
-.message-bubble .part-tool-cmd {
+.openspace-chat-widget .part-task-tool-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.5;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-task-tool-item-title {
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-task-tool-item-subtitle {
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
     font-family: var(--theia-code-font-family, monospace);
-    color: var(--oc-green, #4ec94e);
-    padding: 7px 12px;
+}
+
+.openspace-chat-widget .part-task-tool-loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-task-tool-empty {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+    font-style: italic;
+}
+
+/* ─── TodoWrite tool block (checklist) ───────────────────────── */
+.openspace-chat-widget .part-todo-tool .part-tool-header:hover {
+    background: transparent;
+}
+
+.openspace-chat-widget .part-todo-body {
+    padding: 10px 12px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--oc-border, #333);
+}
+
+.openspace-chat-widget .part-todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+    cursor: default;
+    line-height: 1.4;
+}
+
+.openspace-chat-widget .part-todo-checkbox {
+    margin: 2px 0 0;
+    flex-shrink: 0;
+    pointer-events: none;
+    accent-color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .part-todo-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .part-todo-item[data-completed="true"] .part-todo-content {
+    text-decoration: line-through;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-tool-body {
+    border-top: 1px solid var(--oc-border, #333);
+    padding: 8px 10px;
+    max-height: 300px;
+    overflow: auto;
+}
+
+.openspace-chat-widget .part-tool-io {
+    margin: 0;
+    padding: 0;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family, monospace);
     white-space: pre-wrap;
     word-break: break-all;
-    max-height: 120px;
-    overflow-y: auto;
+    color: var(--oc-text-dim, #858585);
+    line-height: 1.4;
 }
 
-.message-bubble .part-tool-bash-output {
-    padding: 0 12px 8px;
-    font-family: var(--theia-code-font-family, monospace);
-    font-size: 11px;
-    color: var(--oc-text, #cccccc);
-    opacity: 0.85;
-    white-space: pre-wrap;
-    word-break: break-word;
+.openspace-chat-widget .part-tool-output {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--oc-border, #333);
     max-height: 200px;
-    overflow-y: auto;
+    overflow: auto;
 }
 
 /* ─── Reasoning block — fluent side-line ────────────────────── */
 .message-bubble .part-reasoning {
-    margin: 8px 0;
+    margin: 4px 0;
     padding-left: 10px;
     border-left: 2px solid var(--theia-openspace-chat-reasoningBorder);
     font-size: 12px;
@@ -838,6 +963,133 @@
     white-space: pre;
 }
 
+/* ─── Syntax highlighting (highlight.js token classes) ───────── */
+.message-bubble .md-code-body .hljs {
+    color: var(--oc-text, #ccc);
+    background: transparent;
+}
+
+.message-bubble .md-code-body .hljs-comment,
+.message-bubble .md-code-body .hljs-quote {
+    color: #6a9955;
+    font-style: italic;
+}
+
+.message-bubble .md-code-body .hljs-keyword,
+.message-bubble .md-code-body .hljs-selector-tag {
+    color: #c586c0;
+}
+
+.message-bubble .md-code-body .hljs-built_in,
+.message-bubble .md-code-body .hljs-type {
+    color: #4ec9b0;
+}
+
+.message-bubble .md-code-body .hljs-literal,
+.message-bubble .md-code-body .hljs-symbol,
+.message-bubble .md-code-body .hljs-bullet {
+    color: #569cd6;
+}
+
+.message-bubble .md-code-body .hljs-number {
+    color: #b5cea8;
+}
+
+.message-bubble .md-code-body .hljs-string,
+.message-bubble .md-code-body .hljs-regexp {
+    color: #ce9178;
+}
+
+.message-bubble .md-code-body .hljs-title,
+.message-bubble .md-code-body .hljs-section {
+    color: #dcdcaa;
+}
+
+.message-bubble .md-code-body .hljs-class .hljs-title,
+.message-bubble .md-code-body .hljs-title.class_ {
+    color: #4ec9b0;
+}
+
+.message-bubble .md-code-body .hljs-function .hljs-title,
+.message-bubble .md-code-body .hljs-title.function_ {
+    color: #dcdcaa;
+}
+
+.message-bubble .md-code-body .hljs-params {
+    color: #9cdcfe;
+}
+
+.message-bubble .md-code-body .hljs-attr,
+.message-bubble .md-code-body .hljs-attribute {
+    color: #9cdcfe;
+}
+
+.message-bubble .md-code-body .hljs-variable,
+.message-bubble .md-code-body .hljs-template-variable {
+    color: #9cdcfe;
+}
+
+.message-bubble .md-code-body .hljs-tag {
+    color: #808080;
+}
+
+.message-bubble .md-code-body .hljs-name {
+    color: #569cd6;
+}
+
+.message-bubble .md-code-body .hljs-selector-id,
+.message-bubble .md-code-body .hljs-selector-class {
+    color: #d7ba7d;
+}
+
+.message-bubble .md-code-body .hljs-meta,
+.message-bubble .md-code-body .hljs-meta-keyword {
+    color: #569cd6;
+}
+
+.message-bubble .md-code-body .hljs-meta-string {
+    color: #ce9178;
+}
+
+.message-bubble .md-code-body .hljs-deletion {
+    color: #ce9178;
+    background: rgba(215, 58, 73, 0.15);
+}
+
+.message-bubble .md-code-body .hljs-addition {
+    color: #b5cea8;
+    background: rgba(40, 167, 69, 0.15);
+}
+
+.message-bubble .md-code-body .hljs-emphasis {
+    font-style: italic;
+}
+
+.message-bubble .md-code-body .hljs-strong {
+    font-weight: bold;
+}
+
+.message-bubble .md-code-body .hljs-link {
+    color: #569cd6;
+    text-decoration: underline;
+}
+
+.message-bubble .md-code-body .hljs-subst {
+    color: var(--oc-text, #ccc);
+}
+
+.message-bubble .md-code-body .hljs-property {
+    color: #9cdcfe;
+}
+
+.message-bubble .md-code-body .hljs-operator {
+    color: var(--oc-text, #ccc);
+}
+
+.message-bubble .md-code-body .hljs-punctuation {
+    color: var(--oc-text, #ccc);
+}
+
 /* ─── Chat footer status bar ─────────────────────────────────── */
 .openspace-chat-widget .chat-footer-bar {
     display: flex;
@@ -856,6 +1108,10 @@
     display: flex;
     align-items: center;
     gap: 5px;
+}
+
+.openspace-chat-widget .chat-footer-status span {
+    transition: opacity 0.15s ease;
 }
 
 .openspace-chat-widget .status-dot {
@@ -1043,4 +1299,484 @@
 
 .openspace-sessions-widget .sessions-spin {
     animation: sessions-spin 1s linear infinite;
+}
+
+
+/* ============================================================================
+   QuestionDock Styles
+   ============================================================================ */
+
+.openspace-chat-widget .qdock {
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    border-bottom: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-question-text {
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .qdock-dismiss {
+    background: none;
+    border: none;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .qdock-dismiss:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #ccc);
+}
+
+/* ─── Option buttons ─────────────────────────────────────────── */
+.openspace-chat-widget .qdock-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.openspace-chat-widget .qdock-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: none;
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    color: var(--oc-text, #ccc);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s, border-color 0.1s;
+}
+
+.openspace-chat-widget .qdock-option-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    border-color: var(--oc-border-focus, #007acc);
+}
+
+.openspace-chat-widget .qdock-option-btn.selected {
+    border-color: var(--oc-accent, #007acc);
+    background: color-mix(in srgb, var(--oc-accent, #007acc) 15%, transparent);
+}
+
+.openspace-chat-widget .qdock-checkbox {
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-option-label {
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-option-desc {
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* ─── Custom input ───────────────────────────────────────────── */
+.openspace-chat-widget .qdock-custom-toggle {
+    background: none;
+    border: none;
+    color: var(--oc-accent, #007acc);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 0;
+    text-align: left;
+    transition: color 0.1s;
+}
+
+.openspace-chat-widget .qdock-custom-toggle:hover {
+    color: var(--oc-accent-hover, #1f8ad2);
+}
+
+.openspace-chat-widget .qdock-custom-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.openspace-chat-widget .qdock-custom-input {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    background: var(--theia-input-background, #3c3c3c);
+    color: var(--theia-input-foreground, #ccc);
+    border: 1px solid var(--theia-input-border, #3c3c3c);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+.openspace-chat-widget .qdock-custom-input:focus {
+    outline: none;
+    border-color: var(--theia-focusBorder, #007acc);
+}
+
+/* ─── Action buttons ─────────────────────────────────────────── */
+.openspace-chat-widget .qdock-btn-accent {
+    padding: 4px 12px;
+    background: var(--oc-accent, #007acc);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.openspace-chat-widget .qdock-btn-accent:hover {
+    background: var(--oc-accent-hover, #1f8ad2);
+}
+
+.openspace-chat-widget .qdock-btn-accent:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.openspace-chat-widget .qdock-btn-ghost {
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .qdock-btn-ghost:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #ccc);
+}
+
+.openspace-chat-widget .qdock-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+/* ─── Tab bar (multi-question flow) ──────────────────────────── */
+.openspace-chat-widget .qdock-tabs {
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-tab {
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.1s, border-color 0.1s;
+}
+
+.openspace-chat-widget .qdock-tab:hover {
+    color: var(--oc-text, #ccc);
+}
+
+.openspace-chat-widget .qdock-tab.active {
+    color: var(--oc-text, #ccc);
+    border-bottom-color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .qdock-tab.answered:not(.active) {
+    color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .qdock-tab-confirm {
+    font-weight: 500;
+}
+
+/* ─── Confirm tab review ─────────────────────────────────────── */
+.openspace-chat-widget .qdock-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-confirm-review {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.openspace-chat-widget .qdock-confirm-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.openspace-chat-widget .qdock-confirm-header {
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-confirm-answer {
+    color: var(--oc-text-dim, #858585);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.openspace-chat-widget .qdock-confirm-answer em {
+    font-style: italic;
+    opacity: 0.6;
+}
+
+/* ── Inline Permission Prompt (below tool card, matched by callID) ────────── */
+
+.openspace-chat-widget .part-tool-permission-prompt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-tool, rgba(255, 255, 255, 0.03));
+    font-size: 12px;
+}
+
+.openspace-chat-widget .part-tool-permission-message {
+    color: var(--oc-text, #ccc);
+    font-weight: 500;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-tool-permission-patterns {
+    color: var(--oc-text-dim, #858585);
+    font-family: var(--oc-font-mono, 'SF Mono', 'Fira Code', monospace);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.openspace-chat-widget .part-tool-permission-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool-permission-btn {
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--oc-border, #444);
+    background: transparent;
+    color: var(--oc-text, #ccc);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.openspace-chat-widget .part-tool-permission-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-deny {
+    color: #f14c4c;
+    border-color: rgba(241, 76, 76, 0.4);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-deny:hover {
+    background: rgba(241, 76, 76, 0.12);
+    border-color: rgba(241, 76, 76, 0.6);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-always {
+    color: var(--oc-accent, #007acc);
+    border-color: rgba(0, 122, 204, 0.4);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-always:hover {
+    background: rgba(0, 122, 204, 0.12);
+    border-color: rgba(0, 122, 204, 0.6);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-once {
+    color: var(--oc-text-dim, #999);
+    border-color: var(--oc-border, #444);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-once:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--oc-text, #ccc);
+}
+
+/* Animated border glow on tool cards with pending permissions */
+.openspace-chat-widget .part-tool:has(.part-tool-permission-prompt) {
+    border-color: rgba(0, 122, 204, 0.5);
+    box-shadow: 0 0 6px rgba(0, 122, 204, 0.15);
+    animation: permission-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes permission-glow {
+    0% {
+        box-shadow: 0 0 4px rgba(0, 122, 204, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 8px rgba(0, 122, 204, 0.25);
+    }
+}
+
+/* ─── Diff viewer for edit/write tools ───────────────────────── */
+.openspace-chat-widget .part-tool-filename {
+    font-weight: 500;
+    color: var(--theia-editor-foreground, var(--oc-text, #ccc));
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-tool-directory {
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    max-width: 200px;
+}
+
+.openspace-chat-widget .part-tool-diff-badge {
+    display: flex;
+    gap: 6px;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 0.8em;
+    margin-right: 4px;
+}
+
+.openspace-chat-widget .diff-additions {
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+}
+
+.openspace-chat-widget .diff-deletions {
+    color: var(--theia-gitDecoration-deletedResourceForeground, #d73a49);
+}
+
+.openspace-chat-widget .part-tool-diff-body {
+    padding: 0;
+}
+
+.openspace-chat-widget .part-tool-diff {
+    max-height: 420px;
+    overflow-y: auto;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+    line-height: 20px;
+    border-top: 1px solid var(--oc-border, #333);
+}
+
+.openspace-chat-widget .diff-line {
+    display: flex;
+    white-space: pre;
+    padding: 0 8px;
+}
+
+.openspace-chat-widget .diff-line-add {
+    background-color: rgba(40, 167, 69, 0.12);
+}
+
+.openspace-chat-widget .diff-line-del {
+    background-color: rgba(215, 58, 73, 0.12);
+}
+
+.openspace-chat-widget .diff-line-ctx {
+    background-color: transparent;
+}
+
+.openspace-chat-widget .diff-line-indicator {
+    display: inline-block;
+    width: 16px;
+    text-align: center;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .diff-line-add .diff-line-indicator {
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+}
+
+.openspace-chat-widget .diff-line-del .diff-line-indicator {
+    color: var(--theia-gitDecoration-deletedResourceForeground, #d73a49);
+}
+
+.openspace-chat-widget .diff-line-text {
+    flex: 1;
+    overflow-x: auto;
+}
+
+/* ─── Retry banner ───────────────────────────────────────────── */
+.openspace-chat-widget .part-retry-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    border: 1px solid rgba(241, 76, 76, 0.3);
+    background: rgba(241, 76, 76, 0.06);
+    font-size: 12px;
+}
+
+.openspace-chat-widget .part-retry-message {
+    font-weight: 500;
+    color: #f14c4c;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-retry-countdown {
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-retry-attempt {
+    color: var(--oc-text-dim, #858585);
 }

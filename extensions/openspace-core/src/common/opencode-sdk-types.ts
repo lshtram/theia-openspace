@@ -358,6 +358,16 @@ export type EventMessagePartUpdated = {
         delta?: string;
     };
 };
+export type EventMessagePartDelta = {
+    type: "message.part.delta";
+    properties: {
+        sessionID: string;
+        messageID: string;
+        partID: string;
+        field: string;
+        delta: string;
+    };
+};
 export type EventMessagePartRemoved = {
     type: "message.part.removed";
     properties: {
@@ -391,6 +401,52 @@ export type EventPermissionReplied = {
         sessionID: string;
         permissionID: string;
         response: string;
+    };
+};
+export type QuestionOption = {
+    label: string;
+    description: string;
+};
+
+export type QuestionInfo = {
+    question: string;
+    header: string;
+    options: Array<QuestionOption>;
+    multiple?: boolean;
+    custom?: boolean;
+};
+
+export type QuestionRequest = {
+    id: string;
+    sessionID: string;
+    questions: Array<QuestionInfo>;
+    tool?: {
+        messageID: string;
+        callID: string;
+    };
+};
+
+export type EventQuestionAsked = {
+    type: "question.asked";
+    properties: QuestionRequest;
+};
+
+export type QuestionAnswer = Array<string>;
+
+export type EventQuestionReplied = {
+    type: "question.replied";
+    properties: {
+        sessionID: string;
+        requestID: string;
+        answers: Array<QuestionAnswer>;
+    };
+};
+
+export type EventQuestionRejected = {
+    type: "question.rejected";
+    properties: {
+        sessionID: string;
+        requestID: string;
     };
 };
 export type SessionStatus = {
@@ -599,7 +655,7 @@ export type EventServerConnected = {
         [key: string]: unknown;
     };
 };
-export type Event = EventServerInstanceDisposed | EventInstallationUpdated | EventInstallationUpdateAvailable | EventLspClientDiagnostics | EventLspUpdated | EventMessageUpdated | EventMessageRemoved | EventMessagePartUpdated | EventMessagePartRemoved | EventPermissionUpdated | EventPermissionReplied | EventSessionStatus | EventSessionIdle | EventSessionCompacted | EventFileEdited | EventTodoUpdated | EventCommandExecuted | EventSessionCreated | EventSessionUpdated | EventSessionDeleted | EventSessionDiff | EventSessionError | EventFileWatcherUpdated | EventVcsBranchUpdated | EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventPtyCreated | EventPtyUpdated | EventPtyExited | EventPtyDeleted | EventServerConnected;
+export type Event = EventServerInstanceDisposed | EventInstallationUpdated | EventInstallationUpdateAvailable | EventLspClientDiagnostics | EventLspUpdated | EventMessageUpdated | EventMessageRemoved | EventMessagePartUpdated | EventMessagePartDelta | EventMessagePartRemoved | EventPermissionUpdated | EventPermissionReplied | EventQuestionAsked | EventQuestionReplied | EventQuestionRejected | EventSessionStatus | EventSessionIdle | EventSessionCompacted | EventFileEdited | EventTodoUpdated | EventCommandExecuted | EventSessionCreated | EventSessionUpdated | EventSessionDeleted | EventSessionDiff | EventSessionError | EventFileWatcherUpdated | EventVcsBranchUpdated | EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventPtyCreated | EventPtyUpdated | EventPtyExited | EventPtyDeleted | EventServerConnected;
 export type GlobalEvent = {
     directory: string;
     payload: Event;

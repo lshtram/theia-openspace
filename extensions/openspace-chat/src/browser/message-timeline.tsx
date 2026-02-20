@@ -15,7 +15,8 @@
  ********************************************************************************/
 
 import * as React from '@theia/core/shared/react';
-import { Message } from 'openspace-core/lib/common/opencode-protocol';
+import { Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
+import type { SessionService } from 'openspace-core/lib/browser/session-service';
 import { MessageBubble } from './message-bubble';
 
 /**
@@ -24,150 +25,170 @@ import { MessageBubble } from './message-bubble';
 export interface MessageTimelineProps {
     /** Array of messages to display */
     messages: Message[];
-    /** Map of message IDs to streaming text content */
-    streamingData: Map<string, string>;
     /** Whether a message is currently streaming */
     isStreaming: boolean;
     /** ID of the message currently being streamed, if any */
     streamingMessageId?: string;
+    /** OpenCode service — needed for fetching child session data (task tools) */
+    openCodeService?: OpenCodeService;
+    /** Session service — needed for active project ID (task tools) */
+    sessionService?: SessionService;
+    /** Pending permission requests — matched by callID to tool parts */
+    pendingPermissions?: PermissionNotification[];
+    /** Callback to reply to a permission request */
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
 }
 
 /**
- * Scroll threshold (pixels from bottom) to consider "scrolled up".
- * Beyond this, we consider the user has intentionally scrolled up.
+ * TextShimmer - Per-character shimmer animation (following opencode web client).
+ * Each character gets a staggered animation delay for a sweeping shimmer effect.
  */
-const SCROLLED_UP_THRESHOLD = 100;
+const TextShimmer: React.FC<{ text: string }> = ({ text }) => (
+    <div className="text-shimmer" aria-live="polite" aria-label="Assistant is thinking">
+        {text.split('').map((char, i) => (
+            <span
+                key={i}
+                className="text-shimmer-char"
+                style={{ animationDelay: `${i * 45}ms` }}
+            >
+                {char}
+            </span>
+        ))}
+    </div>
+);
+
+/**
+ * Scroll threshold (pixels from bottom) to consider "scrolled up".
+ */
+const SCROLLED_UP_THRESHOLD = 50;
+
+/**
+ * Window (ms) after a programmatic scroll during which scroll events are ignored.
+ */
+const PROGRAMMATIC_SCROLL_WINDOW = 250;
 
 /**
  * MessageTimeline - Container for message list with smart scroll behavior.
+ *
+ * Improvements over previous version:
+ * - No streamingData prop (text lives in message.parts only)
+ * - Character shimmer "Thinking" indicator instead of bouncing dots
+ * - Wheel event detection for user scroll-up (avoids false positives)
+ * - Programmatic scroll window to prevent auto-scroll interference
  */
 export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     messages,
-    streamingData,
     isStreaming,
     streamingMessageId,
+    openCodeService,
+    sessionService,
+    pendingPermissions,
+    onReplyPermission,
 }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const bottomSentinelRef = React.useRef<HTMLDivElement>(null);
     const [isScrolledUp, setIsScrolledUp] = React.useState(false);
     const [hasNewMessages, setHasNewMessages] = React.useState(false);
     const lastMessageCountRef = React.useRef(messages.length);
-    const isUserScrollingRef = React.useRef(false);
-    const scrollTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+    const userScrolledUpRef = React.useRef(false);
+    const lastProgrammaticScrollRef = React.useRef(0);
 
     /**
-     * Check scroll position and update state.
-     */
-    const checkScrollPosition = React.useCallback(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-        const wasScrolledUp = isScrolledUp;
-        const nowScrolledUp = distanceFromBottom > SCROLLED_UP_THRESHOLD;
-
-        setIsScrolledUp(nowScrolledUp);
-
-        // If user scrolled to bottom, clear the new messages indicator
-        if (wasScrolledUp && !nowScrolledUp) {
-            setHasNewMessages(false);
-        }
-    }, [isScrolledUp]);
-
-    /**
-     * Handle scroll events with debouncing to detect user scrolling.
-     */
-    const handleScroll = React.useCallback(() => {
-        isUserScrollingRef.current = true;
-
-        // Clear existing timeout
-        if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-        }
-
-        // Set a timeout to mark scrolling as finished
-        scrollTimeoutRef.current = setTimeout(() => {
-            isUserScrollingRef.current = false;
-        }, 150);
-
-        checkScrollPosition();
-    }, [checkScrollPosition]);
-
-    /**
-     * Smooth scroll to bottom of the timeline.
-     * Uses sentinel element scrollIntoView for reliable cross-layout behaviour.
+     * Scroll to bottom programmatically.
+     * Marks the scroll as programmatic so the wheel handler doesn't flag it as user scroll.
      */
     const scrollToBottom = React.useCallback((behavior: ScrollBehavior = 'smooth') => {
         const sentinel = bottomSentinelRef.current;
         if (!sentinel) return;
 
-        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        lastProgrammaticScrollRef.current = Date.now();
         requestAnimationFrame(() => {
             sentinel.scrollIntoView({ behavior, block: 'end' });
             setHasNewMessages(false);
             setIsScrolledUp(false);
+            userScrolledUpRef.current = false;
         });
     }, []);
 
     /**
-     * Handle click on "New messages" indicator.
+     * Detect user scrolling up via wheel events.
+     * Only wheel with deltaY < 0 (scrolling up) counts as user-initiated.
+     * This avoids false positives from content reflows and programmatic scrolls.
      */
-    const handleNewMessagesClick = React.useCallback(() => {
-        scrollToBottom('smooth');
-    }, [scrollToBottom]);
-
-    // Set up scroll event listener
     React.useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        container.addEventListener('scroll', handleScroll);
-        return () => {
-            container.removeEventListener('scroll', handleScroll);
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
+        const handleWheel = (e: WheelEvent) => {
+            if (e.deltaY < 0) {
+                // User scrolled up
+                userScrolledUpRef.current = true;
+                setIsScrolledUp(true);
             }
         };
-    }, [handleScroll]);
 
-    // Auto-scroll logic for new messages
+        const handleScroll = () => {
+            // Ignore programmatic scrolls (within the window)
+            if (Date.now() - lastProgrammaticScrollRef.current < PROGRAMMATIC_SCROLL_WINDOW) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+            if (distanceFromBottom <= SCROLLED_UP_THRESHOLD) {
+                // User scrolled back to bottom — re-enable auto-scroll
+                if (userScrolledUpRef.current) {
+                    userScrolledUpRef.current = false;
+                    setIsScrolledUp(false);
+                    setHasNewMessages(false);
+                }
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: true });
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('scroll', handleScroll);
+        };
+    }, []);
+
+    // Auto-scroll on new messages
     React.useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return undefined;
-
         const messageCountChanged = messages.length !== lastMessageCountRef.current;
         lastMessageCountRef.current = messages.length;
 
         if (messageCountChanged) {
-            if (!isUserScrollingRef.current) {
-                // Always scroll to show new message — user sent it or agent replied.
-                const timer = setTimeout(() => {
-                    scrollToBottom('smooth');
-                }, 50);
+            if (!userScrolledUpRef.current) {
+                const timer = setTimeout(() => scrollToBottom('smooth'), 50);
                 return () => clearTimeout(timer);
             } else {
-                // User is actively scrolling; show indicator instead.
                 setHasNewMessages(true);
             }
         }
         return undefined;
-    }, [messages, scrollToBottom]);
+    }, [messages.length, scrollToBottom]);
 
-    // Auto-scroll during streaming — fire after paint so scrollHeight is current
+    // Auto-scroll during streaming — use ResizeObserver on content for efficient detection
     React.useEffect(() => {
-        if (!isStreaming || isUserScrollingRef.current) return;
-        const rafId = requestAnimationFrame(() => {
-            bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        });
-        return () => cancelAnimationFrame(rafId);
-    }, [streamingData, isStreaming]);
+        if (!isStreaming || userScrolledUpRef.current) return;
 
-    // Scroll to bottom on initial mount so the most recent messages are visible
+        const content = containerRef.current?.querySelector('.message-timeline-content');
+        if (!content) return;
+
+        const observer = new ResizeObserver(() => {
+            if (!userScrolledUpRef.current) {
+                lastProgrammaticScrollRef.current = Date.now();
+                bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+            }
+        });
+
+        observer.observe(content);
+        return () => observer.disconnect();
+    }, [isStreaming]);
+
+    // Scroll to bottom on initial mount
     React.useEffect(() => {
         bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        // Only run once on mount
     }, []);
 
     // Determine message groups
@@ -194,8 +215,6 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
             >
                 <div className="message-timeline-content">
                     {messages.length === 0 ? (
-                        /* Empty state — rendered inside the scroll container so the
-                           container and sentinel are always present in the DOM */
                         <div className="message-timeline-empty">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32" style={{ opacity: 0.3 }}>
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -206,9 +225,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                     ) : (
                         messages.map((message, index) => {
                             const isUser = message.role === 'user';
-                            const streamingText = streamingData.get(message.id);
-                            const isMessageStreaming = isStreaming &&
-                                streamingMessageId === message.id;
+                            const isMessageStreaming = isStreaming && streamingMessageId === message.id;
                             const { isFirst, isLast } = getMessageGroupInfo(index);
 
                             return (
@@ -217,32 +234,44 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                     message={message}
                                     isUser={isUser}
                                     isStreaming={isMessageStreaming}
-                                    streamingText={streamingText}
                                     isFirstInGroup={isFirst}
                                     isLastInGroup={isLast}
+                                    openCodeService={openCodeService}
+                                    sessionService={sessionService}
+                                    pendingPermissions={pendingPermissions}
+                                    onReplyPermission={onReplyPermission}
                                 />
                             );
                         })
                     )}
-                    {/* Shimmer "thinking" indicator — shown when streaming but no response parts yet */}
+                    {/* Character shimmer "Thinking" indicator — shown when streaming but no response parts yet */}
                     {isStreaming && !streamingMessageId && (
-                        <div className="message-timeline-thinking" aria-live="polite" aria-label="Assistant is thinking">
-                            <span className="message-timeline-thinking-dot" />
-                            <span className="message-timeline-thinking-dot" />
-                            <span className="message-timeline-thinking-dot" />
-                        </div>
+                        <TextShimmer text="Thinking" />
                     )}
-                    {/* Sentinel element - scroll target for auto-scroll, always rendered */}
+                    {/* Sentinel element - scroll target */}
                     <div ref={bottomSentinelRef} className="message-timeline-bottom-sentinel" aria-hidden="true" />
                 </div>
             </div>
+
+            {/* Scroll-to-bottom floating button */}
+            <button
+                type="button"
+                className={`scroll-to-bottom-btn ${isScrolledUp ? 'visible' : ''}`}
+                onClick={() => scrollToBottom('smooth')}
+                aria-label="Scroll to bottom"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                    <path d="M12 5v14"/>
+                    <path d="m19 12-7 7-7-7"/>
+                </svg>
+            </button>
 
             {/* New messages indicator */}
             {hasNewMessages && isScrolledUp && (
                 <button
                     type="button"
                     className="new-messages-indicator"
-                    onClick={handleNewMessagesClick}
+                    onClick={() => scrollToBottom('smooth')}
                     aria-label="Scroll to new messages"
                 >
                     <span className="new-messages-icon">↓</span>

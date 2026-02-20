@@ -19,6 +19,9 @@ import '../style/prompt-input.css';
 // Simple unique ID generator
 const generateId = () => crypto.randomUUID();
 
+// Maximum number of prompt history entries to keep
+const MAX_HISTORY = 100;
+
 // Available agents (hardcoded for now - could come from configuration)
 const AVAILABLE_AGENTS = [
     { name: 'oracle', description: 'System architect and requirements analyst' },
@@ -33,6 +36,22 @@ const SLASH_COMMANDS = [
     { name: '/help', description: 'Show available commands' },
     { name: '/compact', description: 'Compact conversation to save context' },
 ];
+
+/**
+ * Simple fuzzy match: checks if all characters in the query appear
+ * in order in the target string (case-insensitive).
+ */
+const fuzzyMatch = (query: string, target: string): boolean => {
+    const q = query.toLowerCase();
+    const t = target.toLowerCase();
+    let qi = 0;
+    for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+        if (t[ti] === q[qi]) {
+            qi++;
+        }
+    }
+    return qi === q.length;
+};
 
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
@@ -54,6 +73,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const [typeaheadType, setTypeaheadType] = React.useState<'agent' | 'file' | null>(null);
     const [showSlashMenu, setShowSlashMenu] = React.useState(false);
     const [slashQuery, setSlashQuery] = React.useState('');
+    const [selectedSlashIndex, setSelectedSlashIndex] = React.useState(0);
+    // Task 20: Prompt history state
+    const [historyEntries, setHistoryEntries] = React.useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = React.useState(-1);
+    const [savedDraft, setSavedDraft] = React.useState('');
+    // Task 21: Shell mode state
+    const [shellMode, setShellMode] = React.useState(false);
 
     /**
      * Get the current prompt from editor and attachments.
@@ -82,6 +108,39 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     }, []);
 
     /**
+     * Check if cursor is at the very beginning of the editor.
+     */
+    const isCursorAtStart = (): boolean => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return true;
+        const range = sel.getRangeAt(0);
+        if (!range.collapsed) return false;
+        const editor = editorRef.current;
+        if (!editor) return true;
+        const preRange = document.createRange();
+        preRange.setStart(editor, 0);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        return preRange.toString().length === 0;
+    };
+
+    /**
+     * Check if cursor is at the very end of the editor.
+     */
+    const isCursorAtEnd = (): boolean => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return true;
+        const range = sel.getRangeAt(0);
+        if (!range.collapsed) return false;
+        const editor = editorRef.current;
+        if (!editor) return true;
+        const text = editor.textContent || '';
+        const preRange = document.createRange();
+        preRange.setStart(editor, 0);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        return preRange.toString().length >= text.length;
+    };
+
+    /**
      * Track whether the editor has any content.
      * Called on every input event on the contenteditable div.
      */
@@ -99,11 +158,6 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     React.useEffect(() => {
         handleEditorInput();
     }, [imageAttachments, fileAttachments, handleEditorInput]);
-
-    const handleAllInput = React.useCallback(() => {
-        handleInput();
-        handleEditorInput();
-    }, [handleEditorInput]);
 
     /**
      * Handle keyboard events.
@@ -136,12 +190,95 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             }
         }
 
-        // Handle slash menu navigation
+        // Handle slash menu navigation (Task 18)
         if (showSlashMenu) {
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    setSelectedSlashIndex(prev => (prev + 1) % filteredSlashCommands.length);
+                    return;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    setSelectedSlashIndex(prev => (prev - 1 + filteredSlashCommands.length) % filteredSlashCommands.length);
+                    return;
+                case 'Enter':
+                case 'Tab':
+                    e.preventDefault();
+                    if (filteredSlashCommands[selectedSlashIndex]) {
+                        selectSlashCommand(filteredSlashCommands[selectedSlashIndex]);
+                    }
+                    return;
+                case 'Escape':
+                    e.preventDefault();
+                    setShowSlashMenu(false);
+                    return;
+            }
+        }
+
+        // Shell mode keyboard handling (Task 21)
+        if (shellMode) {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                setShowSlashMenu(false);
+                setShellMode(false);
+                clearEditor();
                 return;
+            }
+            if (e.key === 'Backspace') {
+                const editorText = editorRef.current?.textContent || '';
+                if (editorText.length === 0) {
+                    e.preventDefault();
+                    setShellMode(false);
+                    return;
+                }
+            }
+        }
+
+        // Shell mode activation (Task 21): '!' at start of empty editor
+        if (e.key === '!' && !shellMode && !showTypeahead && !showSlashMenu) {
+            const editorText = editorRef.current?.textContent || '';
+            if (editorText.length === 0) {
+                e.preventDefault();
+                setShellMode(true);
+                return;
+            }
+        }
+
+        // Prompt history navigation (Task 20)
+        if (!showTypeahead && !showSlashMenu) {
+            if (e.key === 'ArrowUp' && !e.shiftKey) {
+                const editorText = editorRef.current?.textContent || '';
+                if (editorText.length === 0 || isCursorAtStart()) {
+                    if (historyEntries.length > 0 && historyIndex < historyEntries.length - 1) {
+                        e.preventDefault();
+                        const newIndex = historyIndex + 1;
+                        if (historyIndex === -1) {
+                            setSavedDraft(editorRef.current?.textContent || '');
+                        }
+                        setHistoryIndex(newIndex);
+                        if (editorRef.current) {
+                            editorRef.current.textContent = historyEntries[newIndex];
+                        }
+                        handleEditorInput();
+                        return;
+                    }
+                }
+            }
+
+            if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex >= 0) {
+                if (isCursorAtEnd()) {
+                    e.preventDefault();
+                    const newIndex = historyIndex - 1;
+                    setHistoryIndex(newIndex);
+                    if (editorRef.current) {
+                        if (newIndex === -1) {
+                            editorRef.current.textContent = savedDraft;
+                        } else {
+                            editorRef.current.textContent = historyEntries[newIndex];
+                        }
+                    }
+                    handleEditorInput();
+                    return;
+                }
             }
         }
 
@@ -178,6 +315,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const handleInput = React.useCallback(() => {
         if (!editorRef.current) return;
 
+        // Reset history navigation on any input (Task 20)
+        setHistoryIndex(-1);
+
+        // In shell mode, suppress @ and / detection (Task 21)
+        if (shellMode) {
+            setShowTypeahead(false);
+            setShowSlashMenu(false);
+            return;
+        }
+
         const beforeCursor = getTextBeforeCursor();
 
         // @ mention detection — find last @ not preceded by a word character
@@ -193,16 +340,18 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         }
         setShowTypeahead(false);
 
-        // Slash command detection — / at start of content or after whitespace only
-        const slashMatch = beforeCursor.match(/(?:^|\s)\/([^\s/]*)$/);
+        // Slash command detection — only match when / is the entire input (Task 18)
+        const fullText = editorRef.current.textContent || '';
+        const slashMatch = fullText.match(/^\/(\S*)$/);
         if (slashMatch) {
             const query = slashMatch[1];
             setSlashQuery(query);
             setShowSlashMenu(true);
+            setSelectedSlashIndex(0);
             return;
         }
         setShowSlashMenu(false);
-    }, []);
+    }, [shellMode]);
 
     // Keep ref in sync so the native listener always calls the latest implementation
     React.useEffect(() => {
@@ -218,19 +367,32 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         return () => el.removeEventListener('input', handler);
     }, []);
 
+    const handleAllInput = React.useCallback(() => {
+        handleInput();
+        handleEditorInput();
+    }, [handleEditorInput, handleInput]);
+
     /**
      * Get items for typeahead based on query and type.
+     * Task 19: Uses fuzzy matching for agents and shows "no files found" hint.
      */
     const getTypeaheadItems = (): Array<{ type: 'agent' | 'file'; name: string; description?: string }> => {
         if (!typeaheadType) return [];
 
         if (typeaheadType === 'agent') {
-            return AVAILABLE_AGENTS
-                .filter(agent => agent.name.toLowerCase().includes(typeaheadQuery.toLowerCase()))
+            const matchedAgents = AVAILABLE_AGENTS
+                .filter(agent => fuzzyMatch(typeaheadQuery, agent.name))
                 .map(agent => ({ type: 'agent' as const, name: agent.name, description: agent.description }));
+
+            // If query is non-empty and no agents match, show a "no files found" hint
+            if (matchedAgents.length === 0 && typeaheadQuery.length > 0) {
+                return [{ type: 'file' as const, name: 'No files found', description: `No agents or files matching "${typeaheadQuery}"` }];
+            }
+
+            return matchedAgents;
         }
 
-        // For files, we would search the workspace - mock for now
+        // For files, we would search the workspace - not yet implemented
         return [];
     };
 
@@ -287,6 +449,26 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
+     * Select a slash command: clear editor and execute it via onSend (Task 18).
+     */
+    const selectSlashCommand = (cmd: { name: string; description: string }) => {
+        // Clear the editor text
+        if (editorRef.current) {
+            editorRef.current.textContent = '';
+        }
+        setShowSlashMenu(false);
+        setHasContent(false);
+
+        // Execute the command by sending it as a message
+        const workspaceRoot = workspaceRootProp ?? '';
+        const parts = buildRequestParts(
+            [{ type: 'text', content: cmd.name, start: 0, end: cmd.name.length }],
+            workspaceRoot
+        );
+        onSend(parts);
+    };
+
+    /**
      * Handle send button click.
      * T3-9: Use workspaceRoot prop instead of hardcoded '/workspace'
      */
@@ -298,6 +480,20 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         }
 
         if (disabled) return;
+
+        // Task 20: Save to prompt history before clearing
+        const rawText = editorRef.current?.textContent?.trim() || '';
+        if (rawText && rawText !== historyEntries[0]) {
+            setHistoryEntries(prev => [rawText, ...prev].slice(0, MAX_HISTORY));
+        }
+        setHistoryIndex(-1);
+        setSavedDraft('');
+
+        // Task 21: In shell mode, prepend '!' to indicate shell command
+        if (shellMode && editorRef.current) {
+            const editorText = editorRef.current.textContent || '';
+            editorRef.current.textContent = '!' + editorText;
+        }
 
         const prompt = getCurrentPrompt();
         
@@ -311,6 +507,11 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
         onSend(parts);
         clearEditor();
+
+        // Task 21: Exit shell mode after sending
+        if (shellMode) {
+            setShellMode(false);
+        }
     };
 
     /**
@@ -375,19 +576,31 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     /**
-     * Handle paste event for images.
+     * Handle paste event for images and plain text sanitization (Task 22).
      */
     const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
         const items = e.clipboardData.items;
         
+        // Check for image files first
+        let hasImage = false;
         for (const item of Array.from(items)) {
             if (item.type.startsWith('image/')) {
+                hasImage = true;
                 e.preventDefault();
                 const file = item.getAsFile();
                 if (file) {
                     handleImageFile(file);
                 }
             }
+        }
+        if (hasImage) return;
+
+        // For text paste: always intercept to prevent HTML injection
+        e.preventDefault();
+        const plainText = e.clipboardData.getData('text/plain');
+        if (plainText) {
+            // Use execCommand for undo support
+            document.execCommand('insertText', false, plainText);
         }
     };
 
@@ -493,12 +706,24 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             )}
 
             <div className="prompt-input-editor-wrapper">
+                {/* Shell Mode Indicator (Task 21) */}
+                {shellMode && (
+                    <div className="prompt-input-shell-indicator">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                        <span>Shell mode</span>
+                        <span style={{ opacity: 0.6 }}>press Esc to exit</span>
+                    </div>
+                )}
+
                 {/* Contenteditable Editor */}
                 <div
                     ref={editorRef}
                     className="prompt-input-editor"
                     contentEditable={!disabled}
-                    data-placeholder={placeholder}
+                    data-placeholder={shellMode ? 'Run a shell command...' : placeholder}
+                    data-shell-mode={shellMode ? 'true' : undefined}
                     onKeyDown={handleKeyDown}
                     onInput={handleAllInput}
                     onPaste={handlePaste}
@@ -571,21 +796,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         {filteredSlashCommands.map((cmd, index) => (
                             <div
                                 key={cmd.name}
-                                className={`typeahead-item ${index === 0 ? 'selected' : ''}`}
-                                onClick={() => {
-                                    // Insert the command into the editor
-                                    if (editorRef.current) {
-                                        editorRef.current.textContent = cmd.name + ' ';
-                                        // Move cursor to end
-                                        const range = document.createRange();
-                                        const sel = window.getSelection();
-                                        range.setStart(editorRef.current, editorRef.current.childNodes.length);
-                                        range.collapse(true);
-                                        sel?.removeAllRanges();
-                                        sel?.addRange(range);
-                                    }
-                                    setShowSlashMenu(false);
-                                }}
+                                className={`typeahead-item ${index === selectedSlashIndex ? 'selected' : ''}`}
+                                onClick={() => selectSlashCommand(cmd)}
+                                onMouseEnter={() => setSelectedSlashIndex(index)}
                                 role="option"
                                 tabIndex={0}
                             >

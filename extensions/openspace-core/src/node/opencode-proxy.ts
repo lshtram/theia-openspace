@@ -36,7 +36,8 @@ import {
     SessionNotification,
     MessageNotification,
     FileNotification,
-    PermissionNotification
+    PermissionNotification,
+    QuestionNotification
 } from '../common/opencode-protocol';
 import * as SDKTypes from '../common/opencode-sdk-types';
 
@@ -74,6 +75,24 @@ export class OpenCodeProxy implements OpenCodeService {
     protected readonly initialReconnectDelay: number = 1000; // 1 second
     protected currentDirectory: string | undefined;
     protected isDisposed: boolean = false;
+
+    /**
+     * Track the most recently seen streaming part message ID.
+     * The opencode backend sends message.part.updated with one ID (streaming ID) and
+     * message.updated (completed) with a different ID (final ID). We record the last
+     * streaming part ID here so the completed notification can include it as previousMessageId,
+     * allowing the sync service to replace the streaming stub correctly.
+     */
+    protected lastStreamingPartMessageId: string | undefined;
+
+    /**
+     * Track known user message IDs.
+     * When message.updated fires with role:'user', we record the message ID here.
+     * This lets us skip message.part.updated events for user messages, since the proxy
+     * hardcodes role:'assistant' in the partial notification stub and has no other way
+     * to detect user message parts.
+     */
+    protected userMessageIds = new Set<string>();
 
     // Stream interceptor removed in T3 — agent commands now come via MCP tools
 
@@ -300,6 +319,11 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(permissionId)}`, {});
     }
 
+    async replyPermission(_projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void> {
+        // OpenCode API: POST /permission/:requestID/reply
+        await this.post<unknown>(`/permission/${encodeURIComponent(requestId)}/reply`, { reply });
+    }
+
     // =========================================================================
     // Message Methods
     // =========================================================================
@@ -459,8 +483,9 @@ export class OpenCodeProxy implements OpenCodeService {
             }
         });
 
-        // Set connection timeout to prevent hanging on unresponsive servers
-        request.setTimeout(30000); // 30 seconds
+        // SSE connections are long-lived; disable timeout so LLM generation
+        // (which may take minutes without sending events) doesn't drop the stream
+        request.setTimeout(0); // no timeout
 
         // Create SSE parser
         const parser = createParser((event: ParseEvent) => {
@@ -598,11 +623,13 @@ export class OpenCodeProxy implements OpenCodeService {
             if (eventType.startsWith('session.')) {
                 this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError);
             } else if (eventType.startsWith('message.')) {
-                this.forwardMessageEvent(innerEvent as SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved);
+                this.forwardMessageEvent(innerEvent as SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessagePartDelta | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved);
             } else if (eventType.startsWith('file.')) {
                 this.forwardFileEvent(innerEvent as SDKTypes.EventFileEdited | SDKTypes.EventFileWatcherUpdated);
             } else if (eventType.startsWith('permission.')) {
                 this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied);
+            } else if (eventType.startsWith('question.')) {
+                this.forwardQuestionEvent(innerEvent as SDKTypes.EventQuestionAsked | SDKTypes.EventQuestionReplied | SDKTypes.EventQuestionRejected);
             } else {
                 this.logger.debug(`[OpenCodeProxy] Unhandled SSE event type: ${eventType}`);
             }
@@ -652,7 +679,7 @@ export class OpenCodeProxy implements OpenCodeService {
      * Forward message event to client.
      * SDK events: message.updated (full message), message.part.updated (streaming part with delta)
      */
-    protected forwardMessageEvent(event: SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved): void {
+    protected forwardMessageEvent(event: SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessagePartDelta | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved): void {
         if (!this._client) {
             return;
         }
@@ -661,6 +688,14 @@ export class OpenCodeProxy implements OpenCodeService {
             if (event.type === 'message.updated') {
                 // Full message update — map to 'completed' or 'created'
                 const msgInfo = event.properties.info;
+
+                // Track user message IDs so we can filter out their part.updated events.
+                // The proxy hardcodes role:'assistant' in partial stubs (the Part type has no role),
+                // so this is the only reliable place to learn which message IDs belong to user messages.
+                if (msgInfo.role === 'user') {
+                    this.userMessageIds.add(msgInfo.id);
+                    this.logger.debug(`[OpenCodeProxy] Recorded user message ID: ${msgInfo.id}`);
+                }
                 
                 // Build MessageWithParts from the message info
                 const data: MessageWithParts = {
@@ -668,22 +703,53 @@ export class OpenCodeProxy implements OpenCodeService {
                     parts: [] // Parts come separately via message.part.updated events
                 };
 
+                // Include the last streaming part message ID if it differs from the final ID.
+                // This allows the sync service to find and replace the streaming stub correctly.
+                // But only carry over the streaming stub ID for assistant messages (not user messages).
+                const previousMessageId =
+                    msgInfo.role !== 'user' &&
+                    this.lastStreamingPartMessageId !== undefined &&
+                    this.lastStreamingPartMessageId !== msgInfo.id
+                        ? this.lastStreamingPartMessageId
+                        : undefined;
+
                 const notification: MessageNotification = {
                     type: 'completed',
                     sessionId: msgInfo.sessionID,
                     projectId: '',
                     messageId: msgInfo.id,
-                    data
+                    data,
+                    previousMessageId
                 };
+
+                // Clear tracking after forwarding an assistant completed message.
+                // Only clear for non-user messages so a user message.updated arriving between
+                // the last message.part.updated and the assistant message.updated doesn't
+                // prematurely discard the streaming stub ID.
+                if (msgInfo.role !== 'user') {
+                    this.lastStreamingPartMessageId = undefined;
+                }
 
                 // Intercept stream for agent commands
                 this._client.onMessageEvent(notification);
-                this.logger.debug(`[OpenCodeProxy] Forwarded message.updated: ${msgInfo.id}`);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.updated: ${msgInfo.id}${previousMessageId ? ` (streaming stub: ${previousMessageId})` : ''}`);
 
             } else if (event.type === 'message.part.updated') {
                 // Streaming part update — map to 'partial'
                 const part = event.properties.part;
                 const delta = event.properties.delta;
+
+                // Skip message.part.updated events for user messages.
+                // The backend fires part.updated for user messages too (e.g. the text the user typed).
+                // We cannot determine role from Part (it has no role field), but we track user message
+                // IDs from message.updated events above.
+                if (this.userMessageIds.has(part.messageID)) {
+                    this.logger.debug(`[OpenCodeProxy] Skipping message.part.updated for user message: ${part.messageID}`);
+                    return;
+                }
+
+                // Track the streaming part message ID for use in the next message.updated event
+                this.lastStreamingPartMessageId = part.messageID;
 
                 // Build notification with the part and delta
                 const data: MessageWithParts = {
@@ -708,6 +774,29 @@ export class OpenCodeProxy implements OpenCodeService {
 
                 this._client.onMessageEvent(notification);
                 this.logger.debug(`[OpenCodeProxy] Forwarded message.part.updated: ${part.messageID}, delta=${delta ? delta.length : 0} chars`);
+
+            } else if (event.type === 'message.part.delta') {
+                // Per-token text delta — forward directly without wrapping in MessageNotification
+                const props = event.properties;
+
+                // Skip deltas for user messages
+                if (this.userMessageIds.has(props.messageID)) {
+                    this.logger.debug(`[OpenCodeProxy] Skipping message.part.delta for user message: ${props.messageID}`);
+                    return;
+                }
+
+                // Track the streaming message ID (same as message.part.updated)
+                this.lastStreamingPartMessageId = props.messageID;
+
+                this._client.onMessagePartDelta({
+                    sessionID: props.sessionID,
+                    messageID: props.messageID,
+                    partID: props.partID,
+                    field: props.field,
+                    delta: props.delta
+                });
+
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.part.delta: part=${props.partID}, field=${props.field}, delta=${props.delta.length} chars`);
 
             } else if (event.type === 'message.removed') {
                 this.logger.debug(`[OpenCodeProxy] Message removed: ${event.properties.messageID}`);
@@ -766,6 +855,11 @@ export class OpenCodeProxy implements OpenCodeService {
                 // SDK Permission is flat in properties (not wrapped)
                 const perm = event.properties;
                 
+                // Extract patterns from SDK Permission
+                const patterns: string[] | undefined = perm.pattern
+                    ? (Array.isArray(perm.pattern) ? perm.pattern : [perm.pattern])
+                    : undefined;
+
                 const notification: PermissionNotification = {
                     type: 'requested',
                     sessionId: perm.sessionID,
@@ -776,7 +870,11 @@ export class OpenCodeProxy implements OpenCodeService {
                         type: perm.type,
                         message: perm.title,
                         status: 'pending'
-                    }
+                    },
+                    callID: perm.callID,
+                    messageID: perm.messageID,
+                    title: perm.title,
+                    patterns
                 };
 
                 this._client.onPermissionEvent(notification);
@@ -798,6 +896,61 @@ export class OpenCodeProxy implements OpenCodeService {
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding permission event: ${error}`);
         }
+    }
+
+    /**
+     * Forward question event to client.
+     */
+    protected forwardQuestionEvent(event: SDKTypes.EventQuestionAsked | SDKTypes.EventQuestionReplied | SDKTypes.EventQuestionRejected): void {
+        if (!this._client) return;
+        try {
+            if (event.type === 'question.asked') {
+                const q = event.properties;
+                const notification: QuestionNotification = {
+                    type: 'asked',
+                    sessionId: q.sessionID,
+                    projectId: '',
+                    requestId: q.id,
+                    question: q
+                };
+                this._client.onQuestionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded question.asked: ${q.id}`);
+            } else if (event.type === 'question.replied') {
+                const props = event.properties;
+                const notification: QuestionNotification = {
+                    type: 'replied',
+                    sessionId: props.sessionID,
+                    projectId: '',
+                    requestId: props.requestID
+                };
+                this._client.onQuestionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded question.replied: ${props.requestID}`);
+            } else if (event.type === 'question.rejected') {
+                const props = event.properties;
+                const notification: QuestionNotification = {
+                    type: 'rejected',
+                    sessionId: props.sessionID,
+                    projectId: '',
+                    requestId: props.requestID
+                };
+                this._client.onQuestionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded question.rejected: ${props.requestID}`);
+            }
+        } catch (error) {
+            this.logger.error(`[OpenCodeProxy] Error forwarding question event: ${error}`);
+        }
+    }
+
+    // =========================================================================
+    // Question Methods
+    // =========================================================================
+
+    async answerQuestion(_projectId: string, requestId: string, answers: import('../common/opencode-sdk-types').QuestionAnswer[]): Promise<boolean> {
+        return this.post<boolean>(`/question/${encodeURIComponent(requestId)}/reply`, { answers });
+    }
+
+    async rejectQuestion(_projectId: string, requestId: string): Promise<boolean> {
+        return this.post<boolean>(`/question/${encodeURIComponent(requestId)}/reject`, {});
     }
 
     /**

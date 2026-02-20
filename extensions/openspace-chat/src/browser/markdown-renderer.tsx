@@ -5,7 +5,87 @@
 
 import * as React from '@theia/core/shared/react';
 
-/** Render a fenced code block with language label and copy button. */
+// highlight.js core + individual languages (v10.x API)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const hljs: HLJSApi = require('highlight.js/lib/core');
+
+// Register common languages
+const LANGUAGES: Array<[string, string[]]> = [
+    ['typescript', ['ts']],
+    ['javascript', ['js', 'jsx', 'tsx']],
+    ['python', ['py']],
+    ['bash', ['sh', 'shell', 'zsh']],
+    ['json', []],
+    ['xml', ['html', 'htm', 'svg', 'xhtml']],
+    ['css', []],
+    ['go', ['golang']],
+    ['rust', ['rs']],
+    ['java', []],
+    ['c', ['h']],
+    ['cpp', ['cc', 'cxx', 'c++', 'hpp']],
+    ['sql', []],
+    ['yaml', ['yml']],
+    ['markdown', ['md']],
+    ['diff', ['patch']],
+];
+
+interface HLJSApi {
+    highlight(languageName: string, code: string, ignoreIllegals?: boolean): { value: string };
+    highlightAuto(code: string, languageSubset?: string[]): { value: string };
+    registerLanguage(languageName: string, language: unknown): void;
+    getLanguage(languageName: string): unknown | undefined;
+    registerAliases(aliasList: string | string[], opts: { languageName: string }): void;
+}
+
+let _registered = false;
+function ensureLanguagesRegistered(): void {
+    if (_registered) {
+        return;
+    }
+    _registered = true;
+    for (const [name, aliases] of LANGUAGES) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const langDef = require(`highlight.js/lib/languages/${name}`);
+            hljs.registerLanguage(name, langDef);
+            if (aliases.length > 0) {
+                hljs.registerAliases(aliases, { languageName: name });
+            }
+        } catch {
+            // Language not available — skip silently
+        }
+    }
+}
+
+/**
+ * Highlight code using highlight.js.
+ * Returns an HTML string with hljs token classes.
+ */
+function highlightCode(code: string, lang: string): string {
+    ensureLanguagesRegistered();
+    if (lang && hljs.getLanguage(lang)) {
+        try {
+            return hljs.highlight(lang, code, true).value;
+        } catch {
+            // Fall through to auto-detect
+        }
+    }
+    try {
+        return hljs.highlightAuto(code).value;
+    } catch {
+        return escapeHtml(code);
+    }
+}
+
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Render a fenced code block with language label, copy button, and syntax highlighting. */
 const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => {
     const [copied, setCopied] = React.useState(false);
     const copy = () => {
@@ -14,6 +94,7 @@ const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => 
             setTimeout(() => setCopied(false), 1500);
         });
     };
+    const highlighted = highlightCode(code, lang);
     return (
         <div className="md-code-block">
             <div className="md-code-header">
@@ -27,7 +108,7 @@ const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => 
                     {copied ? 'Copied' : 'Copy'}
                 </button>
             </div>
-            <pre className="md-code-body"><code>{code}</code></pre>
+            <pre className="md-code-body"><code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>
         </div>
     );
 };

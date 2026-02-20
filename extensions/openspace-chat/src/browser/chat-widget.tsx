@@ -22,12 +22,14 @@ import { Disposable } from '@theia/core/lib/common/disposable';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
-import { Message, MessagePartInput, Session, OpenCodeService } from 'openspace-core/lib/common/opencode-protocol';
+import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { Message, MessagePartInput, Session, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
 import { MessageTimeline } from './message-timeline';
+import { QuestionDock } from './question-dock';
 import type { MessagePart as PromptMessagePart } from './prompt-input/types';
+import type * as SDKTypes from 'openspace-core/lib/common/opencode-sdk-types';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -126,6 +128,8 @@ interface ChatHeaderBarProps {
     sessionService: SessionService;
     isLoadingSessions: boolean;
     sessionLoadError: string | undefined;
+    isStreaming: boolean;
+    pendingPermissions: PermissionNotification[];
     onLoadSessions: () => void;
     onSessionSwitch: (sessionId: string) => void;
     onNewSession: () => void;
@@ -140,6 +144,8 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     sessionService,
     isLoadingSessions,
     sessionLoadError,
+    isStreaming,
+    pendingPermissions,
     onLoadSessions,
     onSessionSwitch,
     onNewSession,
@@ -204,19 +210,36 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.length === 0 && (
                             <div style={{ padding: '8px 12px', fontSize: 12, color: '#858585' }}>No sessions yet.</div>
                         )}
-                        {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => (
-                            <div
-                                key={session.id}
-                                className={`session-list-item ${session.id === activeSession?.id ? 'active' : ''}`}
-                                onClick={() => onSessionSwitch(session.id)}
-                                role="option"
-                                tabIndex={0}
-                                aria-selected={session.id === activeSession?.id}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { onSessionSwitch(session.id); } }}
-                            >
-                                <span className="session-list-item-title">{session.title}</span>
-                            </div>
-                        ))}
+                        {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => {
+                            const isActive = session.id === activeSession?.id;
+                            // Status indicator: spinner if active+streaming, yellow dot if active+permissions, dash otherwise
+                            let statusIndicator: React.ReactNode;
+                            if (isActive && isStreaming) {
+                                statusIndicator = (
+                                    <svg className="session-status-spinner oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-label="Working">
+                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                    </svg>
+                                );
+                            } else if (isActive && pendingPermissions.length > 0) {
+                                statusIndicator = <span className="session-status-dot permissions" aria-label="Permissions pending" />;
+                            } else {
+                                statusIndicator = <span className="session-status-dash" aria-label="Idle" />;
+                            }
+                            return (
+                                <div
+                                    key={session.id}
+                                    className={`session-list-item ${isActive ? 'active' : ''}`}
+                                    onClick={() => onSessionSwitch(session.id)}
+                                    role="option"
+                                    tabIndex={0}
+                                    aria-selected={isActive}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { onSessionSwitch(session.id); } }}
+                                >
+                                    <span className="session-status-indicator">{statusIndicator}</span>
+                                    <span className="session-list-item-title">{session.title}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -292,11 +315,11 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
-const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
+const ChatFooter: React.FC<{ isStreaming: boolean; streamingStatus: string }> = ({ isStreaming, streamingStatus }) => (
     <div className="chat-footer-bar">
         <div className="chat-footer-status">
             <div className={`status-dot ${isStreaming ? 'streaming' : 'connected'}`} />
-            <span>{isStreaming ? 'Generating...' : 'Ready'}</span>
+            <span>{isStreaming ? (streamingStatus || 'Thinking') : 'Ready'}</span>
         </div>
     </div>
 );
@@ -307,14 +330,17 @@ const ChatFooter: React.FC<{ isStreaming: boolean }> = ({ isStreaming }) => (
  * T3-10: Added messageService prop for dialogs
  * Exported for unit testing.
  */
-export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService: _openCodeService, workspaceRoot, messageService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
-    const [streamingData, setStreamingData] = React.useState<Map<string, string>>(new Map());
     const [isStreaming, setIsStreaming] = React.useState(false);
+    const [streamingStatus, setStreamingStatus] = React.useState('');
+    const [streamingMessageId, setStreamingMessageId] = React.useState<string | undefined>();
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
+    const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
+    const [pendingPermissions, setPendingPermissions] = React.useState<PermissionNotification[]>([]);
     const [queuedCount, setQueuedCount] = React.useState(0);
     const messageQueueRef = React.useRef<PromptMessagePart[][]>([]);
     const isSendingRef = React.useRef(false);
@@ -386,33 +412,64 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         setMessages([...sessionService.messages]);
         loadSessions();
 
-        // Subscribe to message changes
+        // Subscribe to message changes (throttled at 100ms during streaming to prevent DOM thrashing)
+        let messageThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+        let pendingMessages: Message[] | null = null;
+
         const messagesDisposable = sessionService.onMessagesChanged(msgs => {
-            setMessages([...msgs]);
-        });
-
-        // Subscribe to streaming updates
-        const streamingDisposable = sessionService.onMessageStreaming((update: StreamingUpdate) => {
-            setStreamingData(prev => {
-                const next = new Map(prev);
-                const current = next.get(update.messageId) || '';
-                next.set(update.messageId, current + update.delta);
-                return next;
-            });
-
-            if (update.isDone) {
-                // Clear streaming data when complete
-                setStreamingData(prev => {
-                    const next = new Map(prev);
-                    next.delete(update.messageId);
-                    return next;
-                });
+            if (sessionService.isStreaming) {
+                // During streaming: leading+trailing throttle at 100ms
+                // First update fires immediately (leading edge), subsequent updates
+                // are batched and flushed at the trailing edge.
+                pendingMessages = msgs;
+                if (!messageThrottleTimer) {
+                    // Leading edge: fire immediately
+                    setMessages(msgs);
+                    setStreamingMessageId(sessionService.streamingMessageId);
+                    // Start trailing edge timer
+                    messageThrottleTimer = setTimeout(() => {
+                        if (pendingMessages) {
+                            setMessages(pendingMessages);
+                            setStreamingMessageId(sessionService.streamingMessageId);
+                            pendingMessages = null;
+                        }
+                        messageThrottleTimer = null;
+                    }, 100);
+                }
+            } else {
+                // Not streaming: update immediately
+                if (messageThrottleTimer) {
+                    clearTimeout(messageThrottleTimer);
+                    messageThrottleTimer = null;
+                }
+                pendingMessages = null;
+                setMessages([...msgs]);
+                setStreamingMessageId(sessionService.streamingMessageId);
             }
         });
 
         // Subscribe to streaming state
         const streamingStateDisposable = sessionService.onIsStreamingChanged(streaming => {
             setIsStreaming(streaming);
+            if (!streaming) {
+                // Flush any pending throttled messages
+                if (messageThrottleTimer) {
+                    clearTimeout(messageThrottleTimer);
+                    messageThrottleTimer = null;
+                }
+                if (pendingMessages) {
+                    setMessages(pendingMessages);
+                    pendingMessages = null;
+                }
+                setStreamingMessageId(undefined);
+                setStreamingStatus('');
+            }
+        });
+
+        // Subscribe to streaming status changes (dynamic status text)
+        setStreamingStatus(sessionService.currentStreamingStatus);
+        const streamingStatusDisposable = sessionService.onStreamingStatusChanged(status => {
+            setStreamingStatus(status);
         });
 
         // Subscribe to session changes to reload list
@@ -425,18 +482,35 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             loadSessions();
         });
 
+        // Subscribe to pending question changes
+        setPendingQuestions([...sessionService.pendingQuestions]);
+        const questionChangedDisposable = sessionService.onQuestionChanged(questions => {
+            setPendingQuestions([...questions]);
+        });
+
+        // Subscribe to pending permission changes
+        setPendingPermissions([...sessionService.pendingPermissions]);
+        const permissionChangedDisposable = sessionService.onPermissionChanged(permissions => {
+            setPendingPermissions([...permissions]);
+        });
+
         // Store disposables for cleanup
         disposablesRef.current = [
             messagesDisposable,
-            streamingDisposable,
             streamingStateDisposable,
+            streamingStatusDisposable,
             sessionChangedDisposable,
-            projectChangedDisposable
+            projectChangedDisposable,
+            questionChangedDisposable,
+            permissionChangedDisposable
         ];
 
         return () => {
             disposablesRef.current.forEach(d => { d.dispose(); });
             disposablesRef.current = [];
+            if (messageThrottleTimer) {
+                clearTimeout(messageThrottleTimer);
+            }
         };
     }, [sessionService, loadSessions]);
 
@@ -504,6 +578,18 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             messageService.error(`Failed to delete session: ${error}`);
         }
     }, [sessionService, loadSessions, messageService]);
+
+    // Handle permission reply (inline permission buttons)
+    const handleReplyPermission = React.useCallback(async (requestId: string, reply: 'once' | 'always' | 'reject') => {
+        try {
+            await sessionService.replyPermission(requestId, reply);
+        } catch (error) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[ChatWidget] Error replying to permission:', error);
+            }
+            messageService.error(`Failed to reply to permission: ${error}`);
+        }
+    }, [sessionService, messageService]);
 
     // Handle send message (updated for multi-part input and model selection)
     // Messages are queued if streaming is active, and drained sequentially.
@@ -587,6 +673,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     sessionService={sessionService}
                     isLoadingSessions={isLoadingSessions}
                     sessionLoadError={sessionLoadError}
+                    isStreaming={isStreaming}
+                    pendingPermissions={pendingPermissions}
                     onLoadSessions={loadSessions}
                     onSessionSwitch={handleSessionSwitch}
                     onNewSession={handleNewSession}
@@ -602,21 +690,45 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     <>
                         <MessageTimeline
                             messages={messages}
-                            streamingData={streamingData}
                             isStreaming={isStreaming}
-                            streamingMessageId={isStreaming ? streamingData.keys().next().value : undefined}
+                            streamingMessageId={streamingMessageId}
+                            openCodeService={openCodeService}
+                            sessionService={sessionService}
+                            pendingPermissions={pendingPermissions}
+                            onReplyPermission={handleReplyPermission}
                         />
+
+                        {/* QuestionDock — shown when the server asks a question */}
+                        {pendingQuestions.length > 0 && (
+                            <QuestionDock
+                                question={pendingQuestions[0]}
+                                onAnswer={async (requestId, answers) => {
+                                    try {
+                                        await sessionService.answerQuestion(requestId, answers);
+                                    } catch (error) {
+                                        messageService.error(`Failed to answer question: ${error}`);
+                                    }
+                                }}
+                                onReject={async requestId => {
+                                    try {
+                                        await sessionService.rejectQuestion(requestId);
+                                    } catch (error) {
+                                        messageService.error(`Failed to dismiss question: ${error}`);
+                                    }
+                                }}
+                            />
+                        )}
                         
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
                             onStop={() => sessionService.abort()}
                             isStreaming={isStreaming}
-                            disabled={false}
-                            placeholder={queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
+                            disabled={pendingQuestions.length > 0}
+                            placeholder={pendingQuestions.length > 0 ? 'Answer the question above to continue...' : queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
                         />
-                        <ChatFooter isStreaming={isStreaming} />
+                        <ChatFooter isStreaming={isStreaming} streamingStatus={streamingStatus} />
                     </>
                 )}
             </div>
