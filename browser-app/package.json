@@ -49,7 +49,7 @@
   },
   "scripts": {
     "build": "theia build --mode development",
-    "start": "theia start --port 3000 --plugins=local-dir:../plugins/builtin",
+    "start": "THEIA_CONFIG_DIR=$(mktemp -d) theia start --port 3000 --plugins=local-dir:../plugins/builtin",
     "watch": "theia build --watch --mode development",
     "clean": "rimraf lib src-gen"
   }
