@@ -1,0 +1,80 @@
+{
+  "name": "openspace-voice-vscode",
+  "displayName": "OpenSpace Voice",
+  "version": "1.0.0",
+  "publisher": "openspace-ai",
+  "description": "Push-to-talk dictation and read aloud using Kokoro TTS and Whisper STT",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other", "Accessibility"],
+  "main": "./lib/extension",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "keybindings": [
+      {
+        "command": "openspace-voice.startDictation",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorTextFocus || terminalFocus"
+      }
+    ],
+    "commands": [
+      { "command": "openspace-voice.startDictation", "title": "Voice: Start Dictation" },
+      { "command": "openspace-voice.readAloud", "title": "Voice: Read Aloud" },
+      { "command": "openspace-voice.stopNarration", "title": "Voice: Stop Narration" },
+      { "command": "openspace-voice.configure", "title": "Voice: Configure" }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "openspace-voice.readAloud",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenSpace Voice",
+      "properties": {
+        "openspace-voice.voice": {
+          "type": "string",
+          "default": "af_sarah",
+          "description": "Kokoro TTS voice ID (e.g. af_sarah, bm_george)"
+        },
+        "openspace-voice.speed": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.5,
+          "maximum": 2.0,
+          "description": "Playback speed"
+        },
+        "openspace-voice.language": {
+          "type": "string",
+          "default": "en-US",
+          "description": "BCP-47 language tag for STT"
+        },
+        "openspace-voice.whisperPath": {
+          "type": "string",
+          "default": "whisper",
+          "description": "Path to whisper.cpp binary"
+        },
+        "openspace-voice.narrationMode": {
+          "type": "string",
+          "enum": ["narrate-off", "narrate-everything", "narrate-summary"],
+          "default": "narrate-off"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@openspace-ai/voice-core": "^1.0.0",
+    "node-record-lpcm16": "^1.0.1",
+    "play-sound": "^1.1.6"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "~5.4.5",
+    "@vscode/vsce": "^2.0.0"
+  }
+}
