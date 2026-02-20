@@ -909,6 +909,8 @@ export class SessionServiceImpl implements SessionService {
 
         this._messages[index] = { ...message, parts };
         this.onMessagesChangedEmitter.fire([...this._messages]);
+        // Notify streaming subscribers so ChatComponent's streamingMessageId reflects tool-only messages
+        this.onMessageStreamingEmitter.fire({ messageId, delta: '', isDone: false });
         this.logger.debug(`[SessionService] Tool parts upserted for message: ${messageId}, count=${toolParts.length}`);
     }
 
