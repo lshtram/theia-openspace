@@ -3,10 +3,12 @@ import './style/presentation-widget.css';
 import { WidgetFactory, OpenHandler } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { KeybindingContribution } from '@theia/core/lib/browser/keybinding';
+import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { PresentationWidget, PresentationNavigationService } from './presentation-widget';
 import { PresentationOpenHandler } from './presentation-open-handler';
 import { PresentationService } from './presentation-service';
 import { PresentationCommandContribution } from './presentation-command-contribution';
+import { PresentationToolbarContribution } from './presentation-toolbar-contribution';
 
 export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Register the Presentation Widget
@@ -32,4 +34,9 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   bind(PresentationCommandContribution).toSelf();
   bind(CommandContribution).toService(PresentationCommandContribution);
   bind(KeybindingContribution).toService(PresentationCommandContribution);
+
+  // Register the Toolbar Contribution
+  bind(PresentationToolbarContribution).toSelf().inSingletonScope();
+  bind(CommandContribution).toService(PresentationToolbarContribution);
+  bind(TabBarToolbarContribution).toService(PresentationToolbarContribution);
 });
