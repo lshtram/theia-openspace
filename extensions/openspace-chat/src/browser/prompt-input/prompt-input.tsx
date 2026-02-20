@@ -498,9 +498,22 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 pill.contentEditable = 'false';
                 pill.textContent = item.type === 'agent' ? `@${item.name}` : item.name;
                 pill.dataset.type = item.type;
-                pill.dataset.name = item.name;
 
-                const newText = document.createTextNode(beforeAt + ' ');
+                if (item.type === 'file') {
+                    // data-path holds the file path (read by parse-from-dom.ts)
+                    pill.dataset.path = item.name;
+                } else {
+                    // data-name holds the agent name (read by parse-from-dom.ts)
+                    pill.dataset.name = item.name;
+                }
+
+                // Ensure there's text before the pill so it can be deleted normally.
+                // If beforeAt is empty (pill would be first child), use a zero-width space
+                // (\u200B). parse-from-dom.ts already strips \u200B so it won't appear in the
+                // sent text, but the text node itself allows the cursor to sit before the pill
+                // and backspace to delete it.
+                const prefixText = beforeAt.length > 0 ? beforeAt + ' ' : '\u200B';
+                const newText = document.createTextNode(prefixText);
                 const spaceAfter = document.createTextNode(' ' + afterCursor);
 
                 const parent = textNode.parentNode;

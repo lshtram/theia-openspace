@@ -50,7 +50,8 @@ export type SDKCompactionPart = SDKTypes.CompactionPart;
 // Input types (for creating parts without IDs - SDK provides these)
 export type SDKTextPartInput = SDKTypes.TextPartInput;
 export type SDKFilePartInput = SDKTypes.FilePartInput;
-export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput;
+export type SDKAgentPartInput = SDKTypes.AgentPartInput;
+export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput | SDKTypes.AgentPartInput;
 
 // ============================================================================
 // Application Types (SDK-based)

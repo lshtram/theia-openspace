@@ -71,9 +71,9 @@ export interface ImagePart {
 
 /**
  * Message part formats for sending to the opencode server.
- * These match the openspace-core protocol types.
+ * These match the openspace-core protocol types (SDK FilePartInput / AgentPartInput).
  */
-export type MessagePart = TextMessagePart | FileMessagePart | ImageMessagePart;
+export type MessagePart = TextMessagePart | FileMessagePart | AgentMessagePart;
 
 export interface TextMessagePart {
     readonly type: 'text';
@@ -82,14 +82,17 @@ export interface TextMessagePart {
 
 export interface FileMessagePart {
     readonly type: 'file';
-    readonly path: string;
-    readonly content?: string;
+    /** MIME type, e.g. "text/plain" or "image/png" */
+    readonly mime: string;
+    /** file:// URL or data: URL for images */
+    readonly url: string;
+    /** Optional display filename */
+    readonly filename?: string;
 }
 
-export interface ImageMessagePart {
-    readonly type: 'image';
-    readonly path: string;
-    readonly mime_type?: string;
+export interface AgentMessagePart {
+    readonly type: 'agent';
+    readonly name: string;
 }
 
 /**
