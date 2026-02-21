@@ -15,8 +15,10 @@
  ********************************************************************************/
 
 import * as React from '@theia/core/shared/react';
-import { Message } from 'openspace-core/lib/common/opencode-protocol';
-import { MessageBubble } from './message-bubble';
+import { Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
+import type { SessionService } from 'openspace-core/lib/browser/session-service';
+import { MessageBubble, TurnGroup } from './message-bubble';
+import type { ShellOutput } from './chat-widget';
 
 /**
  * Props for the MessageTimeline component.
@@ -24,151 +26,237 @@ import { MessageBubble } from './message-bubble';
 export interface MessageTimelineProps {
     /** Array of messages to display */
     messages: Message[];
-    /** Map of message IDs to streaming text content */
-    streamingData: Map<string, string>;
+    /** Locally-executed shell command outputs to display inline */
+    shellOutputs?: ShellOutput[];
     /** Whether a message is currently streaming */
     isStreaming: boolean;
+    /** Server-authoritative session busy state — stays true for the entire agent turn */
+    sessionBusy: boolean;
     /** ID of the message currently being streamed, if any */
     streamingMessageId?: string;
+    /** Dynamic streaming status text (e.g. "Thinking", "Searching the codebase") */
+    streamingStatus?: string;
+    /** OpenCode service — needed for fetching child session data (task tools) */
+    openCodeService?: OpenCodeService;
+    /** Session service — needed for active project ID (task tools) */
+    sessionService?: SessionService;
+    /** Pending permission requests — matched by callID to tool parts */
+    pendingPermissions?: PermissionNotification[];
+    /** Callback to reply to a permission request */
+    onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
+    /** Callback to open a file in the editor when a file path subtitle is clicked */
+    onOpenFile?: (filePath: string) => void;
 }
 
 /**
- * Scroll threshold (pixels from bottom) to consider "scrolled up".
- * Beyond this, we consider the user has intentionally scrolled up.
+ * ShellOutputBlock - Renders the output of a locally-executed shell command.
+ * Shows the command that was run, its stdout/stderr, and exit code.
  */
-const SCROLLED_UP_THRESHOLD = 100;
+const ShellOutputBlock: React.FC<{ output: ShellOutput }> = ({ output }) => {
+    const isRunning = output.exitCode === -1;
+    const hasError = output.exitCode !== 0 && !isRunning;
+    const outputText = (output.stdout + (output.stderr ? (output.stdout ? '\n' : '') + output.stderr : '')).trimEnd();
+
+    return (
+        <div className={`shell-output-block ${hasError ? 'shell-output-error' : ''}`}>
+            <div className="shell-output-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+                <code className="shell-output-command">{'!'}{output.command}</code>
+                {!isRunning && (
+                    <span className={`shell-output-exit ${hasError ? 'shell-output-exit-error' : 'shell-output-exit-ok'}`}>
+                        exit {output.exitCode}
+                    </span>
+                )}
+                {isRunning && (
+                    <span className="shell-output-running">running...</span>
+                )}
+            </div>
+            {outputText && (
+                <pre className="shell-output-content">{outputText}</pre>
+            )}
+            {output.error && (
+                <div className="shell-output-error-msg">{output.error}</div>
+            )}
+        </div>
+    );
+};
+
+/**
+ * Scroll threshold (pixels from bottom) to consider "scrolled up".
+ */
+const SCROLLED_UP_THRESHOLD = 50;
+
+/**
+ * Window (ms) after a programmatic scroll during which scroll events are ignored.
+ */
+const PROGRAMMATIC_SCROLL_WINDOW = 250;
+
+/**
+ * useLatchedBool — returns a value that latches `true` for `delayMs` after the
+ * input transitions from true → false. This prevents brief false drops (e.g.
+ * between SSE chunks) from causing visible UI flicker while a second flag
+ * (sessionBusy) is about to arrive from the server.
+ */
+export function useLatchedBool(value: boolean, delayMs: number): boolean {
+    const [latched, setLatched] = React.useState(value);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => {
+        if (value) {
+            // Input is true — cancel any pending collapse and latch true immediately
+            if (timerRef.current !== null) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+            setLatched(true);
+        } else {
+            // Input went false — wait delayMs before propagating false
+            if (timerRef.current === null) {
+                timerRef.current = setTimeout(() => {
+                    timerRef.current = null;
+                    setLatched(false);
+                }, delayMs);
+            }
+        }
+    }, [value, delayMs]);
+
+    return latched;
+}
 
 /**
  * MessageTimeline - Container for message list with smart scroll behavior.
+ *
+ * Improvements over previous version:
+ * - No streamingData prop (text lives in message.parts only)
+ * - Character shimmer "Thinking" indicator instead of bouncing dots
+ * - Wheel event detection for user scroll-up (avoids false positives)
+ * - Programmatic scroll window to prevent auto-scroll interference
  */
 export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     messages,
-    streamingData,
+    shellOutputs = [],
     isStreaming,
+    sessionBusy,
     streamingMessageId,
+    streamingStatus,
+    openCodeService,
+    sessionService,
+    pendingPermissions,
+    onReplyPermission,
+    onOpenFile,
 }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const bottomSentinelRef = React.useRef<HTMLDivElement>(null);
     const [isScrolledUp, setIsScrolledUp] = React.useState(false);
     const [hasNewMessages, setHasNewMessages] = React.useState(false);
     const lastMessageCountRef = React.useRef(messages.length);
-    const isUserScrollingRef = React.useRef(false);
-    const scrollTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+    const userScrolledUpRef = React.useRef(false);
+    const lastProgrammaticScrollRef = React.useRef(0);
+
+    // Latch the "session is active" flag so transient false drops (between SSE
+    // chunks) don't cause the TurnGroup to briefly switch to its collapsed state
+    // before sessionBusy arrives from the server.
+    const sessionActive = isStreaming || sessionBusy;
+    const sessionActiveLatch = useLatchedBool(sessionActive, 600);
 
     /**
-     * Check scroll position and update state.
-     */
-    const checkScrollPosition = React.useCallback(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-        const wasScrolledUp = isScrolledUp;
-        const nowScrolledUp = distanceFromBottom > SCROLLED_UP_THRESHOLD;
-
-        setIsScrolledUp(nowScrolledUp);
-
-        // If user scrolled to bottom, clear the new messages indicator
-        if (wasScrolledUp && !nowScrolledUp) {
-            setHasNewMessages(false);
-        }
-    }, [isScrolledUp]);
-
-    /**
-     * Handle scroll events with debouncing to detect user scrolling.
-     */
-    const handleScroll = React.useCallback(() => {
-        isUserScrollingRef.current = true;
-
-        // Clear existing timeout
-        if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-        }
-
-        // Set a timeout to mark scrolling as finished
-        scrollTimeoutRef.current = setTimeout(() => {
-            isUserScrollingRef.current = false;
-        }, 150);
-
-        checkScrollPosition();
-    }, [checkScrollPosition]);
-
-    /**
-     * Smooth scroll to bottom of the timeline.
-     * Uses sentinel element scrollIntoView for reliable cross-layout behaviour.
+     * Scroll to bottom programmatically.
+     * Marks the scroll as programmatic so the wheel handler doesn't flag it as user scroll.
      */
     const scrollToBottom = React.useCallback((behavior: ScrollBehavior = 'smooth') => {
         const sentinel = bottomSentinelRef.current;
         if (!sentinel) return;
 
-        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        lastProgrammaticScrollRef.current = Date.now();
         requestAnimationFrame(() => {
             sentinel.scrollIntoView({ behavior, block: 'end' });
             setHasNewMessages(false);
             setIsScrolledUp(false);
+            userScrolledUpRef.current = false;
         });
     }, []);
 
     /**
-     * Handle click on "New messages" indicator.
+     * Detect user scrolling up via wheel events.
+     * Only wheel with deltaY < 0 (scrolling up) counts as user-initiated.
+     * This avoids false positives from content reflows and programmatic scrolls.
      */
-    const handleNewMessagesClick = React.useCallback(() => {
-        scrollToBottom('smooth');
-    }, [scrollToBottom]);
-
-    // Set up scroll event listener
     React.useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        container.addEventListener('scroll', handleScroll);
-        return () => {
-            container.removeEventListener('scroll', handleScroll);
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
+        const handleWheel = (e: WheelEvent) => {
+            if (e.deltaY < 0) {
+                // User scrolled up
+                userScrolledUpRef.current = true;
+                setIsScrolledUp(true);
             }
         };
-    }, [handleScroll]);
 
-    // Auto-scroll logic for new messages
+        const handleScroll = () => {
+            // Ignore programmatic scrolls (within the window)
+            if (Date.now() - lastProgrammaticScrollRef.current < PROGRAMMATIC_SCROLL_WINDOW) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+            if (distanceFromBottom <= SCROLLED_UP_THRESHOLD) {
+                // User scrolled back to bottom — re-enable auto-scroll
+                if (userScrolledUpRef.current) {
+                    userScrolledUpRef.current = false;
+                    setIsScrolledUp(false);
+                    setHasNewMessages(false);
+                }
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: true });
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('scroll', handleScroll);
+        };
+    }, []);
+
+    // Auto-scroll on new messages
     React.useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return undefined;
-
         const messageCountChanged = messages.length !== lastMessageCountRef.current;
         lastMessageCountRef.current = messages.length;
 
         if (messageCountChanged) {
-            if (!isUserScrollingRef.current) {
-                // Always scroll to show new message — user sent it or agent replied.
-                const timer = setTimeout(() => {
-                    scrollToBottom('smooth');
-                }, 50);
+            if (!userScrolledUpRef.current) {
+                const timer = setTimeout(() => scrollToBottom('smooth'), 50);
                 return () => clearTimeout(timer);
             } else {
-                // User is actively scrolling; show indicator instead.
                 setHasNewMessages(true);
             }
         }
         return undefined;
-    }, [messages, scrollToBottom]);
+    }, [messages.length, scrollToBottom]);
 
-    // Auto-scroll during streaming — fire after paint so scrollHeight is current
+    // Auto-scroll during streaming — use ResizeObserver on content for efficient detection
     React.useEffect(() => {
-        if (!isStreaming || isUserScrollingRef.current) return;
-        const rafId = requestAnimationFrame(() => {
-            bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        });
-        return () => cancelAnimationFrame(rafId);
-    }, [streamingData, isStreaming]);
+        if (!isStreaming || userScrolledUpRef.current) return;
 
-    // Scroll to bottom on initial mount so the most recent messages are visible
+        const content = containerRef.current?.querySelector('.message-timeline-content');
+        if (!content) return;
+
+        const observer = new ResizeObserver(() => {
+            if (!userScrolledUpRef.current) {
+                lastProgrammaticScrollRef.current = Date.now();
+                bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+            }
+        });
+
+        observer.observe(content);
+        return () => observer.disconnect();
+    }, [isStreaming]);
+
+    // Scroll to bottom on initial mount
     React.useEffect(() => {
         bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        // Only run once on mount
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Determine message groups
@@ -183,6 +271,42 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         return { isFirst, isLast };
     };
 
+    /**
+     * Build a grouped rendering plan for all messages.
+     * Consecutive assistant messages are batched: all but the last are "intermediate steps"
+     * and get rendered inside a single shared TurnGroup. The last is the "final answer"
+     * and renders as a normal MessageBubble.
+     *
+     * Each entry is one of:
+     *  - { kind: 'user', index }           — a user message, render normally
+     *  - { kind: 'assistant-run', indices } — a run of assistant messages;
+     *                                          indices[0..n-2] are intermediate, indices[n-1] is final
+     */
+    type RenderItem =
+        | { kind: 'user'; index: number }
+        | { kind: 'assistant-run'; indices: number[] };
+
+    const renderPlan = React.useMemo<RenderItem[]>(() => {
+        const plan: RenderItem[] = [];
+        let i = 0;
+        while (i < messages.length) {
+            if (messages[i].role !== 'assistant') {
+                plan.push({ kind: 'user', index: i });
+                i++;
+            } else {
+                // Collect all consecutive assistant messages
+                const run: number[] = [];
+                while (i < messages.length && messages[i].role === 'assistant') {
+                    run.push(i);
+                    i++;
+                }
+                plan.push({ kind: 'assistant-run', indices: run });
+            }
+        }
+        return plan;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages]);
+
     return (
         <div className="message-timeline">
             <div
@@ -195,47 +319,189 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
             >
                 <div className="message-timeline-content">
                     {messages.length === 0 ? (
-                        /* Empty state — rendered inside the scroll container so the
-                           container and sentinel are always present in the DOM */
-                        <div className="message-timeline-empty-content">
-                            <div className="message-timeline-empty-icon">💬</div>
-                            <p className="message-timeline-empty-title">No messages yet</p>
-                            <p className="message-timeline-empty-hint">
-                                Type a message below to start the conversation
-                            </p>
+                        <div className="message-timeline-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32" style={{ opacity: 0.3 }}>
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <div className="message-timeline-empty-title">Start a conversation</div>
+                            <div className="message-timeline-empty-hint">Type a message below, or attach a file with @</div>
                         </div>
                     ) : (
-                        messages.map((message, index) => {
-                            const isUser = message.role === 'user';
-                            const streamingText = streamingData.get(message.id);
-                            const isMessageStreaming = isStreaming &&
-                                streamingMessageId === message.id;
-                            const { isFirst, isLast } = getMessageGroupInfo(index);
+                        renderPlan.map((item, planIdx) => {
+                            if (item.kind === 'user') {
+                                const index = item.index;
+                                const message = messages[index];
+                                const { isFirst, isLast } = getMessageGroupInfo(index);
+                                return (
+                                    <MessageBubble
+                                        key={message.id}
+                                        message={message}
+                                        isUser={true}
+                                        isStreaming={false}
+                                        isFirstInGroup={isFirst}
+                                        isLastInGroup={isLast}
+                                        openCodeService={openCodeService}
+                                        sessionService={sessionService}
+                                        pendingPermissions={pendingPermissions}
+                                        onReplyPermission={onReplyPermission}
+                                        onOpenFile={onOpenFile}
+                                    />
+                                );
+                            }
+
+                            // assistant-run — all assistant messages rendered as one turn
+                            const { indices } = item;
+                            // For the LAST assistant-run in the plan, use the server-authoritative
+                            // sessionBusy flag. This stays true for the entire agent turn (including
+                            // gaps between tool rounds) because the server holds the session in
+                            // "busy" state until the prompt loop exits. For non-last runs, use
+                            // per-message streaming state.
+                            const isLastRun = planIdx === renderPlan.length - 1;
+                            const isRunStreaming = isLastRun
+                                ? sessionActiveLatch
+                                : isStreaming && indices.some(i => streamingMessageId === messages[i].id);
+
+                            // Compute total duration for the TurnGroup header (sum of ALL messages' durations)
+                            const totalDurationSecs = indices.reduce((sum, idx) => {
+                                const m = messages[idx];
+                                const c = m.time?.created;
+                                const d = (m.time as any)?.completed;
+                                if (!c || !d) return sum;
+                                const cMs = typeof c === 'number' ? c : new Date(c).getTime();
+                                const dMs = typeof d === 'number' ? d : new Date(d).getTime();
+                                return sum + Math.max(0, Math.floor((dMs - cMs) / 1000));
+                            }, 0);
+
+                            // Extract the "response" — the last text part from the last message.
+                            // This text is shown below the TurnGroup as the final answer.
+                            const lastMessage = messages[indices[indices.length - 1]];
+                            const lastMessageParts = lastMessage?.parts || [];
+                            let responsePartIndex = -1;
+                            for (let pi = lastMessageParts.length - 1; pi >= 0; pi--) {
+                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as any).text) {
+                                    responsePartIndex = pi;
+                                    break;
+                                }
+                            }
+                            const hasResponse = responsePartIndex >= 0;
+
+                            // Determine if there are any "steps" (tool/reasoning parts) in the run.
+                            const hasSteps = indices.some(idx =>
+                                (messages[idx].parts || []).some(p => p.type === 'tool' || p.type === 'reasoning')
+                            );
+
+                            // Simple case: no steps (only text parts) — render last message as a normal bubble
+                            if (!hasSteps) {
+                                return (
+                                    <MessageBubble
+                                        key={lastMessage.id}
+                                        message={lastMessage}
+                                        isUser={false}
+                                        isStreaming={isRunStreaming}
+                                        isFirstInGroup={true}
+                                        isLastInGroup={true}
+                                        openCodeService={openCodeService}
+                                        sessionService={sessionService}
+                                        pendingPermissions={pendingPermissions}
+                                        onReplyPermission={onReplyPermission}
+                                        onOpenFile={onOpenFile}
+                                    />
+                                );
+                            }
 
                             return (
-                                <MessageBubble
-                                    key={message.id}
-                                    message={message}
-                                    isUser={isUser}
-                                    isStreaming={isMessageStreaming}
-                                    streamingText={streamingText}
-                                    isFirstInGroup={isFirst}
-                                    isLastInGroup={isLast}
-                                />
+                                <React.Fragment key={`run-${planIdx}`}>
+                                    {/* All messages in one TurnGroup — for the last message, exclude the response text */}
+                                    <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs} streamingStatus={streamingStatus}>
+                                        {indices.map(idx => {
+                                            const m = messages[idx];
+                                            const isMessageStreaming = isStreaming && streamingMessageId === m.id;
+                                            const isLastMsg = idx === indices[indices.length - 1];
+                                            // For the last message, filter out the response text part so it's not duplicated
+                                            const filteredMessage = isLastMsg && hasResponse
+                                                ? { ...m, parts: (m.parts || []).filter((_, pi) => pi !== responsePartIndex) }
+                                                : m;
+                                            // Skip rendering if the filtered message has no parts left
+                                            if (filteredMessage.parts && filteredMessage.parts.length === 0) return null;
+                                            return (
+                                                <MessageBubble
+                                                    key={m.id}
+                                                    message={filteredMessage}
+                                                    isUser={false}
+                                                    isStreaming={isMessageStreaming}
+                                                    isFirstInGroup={false}
+                                                    isLastInGroup={false}
+                                                    isIntermediateStep={true}
+                                                    openCodeService={openCodeService}
+                                                    sessionService={sessionService}
+                                                    pendingPermissions={pendingPermissions}
+                                                    onReplyPermission={onReplyPermission}
+                                                    onOpenFile={onOpenFile}
+                                                />
+                                            );
+                                        })}
+                                    </TurnGroup>
+
+                                    {/* Response section — the final text answer, rendered below the TurnGroup */}
+                                    {hasResponse && (
+                                        <div className="turn-response">
+                                            <MessageBubble
+                                                key={`response-${lastMessage.id}`}
+                                                message={{ ...lastMessage, parts: [lastMessageParts[responsePartIndex]] }}
+                                                isUser={false}
+                                                isStreaming={isRunStreaming}
+                                                isFirstInGroup={true}
+                                                isLastInGroup={true}
+                                                openCodeService={openCodeService}
+                                                sessionService={sessionService}
+                                                pendingPermissions={pendingPermissions}
+                                                onReplyPermission={onReplyPermission}
+                                                onOpenFile={onOpenFile}
+                                            />
+                                        </div>
+                                    )}
+                                </React.Fragment>
                             );
                         })
                     )}
-                    {/* Sentinel element - scroll target for auto-scroll, always rendered */}
+                    {/* Shell command outputs — rendered at the bottom of the timeline */}
+                    {shellOutputs.map(entry => (
+                        <ShellOutputBlock key={entry.id} output={entry} />
+                    ))}
+                    {/* Standalone trigger bar — shown when session is active but no TurnGroup is visible yet.
+                         * Covers two cases:
+                         * 1. No messages at all yet (renderPlan empty)
+                         * 2. Last render item is a user message (assistant hasn't replied yet)
+                         * Once an assistant TurnGroup renders, it takes over. */}
+                    {sessionActiveLatch && (renderPlan.length === 0 || renderPlan[renderPlan.length - 1].kind === 'user') && (
+                        <TurnGroup isStreaming={true} durationSecs={0} streamingStatus={streamingStatus}>
+                            {null}
+                        </TurnGroup>
+                    )}
+                    {/* Sentinel element - scroll target */}
                     <div ref={bottomSentinelRef} className="message-timeline-bottom-sentinel" aria-hidden="true" />
                 </div>
             </div>
+
+            {/* Scroll-to-bottom floating button */}
+            <button
+                type="button"
+                className={`scroll-to-bottom-btn ${isScrolledUp ? 'visible' : ''}`}
+                onClick={() => scrollToBottom('smooth')}
+                aria-label="Scroll to bottom"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                    <path d="M12 5v14"/>
+                    <path d="m19 12-7 7-7-7"/>
+                </svg>
+            </button>
 
             {/* New messages indicator */}
             {hasNewMessages && isScrolledUp && (
                 <button
                     type="button"
                     className="new-messages-indicator"
-                    onClick={handleNewMessagesClick}
+                    onClick={() => scrollToBottom('smooth')}
                     aria-label="Scroll to new messages"
                 >
                     <span className="new-messages-icon">↓</span>

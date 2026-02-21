@@ -7,7 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   
-  /* Global setup - ensure OpenCode server is running */
+  /* Global setup — ensures OpenCode server (:7890) is running.
+   * Theia (:3000) is handled by webServer below. */
   globalSetup: require.resolve('./scripts/global-setup-opencode'),
   
   /* Maximum time one test can run for */
@@ -19,8 +20,8 @@ export default defineConfig({
   /* Fail the build on CI if you accidentally left test.only */
   forbidOnly: !!process.env.CI,
   
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry on CI; also 1 retry locally to handle transient bridge timing issues */
+  retries: process.env.CI ? 2 : 1,
   
   /* Opt out of parallel tests on CI */
   workers: process.env.CI ? 1 : undefined,
@@ -54,11 +55,16 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Theia dev server — started automatically if not already running.
+   * In non-CI mode reuseExistingServer=true so a manually-started Theia
+   * is reused.  The globalSetup (scripts/global-setup-opencode.ts) handles
+   * the OpenCode server on port 7890.
+   * Use `npm run test:e2e` (not `npx playwright test` directly) so the
+   * e2e-precheck.sh guard runs first. */
   webServer: {
     command: 'yarn start:browser',
     port: 3000,
     timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
   },
 });

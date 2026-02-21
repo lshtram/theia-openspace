@@ -45,7 +45,7 @@ export const SENSITIVE_FILE_PATTERNS: RegExp[] = [
     /\.pem$/,
     /\.key$/,
     /\.cert$/,
-    /[\/\\]\.ssh[\/\\]/,        // Matches /.ssh/ or .\ssh\
+    /[/\\]\.ssh[/\\]/,        // Matches /.ssh/ or .\ssh\
     /\.ssh\//i,                 // Matches .ssh/ anywhere in path
     /secrets/,
     /secret/i,                  // Matches secret (singular or plural)

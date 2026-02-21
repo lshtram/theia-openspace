@@ -15,6 +15,21 @@ import { test, expect, Page } from '@playwright/test';
 /**
  * Helper: Wait for Theia to fully load
  */
+async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
+    // Theia may show a "Do you trust the authors?" dialog on first open.
+    // Dismiss it by clicking "Yes, I trust the authors" so UI interactions proceed.
+    try {
+        const trustDialog = page.locator('.workspace-trust-dialog');
+        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        if (isVisible) {
+            await page.locator('.workspace-trust-dialog .theia-button.main').click();
+            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+    } catch {
+        // Dialog not present or already dismissed — safe to continue
+    }
+}
+
 async function waitForTheiaLoad(page: Page) {
   console.log('Waiting for Theia to load...');
   
@@ -29,6 +44,7 @@ async function waitForTheiaLoad(page: Page) {
   // Wait for Theia to be attached using proper selector waiting
   await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
   console.log('✓ Theia initialization wait complete');
+  await dismissWorkspaceTrustDialog(page);
 }
 
 /**
@@ -192,7 +208,7 @@ test.skip('Test 4: Empty state shows helpful message when no sessions exist', as
 // TEST 5: Event Listener Cleanup - No memory leaks on widget close
 // ============================================================================
 
-test.skip('Test 5: Event listeners cleaned up when widget closes (no memory leaks)', async ({ page }) => {
+test.skip('Test 5: Event listeners cleaned up when widget closes (no memory leaks)', async ({ page: _page }) => {
   // SKIPPED: Memory leak detection requires browser DevTools profiling
   // Event listener cleanup is already tested in unit tests (useEffect cleanup)
   console.log('⊘ Test 5 skipped - memory leak detection requires manual profiling');

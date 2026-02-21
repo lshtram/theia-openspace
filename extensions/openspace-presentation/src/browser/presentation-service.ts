@@ -18,10 +18,13 @@ import { inject, injectable } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
 import { Disposable, Emitter } from '@theia/core/lib/common';
 import { ILogger } from '@theia/core/lib/common/logger';
+import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { FileStat } from '@theia/filesystem/lib/common/files';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { PresentationWidget, DeckData, DeckOptions } from './presentation-widget';
+import { resolveContentPath } from 'openspace-core/lib/browser/resolve-content-path';
+import { OpenspacePreferences } from 'openspace-settings/lib/browser/openspace-preferences';
 
 /**
  * File extension for presentation files.
@@ -43,6 +46,9 @@ export class PresentationService {
 
     @inject(ILogger)
     protected readonly logger!: ILogger;
+
+    @inject(PreferenceService)
+    protected readonly preferenceService!: PreferenceService;
 
     /**
      * Get the file extension for presentation files.
@@ -117,19 +123,41 @@ export class PresentationService {
         slides: string[] = ['# Slide 1\n\nWelcome to your presentation'],
         options?: DeckOptions
     ): Promise<string> {
-        // Ensure path has correct extension
-        let finalPath = path;
-        if (!finalPath.endsWith(DECK_EXTENSION)) {
-            finalPath = `${path}${DECK_EXTENSION}`;
+        // Resolve to a full URI using the configured default folder
+        const roots = await this.workspaceService.roots;
+        if (!roots.length) {
+            throw new Error('[PresentationService] Cannot create presentation: no workspace is open');
+        }
+        const workspaceRoot = roots[0].resource.toString();
+        const configuredFolder = this.preferenceService.get<string>(
+            OpenspacePreferences.DECKS_PATH,
+            'openspace/decks'
+        );
+
+        const resolvedUri = resolveContentPath(path, configuredFolder, workspaceRoot, DECK_EXTENSION);
+        const uri = new URI(resolvedUri);
+
+        // Auto-create parent folder if it doesn't exist
+        const parentUri = uri.parent;
+        const parentExists = await this.fileService.exists(parentUri);
+        if (!parentExists) {
+            try {
+                await this.fileService.createFolder(parentUri);
+                this.logger.info('[PresentationService] Created folder:', parentUri.toString());
+            } catch (err) {
+                throw new Error(`[PresentationService] Failed to create folder '${parentUri.toString()}': ${(err as Error).message}`);
+            }
         }
 
-        const uri = new URI(finalPath);
         const content = this.buildDeckContent(title, slides, options);
-        
-        await this.fileService.create(uri, content);
-        
-        this.logger.info('[PresentationService] Created presentation:', finalPath);
-        return finalPath;
+        try {
+            await this.fileService.create(uri, content);
+        } catch (err) {
+            throw new Error(`[PresentationService] Failed to create presentation '${resolvedUri}': ${(err as Error).message}`);
+        }
+
+        this.logger.info('[PresentationService] Created presentation:', resolvedUri);
+        return resolvedUri;
     }
 
     /**

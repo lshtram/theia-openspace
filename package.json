@@ -17,21 +17,32 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build-summary.js",
+    "build:dev": "node scripts/build-summary.js --mode dev",
+    "build:clean": "node scripts/clean-build.js",
     "build:verbose": "yarn build:extensions && yarn build:browser",
-    "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-settings build",
-    "build:browser": "yarn --silent --cwd browser-app build",
+    "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-settings build && yarn --silent --cwd extensions/openspace-languages build && yarn --silent --cwd extensions/openspace-viewers build",
+    "build:browser": "yarn install && yarn --silent --cwd browser-app build",
     "build:electron": "yarn --cwd electron-app build",
     "start:browser": "yarn --cwd browser-app start",
     "start:electron": "yarn --cwd electron-app start",
+    "setup:plugins": "node scripts/download-plugins.js",
+    "setup:plugins:check": "node scripts/download-plugins.js --check",
     "watch": "yarn --cwd browser-app watch",
     "clean": "yarn --cwd browser-app clean && yarn --cwd electron-app clean && rimraf extensions/*/lib extensions/*/tsconfig.tsbuildinfo",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "mocha",
-    "test:e2e": "playwright test",
+    "test:e2e": "bash scripts/e2e-precheck.sh && playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:coverage": "nyc mocha",
-    "test:watch": "mocha --watch"
+    "test:watch": "mocha --watch",
+    "servers:start": "bash scripts/servers.sh start",
+    "servers:stop": "bash scripts/servers.sh stop",
+    "servers:status": "bash scripts/e2e-precheck.sh --status",
+    "e2e:precheck": "bash scripts/e2e-precheck.sh"
+  },
+  "resolutions": {
+    "@theia/monaco-editor-core": "1.96.302"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

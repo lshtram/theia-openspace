@@ -19,29 +19,54 @@
    ============================================================================ */
 
 .openspace-chat-widget {
-    /* Message bubble colors */
-    --message-user-bg: var(--theia-button-background);
-    --message-user-fg: var(--theia-button-foreground);
-    --message-assistant-bg: var(--theia-panel-background);
-    --message-assistant-fg: var(--theia-panel-foreground);
-    --message-assistant-border: var(--theia-panel-border);
+    /* ─── OpenSpace Chat design tokens (mapped from Theia color registry) ─── */
+    --oc-bg:           var(--theia-openspace-chat-background);
+    --oc-bg-raised:    var(--theia-openspace-chat-backgroundRaised);
+    --oc-bg-input:     var(--theia-openspace-chat-backgroundInput);
+    --oc-bg-hover:     var(--theia-openspace-chat-backgroundHover);
+    --oc-bg-code:      var(--theia-openspace-chat-backgroundCode);
+    --oc-border:       var(--theia-openspace-chat-border);
+    --oc-border-focus: var(--theia-openspace-chat-borderFocus);
+    --oc-text:         var(--theia-openspace-chat-foreground);
+    --oc-text-dim:     var(--theia-openspace-chat-foregroundDim);
+    --oc-text-bright:  var(--theia-openspace-chat-foregroundBright);
+    --oc-accent:       var(--theia-openspace-chat-accent);
+    --oc-accent-hover: var(--theia-openspace-chat-accentHover);
+    --oc-green:        var(--theia-openspace-chat-terminalGreen);
+    --oc-pill-bg:      var(--theia-openspace-chat-pillBackground);
+    --oc-pill-border:  var(--theia-openspace-chat-pillBorder);
+    --oc-shimmer-start: var(--theia-openspace-chat-shimmerStart);
+    --oc-shimmer-mid:   var(--theia-openspace-chat-shimmerMid);
 
-    /* Spacing and sizing */
+    /* ─── Derived message tokens ────────────────────────────────── */
+    --message-user-bg:       var(--theia-openspace-chat-userBubbleBackground);
+    --message-user-fg:       var(--theia-openspace-chat-userBubbleForeground);
+    --message-assistant-bg:  transparent;
+    --message-assistant-fg:  var(--oc-text);
     --message-border-radius: 12px;
-    --message-padding: 12px 16px;
-    --message-max-width: 85%;
-    --message-gap: 16px;
-    --message-group-gap: 4px;
-    --timeline-padding: 16px;
+    --message-spacing:       16px;
 
-    /* Streaming indicator */
-    --cursor-color: var(--theia-editor-foreground);
-    --cursor-blink-duration: 1s;
+    /* ─── Legacy derived tokens (compatibility) ─────────────────── */
+    --message-padding:          12px 16px;
+    --message-max-width:        100%;
+    --message-gap:              2px;
+    --message-group-gap:        32px;
+    --timeline-padding:         12px;
+    --message-assistant-border: none;
+    --cursor-color:             var(--oc-accent);
+    --cursor-blink-duration:    1s;
+    --new-messages-bg:          var(--oc-accent);
+    --new-messages-fg:          var(--oc-text-bright);
+    --new-messages-shadow:      0 2px 8px rgba(0,122,204,0.4);
 
-    /* New messages indicator */
-    --new-messages-bg: var(--theia-button-background);
-    --new-messages-fg: var(--theia-button-foreground);
-    --new-messages-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -70,38 +95,31 @@
     gap: var(--message-gap);
 }
 
-/* ============================================================================
-   Empty State
-   ============================================================================ */
-
+/* ─── Empty state ────────────────────────────────────────────── */
 .openspace-chat-widget .message-timeline-empty {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 10px;
     height: 100%;
-}
-
-.openspace-chat-widget .message-timeline-empty-content {
+    min-height: 120px;
+    color: var(--oc-text-dim, #858585);
     text-align: center;
-    opacity: 0.7;
-}
-
-.openspace-chat-widget .message-timeline-empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    padding: 32px 24px;
 }
 
 .openspace-chat-widget .message-timeline-empty-title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
-    margin: 0 0 8px 0;
-    color: var(--theia-foreground);
+    color: var(--oc-text, #ccc);
 }
 
 .openspace-chat-widget .message-timeline-empty-hint {
-    font-size: 13px;
-    margin: 0;
-    color: var(--theia-descriptionForeground);
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+    max-width: 240px;
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -132,10 +150,6 @@
     opacity: 0.8;
 }
 
-.openspace-chat-widget .message-bubble-icon {
-    font-size: 14px;
-}
-
 .openspace-chat-widget .message-bubble-timestamp {
     font-size: 11px;
     opacity: 0.6;
@@ -143,9 +157,11 @@
 }
 
 .openspace-chat-widget .message-bubble-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     padding: var(--message-padding);
     border-radius: var(--message-border-radius);
-    white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.5;
     font-size: 14px;
@@ -157,6 +173,7 @@
 
 .openspace-chat-widget .message-bubble-user {
     align-self: flex-end;
+    align-items: flex-end;
 }
 
 .openspace-chat-widget .message-bubble-user .message-bubble-header {
@@ -167,7 +184,15 @@
 .openspace-chat-widget .message-bubble-user .message-bubble-content {
     background-color: var(--message-user-bg);
     color: var(--message-user-fg);
-    border-bottom-right-radius: 4px;
+    border-radius: 12px 12px 2px 12px;
+    border: 1px solid var(--theia-openspace-chat-userBubbleBorder);
+    font-size: 13px;
+}
+
+.openspace-chat-widget .message-bubble-role-icon {
+    display: inline-block;
+    opacity: 0.6;
+    margin-right: 4px;
 }
 
 /* ============================================================================
@@ -212,6 +237,11 @@
 /* ============================================================================
    Message Grouping
    ============================================================================ */
+
+/* Response section below a TurnGroup */
+.openspace-chat-widget .turn-response {
+    margin-top: 4px;
+}
 
 /* Reduce gap between consecutive messages from same sender */
 .openspace-chat-widget .message-bubble-user + .message-bubble-user,
@@ -330,4 +360,241 @@
         --message-max-width: 90%;
         --timeline-padding: 12px;
     }
+}
+
+/* ─── Shared animations ─────────────────────────────────────── */
+@keyframes oc-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes oc-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+/* ─── Utility: icon button ──────────────────────────────────── */
+.openspace-chat-widget .oc-icon-btn {
+    background: none;
+    border: none;
+    color: var(--oc-text-dim);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .oc-icon-btn:hover {
+    background: var(--oc-bg-hover);
+    color: var(--oc-text);
+}
+
+.openspace-chat-widget .oc-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ─── Utility: spinning icon ────────────────────────────────── */
+.oc-spin {
+    animation: oc-spin 1s linear infinite;
+    transform-origin: center;
+}
+
+/* ─── Utility: shimmer text ─────────────────────────────────── */
+.oc-shimmer {
+    background: linear-gradient(
+        90deg,
+        var(--oc-shimmer-start) 25%,
+        var(--oc-shimmer-mid)   50%,
+        var(--oc-shimmer-start) 75%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: oc-shimmer 2s linear infinite;
+}
+
+/* ─── Thinking indicator (character shimmer — follows opencode web client) ─── */
+.text-shimmer {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 4px;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.text-shimmer-char {
+    display: inline-block;
+    animation: text-shimmer-char 1200ms ease-in-out infinite;
+    color: var(--oc-text-dim);
+}
+
+@keyframes text-shimmer-char {
+    0%, 100% { color: var(--oc-text-dim, #666); }
+    33%      { color: var(--oc-text, #ccc); }
+    66%      { color: var(--oc-accent, #007acc); }
+}
+
+/* ── Elapsed timer in assistant message header ────────────────── */
+.openspace-chat-widget .message-bubble-elapsed {
+    font-variant-numeric: tabular-nums;
+    color: var(--oc-accent, #007acc);
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* ── Context tool group ───────────────────────────────────────── */
+.openspace-chat-widget .part-context-group .part-tool-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.openspace-chat-widget .part-context-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.openspace-chat-widget .part-context-item:last-child {
+    border-bottom: none;
+}
+
+.openspace-chat-widget .part-context-item-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--oc-text-dim);
+    font-family: var(--theia-code-font-family, monospace);
+}
+
+/* ============================================================================
+   Scroll-to-bottom floating button
+   ============================================================================ */
+
+.openspace-chat-widget .message-timeline .scroll-to-bottom-btn {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    z-index: 60;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    color: var(--oc-text, #ccc);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.openspace-chat-widget .message-timeline .scroll-to-bottom-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.openspace-chat-widget .message-timeline .scroll-to-bottom-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    border-color: var(--oc-border-focus, #007acc);
+}
+
+/* ============================================================================
+   Shell Output Block — inline display of ! shell command results
+   ============================================================================ */
+
+.openspace-chat-widget .shell-output-block {
+    margin: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-code, #1e1e1e);
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.openspace-chat-widget .shell-output-block.shell-output-error {
+    border-color: rgba(241, 76, 76, 0.4);
+}
+
+.openspace-chat-widget .shell-output-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--oc-bg-raised, #252526);
+    border-bottom: 1px solid var(--oc-border, #333);
+    color: var(--oc-text-dimmed, #888);
+    font-size: 12px;
+}
+
+.openspace-chat-widget .shell-output-command {
+    color: var(--oc-text, #ccc);
+    font-family: var(--theia-code-font-family, 'Menlo', 'Consolas', monospace);
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .shell-output-exit {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .shell-output-exit-ok {
+    color: #4ec9b0;
+    background: rgba(78, 201, 176, 0.1);
+}
+
+.openspace-chat-widget .shell-output-exit-error {
+    color: #f14c4c;
+    background: rgba(241, 76, 76, 0.1);
+}
+
+.openspace-chat-widget .shell-output-running {
+    font-size: 11px;
+    color: var(--oc-accent, #007acc);
+    animation: shell-running-pulse 1.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes shell-running-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+.openspace-chat-widget .shell-output-content {
+    margin: 0;
+    padding: 10px 12px;
+    color: var(--oc-text, #ccc);
+    font-family: var(--theia-code-font-family, 'Menlo', 'Consolas', monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.openspace-chat-widget .shell-output-error-msg {
+    padding: 6px 12px;
+    color: #f14c4c;
+    font-size: 12px;
+    border-top: 1px solid rgba(241, 76, 76, 0.2);
+    background: rgba(241, 76, 76, 0.06);
 }

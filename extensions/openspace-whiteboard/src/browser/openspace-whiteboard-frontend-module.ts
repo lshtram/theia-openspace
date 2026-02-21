@@ -7,7 +7,7 @@ import { WhiteboardOpenHandler } from './whiteboard-open-handler';
 import { WhiteboardService } from './whiteboard-service';
 import { WhiteboardCommandContribution } from './whiteboard-command-contribution';
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Register the Whiteboard Widget
   bind(WhiteboardWidget).toSelf();
   bind(WidgetFactory)

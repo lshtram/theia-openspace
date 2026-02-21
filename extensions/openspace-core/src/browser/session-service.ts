@@ -24,8 +24,10 @@ import {
     Session,
     Message,
     MessagePartInput,
-    ProviderWithModels
+    ProviderWithModels,
+    PermissionNotification
 } from '../common/opencode-protocol';
+import * as SDKTypes from '../common/opencode-sdk-types';
 
 /**
  * Streaming update event data for incremental message updates.
@@ -60,6 +62,10 @@ export interface SessionService extends Disposable {
     readonly isLoading: boolean;
     readonly lastError: string | undefined;
     readonly isStreaming: boolean;
+    readonly streamingMessageId: string | undefined;
+    readonly currentStreamingStatus: string;
+    /** Server-authoritative session status (busy/idle/retry). Spans the full agent turn. */
+    readonly sessionStatus: SDKTypes.SessionStatus;
 
     // Events
     readonly onActiveProjectChanged: Event<Project | undefined>;
@@ -70,6 +76,8 @@ export interface SessionService extends Disposable {
     readonly onIsLoadingChanged: Event<boolean>;
     readonly onErrorChanged: Event<string | undefined>;
     readonly onIsStreamingChanged: Event<boolean>;
+    readonly onStreamingStatusChanged: Event<string>;
+    readonly onSessionStatusChanged: Event<SDKTypes.SessionStatus>;
 
     // Operations
     setActiveProject(projectId: string): Promise<void>;
@@ -86,9 +94,33 @@ export interface SessionService extends Disposable {
     // State update methods (for SyncService integration)
     appendMessage(message: Message): void;
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateStreamingMessageParts(messageId: string, toolParts: any[]): void;
     replaceMessage(messageId: string, message: Message): void;
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
+    /** Update session status from server-authoritative SSE event. */
+    updateSessionStatus(status: SDKTypes.SessionStatus): void;
+    applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
+
+    // Question state
+    readonly pendingQuestions: SDKTypes.QuestionRequest[];
+    readonly onQuestionChanged: Event<SDKTypes.QuestionRequest[]>;
+
+    // Question operations
+    addPendingQuestion(question: SDKTypes.QuestionRequest): void;
+    removePendingQuestion(requestId: string): void;
+    answerQuestion(requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<void>;
+    rejectQuestion(requestId: string): Promise<void>;
+
+    // Permission state
+    readonly pendingPermissions: PermissionNotification[];
+    readonly onPermissionChanged: Event<PermissionNotification[]>;
+
+    // Permission operations
+    addPendingPermission(permission: PermissionNotification): void;
+    removePendingPermission(permissionId: string): void;
+    replyPermission(requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void>;
 }
 
 /**
@@ -113,7 +145,16 @@ export class SessionServiceImpl implements SessionService {
     private _loadingCounter = 0;
     private _lastError: string | undefined;
     private _isStreaming = false;
+    private _streamingMessageId: string | undefined;
+    private _pendingQuestions: SDKTypes.QuestionRequest[] = [];
+    private _pendingPermissions: PermissionNotification[] = [];
     private sessionLoadAbortController?: AbortController;
+    private _currentStreamingStatus = '';
+    private _lastStatusChangeTime = 0;
+    private _statusChangeTimeout: ReturnType<typeof setTimeout> | undefined;
+    private _streamingDoneTimer: ReturnType<typeof setTimeout> | undefined;
+    private readonly STREAMING_DONE_DELAY_MS = 500;
+    private _sessionStatus: SDKTypes.SessionStatus = { type: 'idle' };
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -124,6 +165,10 @@ export class SessionServiceImpl implements SessionService {
     private readonly onIsLoadingChangedEmitter = new Emitter<boolean>();
     private readonly onErrorChangedEmitter = new Emitter<string | undefined>();
     private readonly onIsStreamingChangedEmitter = new Emitter<boolean>();
+    private readonly onStreamingStatusChangedEmitter = new Emitter<string>();
+    private readonly onSessionStatusChangedEmitter = new Emitter<SDKTypes.SessionStatus>();
+    private readonly onQuestionChangedEmitter = new Emitter<SDKTypes.QuestionRequest[]>();
+    private readonly onPermissionChangedEmitter = new Emitter<PermissionNotification[]>();
 
     // Public event properties
     readonly onActiveProjectChanged = this.onActiveProjectChangedEmitter.event;
@@ -134,6 +179,10 @@ export class SessionServiceImpl implements SessionService {
     readonly onIsLoadingChanged = this.onIsLoadingChangedEmitter.event;
     readonly onErrorChanged = this.onErrorChangedEmitter.event;
     readonly onIsStreamingChanged = this.onIsStreamingChangedEmitter.event;
+    readonly onStreamingStatusChanged = this.onStreamingStatusChangedEmitter.event;
+    readonly onSessionStatusChanged = this.onSessionStatusChangedEmitter.event;
+    readonly onQuestionChanged = this.onQuestionChangedEmitter.event;
+    readonly onPermissionChanged = this.onPermissionChangedEmitter.event;
 
     // Getters for readonly properties
     get activeProject(): Project | undefined {
@@ -163,6 +212,26 @@ export class SessionServiceImpl implements SessionService {
 
     get isStreaming(): boolean {
         return this._isStreaming;
+    }
+
+    get streamingMessageId(): string | undefined {
+        return this._streamingMessageId;
+    }
+
+    get currentStreamingStatus(): string {
+        return this._currentStreamingStatus;
+    }
+
+    get sessionStatus(): SDKTypes.SessionStatus {
+        return this._sessionStatus;
+    }
+
+    get pendingQuestions(): SDKTypes.QuestionRequest[] {
+        return this._pendingQuestions;
+    }
+
+    get pendingPermissions(): PermissionNotification[] {
+        return this._pendingPermissions;
     }
 
     // T2-11: Increment loading counter
@@ -370,6 +439,10 @@ export class SessionServiceImpl implements SessionService {
 
             // Clear messages from previous session BEFORE updating session
             this._messages = [];
+            this._pendingQuestions = [];
+            this._pendingPermissions = [];
+            this.onQuestionChangedEmitter.fire([]);
+            this.onPermissionChangedEmitter.fire([]);
             this.onMessagesChangedEmitter.fire([...this._messages]);
             this.logger.debug('[SessionService] State: messages cleared');
 
@@ -381,12 +454,28 @@ export class SessionServiceImpl implements SessionService {
             // Persist to localStorage
             window.localStorage.setItem('openspace.activeSessionId', sessionId);
 
+            // Reconnect SSE to the session's actual directory (may differ from project worktree)
+            if (session.directory) {
+                try {
+                    await this.openCodeService.connectToProject(session.directory);
+                    this.logger.debug(`[SessionService] SSE reconnected for session directory: ${session.directory}`);
+                } catch (sseError) {
+                    this.logger.warn('[SessionService] Failed to reconnect SSE for session (non-fatal):', sseError);
+                }
+            }
+
             // Load messages for the new session
             await this.loadMessages();
+            if (signal.aborted) { return; }
+
+            // Load any pending questions that were created before the SSE connection
+            // (e.g., questions from a previous server session that are still unanswered)
+            await this.loadPendingQuestions(sessionId);
             
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as Error;
             this.logger.error('[SessionService] Error in setActiveSession:', error);
-            this._lastError = error.message || String(error);
+            this._lastError = err.message || String(error);
             this.onErrorChangedEmitter.fire(this._lastError);
             throw error;
         } finally {
@@ -557,6 +646,7 @@ export class SessionServiceImpl implements SessionService {
                 providerID: model?.providerID || 'unknown',
                 modelID: model?.modelID || 'unknown'
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             parts: parts as any // Input parts will be converted to full parts by server
         } as Message;
 
@@ -577,36 +667,39 @@ export class SessionServiceImpl implements SessionService {
             const result = await this.openCodeService.createMessage(
                 this._activeProject.id,
                 this._activeSession.id,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 { parts: parts as any },
                 model
             );
 
-            // Replace optimistic message ID with real ID (if server returns updated user message)
-            // Then ADD the assistant response as a new message
-            // Note: OpenCode API returns { info: Message, parts: MessagePart[] } - need to combine them
+            // The RPC call returns the final assistant message (info + parts).
+            // SSE events (message.part.updated → partial, message.updated → completed) may have
+            // already added/updated this message via appendMessage() / replaceMessage().
+            // To avoid duplicates we only push the assistant message if it isn't in the array yet.
             const assistantMessage: Message = {
                 ...result.info,
                 parts: result.parts || []
             };
-            
-            const index = this._messages.findIndex(m => m.id === optimisticMsg.id);
-            if (index >= 0) {
-                // Update the user message with real ID from server (if available)
-                // The result.info is the ASSISTANT message, not the user message
-                const updatedUserMessage = { ...this._messages[index] };
-                // Keep the optimistic message as-is (or update ID if server provides it)
-                this._messages[index] = updatedUserMessage;
-                
-                // Add the assistant message as a NEW message (with parts!)
+
+            const assistantExists = this._messages.some(m => m.id === assistantMessage.id);
+            if (assistantExists) {
+                // SSE already handled this message (streamed parts via message.part.updated
+                // and completed via message.updated). The RPC result typically has parts: []
+                // because parts arrive via SSE, not the REST response. Only replace if the
+                // RPC result actually carries parts; otherwise we'd wipe SSE-streamed content.
+                const rpcHasParts = (result.parts || []).length > 0;
+                if (rpcHasParts) {
+                    this.replaceMessage(assistantMessage.id, assistantMessage);
+                    this.logger.debug(`[SessionService] Updated existing assistant message via RPC result: ${assistantMessage.id} (${result.parts!.length} parts)`);
+                } else {
+                    this.logger.debug(`[SessionService] Skipping replaceMessage for ${assistantMessage.id}: RPC result has empty parts, SSE already populated content`);
+                }
+            } else {
+                // SSE hasn't arrived yet (or was very fast) — append the assistant message
                 this._messages.push(assistantMessage);
                 this.onMessagesChangedEmitter.fire([...this._messages]);
                 const partsCount = assistantMessage.parts?.length || 0;
-                this.logger.debug(`[SessionService] Added assistant message: ${assistantMessage.id} with ${partsCount} parts`);
-            } else {
-                // Optimistic message not found (shouldn't happen, but handle gracefully)
-                this.logger.warn(`[SessionService] Optimistic message not found for replacement: ${optimisticMsg.id}`);
-                this._messages.push(assistantMessage);
-                this.onMessagesChangedEmitter.fire([...this._messages]);
+                this.logger.debug(`[SessionService] Added assistant message from RPC: ${assistantMessage.id} with ${partsCount} parts`);
             }
 
             this.logger.debug(`[SessionService] State: messages=${this._messages.length}`);
@@ -624,8 +717,19 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            this._isStreaming = false;
-            this.onIsStreamingChangedEmitter.fire(false);
+            // The RPC promise resolves when the HTTP response arrives, but SSE streaming
+            // continues for the actual assistant turn. Do NOT unconditionally kill streaming
+            // here — let SSE events (message.completed → updateStreamingMessage(id,'',true))
+            // handle the transition via the 500ms hysteresis timer.
+            //
+            // We only force-stop streaming if no SSE activity is ongoing (no pending done
+            // timer and no active streaming message). This handles the edge case where the
+            // RPC itself failed before any SSE events arrived.
+            if (!this._streamingDoneTimer && !this._streamingMessageId) {
+                this._isStreaming = false;
+                this.onIsStreamingChangedEmitter.fire(false);
+                this.resetStreamingStatus();
+            }
         }
     }
 
@@ -668,8 +772,14 @@ export class SessionServiceImpl implements SessionService {
             throw error;
         } finally {
             // Always clear streaming state
+            this._streamingMessageId = undefined;
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
+            }
             this._isStreaming = false;
             this.onIsStreamingChangedEmitter.fire(false);
+            this.resetStreamingStatus();
         }
     }
 
@@ -788,6 +898,31 @@ export class SessionServiceImpl implements SessionService {
     }
 
     /**
+     * Load pending questions for a session from the REST API.
+     * This handles questions that were created before the SSE connection was established
+     * (e.g., from a previous server session that are still awaiting an answer).
+     *
+     * @param sessionId - The session ID to load pending questions for
+     */
+    private async loadPendingQuestions(sessionId: string): Promise<void> {
+        if (!this._activeProject) {
+            return;
+        }
+        try {
+            const questions = await this.openCodeService.listPendingQuestions(this._activeProject.id, sessionId);
+            if (questions.length > 0) {
+                this.logger.info(`[SessionService] Loaded ${questions.length} pending question(s) for session ${sessionId}`);
+                for (const q of questions) {
+                    this.addPendingQuestion(q);
+                }
+            }
+        } catch (error) {
+            // Non-fatal: if listing questions fails, we fall back to SSE-only delivery
+            this.logger.warn('[SessionService] Failed to load pending questions (non-fatal):', error);
+        }
+    }
+
+    /**
      * Append a new message to the messages array (for external events like message.created).
      * Prevents duplicate messages by checking ID.
      * 
@@ -799,7 +934,7 @@ export class SessionServiceImpl implements SessionService {
         // Check if message already exists (prevent duplicates)
         const exists = this._messages.some(m => m.id === message.id);
         if (exists) {
-            this.logger.warn(`[SessionService] Message already exists: ${message.id}`);
+            this.logger.debug(`[SessionService] appendMessage: skipping duplicate: ${message.id}`);
             return;
         }
 
@@ -818,49 +953,126 @@ export class SessionServiceImpl implements SessionService {
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void {
         this.logger.debug(`[SessionService] Streaming update: ${messageId}, isDone=${isDone}`);
 
+        // Track which message is streaming
+        if (!isDone) {
+            this._streamingMessageId = messageId;
+            // Cancel any pending done timer when new streaming activity arrives
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
+            }
+            if (!this._isStreaming) {
+                this._isStreaming = true;
+                this.onIsStreamingChangedEmitter.fire(true);
+            }
+            // Update dynamic streaming status
+            this.updateStreamingStatus(this._messages);
+        }
+
         // Fire streaming event for incremental updates
         if (!isDone) {
             this.onMessageStreamingEmitter.fire({ messageId, delta, isDone });
         }
 
-        // Find message in array
-        const index = this._messages.findIndex(m => m.id === messageId);
-        if (index < 0) {
-            this.logger.warn(`[SessionService] Streaming message not found: ${messageId}`);
-            return;
-        }
+        // Only modify parts if there's actual text delta to append.
+        // Empty deltas are used purely for streaming state tracking.
+        if (delta) {
+            // Find message in array
+            const index = this._messages.findIndex(m => m.id === messageId);
+            if (index < 0) {
+                this.logger.warn(`[SessionService] Streaming message not found: ${messageId}`);
+            } else {
+                // Append delta to the last text part
+                const message = this._messages[index];
+                const parts = [...(message.parts || [])];
 
-        // Append delta to the last text part
-        const message = this._messages[index];
-        const parts = [...(message.parts || [])];
+                if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
+                    // Append to existing text part
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const lastPart = parts[parts.length - 1] as any;
+                    if ('text' in lastPart) {
+                        parts[parts.length - 1] = { ...lastPart, text: lastPart.text + delta };
+                    }
+                } else {
+                    // Create new text part (with required SDK fields if available)
+                    parts.push({ 
+                        type: 'text', 
+                        text: delta,
+                        id: `temp-part-${crypto.randomUUID()}`,
+                        sessionID: message.sessionID,
+                        messageID: message.id
+                    } as unknown as NonNullable<Message['parts']>[0]);
+                }
 
-        if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
-            // Append to existing text part
-            const lastPart = parts[parts.length - 1] as any;
-            if ('text' in lastPart) {
-                parts[parts.length - 1] = { ...lastPart, text: lastPart.text + delta };
+                // Update message with new parts
+                this._messages[index] = { ...message, parts };
+                this.onMessagesChangedEmitter.fire([...this._messages]);
             }
-        } else {
-            // Create new text part (with required SDK fields if available)
-            parts.push({ 
-                type: 'text', 
-                text: delta,
-                id: `temp-part-${crypto.randomUUID()}`,
-                sessionID: message.sessionID,
-                messageID: message.id
-            } as any);
         }
-
-        // Update message with new parts
-        this._messages[index] = { ...message, parts };
-        this.onMessagesChangedEmitter.fire([...this._messages]);
 
         // Fire completion event
         if (isDone) {
             this.onMessageStreamingEmitter.fire({ messageId, delta, isDone: true });
-            this._isStreaming = false;
-            this.onIsStreamingChangedEmitter.fire(false);
+            this._streamingMessageId = undefined;
+            // Don't set isStreaming=false immediately — wait STREAMING_DONE_DELAY_MS
+            // to avoid flicker when a new message starts right after this one completes.
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+            }
+            this._streamingDoneTimer = setTimeout(() => {
+                this._streamingDoneTimer = undefined;
+                this._isStreaming = false;
+                this.onIsStreamingChangedEmitter.fire(false);
+                this.resetStreamingStatus();
+            }, this.STREAMING_DONE_DELAY_MS);
         }
+    }
+
+    /**
+     * Upsert tool parts into a streaming message's parts array.
+     * Called when message.part.updated SSE events carry tool parts (not text deltas).
+     * Fires onMessagesChanged to trigger React re-render.
+     *
+     * @param messageId - ID of the message to update
+     * @param toolParts - Array of tool parts to upsert (matched by part.id)
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateStreamingMessageParts(messageId: string, toolParts: any[]): void {
+        if (!toolParts || toolParts.length === 0) return;
+
+        const index = this._messages.findIndex(m => m.id === messageId);
+        if (index < 0) {
+            this.logger.warn(`[SessionService] updateStreamingMessageParts: message not found: ${messageId}`);
+            return;
+        }
+
+        const message = this._messages[index];
+        const parts = [...(message.parts || [])];
+
+        for (const incoming of toolParts) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existingIndex = parts.findIndex(p => (p as any).id === incoming.id);
+            if (existingIndex >= 0) {
+                // Replace existing part with updated state
+                parts[existingIndex] = incoming;
+            } else {
+                // Insert tool part before the last text part (if any), otherwise append
+                const lastTextIndex = parts.reduce((acc, p, i) => p.type === 'text' ? i : acc, -1);
+                if (lastTextIndex >= 0) {
+                    parts.splice(lastTextIndex, 0, incoming);
+                } else {
+                    parts.push(incoming);
+                }
+            }
+        }
+
+        this._messages[index] = { ...message, parts };
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+        // Notify streaming subscribers so ChatComponent's streamingMessageId reflects tool-only messages
+        this.onMessageStreamingEmitter.fire({ messageId, delta: '', isDone: false });
+        // Update dynamic streaming status based on latest tool parts
+        this.updateStreamingStatus(this._messages);
+        this.logger.debug(`[SessionService] Tool parts upserted for message: ${messageId}, count=${toolParts.length}`);
     }
 
     /**
@@ -924,6 +1136,251 @@ export class SessionServiceImpl implements SessionService {
     }
 
     /**
+     * Update session status from server-authoritative SSE event.
+     * This is the definitive busy/idle signal that spans the entire agent turn,
+     * including gaps between tool rounds.
+     */
+    updateSessionStatus(status: SDKTypes.SessionStatus): void {
+        this.logger.debug(`[SessionService] Session status: ${status.type}`);
+        this._sessionStatus = status;
+        this.onSessionStatusChangedEmitter.fire(status);
+    }
+
+    /**
+     * Apply a field-level delta to a specific part in a message.
+     * This is the high-frequency streaming path — called once per token.
+     *
+     * Finds the part by partID and appends delta to the specified field.
+     * If the part doesn't exist yet, creates a text part stub.
+     *
+     * @param messageId - Message containing the part
+     * @param partId - Part to update
+     * @param field - Field name to append to (e.g., 'text', 'reasoning')
+     * @param delta - String to append
+     */
+    applyPartDelta(messageId: string, partId: string, field: string, delta: string): void {
+        const index = this._messages.findIndex(m => m.id === messageId);
+        if (index < 0) {
+            this.logger.warn(`[SessionService] applyPartDelta: message not found: ${messageId}`);
+            return;
+        }
+
+        // Track streaming state
+        this._streamingMessageId = messageId;
+        // Cancel any pending done timer when new streaming activity arrives
+        if (this._streamingDoneTimer) {
+            clearTimeout(this._streamingDoneTimer);
+            this._streamingDoneTimer = undefined;
+        }
+        if (!this._isStreaming) {
+            this._isStreaming = true;
+            this.onIsStreamingChangedEmitter.fire(true);
+        }
+
+        const message = this._messages[index];
+        const parts = [...(message.parts || [])];
+
+        // Find existing part by ID
+        const partIndex = parts.findIndex(p => (p as any).id === partId);
+        if (partIndex >= 0) {
+            // Append delta to existing part's field
+            const part = { ...parts[partIndex] } as any;
+            part[field] = (part[field] || '') + delta;
+            parts[partIndex] = part;
+        } else {
+            // Part doesn't exist yet — create a stub
+            const newPart: any = {
+                id: partId,
+                sessionID: message.sessionID,
+                messageID: messageId,
+                type: field === 'reasoning' ? 'reasoning' : 'text',
+                [field]: delta
+            };
+            parts.push(newPart);
+        }
+
+        // Update message in-place then fire change
+        this._messages[index] = { ...message, parts };
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+        this.onMessageStreamingEmitter.fire({ messageId, delta, isDone: false });
+        // Update dynamic streaming status
+        this.updateStreamingStatus(this._messages);
+    }
+
+    // =========================================================================
+    // Streaming Status Methods
+    // =========================================================================
+
+    private computeStreamingStatus(messages: Message[]): string {
+        // Find the last assistant message
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.role !== 'assistant') continue;
+            if (!msg.parts || msg.parts.length === 0) continue;
+            // Find the last tool part in the message
+            for (let j = msg.parts.length - 1; j >= 0; j--) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const part = msg.parts[j] as any;
+                if (part.type === 'tool') {
+                    return this.toolNameToStatus(part.tool || '');
+                }
+                if (part.type === 'text') {
+                    return 'Thinking';
+                }
+            }
+        }
+        return 'Considering next steps';
+    }
+
+    private toolNameToStatus(toolName: string): string {
+        const name = toolName.toLowerCase();
+        if (/^(bash|shell)$/.test(name)) return 'Running commands';
+        if (/^task$/.test(name)) return 'Delegating work';
+        if (/^(todowrite|todoread|todo_write|todo_read)$/.test(name)) return 'Planning next steps';
+        if (/^read$/.test(name)) return 'Gathering context';
+        if (/^(list|grep|glob|find|ripgrep|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/.test(name)) return 'Searching the codebase';
+        if (/^(webfetch|web_fetch)$/.test(name)) return 'Searching the web';
+        if (/^(edit|write)$/.test(name)) return 'Making edits';
+        return 'Considering next steps';
+    }
+
+    private updateStreamingStatus(messages: Message[]): void {
+        const newStatus = this.computeStreamingStatus(messages);
+        if (newStatus === this._currentStreamingStatus) return;
+
+        const now = Date.now();
+        const elapsed = now - this._lastStatusChangeTime;
+        const MIN_STATUS_INTERVAL = 2500;
+
+        if (elapsed >= MIN_STATUS_INTERVAL) {
+            this._currentStreamingStatus = newStatus;
+            this._lastStatusChangeTime = now;
+            this.onStreamingStatusChangedEmitter.fire(newStatus);
+            if (this._statusChangeTimeout) {
+                clearTimeout(this._statusChangeTimeout);
+                this._statusChangeTimeout = undefined;
+            }
+        } else {
+            if (this._statusChangeTimeout) clearTimeout(this._statusChangeTimeout);
+            this._statusChangeTimeout = setTimeout(() => {
+                const latestStatus = this.computeStreamingStatus(this._messages);
+                this._currentStreamingStatus = latestStatus;
+                this._lastStatusChangeTime = Date.now();
+                this.onStreamingStatusChangedEmitter.fire(latestStatus);
+                this._statusChangeTimeout = undefined;
+            }, MIN_STATUS_INTERVAL - elapsed);
+        }
+    }
+
+    private resetStreamingStatus(): void {
+        this._currentStreamingStatus = '';
+        this._lastStatusChangeTime = 0;
+        if (this._statusChangeTimeout) {
+            clearTimeout(this._statusChangeTimeout);
+            this._statusChangeTimeout = undefined;
+        }
+        this.onStreamingStatusChangedEmitter.fire('');
+    }
+
+    // =========================================================================
+    // Question Methods
+    // =========================================================================
+
+    addPendingQuestion(question: SDKTypes.QuestionRequest): void {
+        this.logger.debug(`[SessionService] Adding pending question: ${question.id}`);
+        // Replace existing or add new
+        const existingIndex = this._pendingQuestions.findIndex(q => q.id === question.id);
+        if (existingIndex >= 0) {
+            this._pendingQuestions[existingIndex] = question;
+        } else {
+            this._pendingQuestions.push(question);
+        }
+        this.onQuestionChangedEmitter.fire([...this._pendingQuestions]);
+    }
+
+    removePendingQuestion(requestId: string): void {
+        this.logger.debug(`[SessionService] Removing pending question: ${requestId}`);
+        this._pendingQuestions = this._pendingQuestions.filter(q => q.id !== requestId);
+        this.onQuestionChangedEmitter.fire([...this._pendingQuestions]);
+    }
+
+    async answerQuestion(requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<void> {
+        this.logger.info(`[SessionService] Operation: answerQuestion(${requestId})`);
+        if (!this._activeProject) {
+            throw new Error('No active project');
+        }
+        try {
+            await this.openCodeService.answerQuestion(this._activeProject.id, requestId, answers);
+            // Remove from pending (SSE event will also remove it, but do it eagerly)
+            this.removePendingQuestion(requestId);
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] Error answering question: ${errorMsg}`);
+            this._lastError = errorMsg;
+            this.onErrorChangedEmitter.fire(errorMsg);
+            throw error;
+        }
+    }
+
+    async rejectQuestion(requestId: string): Promise<void> {
+        this.logger.info(`[SessionService] Operation: rejectQuestion(${requestId})`);
+        if (!this._activeProject) {
+            throw new Error('No active project');
+        }
+        try {
+            await this.openCodeService.rejectQuestion(this._activeProject.id, requestId);
+            // Remove from pending (SSE event will also remove it, but do it eagerly)
+            this.removePendingQuestion(requestId);
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] Error rejecting question: ${errorMsg}`);
+            this._lastError = errorMsg;
+            this.onErrorChangedEmitter.fire(errorMsg);
+            throw error;
+        }
+    }
+
+    // =========================================================================
+    // Permission Methods
+    // =========================================================================
+
+    addPendingPermission(permission: PermissionNotification): void {
+        this.logger.debug(`[SessionService] Adding pending permission: ${permission.permissionId}`);
+        // Replace existing or add new
+        const existingIndex = this._pendingPermissions.findIndex(p => p.permissionId === permission.permissionId);
+        if (existingIndex >= 0) {
+            this._pendingPermissions[existingIndex] = permission;
+        } else {
+            this._pendingPermissions.push(permission);
+        }
+        this.onPermissionChangedEmitter.fire([...this._pendingPermissions]);
+    }
+
+    removePendingPermission(permissionId: string): void {
+        this.logger.debug(`[SessionService] Removing pending permission: ${permissionId}`);
+        this._pendingPermissions = this._pendingPermissions.filter(p => p.permissionId !== permissionId);
+        this.onPermissionChangedEmitter.fire([...this._pendingPermissions]);
+    }
+
+    async replyPermission(requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void> {
+        this.logger.info(`[SessionService] Operation: replyPermission(${requestId}, ${reply})`);
+        if (!this._activeProject) {
+            throw new Error('No active project');
+        }
+        try {
+            await this.openCodeService.replyPermission(this._activeProject.id, requestId, reply);
+            // Remove from pending (SSE event will also remove it, but do it eagerly)
+            this.removePendingPermission(requestId);
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] Error replying to permission: ${errorMsg}`);
+            this._lastError = errorMsg;
+            this.onErrorChangedEmitter.fire(errorMsg);
+            throw error;
+        }
+    }
+
+    /**
      * Dispose the service - cleanup emitters and state.
      */
     dispose(): void {
@@ -931,6 +1388,14 @@ export class SessionServiceImpl implements SessionService {
 
         // Cancel any in-flight operations
         this.sessionLoadAbortController?.abort();
+        if (this._statusChangeTimeout) {
+            clearTimeout(this._statusChangeTimeout);
+            this._statusChangeTimeout = undefined;
+        }
+        if (this._streamingDoneTimer) {
+            clearTimeout(this._streamingDoneTimer);
+            this._streamingDoneTimer = undefined;
+        }
 
         // Dispose all emitters
         // T3-4: Also dispose onActiveModelChangedEmitter
@@ -942,6 +1407,9 @@ export class SessionServiceImpl implements SessionService {
         this.onIsLoadingChangedEmitter.dispose();
         this.onErrorChangedEmitter.dispose();
         this.onIsStreamingChangedEmitter.dispose();
+        this.onStreamingStatusChangedEmitter.dispose();
+        this.onQuestionChangedEmitter.dispose();
+        this.onPermissionChangedEmitter.dispose();
 
         // Clear state
         this._activeProject = undefined;

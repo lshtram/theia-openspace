@@ -41,7 +41,7 @@ export class LayoutContribution implements FrontendApplicationContribution {
      * Note: File Navigator is opened by @theia/navigator's own initializeLayout.
      * Note: Chat widget is opened by ChatViewContribution.initializeLayout.
      */
-    async initializeLayout(app: FrontendApplication): Promise<void> {
+    async initializeLayout(_app: FrontendApplication): Promise<void> {
         console.debug('[LayoutContribution] Setting up default layout');
 
         // Open terminal in the bottom panel on first launch.

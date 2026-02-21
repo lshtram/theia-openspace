@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Window Redesign — Visual Mockup v2</title>
+<style>
+  /* ===== DESIGN TOKENS (Theia Dark Theme - Modernized) ===== */
+  :root {
+    --bg:           #1e1e1e;
+    --bg-raised:    #252526;
+    --bg-input:     #2d2d2d;
+    --bg-hover:     #2a2d2e;
+    --bg-active:    rgba(255,255,255,0.04);
+    --bg-code:      #1e1e1e;
+    --border:       #333;
+    --border-focus: #007acc;
+    --text:         #cccccc;
+    --text-dim:     #858585;
+    --text-bright:  #ffffff;
+    --text-link:    #4fc1ff;
+    --accent:       #007acc;
+    --accent-hover: #1f8ad2;
+    --green:        #4ec94e;
+    --yellow:       #cca700;
+    --red:          #f14c4c;
+    --purple:       #c586c0;
+    --orange:       #ce9178;
+    
+    /* Subtle Pills */
+    --pill-bg:         rgba(255,255,255,0.06);
+    --pill-border:     rgba(255,255,255,0.1);
+    --pill-text:       #ccc;
+    
+    --shimmer-start: #333;
+    --shimmer-mid:   #666;
+    
+    --font: -apple-system, "Segoe UI", sans-serif;
+    --mono: "SF Mono", "Fira Code", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; font-family: var(--font); font-size: 13px; color: var(--text); padding: 24px; }
+
+  h1 { color: var(--text-bright); font-size: 18px; margin-bottom: 8px; }
+  h2 { color: var(--text-bright); font-size: 14px; margin: 32px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 8px; }
+  .section { margin-bottom: 48px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+
+  /* ===== ICONS (Simple SVGs) ===== */
+  .icon { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: middle; }
+  .icon-sm { width: 12px; height: 12px; }
+
+  /* ===== SHARED COMPONENTS ===== */
+  .panel {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .icon-btn {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    padding: 4px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+  /* ===== SECTION 2: MESSAGE RENDERING ===== */
+
+  .msg-container { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 16px; max-width: 700px; }
+
+  /* User message - Updated color */
+  .user-msg { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+  .user-bubble {
+    background: #333; color: #fff; border-radius: 12px 12px 2px 12px;
+    padding: 8px 14px; max-width: 80%; font-size: 13px; line-height: 1.5;
+  }
+
+  /* Assistant text — markdown */
+  .assistant-msg { margin-bottom: 16px; }
+  .assistant-msg p { line-height: 1.6; margin-bottom: 8px; }
+  .assistant-msg code { font-family: var(--mono); background: var(--bg-code); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--orange); }
+  .assistant-msg pre {
+    background: var(--bg-code); border: 1px solid var(--border); border-radius: 4px;
+    padding: 12px 14px; overflow-x: auto; margin: 10px 0; position: relative;
+  }
+  .assistant-msg pre code { background: none; padding: 0; color: var(--text); font-size: 12px; }
+  .code-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 10px; background: #111; border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--text-dim);
+  }
+  .copy-btn { font-size: 11px; cursor: pointer; color: var(--text-dim); }
+  .copy-btn:hover { color: var(--text); }
+
+  /* Tool call block - Modernized */
+  .tool-block {
+    margin: 4px 0; font-size: 12px;
+  }
+  .tool-header {
+    display: flex; align-items: center; gap: 8px; padding: 4px 0;
+    cursor: pointer; user-select: none; color: var(--text-dim); transition: color 0.1s;
+  }
+  .tool-header:hover { color: var(--text); }
+  .tool-chevron { margin-left: auto; transition: transform 0.2s; opacity: 0.5; }
+  .tool-block.expanded .tool-chevron { transform: rotate(90deg); }
+  
+  .tool-body { 
+    padding: 8px 0 8px 22px; 
+    border-left: 1px solid var(--border); 
+    margin-left: 7px;
+    display: none; 
+  }
+  .tool-block.expanded .tool-body { display: block; }
+  .tool-body pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 3px; padding: 8px 10px; font-size: 11px; overflow-x: auto; margin: 0; }
+
+  /* Shimmer animation */
+  @keyframes shimmer-wave {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, var(--shimmer-start) 25%, var(--shimmer-mid) 50%, var(--shimmer-start) 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer-wave 2s linear infinite;
+  }
+
+  /* Reasoning block - Fluent style */
+  .reasoning-block {
+    margin: 8px 0; font-size: 12px;
+    padding-left: 10px;
+    border-left: 2px solid #333;
+    color: var(--text-dim);
+  }
+  .reasoning-header {
+    display: flex; align-items: center; gap: 8px; padding: 4px 0;
+    cursor: pointer; user-select: none;
+  }
+  .reasoning-body { 
+    padding-top: 4px;
+    font-style: italic; line-height: 1.6;
+    display: none;
+  }
+  .reasoning-block.expanded .reasoning-body { display: block; }
+
+  /* Bash block - Terminal Style */
+  .bash-block {
+    border-radius: 4px; margin: 8px 0; overflow: hidden; font-size: 12px;
+    background: #000; border: 1px solid #333;
+  }
+  .bash-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-bottom: 1px solid #333; }
+  .bash-cmd { font-family: var(--mono); color: var(--green); padding: 8px 12px; }
+  .bash-output { padding: 0 12px 8px; font-family: var(--mono); font-size: 11px; color: #ccc; opacity: 0.8; }
+
+  /* ===== SECTION 3: INPUT AREA ===== */
+  .input-panel {
+    background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; max-width: 700px;
+  }
+  
+  /* Attachment chips - Modernized */
+  .chip-row { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: default;
+    background: var(--pill-bg); border: 1px solid var(--pill-border); color: var(--pill-text);
+  }
+  .chip-x { cursor: pointer; opacity: 0.5; }
+  .chip-x:hover { opacity: 1; }
+
+  .input-area {
+    min-height: 60px; padding: 12px; font-size: 13px; line-height: 1.5;
+    color: var(--text); outline: none; white-space: pre-wrap;
+  }
+  .input-footer {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    border-top: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  }
+  .footer-spacer { flex: 1; }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 4px; background: var(--accent);
+    border: none; cursor: pointer; color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .send-btn:hover { background: var(--accent-hover); }
+
+  /* ===== SECTION 4: SESSION TREE ===== */
+  .tree-panel { width: 260px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .tree-toolbar {
+    display: flex; align-items: center; gap: 2px; padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tree-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    cursor: pointer; font-size: 12px; position: relative;
+    border-bottom: 1px solid transparent;
+  }
+  .tree-item:hover { background: var(--bg-hover); }
+  .tree-item.active { background: var(--bg-active); color: var(--text-bright); }
+  .tree-item-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree-time { font-size: 10px; color: var(--text-dim); }
+
+  /* ===== SECTION 5: HEADER / FOOTER ===== */
+  .chat-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid var(--border); background: var(--bg-raised);
+    min-height: 40px;
+  }
+  .session-title { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
+  
+  .chat-footer {
+    display: flex; align-items: center; gap: 10px; padding: 4px 12px;
+    border-top: 1px solid var(--border); background: var(--bg-raised); font-size: 11px;
+    height: 28px;
+  }
+  
+  /* Status Bar Item (Theia) */
+  .status-bar-strip {
+    display: flex; align-items: center; background: var(--accent);
+    color: #fff; font-size: 12px; padding: 0 10px; height: 22px;
+    border-radius: 0;
+  }
+
+  /* ===== SECTION 6: POPUPS ===== */
+  .popover {
+    background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 260px; overflow: hidden; font-size: 12px;
+  }
+  .agent-item { 
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); 
+  }
+  .agent-item:last-child { border-bottom: none; }
+  .agent-item:hover { background: var(--bg-hover); }
+  .agent-item.active { background: var(--bg-active); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; transform-origin: center; }
+
+</style>
+</head>
+<body>
+
+<h1>Chat Window Redesign — Visual Mockup v2</h1>
+<p style="color:var(--text-dim); margin-bottom: 8px;">Refined based on user feedback. Dark theme, subtle colors, modern icons.</p>
+
+<!-- SECTION 2: MESSAGES -->
+<div class="section">
+<h2>§2 — Message Rendering</h2>
+
+<h3>2.1 — User message + Assistant text</h3>
+<div class="msg-container">
+  <div class="user-msg">
+    <div class="user-bubble">Can you refactor the <code>parseConfig</code> function to use zod validation?</div>
+  </div>
+  <div class="assistant-msg">
+    <p>Sure! Here's the refactored version using <code>zod</code> for runtime validation:</p>
+    <div class="panel" style="overflow:hidden; margin:10px 0;">
+      <div class="code-header">
+        <span>typescript</span>
+        <span class="copy-btn">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy
+        </span>
+      </div>
+      <pre style="margin:0; border:none; border-radius:0;"><code><span style="color:#569cd6">import</span> { z } <span style="color:#569cd6">from</span> <span style="color:#ce9178">'zod'</span>
+
+<span style="color:#569cd6">const</span> ConfigSchema = z.object({
+  host: z.string(),
+  port: z.number().min(<span style="color:#b5cea8">1</span>).max(<span style="color:#b5cea8">65535</span>),
+})</code></pre>
+    </div>
+  </div>
+</div>
+
+<h3>2.2 — Tool calls & Thinking</h3>
+<div class="msg-container">
+  <!-- Running Tool -->
+  <div class="tool-block">
+    <div class="tool-header">
+      <div style="width:16px; height:16px; display:flex; align-items:center; justify-content:center;">
+        <svg class="icon icon-sm spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      </div>
+      <span class="tool-name shimmer">edit_file — src/config/parser.ts</span>
+    </div>
+  </div>
+
+  <!-- Completed Tool (Collapsed) -->
+  <div class="tool-block">
+    <div class="tool-header">
+      <svg class="icon icon-sm" style="color:var(--text-dim);" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      <span class="tool-name" style="color:var(--text-dim);">edit_file — src/config/parser.ts</span>
+      <svg class="icon icon-sm tool-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+    </div>
+  </div>
+  
+  <!-- Thinking -->
+  <div class="reasoning-block expanded">
+    <div class="reasoning-header">
+      <div style="width:2px; height:100%; background:var(--text-dim); margin-right:8px;"></div>
+      <span style="font-style:italic;">Thinking Process</span>
+    </div>
+    <div class="reasoning-body">
+      I need to check the dependency list first. Checking package.json...<br>
+      Zod is installed. Now I will write the schema...
+    </div>
+  </div>
+
+  <!-- Bash -->
+  <div class="bash-block">
+    <div class="bash-header">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span style="font-weight:600; color:#ccc;">npm run build</span>
+    </div>
+    <div class="bash-output">
+      > vite build<br>
+      vite v5.0.12 building for production...<br>
+      <span style="color:var(--green);">✓</span> 142 modules transformed.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SECTION 3: INPUT -->
+<div class="section">
+<h2>§3 — Input Area</h2>
+<div class="input-panel">
+  <div class="chip-row">
+    <div class="chip">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/></svg>
+      package.json
+      <span class="chip-x">×</span>
+    </div>
+    <div class="chip">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+      screenshot.png
+      <span class="chip-x">×</span>
+    </div>
+  </div>
+  <div class="input-area">What do these config files tell you about the project setup?</div>
+  <div class="input-footer">
+    <button class="icon-btn">@</button>
+    <button class="icon-btn">/</button>
+    <button class="icon-btn"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+    <div class="footer-spacer"></div>
+    <button class="send-btn"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+  </div>
+</div>
+</div>
+
+<!-- SECTION 4: TREE -->
+<div class="section">
+<h2>§4 — Session Tree</h2>
+<div class="tree-panel">
+  <div class="tree-toolbar">
+    <span style="flex:1; font-size:11px; font-weight:600; color:var(--text-dim); letter-spacing:0.5px;">SESSIONS</span>
+    <button class="icon-btn"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+  </div>
+  <div class="tree-item active">
+    <span class="tree-item-title">Refactor config parser with zod</span>
+    <span class="tree-time">now</span>
+  </div>
+  <div class="tree-item">
+    <span class="tree-item-title">Add unit tests for auth module</span>
+    <span class="tree-time">2h</span>
+  </div>
+  <div class="tree-item">
+    <span class="tree-item-title">Fix CI pipeline timeout issue</span>
+    <span class="tree-time">5h</span>
+  </div>
+</div>
+</div>
+
+<!-- SECTION 5: HEADER / FOOTER -->
+<div class="section">
+<h2>§5 — Header & Footer</h2>
+<div class="panel">
+  <div class="chat-header">
+    <span class="session-title">Refactor config parser with zod</span>
+    <div class="chip" style="background:none; border:1px solid var(--border);">claude-sonnet-4-5</div>
+    <button class="icon-btn"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+  </div>
+  <div class="msg-container" style="border:none; height:100px;"></div>
+  <div class="chat-footer">
+    <div class="status-item"><div class="dot dot-green"></div> Connected</div>
+    <div style="color:#333">|</div>
+    <div style="color:var(--text-dim);">3 MCP</div>
+    <div style="color:var(--text-dim);">LSP</div>
+  </div>
+</div>
+</div>
+
+<!-- SECTION 6: AGENT SELECTOR -->
+<div class="section">
+<h2>§6 — Agent Selector</h2>
+<div class="popover">
+  <div style="padding:8px 12px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text);">Active Agent</div>
+  <div class="agent-item active">
+    <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    <div style="flex:1;">
+      <div style="font-weight:600; color:var(--text);">code</div>
+      <div style="font-size:11px; color:var(--text-dim);">Writes and edits code autonomously</div>
+    </div>
+    <svg class="icon icon-sm" style="color:var(--accent);" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <div class="agent-item">
+    <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div style="flex:1;">
+      <div style="font-weight:600; color:var(--text);">ask</div>
+      <div style="font-size:11px; color:var(--text-dim);">Answers questions, no file writes</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

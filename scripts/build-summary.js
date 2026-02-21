@@ -56,7 +56,9 @@ async function main() {
     'openspace-presentation',
     'openspace-whiteboard',
     'openspace-layout',
-    'openspace-settings'
+    'openspace-settings',
+    'openspace-languages',
+    'openspace-viewers',
   ];
 
   const extStartTime = Date.now();
@@ -105,6 +107,7 @@ async function main() {
   console.log();
   log('Run: yarn start:browser', DIM);
   log('Open: http://localhost:3000', DIM);
+  log('Plugins: yarn setup:plugins (first-time setup)', DIM);
   console.log();
 }
 

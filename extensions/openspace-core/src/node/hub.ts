@@ -18,7 +18,7 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
-import { MutableHubState, AgentCommand, PaneStateSnapshot } from '../common/command-manifest';
+import { MutableHubState, AgentCommand, PaneStateSnapshot, CommandDefinition } from '../common/command-manifest';
 import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
 import * as os from 'os';
 
@@ -171,7 +171,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
 
             this.state.manifest = {
                 version: '1.0.0',
-                commands: body.commands as any,
+                commands: body.commands as CommandDefinition[],
                 lastUpdated: body.timestamp || new Date().toISOString()
             };
             this.state.lastManifestUpdate = new Date().toISOString();

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, expect, Page } from '@playwright/test';
 
 const THEIA_URL = 'http://localhost:3000/#/Users/Shared/dev/core_dev';

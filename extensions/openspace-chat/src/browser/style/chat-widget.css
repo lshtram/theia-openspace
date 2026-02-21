@@ -4,88 +4,86 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    background-color: var(--oc-bg);
+    color: var(--oc-text);
 }
 
-/* Model/Provider Status Display */
-.openspace-chat-widget .model-provider-status {
-    padding: 4px 12px;
-    font-size: 0.85em;
-    color: var(--theia-descriptionForeground);
-    background-color: var(--theia-editor-background);
-    border-bottom: 1px solid var(--theia-panel-border);
+/* ─── Chat header ────────────────────────────────────────────── */
+.openspace-chat-widget .chat-header-bar {
     display: flex;
     align-items: center;
     gap: 6px;
+    padding: 0 8px;
+    min-height: 36px;
+    border-bottom: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    flex-shrink: 0;
 }
 
-.openspace-chat-widget .model-provider-status-icon {
-    font-size: 14px;
-}
-
-.openspace-chat-widget .model-provider-status-text {
-    font-weight: 400;
-}
-
-/* Session Header */
-.openspace-chat-widget .session-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px;
-    border-bottom: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-}
-
-/* Session Selector */
-.openspace-chat-widget .session-selector {
-    position: relative;
+.openspace-chat-widget .chat-header-title {
     flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.openspace-chat-widget .session-dropdown-button {
-    width: 100%;
-    padding: 6px 12px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
+.openspace-chat-widget .chat-header-title.no-session {
+    color: var(--oc-text-dim, #858585);
+    font-style: italic;
+}
+
+/* Model pill inside header */
+.openspace-chat-widget .model-selector {
+    position: relative;
+    display: inline-flex;
+}
+
+.openspace-chat-widget .model-selector-pill {
+    display: inline-flex;
     align-items: center;
-    font-size: 13px;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text, #ccc);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color 0.1s, background 0.1s;
 }
 
-.openspace-chat-widget .session-dropdown-button:hover:not(:disabled) {
-    background: var(--theia-button-hoverBackground);
+.openspace-chat-widget .model-selector-pill:hover {
+    border-color: var(--oc-border-focus, #007acc);
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
-.openspace-chat-widget .session-dropdown-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+/* Remove old secondary header */
+.openspace-chat-widget .chat-header-secondary {
+    display: none;
 }
 
-.openspace-chat-widget .dropdown-icon {
-    margin-left: 8px;
-    font-size: 10px;
-}
-
-/* Session List Dropdown */
+/* ─── Session dropdown (restyled) ── */
 .openspace-chat-widget .session-list-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-    margin-top: 4px;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
-    border-radius: 3px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    max-height: 300px;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    z-index: 200;
+    max-height: 280px;
     overflow-y: auto;
-    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 200px;
 }
 
 .openspace-chat-widget .session-list-item {
@@ -94,125 +92,82 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
-    color: var(--theia-foreground);
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
 }
 
 .openspace-chat-widget .session-list-item:hover {
-    background: var(--theia-list-hoverBackground);
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
 .openspace-chat-widget .session-list-item.active {
-    background: var(--theia-list-activeSelectionBackground);
-    color: var(--theia-list-activeSelectionForeground);
-    font-weight: bold;
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
 }
 
-.openspace-chat-widget .active-indicator {
-    color: var(--theia-badge-background);
-    font-size: 16px;
+.openspace-chat-widget .session-list-item-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
 }
 
-.openspace-chat-widget .session-list-empty {
-    padding: 12px;
-    text-align: center;
-    color: var(--theia-descriptionForeground);
-    font-size: 12px;
-}
-
-/* Session List Loading State */
-.openspace-chat-widget .session-list-loading {
-    padding: 12px;
-    text-align: center;
-    color: var(--theia-descriptionForeground);
-    font-size: 12px;
+/* ─── Session status indicators ──────────────────────────────── */
+.openspace-chat-widget .session-status-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    width: 20px;
+    flex-shrink: 0;
 }
 
-.openspace-chat-widget .session-list-loading .spinner {
-    animation: spin 1s linear infinite;
+.openspace-chat-widget .session-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.openspace-chat-widget .session-status-dot.permissions {
+    background: #cca700;
+    box-shadow: 0 0 4px rgba(204, 167, 0, 0.4);
 }
 
-/* Session List Error State */
-.openspace-chat-widget .session-list-error {
-    padding: 12px;
-    background: var(--theia-inputValidation-errorBackground);
-    border: 1px solid var(--theia-inputValidation-errorBorder);
-    border-radius: 3px;
-    margin: 8px;
+.openspace-chat-widget .session-status-dot.error {
+    background: #f14c4c;
+    box-shadow: 0 0 4px rgba(241, 76, 76, 0.4);
 }
 
-.openspace-chat-widget .session-list-error .error-message {
-    color: var(--theia-errorForeground);
-    font-size: 12px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.openspace-chat-widget .session-status-dot.unseen {
+    background: #007acc;
+    box-shadow: 0 0 4px rgba(0, 122, 204, 0.4);
 }
 
-.openspace-chat-widget .session-list-error .error-icon {
-    font-size: 14px;
+.openspace-chat-widget .session-status-spinner {
+    color: var(--oc-accent, #007acc);
 }
 
-.openspace-chat-widget .session-list-error .retry-button {
-    width: 100%;
-    padding: 4px 8px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
+.openspace-chat-widget .session-status-dash {
+    display: block;
+    width: 8px;
+    height: 1px;
+    background: var(--oc-text-dim, #858585);
+    opacity: 0.35;
+    border-radius: 1px;
 }
 
-.openspace-chat-widget .session-list-error .retry-button:hover {
-    background: var(--theia-button-hoverBackground);
+.openspace-chat-widget .session-list-item-time {
+    font-size: 10px;
+    color: var(--oc-text-dim, #858585);
+    flex-shrink: 0;
 }
 
-/* New Session Button */
-.openspace-chat-widget .new-session-button {
-    padding: 6px 12px;
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 13px;
-    white-space: nowrap;
-}
-
-.openspace-chat-widget .new-session-button:hover:not(:disabled) {
-    background: var(--theia-button-hoverBackground);
-}
-
-.openspace-chat-widget .new-session-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Delete Session Button */
-.openspace-chat-widget .delete-session-button {
-    padding: 6px 12px;
-    background: var(--theia-button-secondaryBackground);
-    color: var(--theia-button-secondaryForeground);
-    border: 1px solid var(--theia-button-border);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 16px;
-}
-
-.openspace-chat-widget .delete-session-button:hover {
-    background: var(--theia-errorForeground);
-    color: white;
+/* Session Selector wrapper */
+.openspace-chat-widget .session-selector {
+    position: relative;
+    flex: 1;
+    min-width: 0;
 }
 
 /* Active chat state */
@@ -280,6 +235,7 @@
     align-self: flex-end;
     background-color: var(--theia-button-background);
     color: var(--theia-button-foreground);
+    border: 1px solid var(--theia-openspace-chat-userBubbleBorder);
 }
 
 .openspace-chat-widget .chat-message-assistant {
@@ -374,69 +330,6 @@
 /* ============================================================================
    Model Selector Styles
    ============================================================================ */
-
-/* Model Selector Container */
-.openspace-chat-widget .model-selector {
-    position: relative;
-    display: inline-flex;
-}
-
-/* Secondary header for model selector */
-.openspace-chat-widget .chat-header-secondary {
-    padding: 4px 12px;
-    border-bottom: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-    display: flex;
-    justify-content: flex-end;
-}
-
-/* Model Selector Display Button */
-.openspace-chat-widget .model-selector-display {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-    transition: all 0.2s ease;
-}
-
-.openspace-chat-widget .model-selector-display:hover {
-    background: var(--theia-toolbar-hoverBackground);
-    border-color: var(--theia-toolbar-hoverBackground);
-}
-
-.openspace-chat-widget .model-selector-display:focus {
-    outline: none;
-    border-color: var(--theia-focusBorder);
-}
-
-.openspace-chat-widget .model-selector-display[aria-expanded="true"] {
-    background: var(--theia-toolbar-activeBackground);
-    border-color: var(--theia-focusBorder);
-}
-
-.openspace-chat-widget .model-selector-icon {
-    font-size: 14px;
-}
-
-.openspace-chat-widget .model-selector-name {
-    font-weight: 500;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.openspace-chat-widget .model-selector-arrow {
-    font-size: 10px;
-    margin-left: 2px;
-    opacity: 0.7;
-}
 
 /* Model Dropdown Panel */
 .openspace-chat-widget .model-dropdown {
@@ -569,7 +462,8 @@
 }
 
 .openspace-chat-widget .model-option-indicator {
-    font-size: 8px;
+    display: inline-flex;
+    flex-shrink: 0;
     color: var(--theia-badge-background);
 }
 
@@ -673,158 +567,1640 @@
    Message Part Styles (MVP rendering for SDK Part types)
    ============================================================================ */
 
-/* Text part — basic pre-wrap text rendering */
+/* Text part — markdown-rendered content */
 .message-bubble .part-text {
-    white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.5;
 }
 
-/* Tool part — collapsible block with name and input/output */
-.message-bubble .part-tool {
-    margin: 4px 0;
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 4px;
+/* ─── Tool card (BasicTool pattern) ─────────────────────────── */
+.openspace-chat-widget .part-tool {
+    border-radius: 6px;
+    border: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #1e1e1e);
     overflow: hidden;
+    margin: 2px 0;
 }
 
-.message-bubble .part-tool-summary {
+.openspace-chat-widget .part-tool[data-state="running"] {
+    border-color: var(--oc-border-focus, #007acc44);
+}
+
+.openspace-chat-widget .part-tool[data-state="error"] {
+    border-color: #f14c4c44;
+}
+
+.openspace-chat-widget .part-tool-header {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    cursor: pointer;
     font-size: 12px;
-    color: var(--theia-descriptionForeground);
-    background: var(--theia-editor-background);
+    min-height: 28px;
     user-select: none;
 }
 
-.message-bubble .part-tool-summary:hover {
-    background: var(--theia-list-hoverBackground);
+.openspace-chat-widget .part-tool-header:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
 }
 
-.message-bubble .part-tool-icon {
-    font-family: monospace;
-    font-weight: bold;
-    font-size: 11px;
+.openspace-chat-widget .part-tool-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     opacity: 0.6;
+    color: var(--oc-text-dim, #858585);
 }
 
-.message-bubble .part-tool-name {
-    font-weight: 600;
-    font-family: var(--theia-code-font-family);
-    color: var(--theia-foreground);
+.openspace-chat-widget .part-tool-name {
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-.message-bubble .part-tool-state {
+.openspace-chat-widget .part-tool-subtitle {
+    color: var(--oc-text-dim, #858585);
     font-size: 11px;
-    opacity: 0.7;
-    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+    font-family: var(--theia-code-font-family, monospace);
 }
 
-.message-bubble .part-tool-io {
-    margin: 0;
-    padding: 8px 10px;
-    font-size: 11px;
-    font-family: var(--theia-code-font-family);
-    line-height: 1.4;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 200px;
+.openspace-chat-widget .part-tool-file-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    opacity: 0.75;
+}
+
+.openspace-chat-widget .part-tool-file-link:hover {
+    text-decoration: underline;
+    opacity: 1;
+    color: var(--theia-textLink-foreground, var(--oc-accent, #007acc));
+}
+
+.openspace-chat-widget .part-tool-trailing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool-chevron {
+    opacity: 0.4;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool[data-expanded="true"] .part-tool-chevron {
+    transform: rotate(90deg);
+}
+
+.openspace-chat-widget .part-tool-error-icon {
+    color: #f14c4c;
+}
+
+/* ─── Task tool block (subagent/subtask) — always expanded ──── */
+.openspace-chat-widget .part-task-tool {
+    border-color: var(--oc-border, #333);
+}
+
+.openspace-chat-widget .part-task-tool .part-tool-header:hover {
+    background: transparent;
+}
+
+.openspace-chat-widget .part-task-tool-body {
+    max-height: 300px;
     overflow-y: auto;
-    border-top: 1px solid var(--theia-panel-border);
-    background: var(--theia-editor-background);
-    color: var(--theia-editor-foreground);
+    padding: 4px 0;
 }
 
-/* Reasoning part — italic/dimmed thinking indicator */
-.message-bubble .part-reasoning {
-    margin: 4px 0;
-    padding: 6px 10px;
-    border-left: 3px solid var(--theia-descriptionForeground);
-    opacity: 0.7;
-    font-style: italic;
-    font-size: 12px;
-    color: var(--theia-descriptionForeground);
-}
-
-.message-bubble .part-reasoning-label {
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: block;
-    margin-bottom: 2px;
-}
-
-.message-bubble .part-reasoning-text {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.4;
-}
-
-/* Step parts — progress indicators */
-.message-bubble .part-step {
+.openspace-chat-widget .part-task-tool-item {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
     font-size: 12px;
-    color: var(--theia-descriptionForeground);
+    min-height: 24px;
 }
 
-.message-bubble .part-step-icon {
-    font-family: monospace;
-    font-weight: bold;
-    font-size: 11px;
-    opacity: 0.6;
+.openspace-chat-widget .part-task-tool-item:not(:last-child) {
+    border-bottom: 1px solid color-mix(in srgb, var(--oc-border, #333) 50%, transparent);
 }
 
-.message-bubble .part-step-label {
+.openspace-chat-widget .part-task-tool-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.5;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-task-tool-item-title {
     font-weight: 500;
+    color: var(--oc-text, #ccc);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-task-tool-item-subtitle {
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+    font-family: var(--theia-code-font-family, monospace);
+}
+
+.openspace-chat-widget .part-task-tool-loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-task-tool-empty {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+    font-style: italic;
+}
+
+/* ─── TodoWrite tool block (checklist) ───────────────────────── */
+.openspace-chat-widget .part-todo-tool .part-tool-header:hover {
+    background: transparent;
+}
+
+.openspace-chat-widget .part-todo-body {
+    padding: 10px 12px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--oc-border, #333);
+}
+
+.openspace-chat-widget .part-todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+    cursor: default;
+    line-height: 1.4;
+}
+
+.openspace-chat-widget .part-todo-checkbox {
+    margin: 2px 0 0;
+    flex-shrink: 0;
+    pointer-events: none;
+    accent-color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .part-todo-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .part-todo-item[data-completed="true"] .part-todo-content {
+    text-decoration: line-through;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-tool-body {
+    border-top: 1px solid var(--oc-border, #333);
+    padding: 8px 10px;
+    max-height: 300px;
+    overflow: auto;
+}
+
+.openspace-chat-widget .part-tool-io {
+    margin: 0;
+    padding: 0;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family, monospace);
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--oc-text-dim, #858585);
+    line-height: 1.4;
+}
+
+.openspace-chat-widget .part-tool-output {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--oc-border, #333);
+    max-height: 200px;
+    overflow: auto;
+}
+
+/* ─── Reasoning block — fluent side-line ────────────────────── */
+.message-bubble .part-reasoning {
+    margin: 4px 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--theia-openspace-chat-reasoningBorder);
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.message-bubble .part-reasoning-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.1s;
+}
+
+.message-bubble .part-reasoning-header:hover {
+    color: var(--theia-foreground);
+}
+
+.message-bubble .part-reasoning-chevron {
+    opacity: 0.5;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.message-bubble .part-reasoning[data-expanded="true"] .part-reasoning-chevron {
+    transform: rotate(90deg);
+}
+
+.message-bubble .part-reasoning-label {
+    font-style: italic;
+    font-size: 12px;
+}
+
+.message-bubble .part-reasoning-body {
+    display: none;
+    padding-top: 6px;
+    padding-bottom: 4px;
+    font-style: italic;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.message-bubble .part-reasoning[data-expanded="true"] .part-reasoning-body {
+    display: block;
+}
+
+/* ─── Step parts ─────────────────────────────────────────────── */
+.message-bubble .part-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+    opacity: 0.75;
+}
+
+.message-bubble .part-step-start .part-step-label {
+    font-style: italic;
 }
 
 .message-bubble .part-step-finish {
-    opacity: 0.6;
+    opacity: 0.5;
 }
 
-/* File part — file path reference */
+/* ─── File part ──────────────────────────────────────────────── */
 .message-bubble .part-file {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 5px;
+    padding: 3px 8px;
     margin: 2px 0;
-    background: var(--theia-editor-background);
-    border: 1px solid var(--theia-panel-border);
-    border-radius: 3px;
-    font-size: 12px;
-    font-family: var(--theia-code-font-family);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text, #ccc);
 }
 
-.message-bubble .part-file-icon {
-    font-weight: bold;
+/* ─── Fallback part ──────────────────────────────────────────── */
+.message-bubble .part-fallback {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    margin: 2px 2px;
+    border-radius: 3px;
     font-size: 10px;
+    font-family: var(--theia-code-font-family, monospace);
+    background: var(--oc-pill-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--oc-pill-border, rgba(255,255,255,0.1));
+    color: var(--oc-text-dim, #858585);
     opacity: 0.6;
 }
 
-.message-bubble .part-file-path {
-    color: var(--theia-textLink-foreground);
+/* ─── Markdown renderer styles ───────────────────────────────── */
+
+/* md-body: wraps HTML output from markdown-it. Targets native HTML tags
+   so we get full CommonMark/GFM rendering (links, blockquotes, nested lists,
+   tables, images, strikethrough) without custom class names. */
+.message-bubble .md-body {
+    line-height: 1.6;
 }
 
-/* Fallback part — small info badge for unhandled types */
-.message-bubble .part-fallback {
-    display: inline-flex;
-    padding: 2px 6px;
-    margin: 2px 0;
-    background: var(--theia-badge-background);
-    color: var(--theia-badge-foreground);
-    border-radius: 3px;
-    font-size: 10px;
+/* Paragraphs */
+.message-bubble .md-body p {
+    margin: 0 0 8px;
+    line-height: 1.6;
+}
+.message-bubble .md-body p:last-child { margin-bottom: 0; }
+
+/* Headings */
+.message-bubble .md-body h1,
+.message-bubble .md-body h2,
+.message-bubble .md-body h3,
+.message-bubble .md-body h4,
+.message-bubble .md-body h5,
+.message-bubble .md-body h6 {
+    color: var(--oc-text-bright, #fff);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    margin: 12px 0 6px;
+}
+.message-bubble .md-body h1 { font-size: 16px; }
+.message-bubble .md-body h2 { font-size: 14px; }
+.message-bubble .md-body h3,
+.message-bubble .md-body h4,
+.message-bubble .md-body h5,
+.message-bubble .md-body h6 { font-size: 13px; }
+
+/* Lists */
+.message-bubble .md-body ul,
+.message-bubble .md-body ol {
+    padding-left: 20px;
+    margin: 4px 0 8px;
+    line-height: 1.6;
+}
+.message-bubble .md-body li { margin: 2px 0; }
+
+/* Horizontal rule */
+.message-bubble .md-body hr {
+    border: none;
+    border-top: 1px solid var(--oc-border, rgba(0,0,0,0.12));
+    margin: 12px 0;
 }
 
+/* Tables */
+.message-bubble .md-body .md-table-wrap,
+.message-bubble .md-body div.md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-bubble .md-body table {
+    border-collapse: collapse;
+    font-size: 12px;
+    width: auto;
+    overflow-x: auto;
+    display: block;
+    white-space: nowrap;
+    margin: 8px 0;
+}
+
+.message-bubble .md-body th,
+.message-bubble .md-body td {
+    border: 1px solid var(--oc-border, rgba(255,255,255,0.12));
+    padding: 4px 10px;
+    text-align: left;
+}
+
+.message-bubble .md-body th {
+    background: rgba(255,255,255,0.06);
+    font-weight: 600;
+    color: var(--oc-text-bright, #fff);
+}
+
+.message-bubble .md-body tr:nth-child(even) td {
+    background: rgba(255,255,255,0.03);
+}
+
+/* Inline code */
+.message-bubble .md-body code {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #ce9178;
+    font-family: var(--theia-code-font-family, monospace);
+}
+
+/* Blockquotes */
+.message-bubble .md-body blockquote {
+    border-left: 3px solid var(--oc-accent, #007acc);
+    margin: 8px 0;
+    padding: 4px 12px;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+.message-bubble .md-body blockquote p { margin: 0; }
+
+/* Links */
+.message-bubble .md-body a {
+    color: var(--oc-accent, #007acc);
+    text-decoration: none;
+}
+.message-bubble .md-body a:hover {
+    text-decoration: underline;
+}
+
+/* Strikethrough (GFM) */
+.message-bubble .md-body s,
+.message-bubble .md-body del { opacity: 0.6; }
+
+/* Images */
+.message-bubble .md-body img {
+    max-width: 100%;
+    border-radius: 4px;
+}
+
+/* ─── Legacy md-* classes (kept for any direct usage) ─────────── */
+.message-bubble .md-para {
+    margin: 0 0 8px;
+    line-height: 1.6;
+}
+
+.message-bubble .md-para:last-child { margin-bottom: 0; }
+
+.message-bubble .md-h1,
+.message-bubble .md-h2,
+.message-bubble .md-h3 {
+    color: var(--oc-text-bright, #fff);
+    font-weight: 600;
+    margin: 12px 0 6px;
+}
+.message-bubble .md-h1 { font-size: 16px; }
+.message-bubble .md-h2 { font-size: 14px; }
+.message-bubble .md-h3 { font-size: 13px; }
+
+.message-bubble .md-ul,
+.message-bubble .md-ol {
+    padding-left: 20px;
+    margin: 4px 0 8px;
+    line-height: 1.6;
+}
+
+.message-bubble .md-hr {
+    border: none;
+    border-top: 1px solid var(--oc-border, rgba(0,0,0,0.12));
+    margin: 12px 0;
+}
+
+.message-bubble .md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-bubble .md-table {
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 100%;
+}
+
+.message-bubble .md-table th,
+.message-bubble .md-table td {
+    border: 1px solid var(--oc-border, rgba(0,0,0,0.15));
+    padding: 5px 10px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.message-bubble .md-table th {
+    background: var(--oc-bg-raised, rgba(0,0,0,0.06));
+    font-weight: 600;
+    color: var(--oc-text-bright, inherit);
+}
+
+.message-bubble .md-table tr:nth-child(even) td {
+    background: var(--oc-bg-raised, rgba(0,0,0,0.03));
+}
+
+.message-bubble .md-inline-code {
+    font-family: var(--theia-code-font-family, monospace);
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #ce9178;
+}
+
+.message-bubble .md-code-block {
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+    border: 1px solid var(--oc-border, #e0e0e0);
+}
+
+.message-bubble .md-code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--oc-bg-raised, #f3f3f3);
+    border-bottom: 1px solid var(--oc-border, #e0e0e0);
+    font-size: 11px;
+    color: var(--oc-text-dim, #616161);
+}
+
+.message-bubble .md-code-copy {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.message-bubble .md-code-body {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--oc-bg-code, #f5f5f5);
+    overflow-x: auto;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+    color: var(--oc-text, #333333);
+    line-height: 1.5;
+    white-space: pre;
+}
+
+/* ─── Syntax highlighting (highlight.js token classes) ───────── */
+/* Token colors use Theia CSS vars with VS Code Light+ fallbacks  */
+.message-bubble .md-code-body .hljs {
+    color: var(--oc-text, #333333);
+    background: transparent;
+}
+
+.message-bubble .md-code-body .hljs-comment,
+.message-bubble .md-code-body .hljs-quote {
+    color: var(--theia-editorInlayHint-foreground, #008000);
+    font-style: italic;
+}
+
+.message-bubble .md-code-body .hljs-keyword,
+.message-bubble .md-code-body .hljs-selector-tag {
+    color: var(--theia-symbolIcon-keywordForeground, #0000ff);
+}
+
+.message-bubble .md-code-body .hljs-built_in,
+.message-bubble .md-code-body .hljs-type {
+    color: var(--theia-symbolIcon-classForeground, #267f99);
+}
+
+.message-bubble .md-code-body .hljs-literal,
+.message-bubble .md-code-body .hljs-symbol,
+.message-bubble .md-code-body .hljs-bullet {
+    color: var(--theia-symbolIcon-constantForeground, #0070c1);
+}
+
+.message-bubble .md-code-body .hljs-number {
+    color: var(--theia-symbolIcon-numberForeground, #09885a);
+}
+
+.message-bubble .md-code-body .hljs-string,
+.message-bubble .md-code-body .hljs-regexp {
+    color: var(--theia-symbolIcon-stringForeground, #a31515);
+}
+
+.message-bubble .md-code-body .hljs-title,
+.message-bubble .md-code-body .hljs-section {
+    color: var(--theia-symbolIcon-functionForeground, #795e26);
+}
+
+.message-bubble .md-code-body .hljs-class .hljs-title,
+.message-bubble .md-code-body .hljs-title.class_ {
+    color: var(--theia-symbolIcon-classForeground, #267f99);
+}
+
+.message-bubble .md-code-body .hljs-function .hljs-title,
+.message-bubble .md-code-body .hljs-title.function_ {
+    color: var(--theia-symbolIcon-functionForeground, #795e26);
+}
+
+.message-bubble .md-code-body .hljs-params {
+    color: var(--theia-symbolIcon-variableForeground, #001080);
+}
+
+.message-bubble .md-code-body .hljs-attr,
+.message-bubble .md-code-body .hljs-attribute {
+    color: var(--theia-symbolIcon-variableForeground, #001080);
+}
+
+.message-bubble .md-code-body .hljs-variable,
+.message-bubble .md-code-body .hljs-template-variable {
+    color: var(--theia-symbolIcon-variableForeground, #001080);
+}
+
+.message-bubble .md-code-body .hljs-tag {
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
+}
+
+.message-bubble .md-code-body .hljs-name {
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
+}
+
+.message-bubble .md-code-body .hljs-selector-id,
+.message-bubble .md-code-body .hljs-selector-class {
+    color: var(--theia-symbolIcon-namespaceForeground, #800000);
+}
+
+.message-bubble .md-code-body .hljs-meta,
+.message-bubble .md-code-body .hljs-meta-keyword {
+    color: var(--theia-symbolIcon-keywordForeground, #0000ff);
+}
+
+.message-bubble .md-code-body .hljs-meta-string {
+    color: var(--theia-symbolIcon-stringForeground, #a31515);
+}
+
+.message-bubble .md-code-body .hljs-deletion {
+    color: var(--theia-gitDecoration-deletedResourceForeground, #a31515);
+    background: rgba(215, 58, 73, 0.1);
+}
+
+.message-bubble .md-code-body .hljs-addition {
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+    background: rgba(40, 167, 69, 0.1);
+}
+
+.message-bubble .md-code-body .hljs-emphasis {
+    font-style: italic;
+}
+
+.message-bubble .md-code-body .hljs-strong {
+    font-weight: bold;
+}
+
+.message-bubble .md-code-body .hljs-link {
+    color: var(--theia-textLink-foreground, #0070c1);
+    text-decoration: underline;
+}
+
+.message-bubble .md-code-body .hljs-subst,
+.message-bubble .md-code-body .hljs-operator,
+.message-bubble .md-code-body .hljs-punctuation {
+    color: var(--theia-editor-foreground, #333333);
+}
+
+.message-bubble .md-code-body .hljs-property {
+    color: var(--theia-symbolIcon-variableForeground, #001080);
+}
+
+/* ─── Chat footer status bar ─────────────────────────────────── */
+.openspace-chat-widget .chat-footer-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    height: 24px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .chat-footer-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.openspace-chat-widget .chat-footer-status span {
+    transition: opacity 0.15s ease;
+}
+
+.openspace-chat-widget .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .status-dot.connected {
+    background: var(--oc-green, #4ec94e);
+    box-shadow: 0 0 4px rgba(78,201,78,0.5);
+}
+
+.openspace-chat-widget .status-dot.streaming {
+    background: #cca700;
+}
+
+/* ─── Chat header context menu ───────────────────────────────── */
+.openspace-chat-widget .chat-header-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 200;
+    min-width: 140px;
+    padding: 2px 0;
+}
+
+.openspace-chat-widget .chat-header-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 12px;
+    background: none;
+    border: none;
+    color: var(--oc-text, #ccc);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.08s;
+}
+
+.openspace-chat-widget .chat-header-menu-item:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+}
+
+.openspace-chat-widget .chat-header-menu-empty {
+    padding: 7px 12px;
+    font-size: 12px;
+    color: var(--oc-text-dim, #858585);
+}
+
+/* ─── Sessions sidebar widget ────────────────────────────────── */
+.openspace-sessions-widget {
+    --oc-bg:        var(--theia-openspace-chat-background);
+    --oc-bg-raised: var(--theia-openspace-chat-backgroundRaised);
+    --oc-bg-hover:  var(--theia-openspace-chat-backgroundHover);
+    --oc-border:    var(--theia-openspace-chat-border);
+    --oc-text:      var(--theia-openspace-chat-foreground);
+    --oc-text-dim:  var(--theia-openspace-chat-foregroundDim);
+    --oc-accent:    var(--theia-openspace-chat-accent);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    font-size: 13px;
+}
+
+.openspace-sessions-widget .sessions-widget-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--oc-border);
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--oc-text-dim);
+    letter-spacing: 0.5px;
+}
+
+.openspace-sessions-widget .sessions-widget-loading,
+.openspace-sessions-widget .sessions-widget-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--oc-text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.openspace-sessions-widget .sessions-widget-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.openspace-sessions-widget .sessions-widget-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--oc-text);
+    border-bottom: 1px solid transparent;
+    gap: 8px;
+    transition: background 0.08s;
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover {
+    background: var(--oc-bg-hover);
+}
+
+.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-delete {
+    opacity: 1;
+}
+
+.openspace-sessions-widget .sessions-widget-item.active {
+    background: var(--theia-openspace-chat-sessionActiveBackground);
+    color: var(--theia-openspace-chat-sessionActiveForeground);
+}
+
+.openspace-sessions-widget .sessions-widget-item-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.openspace-sessions-widget .sessions-widget-item-time {
+    font-size: 10px;
+    color: var(--oc-text-dim);
+}
+
+.openspace-sessions-widget .sessions-widget-delete {
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+/* Sessions widget icon buttons (standalone, not scoped to .openspace-chat-widget) */
+.sessions-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 3px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--oc-text-dim, #858585);
+    transition: background 0.1s, color 0.1s;
+    line-height: 1;
+}
+
+.sessions-icon-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #cccccc);
+}
+
+.sessions-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@keyframes sessions-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.openspace-sessions-widget .sessions-spin {
+    animation: sessions-spin 1s linear infinite;
+}
+
+.openspace-chat-widget .oc-spin {
+    animation: oc-spin 1s linear infinite;
+}
+
+
+/* ============================================================================
+   QuestionDock Styles
+   ============================================================================ */
+
+.openspace-chat-widget .qdock {
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    border-bottom: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-question-text {
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .qdock-dismiss {
+    background: none;
+    border: none;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .qdock-dismiss:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #ccc);
+}
+
+/* ─── Option buttons ─────────────────────────────────────────── */
+.openspace-chat-widget .qdock-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.openspace-chat-widget .qdock-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: none;
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    color: var(--oc-text, #ccc);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s, border-color 0.1s;
+}
+
+.openspace-chat-widget .qdock-option-btn:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    border-color: var(--oc-border-focus, #007acc);
+}
+
+.openspace-chat-widget .qdock-option-btn.selected {
+    border-color: var(--oc-accent, #007acc);
+    background: color-mix(in srgb, var(--oc-accent, #007acc) 15%, transparent);
+}
+
+.openspace-chat-widget .qdock-checkbox {
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-option-label {
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-option-desc {
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* ─── Custom input ───────────────────────────────────────────── */
+.openspace-chat-widget .qdock-custom-toggle {
+    background: none;
+    border: none;
+    color: var(--oc-accent, #007acc);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 0;
+    text-align: left;
+    transition: color 0.1s;
+}
+
+.openspace-chat-widget .qdock-custom-toggle:hover {
+    color: var(--oc-accent-hover, #1f8ad2);
+}
+
+.openspace-chat-widget .qdock-custom-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.openspace-chat-widget .qdock-custom-input {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    background: var(--theia-input-background, #3c3c3c);
+    color: var(--theia-input-foreground, #ccc);
+    border: 1px solid var(--theia-input-border, #3c3c3c);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+.openspace-chat-widget .qdock-custom-input:focus {
+    outline: none;
+    border-color: var(--theia-focusBorder, #007acc);
+}
+
+/* ─── Action buttons ─────────────────────────────────────────── */
+.openspace-chat-widget .qdock-btn-accent {
+    padding: 4px 12px;
+    background: var(--oc-accent, #007acc);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.openspace-chat-widget .qdock-btn-accent:hover {
+    background: var(--oc-accent-hover, #1f8ad2);
+}
+
+.openspace-chat-widget .qdock-btn-accent:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.openspace-chat-widget .qdock-btn-ghost {
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.1s, color 0.1s;
+}
+
+.openspace-chat-widget .qdock-btn-ghost:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+    color: var(--oc-text, #ccc);
+}
+
+.openspace-chat-widget .qdock-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+/* ─── Tab bar (multi-question flow) ──────────────────────────── */
+.openspace-chat-widget .qdock-tabs {
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-tab {
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--oc-text-dim, #858585);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.1s, border-color 0.1s;
+}
+
+.openspace-chat-widget .qdock-tab:hover {
+    color: var(--oc-text, #ccc);
+}
+
+.openspace-chat-widget .qdock-tab.active {
+    color: var(--oc-text, #ccc);
+    border-bottom-color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .qdock-tab.answered:not(.active) {
+    color: var(--oc-accent, #007acc);
+}
+
+.openspace-chat-widget .qdock-tab-confirm {
+    font-weight: 500;
+}
+
+/* ─── Confirm tab review ─────────────────────────────────────── */
+.openspace-chat-widget .qdock-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.openspace-chat-widget .qdock-confirm-review {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.openspace-chat-widget .qdock-confirm-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.openspace-chat-widget .qdock-confirm-header {
+    font-weight: 500;
+    color: var(--oc-text, #ccc);
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .qdock-confirm-answer {
+    color: var(--oc-text-dim, #858585);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.openspace-chat-widget .qdock-confirm-answer em {
+    font-style: italic;
+    opacity: 0.6;
+}
+
+/* ── Inline Permission Prompt (below tool card, matched by callID) ────────── */
+
+.openspace-chat-widget .part-tool-permission-prompt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-tool, rgba(255, 255, 255, 0.03));
+    font-size: 12px;
+}
+
+.openspace-chat-widget .part-tool-permission-message {
+    color: var(--oc-text, #ccc);
+    font-weight: 500;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-tool-permission-patterns {
+    color: var(--oc-text-dim, #858585);
+    font-family: var(--oc-font-mono, 'SF Mono', 'Fira Code', monospace);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.openspace-chat-widget .part-tool-permission-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .part-tool-permission-btn {
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--oc-border, #444);
+    background: transparent;
+    color: var(--oc-text, #ccc);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.openspace-chat-widget .part-tool-permission-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-deny {
+    color: #f14c4c;
+    border-color: rgba(241, 76, 76, 0.4);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-deny:hover {
+    background: rgba(241, 76, 76, 0.12);
+    border-color: rgba(241, 76, 76, 0.6);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-always {
+    color: var(--oc-accent, #007acc);
+    border-color: rgba(0, 122, 204, 0.4);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-always:hover {
+    background: rgba(0, 122, 204, 0.12);
+    border-color: rgba(0, 122, 204, 0.6);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-once {
+    color: var(--oc-text-dim, #999);
+    border-color: var(--oc-border, #444);
+}
+
+.openspace-chat-widget .part-tool-permission-btn-once:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--oc-text, #ccc);
+}
+
+/* Animated border glow on tool cards with pending permissions */
+.openspace-chat-widget .part-tool:has(.part-tool-permission-prompt) {
+    border-color: rgba(0, 122, 204, 0.5);
+    box-shadow: 0 0 6px rgba(0, 122, 204, 0.15);
+    animation: permission-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes permission-glow {
+    0% {
+        box-shadow: 0 0 4px rgba(0, 122, 204, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 8px rgba(0, 122, 204, 0.25);
+    }
+}
+
+/* ─── Diff viewer for edit/write tools ───────────────────────── */
+.openspace-chat-widget .part-tool-filename {
+    font-weight: 500;
+    color: var(--theia-editor-foreground, var(--oc-text, #ccc));
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-tool-directory {
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    max-width: 200px;
+}
+
+.openspace-chat-widget .part-tool-diff-badge {
+    display: flex;
+    gap: 6px;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 0.8em;
+    margin-right: 4px;
+}
+
+.openspace-chat-widget .diff-additions {
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+}
+
+.openspace-chat-widget .diff-deletions {
+    color: var(--theia-gitDecoration-deletedResourceForeground, #d73a49);
+}
+
+.openspace-chat-widget .part-tool-diff-body {
+    padding: 0;
+}
+
+.openspace-chat-widget .part-tool-diff {
+    max-height: 420px;
+    overflow-y: auto;
+    font-family: var(--theia-code-font-family, monospace);
+    font-size: 12px;
+    line-height: 20px;
+    border-top: 1px solid var(--oc-border, #333);
+}
+
+.openspace-chat-widget .diff-line {
+    display: flex;
+    white-space: pre;
+    padding: 0 8px;
+}
+
+.openspace-chat-widget .diff-line-add {
+    background-color: rgba(40, 167, 69, 0.12);
+}
+
+.openspace-chat-widget .diff-line-del {
+    background-color: rgba(215, 58, 73, 0.12);
+}
+
+.openspace-chat-widget .diff-line-ctx {
+    background-color: transparent;
+}
+
+.openspace-chat-widget .diff-line-indicator {
+    display: inline-block;
+    width: 16px;
+    text-align: center;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .diff-line-add .diff-line-indicator {
+    color: var(--theia-gitDecoration-addedResourceForeground, #28a745);
+}
+
+.openspace-chat-widget .diff-line-del .diff-line-indicator {
+    color: var(--theia-gitDecoration-deletedResourceForeground, #d73a49);
+}
+
+.openspace-chat-widget .diff-line-text {
+    flex: 1;
+    overflow-x: auto;
+}
+
+/* ─── Retry banner ───────────────────────────────────────────── */
+.openspace-chat-widget .part-retry-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    border: 1px solid rgba(241, 76, 76, 0.3);
+    background: rgba(241, 76, 76, 0.06);
+    font-size: 12px;
+}
+
+.openspace-chat-widget .part-retry-message {
+    font-weight: 500;
+    color: #f14c4c;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .part-retry-countdown {
+    color: var(--oc-text-dim, #858585);
+}
+
+.openspace-chat-widget .part-retry-attempt {
+    color: var(--oc-text-dim, #858585);
+}
+
+/* ─── Turn Group (intermediate steps wrapper) ─────────────────── */
+.openspace-chat-widget .turn-group {
+    position: relative;
+    margin: 4px 0 8px 0;
+}
+
+.openspace-chat-widget .turn-group-streaming {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Trigger bar — spinner + status + timer shown during streaming */
+.openspace-chat-widget .turn-group-trigger-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+
+.openspace-chat-widget .turn-group-chevron-indicator {
+    flex-shrink: 0;
+    color: var(--oc-accent, #007acc);
+    opacity: 0.8;
+}
+
+.openspace-chat-widget .turn-group-status {
+    font-weight: 500;
+}
+
+/* Streaming body container — sidebar + body side by side */
+.openspace-chat-widget .turn-group-streaming-content {
+    display: flex;
+    gap: 0;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    align-self: stretch;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.openspace-chat-widget .turn-group-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+    font-size: 11px;
+    font-family: inherit;
+    text-align: left;
+    border-radius: 3px;
+    width: 100%;
+}
+
+.openspace-chat-widget .turn-group-header:hover {
+    color: var(--theia-foreground, var(--oc-text, #ccc));
+}
+
+.openspace-chat-widget .turn-group-chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.openspace-chat-widget .turn-group-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.openspace-chat-widget .turn-group-label {
+    font-weight: 500;
+}
+
+.openspace-chat-widget .turn-group-duration {
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap {
+    display: flex;
+    gap: 0;
+    margin-top: 4px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-sidebar {
+    width: 2px;
+    background: var(--theia-focusBorder, var(--oc-accent, #007acc));
+    opacity: 0.35;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.openspace-chat-widget .turn-group-sidebar-wrap .turn-group-body {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Model Selector: Manage Models footer ──────────────────────────────── */
+
+.model-dropdown-footer {
+    border-top: 1px solid var(--theia-widget-border);
+    padding: 6px 8px;
+    display: flex;
+    justify-content: center;
+}
+
+.model-manage-btn {
+    background: none;
+    border: 1px solid var(--theia-button-secondaryBorder, var(--theia-widget-border));
+    color: var(--theia-button-secondaryForeground, var(--theia-foreground));
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.model-manage-btn:hover {
+    background: var(--theia-button-secondaryHoverBackground, var(--theia-list-hoverBackground));
+}
+
+/* ── Mermaid diagram rendering ─────────────────────────────────────────── */
+
+.openspace-chat-widget .md-mermaid-container {
+    margin: 8px 0;
+    padding: 12px 0;
+    text-align: center;
+    background: transparent;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.openspace-chat-widget .md-mermaid-diagram {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.openspace-chat-widget .md-mermaid-diagram svg {
+    max-width: 100%;
+    height: auto;
+    background: transparent !important;
+}
+
+.openspace-chat-widget .md-mermaid-error {
+    color: var(--theia-errorForeground, #f44747);
+}
+
+/* ── ANSI terminal color output ────────────────────────────────────────── */
+
+.openspace-chat-widget .md-ansi-body {
+    background: var(--theia-terminal-background, #1e1e1e);
+}
+
+.openspace-chat-widget .ansi-output {
+    font-family: var(--theia-code-font-family, 'Menlo', 'Monaco', monospace);
+    font-size: var(--theia-code-font-size, 12px);
+    line-height: 1.5;
+}
+
+/* ANSI foreground color classes — anser emits class="ansi-COLOR-fg" */
+.ansi-black-fg          { color: rgb(0, 0, 0); }
+.ansi-red-fg            { color: rgb(187, 0, 0); }
+.ansi-green-fg          { color: rgb(0, 187, 0); }
+.ansi-yellow-fg         { color: rgb(187, 187, 0); }
+.ansi-blue-fg           { color: rgb(0, 0, 187); }
+.ansi-magenta-fg        { color: rgb(187, 0, 187); }
+.ansi-cyan-fg           { color: rgb(0, 187, 187); }
+.ansi-white-fg          { color: rgb(255, 255, 255); }
+.ansi-bright-black-fg   { color: rgb(85, 85, 85); }
+.ansi-bright-red-fg     { color: rgb(255, 85, 85); }
+.ansi-bright-green-fg   { color: rgb(0, 255, 0); }
+.ansi-bright-yellow-fg  { color: rgb(255, 255, 85); }
+.ansi-bright-blue-fg    { color: rgb(85, 85, 255); }
+.ansi-bright-magenta-fg { color: rgb(255, 85, 255); }
+.ansi-bright-cyan-fg    { color: rgb(85, 255, 255); }
+.ansi-bright-white-fg   { color: rgb(255, 255, 255); }
+
+/* ANSI background color classes */
+.ansi-black-bg          { background-color: rgb(0, 0, 0); }
+.ansi-red-bg            { background-color: rgb(187, 0, 0); }
+.ansi-green-bg          { background-color: rgb(0, 187, 0); }
+.ansi-yellow-bg         { background-color: rgb(187, 187, 0); }
+.ansi-blue-bg           { background-color: rgb(0, 0, 187); }
+.ansi-magenta-bg        { background-color: rgb(187, 0, 187); }
+.ansi-cyan-bg           { background-color: rgb(0, 187, 187); }
+.ansi-white-bg          { background-color: rgb(255, 255, 255); }
+.ansi-bright-black-bg   { background-color: rgb(85, 85, 85); }
+.ansi-bright-red-bg     { background-color: rgb(255, 85, 85); }
+.ansi-bright-green-bg   { background-color: rgb(0, 255, 0); }
+.ansi-bright-yellow-bg  { background-color: rgb(255, 255, 85); }
+.ansi-bright-blue-bg    { background-color: rgb(85, 85, 255); }
+.ansi-bright-magenta-bg { background-color: rgb(255, 85, 255); }
+.ansi-bright-cyan-bg    { background-color: rgb(85, 255, 255); }
+.ansi-bright-white-bg   { background-color: rgb(255, 255, 255); }
+
+/* ANSI text decoration */
+.ansi-bold              { font-weight: bold; }
+.ansi-underline         { text-decoration: underline; }
+.ansi-italic            { font-style: italic; }
+
+/* ANSI text styles */
+.ansi-bold        { font-weight: bold; }
+.ansi-dim         { opacity: 0.7; }
+.ansi-italic      { font-style: italic; }
+.ansi-underline   { text-decoration: underline; }
+.ansi-blink       { /* blink suppressed — visual noise */ }
+.ansi-strike      { text-decoration: line-through; }
+
+/* ── Diff highlighting improvements ───────────────────────────────────── */
+/* highlight.js emits .hljs-addition and .hljs-deletion with only text color;
+   we add background colors for cleaner visual diff scanning. */
+
+.openspace-chat-widget .hljs-addition {
+    background-color: rgba(0, 255, 0, 0.08);
+    display: inline-block;
+    width: 100%;
+}
+
+.openspace-chat-widget .hljs-deletion {
+    background-color: rgba(255, 0, 0, 0.10);
+    display: inline-block;
+    width: 100%;
+}
+
+/* ── KaTeX math rendering ──────────────────────────────────────────────── */
+/* KaTeX inline and block math. Scoping to .md-body avoids conflicts. */
+
+.openspace-chat-widget .md-body .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 0.5em 0;
+}
+
+.openspace-chat-widget .md-body .katex {
+    font-size: 1.1em;
+}

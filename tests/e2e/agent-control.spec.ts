@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * E2E Test Suite: Agent IDE Control (Tier 2)
  *
@@ -22,10 +23,26 @@ const BASE_URL = 'http://localhost:3000';
  * Helper: Wait for Theia shell to be fully initialized.
  * Mirrors the gold-standard pattern from permission-dialog.spec.ts.
  */
+async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
+    // Theia may show a "Do you trust the authors?" dialog on first open.
+    // Dismiss it by clicking "Yes, I trust the authors" so UI interactions proceed.
+    try {
+        const trustDialog = page.locator('.workspace-trust-dialog');
+        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        if (isVisible) {
+            await page.locator('.workspace-trust-dialog .theia-button.main').click();
+            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+    } catch {
+        // Dialog not present or already dismissed — safe to continue
+    }
+}
+
 async function waitForTheiaReady(page: Page): Promise<void> {
     await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
     await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
     await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
+    await dismissWorkspaceTrustDialog(page);
 }
 
 /**
@@ -97,7 +114,7 @@ test.describe('Agent IDE Control', () => {
         });
         test.skip(!hasInjectHook, 'injectMessageEvent hook not available — SyncService may not have wired yet');
 
-        const sessionId = await getActiveSessionId(page);
+        const _sessionId = await getActiveSessionId(page);
 
         // Get the actual active session ID from the SessionService if one exists
         const activeSessionId = await page.evaluate(() => {

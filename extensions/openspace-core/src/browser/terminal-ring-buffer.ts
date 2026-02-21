@@ -151,16 +151,20 @@ export class TerminalRingBuffer {
 export function sanitizeOutput(output: string): string {
     // Remove ANSI escape sequences (colors, cursor movement, etc.)
     // Matches: ESC [ ... Letter (e.g., \x1B[31m for red)
+    // eslint-disable-next-line no-control-regex
     let sanitized = output.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
     
     // Remove extended ANSI sequences (RGB colors, etc.)
     // Matches: ESC [ 38;2;R;G;B m (true color)
+    // eslint-disable-next-line no-control-regex
     sanitized = sanitized.replace(/\x1B\[[0-9;]*;[\d;]+m/g, '');
     
     // Remove other escape sequences
+    // eslint-disable-next-line no-control-regex
     sanitized = sanitized.replace(/\x1B\][^\x07]*\x07/g, '');
     
     // Remove control characters (except newline, carriage return, tab)
+    // eslint-disable-next-line no-control-regex
     sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     
     return sanitized;

@@ -20,6 +20,8 @@ import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol'
 
 interface ModelSelectorProps {
     sessionService: SessionService;
+    enabledModels: string[];
+    onManageModels: () => void;
 }
 
 interface FlatModel {
@@ -40,7 +42,7 @@ interface FlatModel {
  * - Keyboard navigation
  * - Recently used models section
  */
-export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) => {
+export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, enabledModels, onManageModels }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
     const [activeModel, setActiveModel] = React.useState<string | undefined>(sessionService.activeModel);
     const [isOpen, setIsOpen] = React.useState(false);
@@ -52,7 +54,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-    // Flatten and filter models based on search
+    // Flatten and filter models based on search and enabled list
     const filteredModels = React.useMemo<FlatModel[]>(() => {
         const models: FlatModel[] = [];
         const query = searchQuery.toLowerCase();
@@ -60,6 +62,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         for (const provider of providers) {
             for (const [, model] of Object.entries(provider.models)) {
                 const fullId = `${provider.id}/${model.id}`;
+
+                // Apply enabled filter (empty = all enabled)
+                if (enabledModels.length > 0 && !enabledModels.includes(fullId)) {
+                    continue;
+                }
+
                 const matchesSearch = !query || 
                     model.name.toLowerCase().includes(query) ||
                     provider.name.toLowerCase().includes(query) ||
@@ -77,7 +85,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
             }
         }
         return models;
-    }, [providers, searchQuery]);
+    }, [providers, searchQuery, enabledModels]);
 
     // Group filtered models by provider
     const groupedModels = React.useMemo(() => {
@@ -224,16 +232,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         >
             <button
                 type="button"
-                className="model-selector-display"
+                className="model-selector-pill"
                 onClick={handleToggle}
                 onKeyDown={handleKeyDown}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
                 title={activeModel || 'Select a model'}
             >
-                <span className="model-selector-icon">🤖</span>
-                <span className="model-selector-name">{currentModelDisplay}</span>
-                <span className="model-selector-arrow">{isOpen ? '▲' : '▼'}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" style={{ flexShrink: 0, opacity: 0.6 }} aria-hidden="true">
+                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                </svg>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentModelDisplay}
+                </span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="9" height="9" style={{ flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"/>
+                </svg>
             </button>
 
             {isOpen && (
@@ -275,14 +289,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
 
                     {isLoading && (
                         <div className="model-dropdown-loading">
-                            <span className="spinner">⏳</span> Loading models...
+                            <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg> Loading models...
                         </div>
                     )}
 
                     {error && (
                         <div className="model-dropdown-error">
                             <div className="error-message">
-                                <span className="error-icon">⚠️</span> {error}
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg> {error}
                             </div>
                             <button
                                 type="button"
@@ -335,6 +353,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
                             ))}
                         </div>
                     )}
+
+                    {/* Footer: Manage Models */}
+                    <div className="model-dropdown-footer">
+                        <button
+                            type="button"
+                            className="model-manage-btn"
+                            onClick={() => { handleClose(); onManageModels(); }}
+                        >
+                            Manage Models
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
@@ -366,7 +395,7 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, onSelect }
             tabIndex={0}
         >
             <span className="model-option-name">
-                {isSelected && <span className="model-option-indicator">●</span>}
+                {isSelected && <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true"><circle cx="4" cy="4" r="3"/></svg>}
                 {model.modelName}
             </span>
             <span className="model-option-id">{model.fullId}</span>

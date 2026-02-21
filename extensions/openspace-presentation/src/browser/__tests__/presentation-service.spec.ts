@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -237,5 +238,70 @@ title: Emitter Test
 
             expect(service.getActivePresentation()).to.be.undefined;
         });
+    });
+});
+
+describe('PresentationService.createPresentation — path resolution', () => {
+    let service: PresentationService;
+    let createStub: sinon.SinonStub;
+
+    beforeEach(() => {
+        service = new PresentationService();
+        createStub = sinon.stub().resolves();
+        (service as any).fileService = {
+            create: createStub,
+            createFolder: sinon.stub().resolves(),
+            exists: sinon.stub().resolves(false),
+        };
+        (service as any).workspaceService = {
+            roots: Promise.resolve([{ resource: { toString: () => 'file:///workspace' } }]),
+        };
+        // Use unconditional stub so it matches the two-arg call get(key, default)
+        (service as any).preferenceService = {
+            get: sinon.stub().returns('openspace/decks'),
+        };
+        (service as any).logger = { warn: sinon.stub(), info: sinon.stub() };
+    });
+
+    it('creates file under configured folder for bare name', async () => {
+        await service.createPresentation('myslides', 'My Slides');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.include('openspace/decks/myslides.deck.md');
+    });
+
+    it('respects absolute file:// path unchanged', async () => {
+        const abs = 'file:///tmp/myslides.deck.md';
+        await service.createPresentation(abs, 'My Slides');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.equal(abs);
+    });
+
+    it('throws when no workspace is open', async () => {
+        (service as any).workspaceService = {
+            roots: Promise.resolve([]),
+        };
+        let caught: Error | undefined;
+        try {
+            await service.createPresentation('myslides', 'My Slides');
+        } catch (err) {
+            caught = err as Error;
+        }
+        expect(caught).to.be.instanceOf(Error);
+        expect(caught!.message).to.include('Cannot create presentation: no workspace is open');
+    });
+
+    it('resolves relative path under workspace root', async () => {
+        await service.createPresentation('subdir/talk', 'Talk');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.equal('file:///workspace/subdir/talk.deck.md');
+    });
+
+    it('uses custom preference folder when configured', async () => {
+        (service as any).preferenceService = {
+            get: sinon.stub().returns('my/custom/decks'),
+        };
+        await service.createPresentation('mytalk', 'My Talk');
+        const calledUri = createStub.firstCall.args[0].toString();
+        expect(calledUri).to.include('my/custom/decks/mytalk.deck.md');
     });
 });

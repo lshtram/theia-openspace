@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -107,6 +108,16 @@ function createMockSessionService(overrides: Partial<any> = {}): any {
         onIsLoadingChanged: sinon.stub().returns({ dispose: sinon.stub() }),
         onErrorChanged: sinon.stub().returns({ dispose: sinon.stub() }),
         onIsStreamingChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onStreamingStatusChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onQuestionChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        onPermissionChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+        pendingQuestions: [],
+        pendingPermissions: [],
+        streamingMessageId: undefined,
+        currentStreamingStatus: '',
+        answerQuestion: sinon.stub().resolves(),
+        rejectQuestion: sinon.stub().resolves(),
+        replyPermission: sinon.stub().resolves(),
         ...overrides,
     };
 }
@@ -115,6 +126,15 @@ const mockMessageService = {
     error: sinon.stub(),
     info: sinon.stub(),
     warn: sinon.stub(),
+};
+
+const mockPreferenceService = {
+    get: sinon.stub().returns([]),
+    onPreferenceChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+};
+
+const mockCommandService = {
+    executeCommand: sinon.stub().resolves(),
 };
 
 interface RenderResult {
@@ -135,6 +155,9 @@ function renderComponent(sessionService: any, workspaceRoot = ''): RenderResult 
             openCodeService: {},
             workspaceRoot,
             messageService: mockMessageService,
+            preferenceService: mockPreferenceService,
+            commandService: mockCommandService,
+            openerService: {} as any,
         }));
     });
 
@@ -438,10 +461,12 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
             const { unmount } = renderComponent(sessionService);
 
             expect(sessionService.onMessagesChanged.called).to.be.true;
-            expect(sessionService.onMessageStreaming.called).to.be.true;
             expect(sessionService.onIsStreamingChanged.called).to.be.true;
+            expect(sessionService.onStreamingStatusChanged.called).to.be.true;
             expect(sessionService.onActiveSessionChanged.called).to.be.true;
             expect(sessionService.onActiveProjectChanged.called).to.be.true;
+            expect(sessionService.onQuestionChanged.called).to.be.true;
+            expect(sessionService.onPermissionChanged.called).to.be.true;
 
             unmount();
         });
@@ -449,28 +474,34 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
         it('should dispose all event listeners on unmount', () => {
             const disposeStubs = {
                 messages: sinon.stub(),
-                streaming: sinon.stub(),
                 streamingState: sinon.stub(),
+                streamingStatus: sinon.stub(),
                 session: sinon.stub(),
                 project: sinon.stub(),
+                question: sinon.stub(),
+                permission: sinon.stub(),
             };
 
             const sessionService = createMockSessionService({
                 onMessagesChanged: sinon.stub().returns({ dispose: disposeStubs.messages }),
-                onMessageStreaming: sinon.stub().returns({ dispose: disposeStubs.streaming }),
                 onIsStreamingChanged: sinon.stub().returns({ dispose: disposeStubs.streamingState }),
+                onStreamingStatusChanged: sinon.stub().returns({ dispose: disposeStubs.streamingStatus }),
                 onActiveSessionChanged: sinon.stub().returns({ dispose: disposeStubs.session }),
                 onActiveProjectChanged: sinon.stub().returns({ dispose: disposeStubs.project }),
+                onQuestionChanged: sinon.stub().returns({ dispose: disposeStubs.question }),
+                onPermissionChanged: sinon.stub().returns({ dispose: disposeStubs.permission }),
             });
 
             const { unmount } = renderComponent(sessionService);
             unmount();
 
             expect(disposeStubs.messages.calledOnce).to.be.true;
-            expect(disposeStubs.streaming.calledOnce).to.be.true;
             expect(disposeStubs.streamingState.calledOnce).to.be.true;
+            expect(disposeStubs.streamingStatus.calledOnce).to.be.true;
             expect(disposeStubs.session.calledOnce).to.be.true;
             expect(disposeStubs.project.calledOnce).to.be.true;
+            expect(disposeStubs.question.calledOnce).to.be.true;
+            expect(disposeStubs.permission.calledOnce).to.be.true;
         });
 
         it('should not leak listeners across re-renders', () => {
@@ -486,6 +517,9 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: mockMessageService,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
@@ -498,6 +532,9 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: mockMessageService,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 

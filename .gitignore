@@ -23,8 +23,10 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Theia
-.theia/
+# Theia — ignore personal settings but track workspace configs
+.theia/settings.json
+.theia/launch.json
+# extensions.json is a repo-level workspace config — intentionally tracked
 
 # Testing
 coverage/
@@ -44,12 +46,18 @@ build/
 # Git worktrees
 .worktrees/
 
+# Temporary dev artifacts
+tmp/
+
 # OpenCode
 .claude/
 
 # Build outputs
 browser-app/
 electron-app/
+
+# Downloaded plugin binaries — run scripts/download-plugins.js to populate
+plugins/builtin/*.vsix
 
 # Build artifacts (screenshots, logs)
 *.png

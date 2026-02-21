@@ -4,6 +4,7 @@
   "license": "MIT",
   "theia": {
     "target": "browser",
+    "theiaPluginsDir": "plugins",
     "frontend": {
       "config": {
         "applicationName": "Theia Openspace",
@@ -27,6 +28,9 @@
     "@theia/search-in-workspace": "1.68.2",
     "@theia/terminal": "1.68.2",
     "@theia/workspace": "1.68.2",
+    "@theia/plugin-ext": "1.68.2",
+    "@theia/plugin-ext-vscode": "1.68.2",
+    "@theia/vsx-registry": "1.68.2",
     "@theia/ai-core": "1.68.2",
     "@theia/ai-chat": "1.68.2",
     "@theia/ai-chat-ui": "1.68.2",
@@ -37,15 +41,18 @@
     "openspace-whiteboard": "0.1.0",
     "openspace-layout": "0.1.0",
     "openspace-settings": "0.1.0",
-    "openspace-voice": "0.1.0"
+"openspace-voice": "0.1.0",
+    "openspace-languages": "0.1.0",
+    "openspace-viewers": "0.1.0"
   },
   "devDependencies": {
     "@theia/cli": "1.68.2"
   },
   "scripts": {
-    "build": "theia build --mode development",
-    "start": "theia start --port 3000",
+    "build": "theia build --mode development && node scripts/postbuild.js",
+    "start": "THEIA_CONFIG_DIR=$(mktemp -d) theia start --port 3000 --plugins=local-dir:../plugins/builtin",
     "watch": "theia build --watch --mode development",
-    "clean": "rimraf lib src-gen"
+    "clean": "rimraf lib src-gen",
+    "postbuild": "node scripts/postbuild.js"
   }
 }

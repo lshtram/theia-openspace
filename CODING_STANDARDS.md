@@ -8,6 +8,7 @@
 - **Validation first:** No code is written without a corresponding validation step (test, compile check, or lint).
 - **Single responsibility:** Functions and classes should be small, single-purpose, and testable.
 - **Fail fast:** Public functions must begin with assertions on their inputs.
+- **Libraries over hand-rolling:** Always prefer a well-established external library over a custom implementation. Before writing any utility (parsing, formatting, searching, sanitizing, animating, etc.), check whether the project already has a suitable library in its dependency tree. Hand-rolled implementations are only acceptable when: (1) no suitable library exists, (2) the implementation is trivially short (< 10 lines) with no edge cases, OR (3) the user has explicitly approved the custom approach. When in doubt, ask. _Examples of past mistakes to avoid: hand-rolled markdown parser (replaced by `markdown-it`), hand-rolled fuzzy match (replaced by `String.includes`), ANSI stripper (use `strip-ansi`)._
 
 ## 2. Style Guide
 
@@ -70,7 +71,11 @@ try {
 - **Commits:** Concise, descriptive messages. Focus on "why" not "what".
 - **Branches:** Feature branches via worktree for BUILD workflow.
 - **No secrets:** Never commit API keys, tokens, or credentials.
-- **E2E tests before push (REQUIRED):** Any change that touches real functionality — Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path — MUST have the full E2E suite run and passing before `git push`. Run: `yarn test:e2e`. Unit tests alone are not sufficient for functional changes. If E2E tests fail, the push is blocked until fixed.
+- **E2E tests before push (REQUIRED):** Any change that touches real functionality — Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path — MUST have the full E2E suite run and passing before `git push`. Run: `npm run test:e2e`. Unit tests alone are not sufficient for functional changes. If E2E tests fail, the push is blocked until fixed.
+- **E2E server pre-requisites (MANDATORY):** E2E tests require **both** servers to be running:
+  - **Theia** on port `3000` — `yarn start:browser`
+  - **OpenCode** on port `7890` — `opencode serve`
+  `npm run test:e2e` handles this automatically via `scripts/e2e-precheck.sh`, which starts any missing server and waits until both are healthy before Playwright launches. Never skip the pre-check. Never invoke `playwright test` directly unless both servers are already verified up. If you are an AI agent running tests, always use `npm run test:e2e` — not `npx playwright test` — so the servers are guaranteed.
 
 ---
 

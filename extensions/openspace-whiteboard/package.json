@@ -11,6 +11,8 @@
     "@theia/core": "1.68.2",
     "@theia/filesystem": "1.68.2",
     "@theia/workspace": "1.68.2",
+    "openspace-core": "0.1.0",
+    "openspace-settings": "0.1.0",
     "tldraw": "^4.3.2"
   },
   "devDependencies": {

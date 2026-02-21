@@ -22,8 +22,10 @@ import {
     OpenCodeClient,
     SessionNotification,
     MessageNotification,
+    MessagePartDeltaNotification,
     FileNotification,
-    PermissionNotification
+    PermissionNotification,
+    QuestionNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -89,16 +91,25 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         this._sessionService = sessionService;
         this.logger.info('[SyncService] SessionService wired successfully');
 
-        // T3-7: Subscribe to session changes to clear streaming messages
-        sessionService.onActiveSessionChanged(() => {
-            this.streamingMessages.clear();
-            this.logger.debug('[SyncService] Streaming messages cleared on session change');
+        // T3-7: Subscribe to session changes to clear streaming messages.
+        // Only clear when the session ID actually changes — SSE fires onActiveSessionChanged
+        // for many in-session events (init_completed, updated, etc.) and clearing mid-stream
+        // would lose accumulated streaming state.
+        let lastClearedSessionId: string | undefined;
+        sessionService.onActiveSessionChanged(session => {
+            const newId = session?.id;
+            if (newId !== lastClearedSessionId) {
+                this.streamingMessages.clear();
+                lastClearedSessionId = newId;
+                this.logger.debug(`[SyncService] Streaming messages cleared: session changed to ${newId}`);
+            }
         });
 
         // T2-15: Only expose test hooks in non-production builds.
         // process.env.NODE_ENV is replaced by webpack DefinePlugin at build time,
         // which also dead-code eliminates the entire block in production bundles.
         if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if (typeof (window as any).__openspace_test__ === 'undefined') {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).__openspace_test__ = {};
@@ -217,6 +228,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     }
                     break;
 
+                case 'status_changed':
+                    if (event.sessionStatus) {
+                        this.sessionService.updateSessionStatus(event.sessionStatus);
+                    }
+                    break;
+
                 default:
                     this.logger.warn(`[SyncService] Unknown session event type: ${event.type}`);
             }
@@ -291,9 +308,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     }
 
     /**
-     * Handle message.partial event - incremental text delta.
-     * SDK sends message.part.updated with a `delta` field for incremental text.
-     * We use the delta directly rather than extracting text from parts.
+     * Handle message.partial event - part replacement from message.part.updated.
+     * SDK sends message.part.updated with the FULL part content.
+     * Text streaming is handled by message.part.delta (applyPartDelta) which appends.
+     * So here we REPLACE parts (not extract and append text) to avoid duplication.
      */
     private handleMessagePartial(event: MessageNotification): void {
         if (!event.data) {
@@ -301,36 +319,41 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
-        // Prefer the explicit delta field from the SDK event (set by opencode-proxy from message.part.updated).
-        // Fall back to extracting text from parts for backward compatibility.
-        const delta = event.delta || this.extractTextDelta(event.data.parts);
-
-        if (!delta) {
-            this.logger.debug('[SyncService] No text delta in partial event');
+        // The opencode SSE also fires message.part.updated for user messages (e.g. the text
+        // the user typed). The proxy hardcodes role:'assistant' in the stub it builds, so we
+        // cannot rely on event.data.info.role here. Instead, check whether the message is
+        // already known to SessionService with role:'user' — if so, skip it entirely.
+        const existingMsg = this.sessionService.messages.find(m => m.id === event.messageId);
+        if (existingMsg?.role === 'user') {
+            this.logger.debug(`[SyncService] Skipping partial event for user message: ${event.messageId}`);
             return;
         }
 
-        // Get or create streaming message tracker
-        let stream = this.streamingMessages.get(event.messageId);
-        if (!stream) {
-            // Received partial before created — auto-initialize tracking
+        // Ensure streaming tracker and message stub exist before routing any parts.
+        // message.created may arrive after the first partial in some race conditions.
+        if (!this.streamingMessages.has(event.messageId)) {
             this.logger.debug(`[SyncService] Auto-initializing streaming tracker for: ${event.messageId}`);
-            stream = { text: '' };
-            this.streamingMessages.set(event.messageId, stream);
-
-            // Also ensure the message exists in SessionService (append a stub if missing)
+            this.streamingMessages.set(event.messageId, { text: '' });
             if (event.data.info) {
                 this.sessionService.appendMessage(event.data.info);
             }
         }
 
-        // Append delta to accumulated text
-        stream.text += delta;
+        // Route ALL parts as upserts (replace if existing, insert if new).
+        // This handles tool parts AND text/reasoning parts correctly:
+        // - Tool parts get upserted with latest state
+        // - Text parts get replaced (text streaming is done via message.part.delta)
+        const allParts = event.data.parts || [];
+        if (allParts.length > 0) {
+            this.sessionService.updateStreamingMessageParts(event.messageId, allParts);
+        }
 
-        // Update SessionService with delta
-        this.sessionService.updateStreamingMessage(event.messageId, delta, false);
+        // Notify streaming subscribers so the UI can identify which message is streaming
+        // (e.g. to apply the message-bubble-streaming CSS class and show the elapsed timer).
+        // Pass empty delta — text is handled by message.part.delta.
+        this.sessionService.updateStreamingMessage(event.messageId, '', false);
 
-        this.logger.debug(`[SyncService] Message partial: ${event.messageId}, delta=${delta.length} chars`);
+        this.logger.debug(`[SyncService] Message partial: ${event.messageId}, parts=${allParts.length}`);
     }
 
     /**
@@ -342,32 +365,88 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             return;
         }
 
-        // Signal streaming completion
-        this.sessionService.updateStreamingMessage(event.messageId, '', true);
+        // Skip completed events for user messages. The opencode SSE fires message.updated for
+        // the user message too, which would wipe the user message content with parts:[].
+        if (event.data.info?.role === 'user') {
+            this.logger.debug(`[SyncService] Skipping completed event for user message: ${event.messageId}`);
+            return;
+        }
 
-        // Replace streaming stub with final message
-        this.sessionService.replaceMessage(event.messageId, event.data.info);
+        // The opencode backend sometimes sends message.part.updated with a different ID than
+        // the final message.updated ID. previousMessageId (set by the proxy) tells us which
+        // streaming stub to signal as done and replace.
+        const streamingStubId = event.previousMessageId || event.messageId;
+
+        // Signal streaming completion on the stub that was being streamed
+        this.sessionService.updateStreamingMessage(streamingStubId, '', true);
+
+        // Replace streaming stub with final message.
+        // The proxy sends parts:[] in the completed notification (parts arrive via part.updated).
+        // To avoid wiping streamed content, merge with existing parts when the event has none.
+        const incomingParts = event.data.parts || [];
+        const existingMsg = this.sessionService.messages.find(m => m.id === streamingStubId);
+        const finalMessage = {
+            ...event.data.info,
+            parts: incomingParts.length > 0 ? incomingParts : (existingMsg?.parts || [])
+        };
+
+        if (streamingStubId !== event.messageId) {
+            // IDs differ: replace the streaming stub (old ID) with the completed message (new ID).
+            // Remove the old stub from the messages array and add the new completed message.
+            this.logger.debug(`[SyncService] Replacing streaming stub ${streamingStubId} → ${event.messageId}`);
+            this.sessionService.replaceMessage(streamingStubId, finalMessage);
+        } else {
+            this.sessionService.replaceMessage(event.messageId, finalMessage);
+        }
 
         // Clean up streaming state
-        this.streamingMessages.delete(event.messageId);
+        this.streamingMessages.delete(streamingStubId);
+        if (streamingStubId !== event.messageId) {
+            this.streamingMessages.delete(event.messageId);
+        }
 
         this.logger.debug(`[SyncService] Message completed: ${event.messageId}`);
     }
 
     /**
-     * Extract text delta from message parts.
-     * Returns concatenated text from all text-type parts (SDK Part union type).
+     * Handle message.part.delta — per-token text append.
+     * This is the high-frequency streaming event. It appends `delta` to
+     * the specified `field` of the part identified by `partID`.
      */
-    private extractTextDelta(parts: Array<any>): string {
-        let text = '';
+    onMessagePartDelta(event: MessagePartDeltaNotification): void {
+        try {
+            this.logger.debug(`[SyncService] Part delta: msg=${event.messageID}, part=${event.partID}, field=${event.field}, len=${event.delta.length}`);
 
-        for (const part of parts) {
-            if (part.type === 'text' && 'text' in part) {
-                text += part.text;
+            // Only process events for the currently active session
+            if (this.sessionService.activeSession?.id !== event.sessionID) {
+                return;
             }
-        }
 
-        return text;
+            // Ensure streaming tracker exists (message.part.delta may arrive before message.created)
+            if (!this.streamingMessages.has(event.messageID)) {
+                this.streamingMessages.set(event.messageID, { text: '' });
+                // Create a stub message so applyPartDelta has something to target
+                this.sessionService.appendMessage({
+                    id: event.messageID,
+                    sessionID: event.sessionID,
+                    role: 'assistant',
+                    time: { created: Date.now() }
+                } as any);
+            }
+
+            // Apply the delta directly to the part in session service
+            this.sessionService.applyPartDelta(event.messageID, event.partID, event.field, event.delta);
+
+            // Also track accumulated text for the streaming tracker
+            if (event.field === 'text') {
+                const stream = this.streamingMessages.get(event.messageID);
+                if (stream) {
+                    stream.text += event.delta;
+                }
+            }
+        } catch (error) {
+            this.logger.error('[SyncService] Error in onMessagePartDelta:', error);
+        }
     }
 
     /**
@@ -414,8 +493,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     /**
      * Handle permission request events (requested/granted/denied).
      * 
-     * Phase 1 implementation: Emit events for PermissionDialogContribution.
-     * Task 1.14 implements full permission UI and state management.
+     * Routes permission events to SessionService for inline permission UI:
+     * - 'requested' → addPendingPermission (shows inline buttons below tool card)
+     * - 'granted'/'denied' → removePendingPermission (clears inline buttons)
+     * 
+     * Also fires permissionRequestedEmitter for backward compat with
+     * PermissionDialogContribution.
      * 
      * @param event - Permission event notification
      */
@@ -429,23 +512,25 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 return;
             }
 
-            // Emit permission requested events for UI to handle
-            if (event.type === 'requested' && event.permission) {
-                this.permissionRequestedEmitter.fire(event);
-            }
-
-            // Handle other event types
             switch (event.type) {
                 case 'requested':
-                    this.logger.debug('[SyncService] Permission requested - event emitted');
+                    // Route to session service for inline permission UI
+                    this.sessionService.addPendingPermission(event);
+                    // Backward compat: also fire emitter for PermissionDialogContribution
+                    if (event.permission) {
+                        this.permissionRequestedEmitter.fire(event);
+                    }
+                    this.logger.debug('[SyncService] Permission requested - routed to session service');
                     break;
 
                 case 'granted':
-                    this.logger.debug('[SyncService] Permission granted');
+                    this.sessionService.removePendingPermission(event.permissionId || '');
+                    this.logger.debug('[SyncService] Permission granted - removed from pending');
                     break;
 
                 case 'denied':
-                    this.logger.debug('[SyncService] Permission denied');
+                    this.sessionService.removePendingPermission(event.permissionId || '');
+                    this.logger.debug('[SyncService] Permission denied - removed from pending');
                     break;
 
                 default:
@@ -454,6 +539,39 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         } catch (error) {
             this.logger.error('[SyncService] Error in onPermissionEvent:', error);
             // Never throw from RPC callback
+        }
+    }
+
+    /**
+     * Handle question events (asked/replied/rejected).
+     *
+     * @param event - Question event notification
+     */
+    onQuestionEvent(event: QuestionNotification): void {
+        try {
+            this.logger.debug(`[SyncService] Question event: type=${event.type}, requestId=${event.requestId}, sessionId=${event.sessionId}`);
+
+            // Only process events for the currently active session
+            if (this.sessionService.activeSession?.id !== event.sessionId) {
+                this.logger.debug(`[SyncService] Ignoring question event for non-active session: event.sessionId=${event.sessionId}`);
+                return;
+            }
+
+            switch (event.type) {
+                case 'asked':
+                    if (event.question) {
+                        this.sessionService.addPendingQuestion(event.question);
+                    }
+                    break;
+                case 'replied':
+                case 'rejected':
+                    this.sessionService.removePendingQuestion(event.requestId);
+                    break;
+                default:
+                    this.logger.warn(`[SyncService] Unknown question event type: ${event.type}`);
+            }
+        } catch (error) {
+            this.logger.error('[SyncService] Error in onQuestionEvent:', error);
         }
     }
 
@@ -499,8 +617,8 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 success = true;
                 this.logger.debug(`[SyncService] Command executed: ${cmd}`);
             }
-        } catch (err: any) {
-            error = err?.message || String(err);
+        } catch (err: unknown) {
+            error = (err as Error)?.message || String(err);
             this.logger.error(`[SyncService] Command execution failed: ${cmd}`, err);
         }
 

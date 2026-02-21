@@ -83,8 +83,6 @@ Stream interceptor cannot handle `%%OS{...}%%` blocks split across SSE chunks. C
 
 ## Process Failures
 
-(None logged yet — see NSO instructions for format)
-
 | Date | Agent | Failure | Proposed Mechanism |
 |------|-------|---------|-------------------|
-| (example) | Oracle | Jumped to implementation without delegation | Update Oracle prompt to enforce explicit user consent |
+| 2026-02-19 | Builder | Built and bundled in main repo root; running server is in `.worktrees/whiteboard-direct-mount/`. User saw no change after hard-reload. Root cause: did not verify which directory the server process serves from before building. | Always run `ps aux | grep main.js` first to identify the serving directory. Document in `patterns.md` — done. |

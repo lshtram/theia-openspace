@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // *****************************************************************************
 // Copyright (C) 2024 OpenSpace contributors.
 //
@@ -358,5 +359,62 @@ describe('SessionService', () => {
             // Should use crypto.randomUUID()
             expect(src).to.match(/temp-part.*randomUUID|randomUUID.*temp-part/);
         });
+    });
+});
+
+describe('isStreaming hysteresis', () => {
+    function createTestService(): SessionServiceImpl {
+        const service = new SessionServiceImpl();
+        (service as any).openCodeService = {
+            getProjects: sinon.stub(),
+            getSession: sinon.stub(),
+            getSessions: sinon.stub(),
+            createSession: sinon.stub(),
+            deleteSession: sinon.stub(),
+            getMessages: sinon.stub(),
+            createMessage: sinon.stub(),
+            abortSession: sinon.stub(),
+            connectToProject: sinon.stub().resolves()
+        };
+        (service as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
+        return service;
+    }
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('does not immediately set isStreaming=false when isDone arrives', () => {
+        const service = createTestService();
+        service.updateStreamingMessage('msg1', 'hello', false);
+        expect(service.isStreaming).to.equal(true);
+        service.updateStreamingMessage('msg1', '', true);  // isDone=true
+        // Should NOT be false yet (within hysteresis window)
+        expect(service.isStreaming).to.equal(true);
+    });
+
+    it('fires isStreaming=false after hysteresis window when no new activity', async () => {
+        const service = createTestService();
+        service.updateStreamingMessage('msg1', 'hello', false);
+        service.updateStreamingMessage('msg1', '', true);  // isDone=true
+        // Wait for hysteresis (600ms > 500ms window)
+        await new Promise(r => setTimeout(r, 600));
+        expect(service.isStreaming).to.equal(false);
+    });
+
+    it('cancels the hysteresis timer when new streaming activity arrives', async () => {
+        const service = createTestService();
+        service.updateStreamingMessage('msg1', 'hello', false);
+        service.updateStreamingMessage('msg1', '', true);  // isDone=true on msg1
+        // New message starts within 500ms window:
+        service.updateStreamingMessage('msg2', 'world', false);
+        await new Promise(r => setTimeout(r, 600));
+        // Should still be streaming (msg2 is active)
+        expect(service.isStreaming).to.equal(true);
     });
 });

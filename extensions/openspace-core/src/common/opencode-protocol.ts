@@ -50,7 +50,8 @@ export type SDKCompactionPart = SDKTypes.CompactionPart;
 // Input types (for creating parts without IDs - SDK provides these)
 export type SDKTextPartInput = SDKTypes.TextPartInput;
 export type SDKFilePartInput = SDKTypes.FilePartInput;
-export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput;
+export type SDKAgentPartInput = SDKTypes.AgentPartInput;
+export type MessagePartInput = SDKTypes.TextPartInput | SDKTypes.FilePartInput | SDKTypes.AgentPartInput;
 
 // ============================================================================
 // Application Types (SDK-based)
@@ -135,6 +136,32 @@ export interface ProviderWithModels {
 }
 
 /**
+ * Command info (API response from GET /command).
+ */
+export interface CommandInfo {
+    name: string;
+    description?: string;
+    agent?: string;
+    model?: string;
+    source?: 'command' | 'mcp' | 'skill';
+    subtask?: boolean;
+    hints?: string[];
+}
+
+/**
+ * Agent info (API response from GET /agent — returns Agent.Info[]).
+ * Shape matches the OpenCode server's Agent.Info zod schema.
+ */
+export interface AgentInfo {
+    name: string;
+    description?: string;
+    model?: {
+        modelID: string;
+        providerID: string;
+    };
+}
+
+/**
  * Agent (API response).
  */
 export interface Agent {
@@ -182,7 +209,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     abortSession(projectId: string, sessionId: string): Promise<Session>;
     shareSession(projectId: string, sessionId: string): Promise<Session>;
     unshareSession(projectId: string, sessionId: string): Promise<Session>;
-    compactSession(projectId: string, sessionId: string): Promise<Session>;
+    compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session>;
     revertSession(projectId: string, sessionId: string): Promise<Session>;
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session>;
@@ -209,8 +236,31 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     // Model methods
     getAvailableModels(directory?: string): Promise<ProviderWithModels[]>;
 
+    // Permission methods
+    replyPermission(projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void>;
+
+    // Command methods
+    listCommands(directory?: string): Promise<CommandInfo[]>;
+
+    // Execute a slash command via POST /session/:id/command
+    sessionCommand(sessionId: string, command: string, args: string, agent: string, model?: { providerID: string; modelID: string }): Promise<void>;
+
+    // File search with query
+    searchFiles(sessionId: string, query: string, limit?: number): Promise<string[]>;
+
+    // Agent list
+    listAgents(directory?: string): Promise<AgentInfo[]>;
+
+    // Question methods
+    listPendingQuestions(projectId: string, sessionId: string): Promise<SDKTypes.QuestionRequest[]>;
+    answerQuestion(projectId: string, requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<boolean>;
+    rejectQuestion(projectId: string, requestId: string): Promise<boolean>;
+
     // Path validation (Node-side, uses fs.realpath for symlink resolution)
     validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }>;
+
+    // Shell command execution (Node-side, uses child_process.exec)
+    executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }>;
 }
 
 /**
@@ -219,10 +269,25 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 export interface OpenCodeClient {
     onSessionEvent(event: SessionNotification): void;
     onMessageEvent(event: MessageNotification): void;
+    onMessagePartDelta(event: MessagePartDeltaNotification): void;
     onFileEvent(event: FileNotification): void;
     onPermissionEvent(event: PermissionNotification): void;
+    onQuestionEvent(event: QuestionNotification): void;
     onAgentCommand(command: AgentCommand): void;
 }
+
+/**
+ * Question event notification.
+ */
+export interface QuestionNotification {
+    readonly type: QuestionEventType;
+    readonly sessionId: string;
+    readonly projectId: string;
+    readonly requestId: string;
+    readonly question?: SDKTypes.QuestionRequest;
+}
+
+export type QuestionEventType = 'asked' | 'replied' | 'rejected';
 
 /**
  * Session event notification.
@@ -232,6 +297,8 @@ export interface SessionNotification {
     readonly sessionId: string;
     readonly projectId: string;
     readonly data?: Session;
+    /** Present when type === 'status_changed'. Server-authoritative session status. */
+    readonly sessionStatus?: import('../common/opencode-sdk-types').SessionStatus;
 }
 
 export type SessionEventType =
@@ -245,7 +312,8 @@ export type SessionEventType =
     | 'unshared'
     | 'compacted'
     | 'reverted'
-    | 'unreverted';
+    | 'unreverted'
+    | 'status_changed';
 
 /**
  * Message event notification.
@@ -258,9 +326,28 @@ export interface MessageNotification {
     readonly data?: MessageWithParts;
     /** Incremental text delta for streaming (message.part.updated events). */
     readonly delta?: string;
+    /**
+     * For 'completed' events: the message ID that was used during streaming (message.part.updated).
+     * The opencode backend uses a different ID for streaming parts vs the final consolidated message.
+     * When set, the sync service should replace the streaming stub (previousMessageId) with the
+     * completed message (messageId), rather than looking up messageId directly.
+     */
+    readonly previousMessageId?: string;
 }
 
 export type MessageEventType = 'created' | 'partial' | 'completed';
+
+/**
+ * Message part delta notification — per-token text append.
+ * Separate from MessageNotification to avoid overloading the 'partial' type.
+ */
+export interface MessagePartDeltaNotification {
+    readonly sessionID: string;
+    readonly messageID: string;
+    readonly partID: string;
+    readonly field: string;
+    readonly delta: string;
+}
 
 /**
  * File event notification.
@@ -283,6 +370,14 @@ export interface PermissionNotification {
     readonly projectId: string;
     readonly permissionId?: string;
     readonly permission?: Permission;
+    /** callID links this permission request to a specific ToolPart */
+    readonly callID?: string;
+    /** messageID of the message containing the tool part */
+    readonly messageID?: string;
+    /** Human-readable title for the permission prompt */
+    readonly title?: string;
+    /** Glob patterns the permission applies to */
+    readonly patterns?: string[];
 }
 
 export type PermissionEventType = 'requested' | 'granted' | 'denied';

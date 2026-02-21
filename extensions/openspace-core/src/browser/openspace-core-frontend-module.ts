@@ -31,7 +31,7 @@ import { PermissionDialogContribution } from './permission-dialog-contribution';
  */
 export const SessionServiceWiring = Symbol('SessionServiceWiring');
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // 1. Filter contribution (existing - Phase 0)
     bind(FilterContribution).to(OpenSpaceFilterContribution).inSingletonScope();
 

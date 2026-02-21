@@ -16,7 +16,9 @@ ALL presentations MUST have:
 2. Slide separators `---` between EVERY horizontal slide
 3. `===` for vertical (nested) slides
 
-Without these, the presentation renders BLANK.
+**CRITICAL: The first slide's content goes AFTER the first `---`. Content before the first `---` is frontmatter or CSS, NOT a slide.**
+
+Without these, the presentation renders BLANK or starts from slide 2.
 
 Minimal working example:
 
@@ -26,7 +28,50 @@ title: My Presentation
 theme: openspace-modern
 ---
 
-# First Slide
+# First Slide — THIS IS SLIDE 1
+
+Content here (this is the actual first slide)
+
+---
+
+# Second Slide — THIS IS SLIDE 2
+
+More content
+```
+
+Key requirements:
+- First `---` closes frontmatter — everything before it is metadata, NOT a slide
+- First slide content MUST come AFTER the first `---`
+- Use `---` to separate horizontal slides (left/right navigation)
+- Use `===` to separate vertical slides (up/down, nested under previous)
+- Every slide MUST be separated by `---` or `===`
+- Plain markdown with headers only = BLANK presentation
+
+### Common Mistake: Empty First Slide
+
+**WRONG** — CSS becomes slide 1 (appears blank):
+```markdown
+---
+title: My Deck
+---
+
+<style>
+/* This CSS becomes SLIDE 1 and appears blank! */
+.reveal { color: red; }
+</style>
+
+---
+
+# First Slide  ← This is actually SLIDE 2!
+```
+
+**RIGHT** — Put CSS at the END of the file, after all slides:
+```markdown
+---
+title: My Deck
+---
+
+# First Slide  ← This IS slide 1
 
 Content here
 
@@ -35,14 +80,16 @@ Content here
 # Second Slide
 
 More content
+
+---
+
+<!-- Put all CSS at the very end -->
+<style>
+.reveal { color: red; }
+</style>
 ```
 
-Key requirements:
-- First `---` closes frontmatter
-- Use `---` to separate horizontal slides (left/right navigation)
-- Use `===` to separate vertical slides (up/down, nested under previous)
-- Every slide MUST be separated by `---` or `===`
-- Plain markdown with headers only = BLANK presentation
+**Why this happens:** In reveal.js, everything between the frontmatter's closing `---` and the first slide separator `---` becomes slide 1. CSS blocks don't render visible content, so slide 1 appears blank.
 
 ## File Location
 
@@ -69,22 +116,376 @@ Each slide answers exactly one question. If you can ask "but what about X?" afte
 Bad: A slide titled "Microservices" that covers definition, benefits, drawbacks, and when to use all at once.
 Good: Four slides — one per concept, built up sequentially.
 
-### Progressive Disclosure
+### Text Density: The 3×5 Golden Standard
 
-Never show a conclusion before the audience understands the evidence. Use fragments to reveal bullet points one at a time when each point is a standalone insight. Use slide sequences when each point needs its own visual treatment.
+Avoid text-heavy slides. The **3×5 Rule** is a golden standard to aim for: roughly 3 bullet points per slide, roughly 5 words per bullet.
 
-Use **fragments** when:
-- Listing 3+ parallel items and you want the audience to consider each before seeing the next
-- Revealing a conclusion after premises
-- Highlighting one item while others are present
+**This is a guideline, not a hard rule.** Sometimes you need 5 bullets. Sometimes you need longer explanations. Use judgment:
+- **Summary moments**: Stick close to 3×5 for crystallizing takeaways
+- **Detail slides**: Expand when the complexity requires it
+- **Code slides**: Focus on the code, minimize bullet text
 
-Use **separate slides** when:
-- Each point needs a diagram, code block, or detailed explanation
-- The visual transition itself conveys meaning (things are changing, evolving)
+**Bullet point formatting:**
+- Keep bullet points on single lines when possible (avoid word wrapping)
+- If a bullet wraps to a second line, consider:
+  - Shortening the text
+  - Splitting into two bullets
+  - Moving details to speaker notes
+- Use consistent punctuation (all fragments end with period, or all without)
+
+**Pattern for complex topics:**
+1. **Detail slide** — full explanation with all context needed
+2. **Summary slide** — 3 bullets, 3-5 words each, capturing the essence
+
+This alternation lets the audience absorb details, then crystallize the takeaway.
+
+```markdown
+---
+
+## SSE: Server-Sent Events
+
+Server-Sent Events provide a unidirectional stream from server to client over a single HTTP connection that remains open. The browser receives text events as they occur without polling.
+
+- Uses standard HTTP, works through most firewalls
+- Automatic reconnection with Last-Event-ID header
+- Text-only format, built-in event types
+
+---
+
+## SSE in 3 Words
+
+- **One-way** — server to client only
+- **Persistent** — single HTTP connection
+- **Simple** — text events over HTTP
+```
+
+### Progressive Disclosure (Use Sparingly)
+
+**Use progressive disclosure cautiously.** It's a nice effect for specific moments, but don't make it the default. Most slides should show their full content immediately.
+
+**When to use fragments:**
+- Building suspense toward an "aha" moment or conclusion
+- Walking through a sequence where each step depends on understanding the previous
+- Highlighting one item among peers for comparison
+
+**When NOT to use fragments:**
+- Default slide content — most slides should be fully visible
+- Simple bullet lists where items are independent
+- When it would frustrate the viewer to wait for content
+
+**Visual placeholder pattern** — for the rare cases when you want to show "there's more coming":
+
+```markdown
+---
+
+## How It Works
+
+<div style="border: 2px dashed #6366f1; border-radius: 8px; padding: 1em; margin: 0.5em 0;">
+  <p style="color: #818cf8; margin: 0;">Step 1: Client establishes connection...</p>
+</div>
+
+<div class="fragment" style="border: 2px solid #10b981; border-radius: 8px; padding: 1em; margin: 0.5em 0; background: rgba(16, 185, 129, 0.1);">
+  <p style="color: #34d399; margin: 0; font-weight: bold;">Step 1: Client establishes connection</p>
+  <p style="margin: 0.5em 0 0; font-size: 0.9em;">GET /events with Accept: text/event-stream</p>
+</div>
+
+<div style="border: 2px dashed #6366f1; border-radius: 8px; padding: 1em; margin: 0.5em 0;">
+  <p style="color: #818cf8; margin: 0;">Step 2: Server streams events...</p>
+</div>
+
+<div class="fragment" style="border: 2px solid #10b981; border-radius: 8px; padding: 1em; margin: 0.5em 0; background: rgba(16, 185, 129, 0.1);">
+  <p style="color: #34d399; margin: 0; font-weight: bold;">Step 2: Server streams events</p>
+  <p style="margin: 0.5em 0 0; font-size: 0.9em;">data: {"message": "Hello"}\n\n</p>
+</div>
+```
+
+Use **separate slides** when each point needs its own visual treatment or when the transition itself conveys meaning.
+
+### Visual-First Design
+
+**Every presentation must include visuals.** Text-only slides are ineffective for conveying complex technical concepts.
+
+#### Creating Diagrams
+
+You have several tools for creating diagrams:
+
+**1. TLDraw (OpenSpace Whiteboard)**
+Create diagrams in the local TLDraw whiteboard, then export as images:
+- Open the whiteboard: `whiteboard.open` tool or use the whiteboard pane
+- Draw architecture diagrams, flowcharts, or comparisons
+- Export as PNG/SVG and reference in your presentation
+- Store exported diagrams in `design/assets/` or similar
+
+**2. Mermaid Diagrams**
+RevealJS supports Mermaid for text-based diagrams:
+
+```markdown
+```mermaid
+graph LR
+    A[Client] -->|GET /events| B[Server]
+    B -->|event stream| A
+```
+```
+
+Common Mermaid diagram types:
+- `graph TD/LR` — flowcharts and architecture diagrams
+- `sequenceDiagram` — sequence diagrams for request/response flows
+- `gantt` — timelines and project schedules
+
+**3. HTML/CSS Diagrams**
+For simple diagrams, use inline HTML with flexbox/grid layouts (see examples below).
+
+#### Finding Images Online
+
+Search for high-quality images to use as backgrounds or illustrations:
+
+**Recommended sources:**
+- **Unsplash** (`images.unsplash.com`) — free, high-quality photos
+- **Pexels** — free stock photos
+- **Flaticon** — icons and vector graphics
+
+**Search patterns:**
+- Concept metaphors: "network cables", "data flow", "communication"
+- Abstract: "gradient", "technology", "abstract background"
+- Icons: Use emoji or search for specific icon packs
+
+**Image Storage & Organization:**
+
+To keep the workspace tidy, store images in a consistent location:
+
+```
+design/
+  deck/
+    my-presentation.deck.md
+  assets/
+    images/           # Downloaded background images
+      server-room.jpg
+      network-cables.jpg
+    diagrams/         # Exported from TLDraw/whiteboard
+      architecture.png
+      flowchart.svg
+```
+
+**Reference local images:**
+```markdown
+<!-- .slide: data-background-image="design/assets/images/server-room.jpg" data-background-opacity="0.3" -->
+```
+
+**Remote images:** You can use direct URLs (Unsplash, etc.) for quick prototyping, but for production presentations, download and store locally in `design/assets/`.
+
+#### Background Image Patterns
+
+**Pattern 1: Full background with opacity (for title slides)**
+```markdown
+<!-- .slide: data-background-image="design/assets/images/tech-background.jpg" data-background-opacity="0.25" -->
+
+<div class="centered">
+  <h1>Title</h1>
+  <p>Subtitle</p>
+</div>
+```
+
+**Pattern 2: Carved-out content box (for mixed image + text)**
+```markdown
+<!-- .slide: data-background-image="design/assets/images/concept-image.jpg" -->
+
+<div style="background: rgba(15, 23, 42, 0.85); padding: 2em; border-radius: 12px; max-width: 70%;">
+  <h2>Content Title</h2>
+  <p>Your text here is readable over the image...</p>
+</div>
+```
+
+**Pattern 3: Image on one side (for split layouts)**
+```markdown
+<div style="display: flex; gap: 2em;">
+  <div style="flex: 1;">
+    <h2>Title</h2>
+    <p>Content here...</p>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/images/diagram.png" style="width: 100%; border-radius: 8px;">
+  </div>
+</div>
+```
+
+**⚠️ WARNING: Never use busy background images on text-heavy slides.** Use atmosphere images only for:
+- Title slides
+- Section dividers
+- Slides with minimal text (1-2 lines max)
+
+#### Types of Visuals
+
+**1. Atmosphere Images (Metaphors)**
+Before each major concept, use a slide with a large background image that evokes the theme:
+
+```markdown
+---
+
+<!-- .slide: data-background-image="https://images.unsplash.com/photo-1451187580459-43490279c0fa" data-background-opacity="0.4" -->
+
+# Communication Patterns
+
+<div style="text-align: center; padding-top: 4em;">
+  <p style="font-size: 1.5em; color: #f8fafc;">How systems talk to each other</p>
+</div>
+```
+
+Image themes for common concepts:
+- **Communication** — satellite dishes, network cables, mail delivery
+- **Speed/Efficiency** — race cars, flowing water, light trails
+- **Security** — locks, shields, vault doors
+- **Architecture** — building blueprints, foundations, bridges
+- **Data Flow** — rivers, highways, conveyor belts
+
+**2. Diagrams for Comparisons**
+When comparing approaches (HTTP polling vs SSE vs WebSockets), use a visual diagram:
+
+```markdown
+---
+
+## Real-Time Options Compared
+
+<div style="display: flex; justify-content: space-around; align-items: flex-start; margin-top: 1em;">
+  <div style="text-align: center; padding: 1em;">
+    <div style="font-size: 3em;">🔄</div>
+    <h3 style="margin: 0.3em 0;">HTTP Polling</h3>
+    <p style="font-size: 0.7em; color: #94a3b8;">Repeated requests</p>
+    <div style="margin-top: 0.5em; font-size: 0.65em;">
+      <span style="color: #ef4444;">High overhead</span><br>
+      <span style="color: #f59e0b;">~1s latency</span>
+    </div>
+  </div>
+  
+  <div style="text-align: center; padding: 1em; border: 2px solid #6366f1; border-radius: 12px; background: rgba(99, 102, 241, 0.1);">
+    <div style="font-size: 3em;">➡️</div>
+    <h3 style="margin: 0.3em 0; color: #818cf8;">SSE</h3>
+    <p style="font-size: 0.7em; color: #94a3b8;">Server push</p>
+    <div style="margin-top: 0.5em; font-size: 0.65em;">
+      <span style="color: #10b981;">Low overhead</span><br>
+      <span style="color: #10b981;">~real-time</span>
+    </div>
+  </div>
+  
+  <div style="text-align: center; padding: 1em;">
+    <div style="font-size: 3em;">🔄</div>
+    <h3 style="margin: 0.3em 0;">WebSockets</h3>
+    <p style="font-size: 0.7em; color: #94a3b8;">Bidirectional</p>
+    <div style="margin-top: 0.5em; font-size: 0.65em;">
+      <span style="color: #10b981;">Low overhead</span><br>
+      <span style="color: #10b981;">True real-time</span>
+    </div>
+  </div>
+</div>
+```
+
+**3. Visual Comparisons (2D/3D Axes)**
+Plot options on axes to show trade-offs:
+
+```markdown
+---
+
+## The Latency vs Complexity Trade-off
+
+<div style="position: relative; height: 400px; margin: 1em 0; border-left: 2px solid #64748b; border-bottom: 2px solid #64748b;">
+  <!-- Y-axis label -->
+  <div style="position: absolute; left: -40px; top: 50%; transform: rotate(-90deg); font-size: 0.7em; color: #94a3b8;">Complexity →</div>
+  
+  <!-- X-axis label -->
+  <div style="position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); font-size: 0.7em; color: #94a3b8;">Latency →</div>
+  
+  <!-- HTTP Polling -->
+  <div style="position: absolute; left: 15%; bottom: 15%; text-align: center;">
+    <div style="width: 16px; height: 16px; background: #ef4444; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">HTTP Polling</p>
+  </div>
+  
+  <!-- SSE -->
+  <div style="position: absolute; left: 60%; bottom: 40%; text-align: center;">
+    <div style="width: 16px; height: 16px; background: #10b981; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">SSE</p>
+  </div>
+  
+  <!-- WebSockets -->
+  <div style="position: absolute; left: 85%; bottom: 75%; text-align: center;">
+    <div style="width: 16px; height: 16px; background: #f59e0b; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">WebSockets</p>
+  </div>
+</div>
+```
+
+**4. Architecture Diagrams**
+Show data flow with arrows and labeled components:
+
+```markdown
+---
+
+## SSE Architecture
+
+<div style="display: flex; align-items: center; justify-content: center; gap: 2em; margin-top: 2em;">
+  <!-- Client -->
+  <div style="text-align: center;">
+    <div style="width: 100px; height: 80px; border: 2px solid #3b82f6; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.1);">
+      <span style="font-size: 2em;">🖥️</span>
+    </div>
+    <p style="margin-top: 0.5em; font-size: 0.75em;">Browser</p>
+  </div>
+  
+  <!-- Arrow -->
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <div style="font-size: 1.5em; color: #64748b;">←</div>
+    <p style="font-size: 0.6em; color: #94a3b8; margin: 0;">Event stream</p>
+  </div>
+  
+  <!-- Server -->
+  <div style="text-align: center;">
+    <div style="width: 100px; height: 80px; border: 2px solid #10b981; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.1);">
+      <span style="font-size: 2em;">⚙️</span>
+    </div>
+    <p style="margin-top: 0.5em; font-size: 0.75em;">Server</p>
+  </div>
+</div>
+
+<div style="margin-top: 2em; text-align: center; font-size: 0.75em; color: #94a3b8;">
+  Single HTTP connection • Text events • Automatic reconnect
+</div>
+```
 
 ### Code on Slides: Show, Don't Tell
 
 Show the minimum code needed to make the point. Use line highlighting to direct attention. Use auto-animate between slides to show code evolution.
+
+#### Syntax Highlighting
+
+**Always use syntax highlighting for code blocks.** Specify the language for proper color highlighting:
+
+```markdown
+```javascript
+const source = new EventSource('/events');
+source.addEventListener('message', (e) => {
+  console.log(e.data);
+});
+```
+```
+
+**Supported languages:**
+- `javascript`, `typescript`, `python`, `java`, `go`, `rust`
+- `html`, `css`, `json`, `yaml`, `bash`
+- `jsx`, `tsx`, `sql`, `graphql`
+
+**Code highlighting colors** (from the CSS in templates):
+- Keywords/functions: `#93c5fd` (light blue)
+- Strings: `#6ee7b7` (green)
+- Comments: `#64748b` (gray)
+- Variables: `#e2e8f0` (off-white)
+
+**Line highlighting for step-by-step reveals:**
+```markdown
+```javascript [1-3|5-8|10-12]
+// Lines 1-3 highlighted first
+// Then lines 5-8
+// Finally lines 10-12
+```
+```
 
 Rules:
 - If the code block is more than 15 lines, it's probably two slides

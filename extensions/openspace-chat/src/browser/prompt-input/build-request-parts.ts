@@ -3,18 +3,18 @@
  * 
  * This module serializes the internal Prompt representation into the format
  * expected by the opencode server's message API (openspace-core protocol).
+ * 
+ * Produces SDK-compatible part inputs:
+ * - TextPartInput:  { type: 'text', text: string }
+ * - FilePartInput:  { type: 'file', mime: string, url: string, filename?: string }
+ * - AgentPartInput: { type: 'agent', name: string }
+ * Images are sent as FilePartInput with data: URL and the image MIME type.
  */
 
 import type { Prompt, MessagePart } from './types';
 
 /**
  * Build MessagePart array from Prompt for sending to the server.
- * 
- * The serialization rules:
- * - All TextParts are concatenated into a single text part
- * - FileParts are converted to file parts with absolute paths
- * - AgentParts are embedded in the text (the opencode server doesn't have a separate agent part type)
- * - ImageParts are converted to image parts with data URL as path
  * 
  * @param prompt The parsed prompt from the editor
  * @param workspaceRoot The workspace root path (for resolving relative paths)
@@ -42,19 +42,29 @@ export function buildRequestParts(prompt: Prompt, workspaceRoot: string): Messag
                     textContent = '';
                 }
 
+                // Build absolute path then produce a file:// URL (SDK FilePartInput format)
                 const absolutePath = resolveAbsolutePath(workspaceRoot, part.path);
+                const fileUrl = `file://${encodeFilePath(absolutePath)}${fileSelectionQuery(part.selection)}`;
+                const filename = getBasename(part.path);
                 parts.push({
                     type: 'file',
-                    path: absolutePath,
-                    content: part.content
+                    mime: 'text/plain',
+                    url: fileUrl,
+                    filename
                 });
                 break;
             }
 
-            case 'agent':
-                // Embed agent mention in text (e.g., "@oracle")
-                textContent += part.content;
+            case 'agent': {
+                // Flush accumulated text before agent mention
+                if (textContent.length > 0) {
+                    parts.push({ type: 'text', text: textContent });
+                    textContent = '';
+                }
+                // Emit a proper AgentPartInput
+                parts.push({ type: 'agent', name: part.name });
                 break;
+            }
 
             case 'image': {
                 // Flush accumulated text before image
@@ -63,11 +73,12 @@ export function buildRequestParts(prompt: Prompt, workspaceRoot: string): Messag
                     textContent = '';
                 }
 
-                // Send image as image part with data URL as path
+                // Images are sent as FilePartInput with data: URL
                 parts.push({
-                    type: 'image',
-                    path: part.dataUrl,
-                    mime_type: part.mime
+                    type: 'file',
+                    mime: part.mime,
+                    url: part.dataUrl,
+                    filename: part.filename
                 });
                 break;
             }
@@ -93,5 +104,31 @@ function resolveAbsolutePath(workspaceRoot: string, path: string): string {
     if (/^[A-Za-z]:[\\/]/.test(path)) {
         return path;
     }
-    return `${workspaceRoot}/${path}`;
+    return `${workspaceRoot.replace(/[\\/]+$/, '')}/${path}`;
+}
+
+/**
+ * Encode a file path for use in a file:// URL.
+ * Normalizes backslashes, ensures a leading slash (for Windows drive letters),
+ * then percent-encodes each path segment while preserving separators.
+ */
+function encodeFilePath(path: string): string {
+    const normalized = path.replace(/\\/g, '/');
+    // Windows drive letter paths (C:/...) need a leading slash in file:// URLs
+    const withLeadingSlash = normalized.startsWith('/') ? normalized : '/' + normalized;
+    return withLeadingSlash.split('/').map(segment => encodeURIComponent(segment)).join('/');
+}
+
+/**
+ * Get the basename (filename) from a path.
+ */
+function getBasename(path: string): string {
+    return path.replace(/\\/g, '/').split('/').pop() || path;
+}
+
+/**
+ * Build a query string for file line selection.
+ */
+function fileSelectionQuery(selection?: { startLine: number; endLine: number }): string {
+    return selection ? `?start=${selection.startLine}&end=${selection.endLine}` : '';
 }
