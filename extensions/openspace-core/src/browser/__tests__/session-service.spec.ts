@@ -400,6 +400,41 @@ describe('SessionService', () => {
             expect(mockOpenCodeService.createSession.called).to.be.false;
         });
     });
+
+    describe('init() hub readiness gate on session restore', () => {
+        let waitForHubStub: sinon.SinonStub;
+
+        beforeEach(() => {
+            mockOpenCodeService.getProjects.resolves([mockProject]);
+            mockOpenCodeService.getSession.resolves(mockSession);
+            mockOpenCodeService.getMessages.resolves([]);
+            waitForHubStub = sinon.stub(
+                Object.getPrototypeOf(sessionService),
+                'waitForHub'
+            );
+            // Seed localStorage with saved IDs via the already-stubbed setItem
+            window.localStorage.setItem('openspace.activeProjectId', 'proj-1');
+            window.localStorage.setItem('openspace.activeSessionId', 'session-1');
+        });
+
+        it('restores session when hub is ready', async () => {
+            waitForHubStub.resolves();
+            (sessionService as any).init();
+            // Let the async init() fire
+            await new Promise(r => setTimeout(r, 50));
+            expect(waitForHubStub.calledOnce).to.be.true;
+            expect(sessionService.activeSession?.id).to.equal('session-1');
+        });
+
+        it('skips session restore and logs warning when hub is not ready', async () => {
+            waitForHubStub.rejects(new Error('Hub not ready after 20 attempts'));
+            (sessionService as any).init();
+            await new Promise(r => setTimeout(r, 50));
+            expect(waitForHubStub.calledOnce).to.be.true;
+            // Session should NOT be restored
+            expect(sessionService.activeSession).to.be.undefined;
+        });
+    });
 });
 
 describe('isStreaming hysteresis', () => {

@@ -306,7 +306,6 @@ export class SessionServiceImpl implements SessionService {
         const projectId = window.localStorage.getItem('openspace.activeProjectId');
         const sessionId = window.localStorage.getItem('openspace.activeSessionId');
 
-        // Restore project first, then session (sequential, not parallel)
         (async () => {
             if (projectId) {
                 try {
@@ -319,6 +318,22 @@ export class SessionServiceImpl implements SessionService {
 
             // Only restore session if project was loaded successfully
             if (sessionId && this._activeProject) {
+                // Gate on hub readiness — a session restored before the Hub is up
+                // will have no MCP tools available to the agent.
+                try {
+                    await this.waitForHub();
+                } catch (err) {
+                    this.logger.warn(
+                        '[SessionService] Hub not ready during session restore — ' +
+                        'skipping session restore to avoid tool-less session. ' +
+                        'Create a new session once the IDE is fully loaded.',
+                        err
+                    );
+                    // Do not restore the stale session
+                    this.logger.info(`[SessionService] Initialized with project=${this._activeProject?.id || 'none'}, session=none`);
+                    return;
+                }
+
                 try {
                     await this.setActiveSession(sessionId);
                     this.logger.debug(`[SessionService] Restored session: ${sessionId}`);
