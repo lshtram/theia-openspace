@@ -126,6 +126,15 @@ const mockMessageService = {
     warn: sinon.stub(),
 };
 
+const mockPreferenceService = {
+    get: sinon.stub().returns([]),
+    onPreferenceChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+};
+
+const mockCommandService = {
+    executeCommand: sinon.stub().resolves(),
+};
+
 function renderComponent(sessionService: any, workspaceRoot = ''): {
     container: HTMLElement;
     root: Root;
@@ -142,6 +151,9 @@ function renderComponent(sessionService: any, workspaceRoot = ''): {
             openCodeService: {},
             workspaceRoot,
             messageService: mockMessageService,
+            preferenceService: mockPreferenceService,
+            commandService: mockCommandService,
+            openerService: {} as any,
         }));
     });
 
@@ -395,6 +407,9 @@ describe('ChatWidget - Session Management', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: msgSvc,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
@@ -514,6 +529,9 @@ describe('ChatWidget - Session Management', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: msgSvc,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
@@ -552,6 +570,9 @@ describe('ChatWidget - Session Management', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: msgSvc,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
@@ -586,6 +607,9 @@ describe('ChatWidget - Session Management', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: msgSvc,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 

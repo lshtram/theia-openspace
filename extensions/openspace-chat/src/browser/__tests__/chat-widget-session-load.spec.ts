@@ -128,6 +128,15 @@ const mockMessageService = {
     warn: sinon.stub(),
 };
 
+const mockPreferenceService = {
+    get: sinon.stub().returns([]),
+    onPreferenceChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+};
+
+const mockCommandService = {
+    executeCommand: sinon.stub().resolves(),
+};
+
 interface RenderResult {
     container: HTMLElement;
     root: Root;
@@ -146,6 +155,9 @@ function renderComponent(sessionService: any, workspaceRoot = ''): RenderResult 
             openCodeService: {},
             workspaceRoot,
             messageService: mockMessageService,
+            preferenceService: mockPreferenceService,
+            commandService: mockCommandService,
+            openerService: {} as any,
         }));
     });
 
@@ -505,6 +517,9 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: mockMessageService,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
@@ -517,6 +532,9 @@ describe('ChatWidget - Session Auto-Load Fix', () => {
                     openCodeService: {},
                     workspaceRoot: '',
                     messageService: mockMessageService,
+                    preferenceService: mockPreferenceService,
+                    commandService: mockCommandService,
+                    openerService: {} as any,
                 }));
             });
 
