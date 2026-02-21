@@ -31,13 +31,17 @@ export async function waitForHub(url: string, options: HubReadinessOptions = {})
     const intervalMs = options.intervalMs ?? 500;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), intervalMs * 2);
         try {
-            const response = await fetch(url, { method: 'GET' });
+            const response = await fetch(url, { method: 'GET', signal: controller.signal });
             if (response.ok) {
                 return; // Hub is ready
             }
         } catch {
-            // Network error — Hub not yet listening, fall through to retry
+            // Network error or AbortError — Hub not yet listening, fall through to retry
+        } finally {
+            clearTimeout(timeoutId);
         }
 
         if (attempt < maxAttempts) {

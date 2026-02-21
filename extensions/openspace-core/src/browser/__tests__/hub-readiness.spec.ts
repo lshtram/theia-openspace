@@ -63,4 +63,28 @@ describe('waitForHub()', () => {
 
         expect(fetchStub.callCount).to.equal(2);
     });
+
+    it('aborts a hung fetch and retries', async () => {
+        const fetchStub = sinon.stub();
+        // First call: resolves only when signal is aborted (simulates a hung fetch)
+        fetchStub.onCall(0).callsFake((_url: string, options: RequestInit) =>
+            new Promise<Response>((_resolve, reject) => {
+                const signal = options?.signal;
+                if (signal) {
+                    signal.addEventListener('abort', () => {
+                        reject(new DOMException('The operation was aborted.', 'AbortError'));
+                    });
+                }
+                // Otherwise, hangs forever
+            })
+        );
+        // Second call: succeeds
+        fetchStub.onCall(1).resolves({ ok: true, status: 200 });
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        // Use short intervalMs so abort fires quickly
+        await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 50 });
+
+        expect(fetchStub.callCount).to.equal(2);
+    });
 });
