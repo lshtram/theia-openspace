@@ -4,6 +4,7 @@ import { validateAudioTransition, type AudioState } from '../common/voice-fsm';
 export interface AudioFsmOptions {
   sttEndpoint: string;
   language: string;
+  autoDetectLanguage: boolean;
   onTranscript: (text: string) => void;
   onError?: (err: Error) => void;
   onVolumeData?: (data: Uint8Array) => void;
@@ -102,6 +103,7 @@ export class AudioFsm {
         headers: {
           'Content-Type': 'audio/raw',
           'X-Voice-Language': this.options.language,
+          'X-Auto-Detect-Language': String(this.options.autoDetectLanguage),
           'X-Sample-Rate': '16000',
         },
         body: new Uint8Array(int16.buffer),

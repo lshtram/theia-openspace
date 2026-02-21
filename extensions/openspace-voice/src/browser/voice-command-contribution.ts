@@ -11,7 +11,7 @@ import { NarrationFsm } from './narration-fsm';
 import { VoiceWaveformOverlay } from './voice-waveform-overlay';
 import { VoiceTextProcessor } from './voice-text-processor';
 import type { VoicePolicy } from '../common/voice-policy';
-import { NARRATION_MODES } from '../common/voice-policy';
+import { NARRATION_MODES, SUPPORTED_LANGUAGES } from '../common/voice-policy';
 
 export const VOICE_COMMANDS = {
   TOGGLE_VOICE:    { id: 'openspace.voice.toggle',         label: 'Voice: Toggle Voice Input' },
@@ -171,6 +171,41 @@ export class VoiceCommandContribution
   private async showPolicyWizard(): Promise<void> {
     const current = this.sessionFsm.policy;
 
+    // Step 0: language (auto-detect toggle or manual selection)
+    const autoDetectChoice = await this.quickPickService.show<QuickPickValue<boolean>>(
+      [
+        {
+          label: 'Auto-detect language',
+          description: 'Whisper will automatically detect the language from your speech',
+          value: true,
+          ...(current.autoDetectLanguage ? { detail: '✓ current' } : {}),
+        },
+        {
+          label: 'Select language manually',
+          description: 'Choose a specific language for better accuracy',
+          value: false,
+          ...(!current.autoDetectLanguage ? { detail: '✓ current' } : {}),
+        },
+      ],
+      { title: 'Voice Policy — Language' }
+    );
+    if (autoDetectChoice === undefined) { return; }
+
+    let selectedLanguage = current.language;
+    if (!autoDetectChoice.value) {
+      const langChoice = await this.quickPickService.show<QuickPickValue<string>>(
+        SUPPORTED_LANGUAGES.map((lang: { code: string; name: string }) => ({
+          label: lang.name,
+          description: lang.code,
+          value: lang.code,
+          ...(lang.code === current.language ? { detail: '✓ current' } : {}),
+        })),
+        { title: 'Select Language', placeholder: 'Search languages...' }
+      );
+      if (langChoice === undefined) { return; }
+      selectedLanguage = langChoice.value;
+    }
+
     // Step 1: enable / disable
     const enabledChoice = await this.quickPickService.show<QuickPickValue<boolean>>(
       [
@@ -187,7 +222,7 @@ export class VoiceCommandContribution
           ...(!current.enabled ? { detail: '✓ current' } : {}),
         },
       ],
-      { title: 'Voice Policy (1/3) — Enable voice?' }
+      { title: 'Voice Policy (2/4) — Enable voice?' }
     );
     if (enabledChoice === undefined) { return; }
 
@@ -213,7 +248,7 @@ export class VoiceCommandContribution
           ...(current.narrationMode === 'narrate-summary' ? { detail: '✓ current' } : {}),
         },
       ],
-      { title: 'Voice Policy (2/3) — Narration mode' }
+      { title: 'Voice Policy (3/4) — Narration mode' }
     );
     if (modeChoice === undefined) { return; }
 
@@ -229,15 +264,17 @@ export class VoiceCommandContribution
         ...item,
         ...(item.value === current.speed ? { detail: '✓ current' } : {}),
       })),
-      { title: 'Voice Policy (3/3) — Playback speed' }
+      { title: 'Voice Policy (4/4) — Playback speed' }
     );
     if (speedChoice === undefined) { return; }
 
     // Apply all choices
     this.sessionFsm.updatePolicy({
-      enabled:       enabledChoice.value,
-      narrationMode: modeChoice.value as typeof NARRATION_MODES[number],
-      speed:         speedChoice.value,
+      enabled:            enabledChoice.value,
+      narrationMode:      modeChoice.value as typeof NARRATION_MODES[number],
+      speed:              speedChoice.value,
+      language:           selectedLanguage,
+      autoDetectLanguage: autoDetectChoice.value,
     });
 
     // Sync FSM state to enabled flag

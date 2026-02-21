@@ -32,6 +32,7 @@ describe('AudioFsm (state transitions only — no real mic)', () => {
     fsm = new AudioFsm({
       sttEndpoint: '/openspace/voice/stt',
       language: 'en-US',
+      autoDetectLanguage: false,
       onTranscript: (text) => transcriptEvents.push(text),
     });
   });

@@ -18,6 +18,7 @@ export default new ContainerModule((bind) => {
     return new AudioFsm({
       sttEndpoint: '/openspace/voice/stt',
       language: sessionFsm.policy.language,
+      autoDetectLanguage: sessionFsm.policy.autoDetectLanguage,
       onTranscript: (text) => {
         // Get VoiceCommandContribution to process the transcript
         let processedText = text;
