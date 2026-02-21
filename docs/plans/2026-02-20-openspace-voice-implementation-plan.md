@@ -141,7 +141,7 @@ Expected: No errors, `packages/voice-core` linked in root `node_modules/@openspa
 
 export interface SttTranscriptionRequest {
   audio: Uint8Array;   // raw 16-bit PCM samples (little-endian)
-  sampleRate: number;  // e.g. 16000 — needed for WAV header construction
+  sampleRate?: number;  // e.g. 16000 — defaults to 16000 if omitted — needed for WAV header construction
   language: string;    // BCP-47 e.g. 'en-US'
 }
 
@@ -445,7 +445,8 @@ export class WhisperCppAdapter implements SttProvider {
   readonly kind = 'stt' as const;
   readonly id = 'whisper.cpp';
 
-  constructor(private readonly binaryPath: string = 'whisper') {}
+  constructor(private readonly binaryPath: string = 'whisper',
+    private readonly modelFolder: string = '/usr/local/share/whisper') {}
 
   async isAvailable(): Promise<boolean> {
     return new Promise((resolve) => {
