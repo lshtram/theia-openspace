@@ -1,6 +1,6 @@
 // src/commands/read-aloud.ts
 import * as vscode from 'vscode';
-import type { KokoroAdapter, SessionFsm, NarrationFsm } from '@openspace-ai/voice-core';
+import type { KokoroAdapter, SessionFsm, NarrationFsm, CancellationToken } from '@openspace-ai/voice-core';
 import { playPcmAudio } from '../audio/playback';
 
 interface ReadAloudDeps {
@@ -44,11 +44,23 @@ export function registerReadAloudCommand(
         { location: vscode.ProgressLocation.Notification, title: 'Synthesizing speech…', cancellable: true },
         async (_progress, vsToken) => {
           let cancelled = false;
+
+          // M-2: Adapt VS Code CancellationToken to voice-core CancellationToken
+          const coreToken: CancellationToken = {
+            isCancellationRequested: vsToken.isCancellationRequested,
+            onCancellationRequested(handler: () => void) {
+              vsToken.onCancellationRequested(() => {
+                cancelled = true;
+                handler();
+              });
+            },
+          };
+
           try {
             deps.narrationFsm.startProcessing();
-            const result = await deps.ttsAdapter.synthesize({ text, language, voice, speed });
-            if (vsToken.isCancellationRequested) {
-              cancelled = true;
+            // M-2: Forward cancellation token so synthesis can be interrupted
+            const result = await deps.ttsAdapter.synthesize({ text, language, voice, speed }, coreToken);
+            if (cancelled) {
               deps.narrationFsm.error();
               return;
             }
