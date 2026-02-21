@@ -1,4 +1,5 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
+import './style/ai-models-manager.css';
 import { PreferenceContribution } from '@theia/core/lib/common/preferences/preference-schema';
 import { PreferenceNodeRendererContribution } from '@theia/preferences/lib/browser/views/components/preference-node-renderer-creator';
 import { OpenspacePreferenceSchema } from './openspace-preferences';

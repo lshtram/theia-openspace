@@ -935,6 +935,41 @@
     line-height: 1.6;
 }
 
+.message-bubble .md-hr {
+    border: none;
+    border-top: 1px solid var(--oc-border, rgba(0,0,0,0.12));
+    margin: 12px 0;
+}
+
+.message-bubble .md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-bubble .md-table {
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 100%;
+}
+
+.message-bubble .md-table th,
+.message-bubble .md-table td {
+    border: 1px solid var(--oc-border, rgba(0,0,0,0.15));
+    padding: 5px 10px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.message-bubble .md-table th {
+    background: var(--oc-bg-raised, rgba(0,0,0,0.06));
+    font-weight: 600;
+    color: var(--oc-text-bright, inherit);
+}
+
+.message-bubble .md-table tr:nth-child(even) td {
+    background: var(--oc-bg-raised, rgba(0,0,0,0.03));
+}
+
 .message-bubble .md-inline-code {
     font-family: var(--theia-code-font-family, monospace);
     background: rgba(255,255,255,0.08);
@@ -1806,6 +1841,37 @@
 
 .openspace-chat-widget .turn-group-streaming {
     display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Trigger bar — spinner + status + timer shown during streaming */
+.openspace-chat-widget .turn-group-trigger-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+
+.openspace-chat-widget .turn-group-spinner {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--oc-text-dim, #858585);
+    border-top-color: var(--oc-accent, #007acc);
+    border-radius: 50%;
+    animation: oc-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.openspace-chat-widget .turn-group-status {
+    font-weight: 500;
+}
+
+/* Streaming body container — sidebar + body side by side */
+.openspace-chat-widget .turn-group-streaming-content {
+    display: flex;
     gap: 0;
 }
 
@@ -1879,4 +1945,28 @@
 .openspace-chat-widget .turn-group-sidebar-wrap .turn-group-body {
     flex: 1;
     min-width: 0;
+}
+
+/* ── Model Selector: Manage Models footer ──────────────────────────────── */
+
+.model-dropdown-footer {
+    border-top: 1px solid var(--theia-widget-border);
+    padding: 6px 8px;
+    display: flex;
+    justify-content: center;
+}
+
+.model-manage-btn {
+    background: none;
+    border: 1px solid var(--theia-button-secondaryBorder, var(--theia-widget-border));
+    color: var(--theia-button-secondaryForeground, var(--theia-foreground));
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.model-manage-btn:hover {
+    background: var(--theia-button-secondaryHoverBackground, var(--theia-list-hoverBackground));
 }

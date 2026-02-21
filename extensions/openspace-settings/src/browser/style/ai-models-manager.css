@@ -1,0 +1,107 @@
+/* ── AI Models Manager (Preferences panel) ─────────────────────────────── */
+
+.ai-models-preference-root {
+    list-style: none;
+    padding: 0;
+}
+
+.ai-models-manager {
+    padding: 8px 0;
+}
+
+.ai-models-loading,
+.ai-models-error {
+    padding: 12px 16px;
+    color: var(--theia-descriptionForeground);
+    font-style: italic;
+}
+
+.ai-models-error {
+    color: var(--theia-inputValidation-errorForeground, var(--theia-errorForeground));
+}
+
+/* Global All/None controls */
+.ai-models-global-controls {
+    display: flex;
+    gap: 6px;
+    padding: 4px 16px 12px;
+}
+
+.ai-models-bulk-btn {
+    background: none;
+    border: 1px solid var(--theia-widget-border);
+    color: var(--theia-foreground);
+    border-radius: 3px;
+    padding: 2px 10px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ai-models-bulk-btn:hover,
+.ai-models-bulk-btn.active {
+    background: var(--theia-list-hoverBackground);
+}
+
+/* Provider group */
+.ai-models-provider-group {
+    margin-bottom: 12px;
+}
+
+.ai-models-provider-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px;
+    background: var(--theia-sideBar-background, var(--theia-editor-background));
+    border-top: 1px solid var(--theia-widget-border);
+    border-bottom: 1px solid var(--theia-widget-border);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.ai-models-provider-name {
+    flex: 1;
+}
+
+.ai-models-provider-count {
+    font-size: 11px;
+    color: var(--theia-descriptionForeground);
+    margin-right: 4px;
+}
+
+/* Model row */
+.ai-models-row {
+    padding: 4px 16px;
+}
+
+.ai-models-row:hover {
+    background: var(--theia-list-hoverBackground);
+}
+
+.ai-models-row.disabled {
+    opacity: 0.5;
+}
+
+.ai-models-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.ai-models-checkbox {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.ai-models-model-name {
+    font-size: 13px;
+    flex: 1;
+}
+
+.ai-models-model-id {
+    font-size: 11px;
+    color: var(--theia-descriptionForeground);
+    font-family: var(--theia-code-font-family);
+}

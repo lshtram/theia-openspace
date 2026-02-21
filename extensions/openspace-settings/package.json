@@ -17,8 +17,9 @@
     "typescript": "~5.4.5"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && yarn copy:css",
     "clean": "rimraf lib tsconfig.tsbuildinfo",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "copy:css": "mkdir -p lib/browser/style && cp -r src/browser/style/*.css lib/browser/style/ || true"
   }
 }
