@@ -9,12 +9,14 @@ import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
 import { VoiceWaveformOverlay } from './voice-waveform-overlay';
+import { VoiceTextProcessor } from './voice-text-processor';
 import type { VoicePolicy } from '../common/voice-policy';
 import { NARRATION_MODES } from '../common/voice-policy';
 
 export const VOICE_COMMANDS = {
   TOGGLE_VOICE:    { id: 'openspace.voice.toggle',         label: 'Voice: Toggle Voice Input' },
   SET_POLICY:      { id: 'openspace.voice.set_policy',     label: 'Voice: Set Policy' },
+  SET_VOCABULARY:  { id: 'openspace.voice.set_vocabulary', label: 'Voice: Edit Vocabulary' },
   STOP_NARRATION:  { id: 'openspace.voice.stop_narration', label: 'Voice: Stop Narration' },
 };
 
@@ -28,6 +30,7 @@ export class VoiceCommandContribution
   @inject(AudioFsm)         private readonly audioFsm!: AudioFsm;
   @inject(NarrationFsm)     private readonly narrationFsm!: NarrationFsm;
   @inject(QuickPickService)  private readonly quickPickService!: QuickPickService;
+  private readonly textProcessor = new VoiceTextProcessor();
   @inject(StatusBar)         private readonly statusBar!: StatusBar;
 
   private recording = false;
@@ -100,6 +103,12 @@ export class VoiceCommandContribution
         }
         await this.showPolicyWizard();
         this.updateStatusBar();
+      },
+    });
+
+    registry.registerCommand(VOICE_COMMANDS.SET_VOCABULARY, {
+      execute: async () => {
+        await this.showVocabularyEditor();
       },
     });
 
@@ -237,5 +246,76 @@ export class VoiceCommandContribution
     } else if (!enabledChoice.value && this.sessionFsm.state !== 'inactive') {
       this.sessionFsm.disable();
     }
+  }
+
+  // ── Vocabulary Editor ─────────────────────────────────────────────────────
+
+  private async showVocabularyEditor(): Promise<void> {
+    this.textProcessor.loadVocabulary();
+    const vocab = this.textProcessor.getVocabulary();
+
+    const choices: QuickPickValue<string>[] = [
+      { label: '+ Add new word', value: '__add__' },
+      ...vocab.map((v, i) => ({
+        label: v.from,
+        description: '→ ' + v.to,
+        value: String(i),
+      })),
+    ];
+
+    const selected = await this.quickPickService.show(choices, {
+      title: 'Voice Vocabulary (select to edit/delete)',
+      placeholder: 'Type to filter...',
+    });
+
+    if (selected === undefined) return;
+
+    if (selected.value === '__add__') {
+      await this.promptAddVocabularyEntry();
+    } else {
+      const idx = parseInt(selected.value, 10);
+      const entry = vocab[idx];
+      const action = await this.quickPickService.show<QuickPickValue<string>>(
+        [
+          { label: 'Edit', value: 'edit', description: 'Change "' + entry.from + '" → "' + entry.to + '"' },
+          { label: 'Delete', value: 'delete', description: 'Remove "' + entry.from + '" completely' },
+        ],
+        { title: 'Edit "' + entry.from + '"' }
+      );
+      if (action === undefined) return;
+
+      if (action.value === 'edit') {
+        await this.promptAddVocabularyEntry(entry.from, entry.to);
+      } else if (action.value === 'delete') {
+        this.textProcessor.removeEntry(entry.from);
+        await this.showVocabularyEditor();
+      }
+    }
+  }
+
+  private async promptAddVocabularyEntry(existingFrom?: string, existingTo?: string): Promise<void> {
+    // For simplicity, we'll use a prompt via window.prompt
+    // In a full implementation, this would be a proper dialog
+    const from = existingFrom || window.prompt('Enter word/phrase to replace:');
+    if (!from) return;
+
+    const to = existingTo || window.prompt();
+    if (to === null || to === undefined) return;
+
+    if (!to.trim()) {
+      alert('Replacement cannot be empty');
+      return;
+    }
+
+    this.textProcessor.addEntry(from.trim(), to.trim());
+
+    const addMore = confirm('Word added! Add another?');
+    if (addMore) {
+      await this.promptAddVocabularyEntry();
+    }
+  }
+
+  processTranscript(text: string): string {
+    return this.textProcessor.process(text);
   }
 }

@@ -19,7 +19,17 @@ export default new ContainerModule((bind) => {
       sttEndpoint: '/openspace/voice/stt',
       language: sessionFsm.policy.language,
       onTranscript: (text) => {
-        // Inject transcript into the contentEditable chat input div
+        // Get VoiceCommandContribution to process the transcript
+        let processedText = text;
+        try {
+          const contrib = container.get(VoiceCommandContribution);
+          processedText = contrib.processTranscript(text);
+        } catch (e) {
+          // If contribution not ready, use raw text
+          console.warn('[VoiceInput] Using raw transcript (contribution not ready)');
+        }
+
+        // Inject processed transcript into the contentEditable chat input div
         const editor = document.querySelector<HTMLElement>('.prompt-input-editor');
         if (editor) {
           editor.focus();
@@ -34,7 +44,7 @@ export default new ContainerModule((bind) => {
           }
           // execCommand triggers React onChange for contentEditable divs —
           // same approach used by prompt-input.tsx handlePaste
-          document.execCommand('insertText', false, text);
+          document.execCommand('insertText', false, processedText);
         } else {
           console.warn('[VoiceInput] Could not find .prompt-input-editor to inject transcript');
         }
