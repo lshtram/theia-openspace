@@ -35,7 +35,7 @@ import 'katex/dist/katex.min.css';
 
 // Mermaid — for diagram rendering
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const mermaid = require('mermaid');
+const mermaid = require('mermaid').default;
 
 // Anser — for ANSI terminal color rendering
 // eslint-disable-next-line @typescript-eslint/no-var-requires
