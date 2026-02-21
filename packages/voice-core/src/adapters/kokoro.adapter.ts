@@ -22,7 +22,7 @@ export class KokoroAdapter implements TtsProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       require('kokoro-js');
       return true;
     } catch {
@@ -74,7 +74,8 @@ export class KokoroAdapter implements TtsProvider {
 
     this.modelLoading = true;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // kokoro-js is ESM-only, use require() in CommonJS context
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const kokoroModule = require('kokoro-js') as { KokoroTTS: KokoroTTSConstructor };
       this.model = await kokoroModule.KokoroTTS.from_pretrained(
         'onnx-community/Kokoro-82M-v1.0-ONNX',

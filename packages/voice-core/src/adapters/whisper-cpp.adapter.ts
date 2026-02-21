@@ -14,6 +14,7 @@ export class WhisperCppAdapter implements SttProvider {
 
   constructor(
     private readonly binaryPath: string = 'whisper',
+    private readonly modelFolder: string = '/usr/local/share/whisper',
     private readonly spawnFn: SpawnFn = spawn,
   ) {}
 
@@ -42,7 +43,7 @@ export class WhisperCppAdapter implements SttProvider {
       return await new Promise<SttTranscriptionResult>((resolve, reject) => {
         const proc = this.spawnFn(
           this.binaryPath,
-          ['--language', request.language, '--output-txt', tmpFile],
+          ['--language', request.language, '-m', path.join(this.modelFolder, 'ggml-base.en.bin'), '--output-txt', tmpFile],
           { stdio: ['ignore', 'pipe', 'pipe'] },
         );
 

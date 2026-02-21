@@ -20,8 +20,9 @@ let statusBar: vscode.StatusBarItem;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const config = vscode.workspace.getConfiguration('openspace-voice');
   const whisperPath = config.get<string>('whisperPath') ?? 'whisper';
+  const whisperModelFolder = config.get<string>('whisperModelFolder') ?? '/usr/local/share/whisper';
 
-  sttAdapter = new WhisperCppAdapter(whisperPath);
+  sttAdapter = new WhisperCppAdapter(whisperPath, whisperModelFolder);
   ttsAdapter = new KokoroAdapter();
   sessionFsm = new SessionFsm();
   audioFsm = new AudioFsm();
