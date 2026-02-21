@@ -17,4 +17,12 @@ describe('OpenspacePreferences', () => {
     it('should have correct default for decks', () => {
         expect(OpenspacePreferenceDefaults[OpenspacePreferences.DECKS_PATH]).to.equal('openspace/decks');
     });
+
+    it('should export MODELS_ENABLED key', () => {
+        expect(OpenspacePreferences.MODELS_ENABLED).to.equal('openspace.models.enabled');
+    });
+
+    it('should have correct default for models enabled (empty array)', () => {
+        expect(OpenspacePreferenceDefaults[OpenspacePreferences.MODELS_ENABLED]).to.deep.equal([]);
+    });
 });
