@@ -687,12 +687,26 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Forward session event to client.
      */
-    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError): void {
+    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionStatus): void {
         if (!this._client) {
             return;
         }
 
         try {
+            // Handle session.status separately — it has a different shape (no info, has status)
+            if (event.type === 'session.status') {
+                const statusEvent = event as SDKTypes.EventSessionStatus;
+                const notification: SessionNotification = {
+                    type: 'status_changed',
+                    sessionId: statusEvent.properties.sessionID,
+                    projectId: '',
+                    sessionStatus: statusEvent.properties.status
+                };
+                this._client.onSessionEvent(notification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded session.status: ${statusEvent.properties.status.type}`);
+                return;
+            }
+
             // Map SDK event type to notification type
             let type: SessionNotification['type'];
             switch (event.type) {

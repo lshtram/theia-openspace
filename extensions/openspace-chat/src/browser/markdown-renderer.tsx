@@ -158,6 +158,16 @@ export function renderMarkdown(text: string): React.ReactNode[] {
     return nodes;
 }
 
+/** Parse a GFM table row into cells (splits on | ignoring leading/trailing |). */
+function parseTableRow(line: string): string[] {
+    return line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+}
+
+/** Returns true if the line is a GFM table separator (e.g. |---|:---|---:|). */
+function isTableSeparator(line: string): boolean {
+    return /^\|?[\s\-:|]+(\|[\s\-:|]+)*\|?$/.test(line.trim()) && line.includes('-');
+}
+
 /** Render a block of non-code text line by line. */
 function renderLines(text: string, keyOffset: number): React.ReactNode[] {
     const nodes: React.ReactNode[] = [];
@@ -183,6 +193,42 @@ function renderLines(text: string, keyOffset: number): React.ReactNode[] {
             const Tag = `h${level}` as 'h1' | 'h2' | 'h3';
             nodes.push(<Tag className={`md-h${level}`} key={key++}>{applyInlineFormatting(hMatch[2])}</Tag>);
             i++; continue;
+        }
+        // Horizontal rule (--- or *** or ___)
+        if (/^(---+|\*\*\*+|___+)\s*$/.test(line.trim())) {
+            flushPara();
+            nodes.push(<hr className="md-hr" key={key++} />);
+            i++; continue;
+        }
+        // GFM table: line starts with | and next line is a separator
+        if (line.trimStart().startsWith('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+            flushPara();
+            const headerCells = parseTableRow(line);
+            i += 2; // skip header + separator
+            const bodyRows: string[][] = [];
+            while (i < lines.length && lines[i].trimStart().startsWith('|')) {
+                bodyRows.push(parseTableRow(lines[i]));
+                i++;
+            }
+            nodes.push(
+                <div className="md-table-wrap" key={key++}>
+                    <table className="md-table">
+                        <thead>
+                            <tr>{headerCells.map((cell, ci) => (
+                                <th key={ci}>{applyInlineFormatting(cell)}</th>
+                            ))}</tr>
+                        </thead>
+                        <tbody>
+                            {bodyRows.map((row, ri) => (
+                                <tr key={ri}>{row.map((cell, ci) => (
+                                    <td key={ci}>{applyInlineFormatting(cell)}</td>
+                                ))}</tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            );
+            continue;
         }
         if (/^[-*]\s/.test(line)) {
             flushPara();

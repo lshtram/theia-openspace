@@ -151,8 +151,10 @@ function getToolInfo(part: any): { icon: string; name: string; subtitle: string 
         subtitle = typeof input === 'object' && input !== null ? (input as any).filePath || (input as any).path || '' : '';
     } else if (/^(task|Task)$/.test(toolName)) {
         iconKey = 'task';
-        displayName = 'Task';
-        subtitle = typeof input === 'object' && input !== null ? (input as any).description || '' : '';
+        const agentType: string = typeof input === 'object' && input !== null ? ((input as any).subagent_type || '') : '';
+        const desc: string = typeof input === 'object' && input !== null ? ((input as any).description || '') : '';
+        displayName = agentType ? `@${agentType}` : 'Task';
+        subtitle = desc;
     } else if (/^(webfetch|WebFetch|web_fetch)$/i.test(toolName)) {
         iconKey = 'window';
         displayName = 'Web Fetch';
@@ -813,50 +815,102 @@ function renderFallbackPart(part: MessagePart, index: number): React.ReactNode {
 export interface TurnGroupProps {
     isStreaming: boolean;
     durationSecs: number;
+    /** Dynamic status text while streaming (e.g. "Thinking", "Searching the codebase") */
+    streamingStatus?: string;
     children: React.ReactNode;
 }
 
 /**
  * TurnGroup — wraps intermediate parts (tool calls, reasoning) in a collapsible
- * container. While streaming, always shown expanded with a sidebar accent line.
- * After completion, collapsed by default with a "Show steps · Xs" header.
+ * container. While streaming, always shown expanded with a sidebar accent line,
+ * a spinner, status text, and a live elapsed timer. After completion, collapsed
+ * by default with a "Show steps · Xs" header.
+ *
+ * Key design: we track whether we *were ever* streaming so that the component
+ * stays expanded throughout the entire agent turn, even if `isStreaming` flickers
+ * briefly between tool-call rounds. We only collapse when streaming definitively
+ * ends (isStreaming transitions from true → false).
  */
-export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, children }) => {
-    const [expanded, setExpanded] = React.useState(false);
+export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, streamingStatus, children }) => {
+    // `showExpanded` controls whether the body is visible.
+    // Starts true so content is visible while streaming, and stays true until
+    // streaming is definitively over (isStreaming goes false after being true).
+    const [showExpanded, setShowExpanded] = React.useState(isStreaming);
+    const wasStreamingRef = React.useRef(isStreaming);
 
-    // While streaming: always show expanded, no collapse UI
+    // Live elapsed timer during streaming
+    const streamStartRef = React.useRef<number>(Date.now());
+    const [elapsed, setElapsed] = React.useState(0);
+
+    React.useEffect(() => {
+        if (isStreaming) {
+            // Streaming started or is still active — ensure expanded
+            wasStreamingRef.current = true;
+            setShowExpanded(true);
+        } else if (wasStreamingRef.current) {
+            // Streaming just ended (was true, now false) — collapse
+            wasStreamingRef.current = false;
+            setShowExpanded(false);
+        }
+    }, [isStreaming]);
+
+    // Reset timer when streaming starts, tick every second
+    React.useEffect(() => {
+        if (!isStreaming) return;
+        streamStartRef.current = Date.now();
+        setElapsed(0);
+        const interval = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - streamStartRef.current) / 1000));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isStreaming]);
+
+    // While streaming: always show expanded with trigger bar
     if (isStreaming) {
         return (
             <div className="turn-group turn-group-streaming">
-                <div className="turn-group-sidebar" />
-                <div className="turn-group-body">{children}</div>
+                <div className="turn-group-trigger-bar">
+                    <svg className="turn-group-chevron-indicator" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        width="10" height="10" aria-hidden="true">
+                        <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                    <span className="turn-group-status">{streamingStatus || 'Thinking'}</span>
+                    {elapsed > 0 && (
+                        <span className="turn-group-duration">· {formatElapsed(elapsed)}</span>
+                    )}
+                </div>
+                <div className="turn-group-streaming-content">
+                    <div className="turn-group-sidebar" />
+                    <div className="turn-group-body">{children}</div>
+                </div>
             </div>
         );
     }
 
     // After completion: collapsed header with toggle
     return (
-        <div className={`turn-group ${expanded ? 'turn-group-open' : 'turn-group-closed'}`}>
+        <div className={`turn-group ${showExpanded ? 'turn-group-open' : 'turn-group-closed'}`}>
             <button
                 type="button"
                 className="turn-group-header"
-                onClick={() => setExpanded(v => !v)}
-                aria-expanded={expanded}
+                onClick={() => setShowExpanded(v => !v)}
+                aria-expanded={showExpanded}
             >
                 <svg
-                    className={`turn-group-chevron ${expanded ? 'expanded' : ''}`}
+                    className={`turn-group-chevron ${showExpanded ? 'expanded' : ''}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                     width="12" height="12" aria-hidden="true"
                 >
                     <path d="m9 18 6-6-6-6"/>
                 </svg>
-                <span className="turn-group-label">{expanded ? 'Hide steps' : 'Show steps'}</span>
+                <span className="turn-group-label">{showExpanded ? 'Hide steps' : 'Show steps'}</span>
                 {durationSecs > 0 && (
                     <span className="turn-group-duration">· {formatElapsed(durationSecs)}</span>
                 )}
             </button>
-            {expanded && (
+            {showExpanded && (
                 <div className="turn-group-sidebar-wrap">
                     <div className="turn-group-sidebar" />
                     <div className="turn-group-body">{children}</div>

@@ -228,6 +228,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     }
                     break;
 
+                case 'status_changed':
+                    if (event.sessionStatus) {
+                        this.sessionService.updateSessionStatus(event.sessionStatus);
+                    }
+                    break;
+
                 default:
                     this.logger.warn(`[SyncService] Unknown session event type: ${event.type}`);
             }

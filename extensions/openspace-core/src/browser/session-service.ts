@@ -64,6 +64,8 @@ export interface SessionService extends Disposable {
     readonly isStreaming: boolean;
     readonly streamingMessageId: string | undefined;
     readonly currentStreamingStatus: string;
+    /** Server-authoritative session status (busy/idle/retry). Spans the full agent turn. */
+    readonly sessionStatus: SDKTypes.SessionStatus;
 
     // Events
     readonly onActiveProjectChanged: Event<Project | undefined>;
@@ -75,6 +77,7 @@ export interface SessionService extends Disposable {
     readonly onErrorChanged: Event<string | undefined>;
     readonly onIsStreamingChanged: Event<boolean>;
     readonly onStreamingStatusChanged: Event<string>;
+    readonly onSessionStatusChanged: Event<SDKTypes.SessionStatus>;
 
     // Operations
     setActiveProject(projectId: string): Promise<void>;
@@ -96,6 +99,8 @@ export interface SessionService extends Disposable {
     replaceMessage(messageId: string, message: Message): void;
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
+    /** Update session status from server-authoritative SSE event. */
+    updateSessionStatus(status: SDKTypes.SessionStatus): void;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
 
     // Question state
@@ -149,6 +154,7 @@ export class SessionServiceImpl implements SessionService {
     private _statusChangeTimeout: ReturnType<typeof setTimeout> | undefined;
     private _streamingDoneTimer: ReturnType<typeof setTimeout> | undefined;
     private readonly STREAMING_DONE_DELAY_MS = 500;
+    private _sessionStatus: SDKTypes.SessionStatus = { type: 'idle' };
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -160,6 +166,7 @@ export class SessionServiceImpl implements SessionService {
     private readonly onErrorChangedEmitter = new Emitter<string | undefined>();
     private readonly onIsStreamingChangedEmitter = new Emitter<boolean>();
     private readonly onStreamingStatusChangedEmitter = new Emitter<string>();
+    private readonly onSessionStatusChangedEmitter = new Emitter<SDKTypes.SessionStatus>();
     private readonly onQuestionChangedEmitter = new Emitter<SDKTypes.QuestionRequest[]>();
     private readonly onPermissionChangedEmitter = new Emitter<PermissionNotification[]>();
 
@@ -173,6 +180,7 @@ export class SessionServiceImpl implements SessionService {
     readonly onErrorChanged = this.onErrorChangedEmitter.event;
     readonly onIsStreamingChanged = this.onIsStreamingChangedEmitter.event;
     readonly onStreamingStatusChanged = this.onStreamingStatusChangedEmitter.event;
+    readonly onSessionStatusChanged = this.onSessionStatusChangedEmitter.event;
     readonly onQuestionChanged = this.onQuestionChangedEmitter.event;
     readonly onPermissionChanged = this.onPermissionChangedEmitter.event;
 
@@ -212,6 +220,10 @@ export class SessionServiceImpl implements SessionService {
 
     get currentStreamingStatus(): string {
         return this._currentStreamingStatus;
+    }
+
+    get sessionStatus(): SDKTypes.SessionStatus {
+        return this._sessionStatus;
     }
 
     get pendingQuestions(): SDKTypes.QuestionRequest[] {
@@ -705,14 +717,19 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            this._streamingMessageId = undefined;
-            if (this._streamingDoneTimer) {
-                clearTimeout(this._streamingDoneTimer);
-                this._streamingDoneTimer = undefined;
+            // The RPC promise resolves when the HTTP response arrives, but SSE streaming
+            // continues for the actual assistant turn. Do NOT unconditionally kill streaming
+            // here — let SSE events (message.completed → updateStreamingMessage(id,'',true))
+            // handle the transition via the 500ms hysteresis timer.
+            //
+            // We only force-stop streaming if no SSE activity is ongoing (no pending done
+            // timer and no active streaming message). This handles the edge case where the
+            // RPC itself failed before any SSE events arrived.
+            if (!this._streamingDoneTimer && !this._streamingMessageId) {
+                this._isStreaming = false;
+                this.onIsStreamingChangedEmitter.fire(false);
+                this.resetStreamingStatus();
             }
-            this._isStreaming = false;
-            this.onIsStreamingChangedEmitter.fire(false);
-            this.resetStreamingStatus();
         }
     }
 
@@ -917,7 +934,7 @@ export class SessionServiceImpl implements SessionService {
         // Check if message already exists (prevent duplicates)
         const exists = this._messages.some(m => m.id === message.id);
         if (exists) {
-            this.logger.warn(`[SessionService] Message already exists: ${message.id}`);
+            this.logger.debug(`[SessionService] appendMessage: skipping duplicate: ${message.id}`);
             return;
         }
 
@@ -1116,6 +1133,17 @@ export class SessionServiceImpl implements SessionService {
         window.localStorage.removeItem('openspace.activeSessionId');
         this.onActiveSessionChangedEmitter.fire(undefined);
         this.onMessagesChangedEmitter.fire([]);
+    }
+
+    /**
+     * Update session status from server-authoritative SSE event.
+     * This is the definitive busy/idle signal that spans the entire agent turn,
+     * including gaps between tool rounds.
+     */
+    updateSessionStatus(status: SDKTypes.SessionStatus): void {
+        this.logger.debug(`[SessionService] Session status: ${status.type}`);
+        this._sessionStatus = status;
+        this.onSessionStatusChangedEmitter.fire(status);
     }
 
     /**

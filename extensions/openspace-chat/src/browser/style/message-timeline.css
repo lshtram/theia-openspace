@@ -238,6 +238,11 @@
    Message Grouping
    ============================================================================ */
 
+/* Response section below a TurnGroup */
+.openspace-chat-widget .turn-response {
+    margin-top: 4px;
+}
+
 /* Reduce gap between consecutive messages from same sender */
 .openspace-chat-widget .message-bubble-user + .message-bubble-user,
 .openspace-chat-widget .message-bubble-assistant + .message-bubble-assistant {

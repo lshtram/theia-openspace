@@ -30,8 +30,12 @@ export interface MessageTimelineProps {
     shellOutputs?: ShellOutput[];
     /** Whether a message is currently streaming */
     isStreaming: boolean;
+    /** Server-authoritative session busy state — stays true for the entire agent turn */
+    sessionBusy: boolean;
     /** ID of the message currently being streamed, if any */
     streamingMessageId?: string;
+    /** Dynamic streaming status text (e.g. "Thinking", "Searching the codebase") */
+    streamingStatus?: string;
     /** OpenCode service — needed for fetching child session data (task tools) */
     openCodeService?: OpenCodeService;
     /** Session service — needed for active project ID (task tools) */
@@ -43,24 +47,6 @@ export interface MessageTimelineProps {
     /** Callback to open a file in the editor when a file path subtitle is clicked */
     onOpenFile?: (filePath: string) => void;
 }
-
-/**
- * TextShimmer - Per-character shimmer animation (following opencode web client).
- * Each character gets a staggered animation delay for a sweeping shimmer effect.
- */
-const TextShimmer: React.FC<{ text: string }> = ({ text }) => (
-    <div className="text-shimmer" aria-live="polite" aria-label="Assistant is thinking">
-        {text.split('').map((char, i) => (
-            <span
-                key={i}
-                className="text-shimmer-char"
-                style={{ animationDelay: `${i * 45}ms` }}
-            >
-                {char}
-            </span>
-        ))}
-    </div>
-);
 
 /**
  * ShellOutputBlock - Renders the output of a locally-executed shell command.
@@ -108,6 +94,38 @@ const SCROLLED_UP_THRESHOLD = 50;
 const PROGRAMMATIC_SCROLL_WINDOW = 250;
 
 /**
+ * useLatchedBool — returns a value that latches `true` for `delayMs` after the
+ * input transitions from true → false. This prevents brief false drops (e.g.
+ * between SSE chunks) from causing visible UI flicker while a second flag
+ * (sessionBusy) is about to arrive from the server.
+ */
+function useLatchedBool(value: boolean, delayMs: number): boolean {
+    const [latched, setLatched] = React.useState(value);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => {
+        if (value) {
+            // Input is true — cancel any pending collapse and latch true immediately
+            if (timerRef.current !== null) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+            setLatched(true);
+        } else {
+            // Input went false — wait delayMs before propagating false
+            if (timerRef.current === null) {
+                timerRef.current = setTimeout(() => {
+                    timerRef.current = null;
+                    setLatched(false);
+                }, delayMs);
+            }
+        }
+    }, [value, delayMs]);
+
+    return latched;
+}
+
+/**
  * MessageTimeline - Container for message list with smart scroll behavior.
  *
  * Improvements over previous version:
@@ -120,7 +138,9 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     messages,
     shellOutputs = [],
     isStreaming,
+    sessionBusy,
     streamingMessageId,
+    streamingStatus,
     openCodeService,
     sessionService,
     pendingPermissions,
@@ -134,6 +154,12 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     const lastMessageCountRef = React.useRef(messages.length);
     const userScrolledUpRef = React.useRef(false);
     const lastProgrammaticScrollRef = React.useRef(0);
+
+    // Latch the "session is active" flag so transient false drops (between SSE
+    // chunks) don't cause the TurnGroup to briefly switch to its collapsed state
+    // before sessionBusy arrives from the server.
+    const sessionActive = isStreaming || sessionBusy;
+    const sessionActiveLatch = useLatchedBool(sessionActive, 600);
 
     /**
      * Scroll to bottom programmatically.
@@ -323,14 +349,20 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                 );
                             }
 
-                            // assistant-run
+                            // assistant-run — all assistant messages rendered as one turn
                             const { indices } = item;
-                            const finalIndex = indices[indices.length - 1];
-                            const finalMessage = messages[finalIndex];
-                            const isRunStreaming = isStreaming && indices.some(i => streamingMessageId === messages[i].id);
+                            // For the LAST assistant-run in the plan, use the server-authoritative
+                            // sessionBusy flag. This stays true for the entire agent turn (including
+                            // gaps between tool rounds) because the server holds the session in
+                            // "busy" state until the prompt loop exits. For non-last runs, use
+                            // per-message streaming state.
+                            const isLastRun = planIdx === renderPlan.length - 1;
+                            const isRunStreaming = isLastRun
+                                ? sessionActiveLatch
+                                : isStreaming && indices.some(i => streamingMessageId === messages[i].id);
 
-                            // Compute total duration for the TurnGroup header (sum of all intermediate messages' durations)
-                            const totalDurationSecs = indices.slice(0, -1).reduce((sum, idx) => {
+                            // Compute total duration for the TurnGroup header (sum of ALL messages' durations)
+                            const totalDurationSecs = indices.reduce((sum, idx) => {
                                 const m = messages[idx];
                                 const c = m.time?.created;
                                 const d = (m.time as any)?.completed;
@@ -340,39 +372,32 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                 return sum + Math.max(0, Math.floor((dMs - cMs) / 1000));
                             }, 0);
 
-                            return (
-                                <React.Fragment key={`run-${planIdx}`}>
-                                    {/* Intermediate steps: all messages before the last, wrapped in one TurnGroup */}
-                                    {indices.length > 1 && (
-                                        <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs}>
-                                            {indices.slice(0, -1).map(idx => {
-                                                const m = messages[idx];
-                                                const isMessageStreaming = isStreaming && streamingMessageId === m.id;
-                                                return (
-                                                    <MessageBubble
-                                                        key={m.id}
-                                                        message={m}
-                                                        isUser={false}
-                                                        isStreaming={isMessageStreaming}
-                                                        isFirstInGroup={false}
-                                                        isLastInGroup={false}
-                                                        isIntermediateStep={true}
-                                                        openCodeService={openCodeService}
-                                                        sessionService={sessionService}
-                                                        pendingPermissions={pendingPermissions}
-                                                        onReplyPermission={onReplyPermission}
-                                                        onOpenFile={onOpenFile}
-                                                    />
-                                                );
-                                            })}
-                                        </TurnGroup>
-                                    )}
-                                    {/* Final answer: last assistant message in the run, rendered normally */}
+                            // Extract the "response" — the last text part from the last message.
+                            // This text is shown below the TurnGroup as the final answer.
+                            const lastMessage = messages[indices[indices.length - 1]];
+                            const lastMessageParts = lastMessage?.parts || [];
+                            let responsePartIndex = -1;
+                            for (let pi = lastMessageParts.length - 1; pi >= 0; pi--) {
+                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as any).text) {
+                                    responsePartIndex = pi;
+                                    break;
+                                }
+                            }
+                            const hasResponse = responsePartIndex >= 0;
+
+                            // Determine if there are any "steps" (tool/reasoning parts) in the run.
+                            const hasSteps = indices.some(idx =>
+                                (messages[idx].parts || []).some(p => p.type === 'tool' || p.type === 'reasoning')
+                            );
+
+                            // Simple case: no steps (only text parts) — render last message as a normal bubble
+                            if (!hasSteps) {
+                                return (
                                     <MessageBubble
-                                        key={finalMessage.id}
-                                        message={finalMessage}
+                                        key={lastMessage.id}
+                                        message={lastMessage}
                                         isUser={false}
-                                        isStreaming={isStreaming && streamingMessageId === finalMessage.id}
+                                        isStreaming={isRunStreaming}
                                         isFirstInGroup={true}
                                         isLastInGroup={true}
                                         openCodeService={openCodeService}
@@ -381,6 +406,60 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                         onReplyPermission={onReplyPermission}
                                         onOpenFile={onOpenFile}
                                     />
+                                );
+                            }
+
+                            return (
+                                <React.Fragment key={`run-${planIdx}`}>
+                                    {/* All messages in one TurnGroup — for the last message, exclude the response text */}
+                                    <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs} streamingStatus={streamingStatus}>
+                                        {indices.map(idx => {
+                                            const m = messages[idx];
+                                            const isMessageStreaming = isStreaming && streamingMessageId === m.id;
+                                            const isLastMsg = idx === indices[indices.length - 1];
+                                            // For the last message, filter out the response text part so it's not duplicated
+                                            const filteredMessage = isLastMsg && hasResponse
+                                                ? { ...m, parts: (m.parts || []).filter((_, pi) => pi !== responsePartIndex) }
+                                                : m;
+                                            // Skip rendering if the filtered message has no parts left
+                                            if (filteredMessage.parts && filteredMessage.parts.length === 0) return null;
+                                            return (
+                                                <MessageBubble
+                                                    key={m.id}
+                                                    message={filteredMessage}
+                                                    isUser={false}
+                                                    isStreaming={isMessageStreaming}
+                                                    isFirstInGroup={false}
+                                                    isLastInGroup={false}
+                                                    isIntermediateStep={true}
+                                                    openCodeService={openCodeService}
+                                                    sessionService={sessionService}
+                                                    pendingPermissions={pendingPermissions}
+                                                    onReplyPermission={onReplyPermission}
+                                                    onOpenFile={onOpenFile}
+                                                />
+                                            );
+                                        })}
+                                    </TurnGroup>
+
+                                    {/* Response section — the final text answer, rendered below the TurnGroup */}
+                                    {hasResponse && (
+                                        <div className="turn-response">
+                                            <MessageBubble
+                                                key={`response-${lastMessage.id}`}
+                                                message={{ ...lastMessage, parts: [lastMessageParts[responsePartIndex]] }}
+                                                isUser={false}
+                                                isStreaming={isRunStreaming}
+                                                isFirstInGroup={true}
+                                                isLastInGroup={true}
+                                                openCodeService={openCodeService}
+                                                sessionService={sessionService}
+                                                pendingPermissions={pendingPermissions}
+                                                onReplyPermission={onReplyPermission}
+                                                onOpenFile={onOpenFile}
+                                            />
+                                        </div>
+                                    )}
                                 </React.Fragment>
                             );
                         })
@@ -389,9 +468,15 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                     {shellOutputs.map(entry => (
                         <ShellOutputBlock key={entry.id} output={entry} />
                     ))}
-                    {/* Character shimmer "Thinking" indicator — shown when streaming but no response parts yet */}
-                    {isStreaming && !streamingMessageId && (
-                        <TextShimmer text="Thinking" />
+                    {/* Standalone trigger bar — shown when session is active but no TurnGroup is visible yet.
+                         * Covers two cases:
+                         * 1. No messages at all yet (renderPlan empty)
+                         * 2. Last render item is a user message (assistant hasn't replied yet)
+                         * Once an assistant TurnGroup renders, it takes over. */}
+                    {sessionActiveLatch && (renderPlan.length === 0 || renderPlan[renderPlan.length - 1].kind === 'user') && (
+                        <TurnGroup isStreaming={true} durationSecs={0} streamingStatus={streamingStatus}>
+                            {null}
+                        </TurnGroup>
                     )}
                     {/* Sentinel element - scroll target */}
                     <div ref={bottomSentinelRef} className="message-timeline-bottom-sentinel" aria-hidden="true" />

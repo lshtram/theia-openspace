@@ -297,6 +297,8 @@ export interface SessionNotification {
     readonly sessionId: string;
     readonly projectId: string;
     readonly data?: Session;
+    /** Present when type === 'status_changed'. Server-authoritative session status. */
+    readonly sessionStatus?: import('../common/opencode-sdk-types').SessionStatus;
 }
 
 export type SessionEventType =
@@ -310,7 +312,8 @@ export type SessionEventType =
     | 'unshared'
     | 'compacted'
     | 'reverted'
-    | 'unreverted';
+    | 'unreverted'
+    | 'status_changed';
 
 /**
  * Message event notification.
