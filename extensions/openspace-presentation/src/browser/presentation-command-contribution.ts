@@ -261,6 +261,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationReadArgs) => {
+                    if (!args?.path) throw new Error('[presentation.read] Missing required argument: path');
                     this.logger.info('[PresentationCommand] Reading presentation:', args.path);
                     return this.presentationService.readPresentation(args.path);
                 }
@@ -275,6 +276,7 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationCreateArgs) => {
+                    if (!args?.path) throw new Error('[presentation.create] Missing required argument: path');
                     this.logger.info('[PresentationCommand] Creating presentation:', args.path);
                     return this.presentationService.createPresentation(
                         args.path,
@@ -294,6 +296,8 @@ export class PresentationCommandContribution implements CommandContribution, Key
             },
             {
                 execute: async (args: PresentationUpdateSlideArgs) => {
+                    if (!args?.path) throw new Error('[presentation.update_slide] Missing required argument: path');
+                    if (args?.slideIndex === undefined || args?.slideIndex === null) throw new Error('[presentation.update_slide] Missing required argument: slideIndex');
                     this.logger.info('[PresentationCommand] Updating slide:', String(args.slideIndex), 'in', args.path);
                     return this.presentationService.updateSlide(args.path, args.slideIndex, args.content);
                 }

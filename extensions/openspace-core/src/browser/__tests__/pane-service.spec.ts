@@ -337,7 +337,10 @@ describe('PaneService', () => {
     });
 
     describe('resizePane', () => {
-        it('should return success for valid resize request', async () => {
+        // Task 17: resizePane is not implemented (Theia has no direct resize API).
+        // It must return { success: false } rather than silently pretending to succeed.
+
+        it('should return success:false for valid resize request (not implemented)', async () => {
             // Arrange
             const mockWidget = createMockWidget('resize-pane', 'Resize Pane');
             (mockShell as any).getWidgetById = (id: string) => {
@@ -352,11 +355,11 @@ describe('PaneService', () => {
                 height: 50
             });
 
-            // Assert
-            expect(result.success).to.be.true;
+            // Assert: honest not-implemented response
+            expect(result.success).to.be.false;
         });
 
-        it('should handle resize without specifying dimensions', async () => {
+        it('should return success:false without specifying dimensions (not implemented)', async () => {
             // Arrange
             const mockWidget = createMockWidget('resize-pane-2', 'Resize Pane 2');
             (mockShell as any).getWidgetById = (id: string) => {
@@ -369,8 +372,8 @@ describe('PaneService', () => {
                 paneId: 'resize-pane-2'
             });
 
-            // Assert
-            expect(result.success).to.be.true;
+            // Assert: honest not-implemented response
+            expect(result.success).to.be.false;
         });
     });
 

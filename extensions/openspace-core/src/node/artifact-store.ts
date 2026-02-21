@@ -1,5 +1,7 @@
+import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import PQueue from 'p-queue';
 import chokidar from 'chokidar';
@@ -31,7 +33,10 @@ export class ArtifactStore extends EventEmitter {
     private queue: PQueue<any, any>;
     private projectRoot: string;
     private watcher: ReturnType<typeof chokidar.watch> | null = null;
+    /** Set of rel-paths currently being written by us — used for chokidar suppression. */
     private internalWriteInProgress = new Set<string>();
+    /** Maps rel-path → hash of content we last wrote, for chokidar hash-based suppression. */
+    private lastWrittenHash = new Map<string, string>();
 
     constructor(projectRoot: string) {
         super();
@@ -55,8 +60,20 @@ export class ArtifactStore extends EventEmitter {
 
         this.watcher.on('change', (absolutePath: string) => {
             const rel = path.relative(this.projectRoot, absolutePath).replace(/\\/g, '/');
-            if (this.internalWriteInProgress.has(rel)) {
-                return; // self-write — suppress
+            // Task 13: Hash-based suppression instead of setTimeout race.
+            // If the file still matches the hash of what we wrote, it's our own write.
+            if (this.lastWrittenHash.has(rel)) {
+                try {
+                    const current = fs.readFileSync(absolutePath);
+                    const currentHash = crypto.createHash('sha256').update(current).digest('hex');
+                    if (currentHash === this.lastWrittenHash.get(rel)) {
+                        return; // self-write — suppress
+                    }
+                    // Hash differs: external modification, clear our hash and emit
+                    this.lastWrittenHash.delete(rel);
+                } catch {
+                    // If we can't read the file, treat as external change
+                }
             }
             this.emit('FILE_CHANGED', { path: rel, actor: 'user' });
         });
@@ -117,9 +134,17 @@ export class ArtifactStore extends EventEmitter {
 
                 await this.logEvent(filePath, abs, opts, exists ? 'UPDATE' : 'CREATE');
 
+                // Task 13: Store hash of written content for chokidar suppression
+                const writtenHash = crypto
+                    .createHash('sha256')
+                    .update(typeof content === 'string' ? content : content)
+                    .digest('hex');
+                this.lastWrittenHash.set(normalizedFilePath, writtenHash);
+
                 this.emit('FILE_CHANGED', { path: filePath, actor: opts.actor });
             } finally {
-                setTimeout(() => this.internalWriteInProgress.delete(normalizedFilePath), 500);
+                // Task 13: Remove from in-progress immediately (hash comparison handles race)
+                this.internalWriteInProgress.delete(normalizedFilePath);
             }
         });
     }

@@ -10,7 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { createRequire } from 'node:module';
 
-// @ts-ignore TS1343
+// @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
 const { renderMarkdown } = _require('openspace-chat/lib/browser/markdown-renderer') as {
     renderMarkdown: (text: string) => React.ReactNode[]

@@ -112,22 +112,22 @@ function renderTextPart(part: any, index: number): React.ReactNode {
     );
 }
 
-/** Map tool name → display info (icon SVG path, display name, subtitle extractor). */
-function getToolInfo(part: any): { icon: string; name: string; subtitle: string } {
+/** Icon React nodes for tool display (avoids dangerouslySetInnerHTML). */
+const ToolIcons: Record<string, React.ReactNode> = {
+    console: <><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></>,
+    glasses: <><circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-4 0"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.4-2-3-2"/></>,
+    search: <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
+    code: <><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>,
+    task: <><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></>,
+    window: <><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></>,
+    mcp: <><circle cx="12" cy="12" r="3"/><path d="M12 3v6"/><path d="M12 15v6"/><path d="m3 12 6 0"/><path d="m15 12 6 0"/></>,
+};
+
+/** Map tool name → display info (icon React node, display name, subtitle extractor). */
+function getToolInfo(part: any): { icon: React.ReactNode; name: string; subtitle: string } {
     const toolName: string = part.tool || 'tool';
     const state = part.state;
     const input = typeof state === 'object' && state !== null && 'input' in state ? state.input : undefined;
-
-    // Icon SVG paths (24x24 viewBox, stroke-based)
-    const icons: Record<string, string> = {
-        console: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
-        glasses: '<circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-4 0"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.4-2-3-2"/>',
-        search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-        code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
-        task: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
-        window: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
-        mcp: '<circle cx="12" cy="12" r="3"/><path d="M12 3v6"/><path d="M12 15v6"/><path d="m3 12 6 0"/><path d="m15 12 6 0"/>',
-    };
 
     let iconKey = 'mcp';
     let displayName = toolName;
@@ -165,8 +165,8 @@ function getToolInfo(part: any): { icon: string; name: string; subtitle: string 
         displayName = 'Todo';
     }
 
-    const iconSvg = icons[iconKey] || icons.mcp;
-    return { icon: iconSvg, name: displayName, subtitle };
+    const icon = ToolIcons[iconKey] || ToolIcons.mcp;
+    return { icon, name: displayName, subtitle };
 }
 
 /** Compute a simple line-based diff between old and new text. */
@@ -261,9 +261,9 @@ const ToolBlock: React.FC<{
                             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                         </svg>
                     ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"
-                            dangerouslySetInnerHTML={{ __html: iconSvg }}
-                        />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            {iconSvg}
+                        </svg>
                     )}
                 </span>
 
@@ -499,9 +499,9 @@ const TaskToolBlock: React.FC<{
                             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                         </svg>
                     ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"
-                            dangerouslySetInnerHTML={{ __html: iconSvg }}
-                        />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            {iconSvg}
+                        </svg>
                     )}
                 </span>
                 <span className={isRunning ? 'part-tool-name oc-shimmer' : 'part-tool-name'}>
@@ -548,9 +548,9 @@ const TaskToolBlock: React.FC<{
                                         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                                     </svg>
                                 ) : (
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12"
-                                        dangerouslySetInnerHTML={{ __html: info.icon }}
-                                    />
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
+                                        {info.icon}
+                                    </svg>
                                 )}
                             </span>
                             <span className={childIsRunning ? 'part-task-tool-item-title oc-shimmer' : 'part-task-tool-item-title'}>
@@ -597,8 +597,8 @@ const TodoToolBlock: React.FC<{ part: any }> = ({ part }) => {
     const completedCount = todos.filter(t => t.status === 'completed').length;
     const subtitle = todos.length > 0 ? `${completedCount}/${todos.length}` : '';
 
-    // Checklist icon SVG
-    const checklistIcon = '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>';
+    // Checklist icon (React node)
+    const checklistIcon = <><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></>;
 
     return (
         <div className="part-tool part-todo-tool" data-expanded="true" data-state={stateStr}>
@@ -609,9 +609,9 @@ const TodoToolBlock: React.FC<{ part: any }> = ({ part }) => {
                             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                         </svg>
                     ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"
-                            dangerouslySetInnerHTML={{ __html: checklistIcon }}
-                        />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                            {checklistIcon}
+                        </svg>
                     )}
                 </span>
                 <span className={isRunning ? 'part-tool-name oc-shimmer' : 'part-tool-name'}>

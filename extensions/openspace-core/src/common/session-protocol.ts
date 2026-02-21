@@ -117,7 +117,7 @@ export interface PermissionData {
 /**
  * Agent command interface for Hub command execution.
  */
-export interface AgentCommand {
+export interface SessionAgentCommand {
     readonly id: string;
     readonly name: string;
     readonly description?: string;

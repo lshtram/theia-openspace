@@ -7,6 +7,7 @@ import * as React from '@theia/core/shared/react';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
+import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { URI } from '@theia/core/lib/common/uri';
@@ -21,6 +22,7 @@ import MarkdownIt from 'markdown-it';
 import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
 import { attachTabDblClickToggle } from 'openspace-core/lib/browser/tab-dblclick-toggle';
+import { ILogger } from '@theia/core/lib/common/logger';
 
 export type ViewerMode = 'preview' | 'edit';
 
@@ -45,8 +47,6 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 
 // Initialize mermaid once at module load — it is a global singleton.
 mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
-
-console.log('[MarkdownViewerWidget] BUILD v8 — tab icon swap + dblclick toggle');
 
 @injectable()
 export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget, NavigatableWidget, ExtractableWidget {
@@ -83,6 +83,9 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     @inject(FileService)
     protected readonly fileService!: FileService;
 
+    @inject(ILogger)
+    protected readonly logger!: ILogger;
+
     @inject(MonacoEditorServices)
     protected readonly monacoEditorServices!: MonacoEditorServices;
 
@@ -112,7 +115,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     protected onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
         this.node.focus();
-        console.log('[MarkdownViewerWidget] onActivateRequest: uri=', this.uri, 'hasContent=', !!this.content);
+        this.logger.debug('[MarkdownViewerWidget] onActivateRequest: uri=', this.uri, 'hasContent=', !!this.content);
         if (this.uri && !this.content) {
             this.reloadFromUri().catch(err =>
                 console.error('[MarkdownViewerWidget] Failed to reload on activate:', err)
@@ -122,14 +125,14 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
 
     /** StatefulWidget: called on unload to persist state across refreshes. */
     storeState(): object {
-        console.log('[MarkdownViewerWidget] storeState: uri=', this.uri);
+        this.logger.debug('[MarkdownViewerWidget] storeState: uri=', this.uri);
         return { uri: this.uri };
     }
 
     /** StatefulWidget: called during layout restore to rehydrate the widget. */
     restoreState(oldState: object): void {
         const state = oldState as { uri?: string };
-        console.log('[MarkdownViewerWidget] restoreState: uri=', state.uri);
+        this.logger.debug('[MarkdownViewerWidget] restoreState: uri=', state.uri);
         if (state.uri) {
             this.uri = state.uri;
             const uriObj = new URI(this.uri);
@@ -145,10 +148,10 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     /** Reload file content from disk (used after layout restore). */
     protected async reloadFromUri(): Promise<void> {
         try {
-            console.log('[MarkdownViewerWidget] reloadFromUri: loading', this.uri);
+            this.logger.debug('[MarkdownViewerWidget] reloadFromUri: loading', this.uri);
             const uri = new URI(this.uri);
             const result = await this.fileService.read(uri);
-            console.log('[MarkdownViewerWidget] reloadFromUri: loaded', result.value.length, 'chars');
+            this.logger.debug('[MarkdownViewerWidget] reloadFromUri: loaded', result.value.length, 'chars');
             this.setContent(result.value);
         } catch (err) {
             console.error('[MarkdownViewerWidget] reloadFromUri failed:', err);
@@ -167,7 +170,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
 
     /** Called by the toolbar toggle contribution. */
     toggleMode(): void {
-        console.log('[MarkdownViewerWidget] toggleMode called, current mode:', this.mode, 'uri:', this.uri);
+        this.logger.debug('[MarkdownViewerWidget] toggleMode called, current mode:', this.mode, 'uri:', this.uri);
         if (this.mode === 'preview') {
             this.mode = 'edit';
         } else {
@@ -181,7 +184,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
         this.title.iconClass = this.mode === 'edit'
             ? MarkdownViewerWidget.ICON_EDIT
             : MarkdownViewerWidget.ICON_PREVIEW;
-        console.log('[MarkdownViewerWidget] toggleMode → new mode:', this.mode);
+        this.logger.debug('[MarkdownViewerWidget] toggleMode → new mode:', this.mode);
         this.update();
     }
 
@@ -221,6 +224,14 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
         super.onBeforeDetach(msg);
     }
 
+    /** Task 32: Relay Lumino resize events to Monaco so it fills the widget correctly on panel resize. */
+    protected onResize(msg: Widget.ResizeMessage): void {
+        super.onResize(msg);
+        if (this.monacoEditor) {
+            this.monacoEditor.getControl().layout();
+        }
+    }
+
     protected render(): React.ReactNode {
         if (this.mode === 'preview') {
             return this.renderPreview();
@@ -244,7 +255,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
             <div
                 className="markdown-viewer-editor-container"
                 ref={(el) => {
-                    console.log('[MarkdownViewerWidget] renderEditor ref fired: el=', !!el, 'hasEditor=', !!this.monacoEditor, 'mounting=', this.mountingEditor, 'uri=', this.uri);
+                    this.logger.debug('[MarkdownViewerWidget] renderEditor ref fired: el=', !!el, 'hasEditor=', !!this.monacoEditor, 'mounting=', this.mountingEditor, 'uri=', this.uri);
                     if (el && !this.monacoEditor && !this.mountingEditor) {
                         this.mountMonacoEditor(el).catch(err =>
                             console.error('[MarkdownViewerWidget] Monaco mount failed:', err)
@@ -256,7 +267,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     }
 
     protected async mountMonacoEditor(container: HTMLDivElement): Promise<void> {
-        console.log('[MarkdownViewerWidget] mountMonacoEditor: uri=', this.uri, 'containerSize=', container.offsetWidth, 'x', container.offsetHeight, 'mounting=', this.mountingEditor);
+        this.logger.debug('[MarkdownViewerWidget] mountMonacoEditor: uri=', this.uri, 'containerSize=', container.offsetWidth, 'x', container.offsetHeight, 'mounting=', this.mountingEditor);
         if (!this.uri || this.mountingEditor) { return; }
         this.mountingEditor = true;
         try {
@@ -286,7 +297,7 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
                 }
             );
 
-            console.log('[MarkdownViewerWidget] MonacoEditor created successfully');
+            this.logger.debug('[MarkdownViewerWidget] MonacoEditor created successfully');
             // Layout to fill container after mount
             this.monacoEditor.getControl().layout();
 
@@ -335,12 +346,13 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     /** Run mermaid.run() after DOM settles. */
     protected runMermaid(): void {
         setTimeout(() => {
-            const els = document.querySelectorAll('.markdown-viewer-preview .mermaid');
-            console.log('[MarkdownViewerWidget] runMermaid: found', els.length, 'mermaid elements');
-            if (els.length > 0) {
-                console.log('[MarkdownViewerWidget] first mermaid element textContent:', els[0].textContent?.substring(0, 100));
+            // Task 31: Scope to this.node to avoid interfering with other markdown viewer instances.
+            const els = Array.from(this.node.querySelectorAll('.markdown-viewer-preview .mermaid'));
+            if (els.length === 0) {
+                return;
             }
-            mermaid.run({ querySelector: '.markdown-viewer-preview .mermaid' }).catch(err => {
+            // Pass explicit nodes array so mermaid only processes elements in this widget.
+            mermaid.run({ nodes: els as HTMLElement[] }).catch(err => {
                 console.warn('[MarkdownViewerWidget] Mermaid render error:', err);
             });
         }, 0);

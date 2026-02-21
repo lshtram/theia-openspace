@@ -12,11 +12,20 @@ import { PresentationToolbarContribution } from './presentation-toolbar-contribu
 
 export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Register the Presentation Widget
+  // Task 27: Do NOT bind as singleton — the factory must create a new instance per URI
+  // so multiple .deck.md files can be open simultaneously.
   bind(PresentationWidget).toSelf();
   bind(WidgetFactory)
     .toDynamicValue((context) => ({
       id: PresentationWidget.ID,
-      createWidget: () => context.container.get<PresentationWidget>(PresentationWidget),
+      // createWidget receives the options object from getOrCreateWidget (includes { uri })
+      // Theia's WidgetManager caches by (factoryId + JSON.stringify(options)), so each
+      // distinct URI gets its own widget instance.
+      createWidget: () => {
+        const child = context.container.createChild();
+        child.bind(PresentationWidget).toSelf();
+        return child.get(PresentationWidget);
+      },
     }))
     .whenTargetNamed(PresentationWidget.ID);
 

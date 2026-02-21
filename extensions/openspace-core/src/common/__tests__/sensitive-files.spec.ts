@@ -152,9 +152,10 @@ describe('sensitive-files', () => {
                 expect(isSensitiveFile('database.yml')).to.be.true;
             });
 
-            it('should detect files with "secret" in name', () => {
-                expect(isSensitiveFile('app_secret.yml')).to.be.true;
-                expect(isSensitiveFile('api_secret.key')).to.be.true;
+            it('should detect secrets directory and files', () => {
+                expect(isSensitiveFile('secrets.yml')).to.be.true;     // already covered above
+                expect(isSensitiveFile('.secrets')).to.be.true;        // hidden secrets dir
+                expect(isSensitiveFile('config/secrets.json')).to.be.true;
             });
         });
 
@@ -186,6 +187,12 @@ describe('sensitive-files', () => {
             it('should allow regular text files', () => {
                 expect(isSensitiveFile('notes.txt')).to.be.false;
                 expect(isSensitiveFile('data.json')).to.be.false;
+            });
+
+            it('should NOT flag files with "secret" as substring (Task 15)', () => {
+                expect(isSensitiveFile('src/secret-santa.ts')).to.be.false;
+                expect(isSensitiveFile('app_secret.yml')).to.be.false;
+                expect(isSensitiveFile('secretariat.ts')).to.be.false;
             });
         });
     });

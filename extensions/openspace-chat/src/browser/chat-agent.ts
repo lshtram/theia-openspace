@@ -31,24 +31,30 @@ export class OpenspaceChatAgent implements ChatAgent {
     const parts: MessagePartInput[] = [{ type: 'text', text: userMessage }];
     
     // T2-12: Track subscription for proper cleanup
-    let subscription: Disposable | undefined;
-    
+    // Task 8: Subscribe BEFORE sending to avoid race where early streaming events are missed.
+    // If sendMessage starts streaming immediately, events arrive before the subscription
+    // exists without this ordering.
+    const subscription = this.sessionService.onMessageStreaming((update: StreamingUpdate) => {
+      request.response.response.addContent(new TextChatResponseContentImpl(update.delta));
+      if (update.isDone) {
+        request.response.complete();
+        subscription?.dispose();
+        clearTimeout(timeout);
+      }
+    });
+
+    // Safety timeout: if isDone is never received, clean up after 5 minutes
+    const timeout = setTimeout(() => {
+      subscription?.dispose();
+      request.response.complete();
+    }, 5 * 60 * 1000);
+
     try {
       await this.sessionService.sendMessage(parts);
-      
-      // Subscribe to streaming updates
-      subscription = this.sessionService.onMessageStreaming((update: StreamingUpdate) => {
-        request.response.response.addContent(new TextChatResponseContentImpl(update.delta));
-        if (update.isDone) {
-          request.response.complete();
-          // T2-12: Clean up subscription when streaming completes
-          subscription?.dispose();
-        }
-      });
     } catch (error) {
-      // T2-12: Clean up subscription on error
-      console.error('[OpenspaceChatAgent] Error invoking agent:', error);
       subscription?.dispose();
+      clearTimeout(timeout);
+      console.error('[OpenspaceChatAgent] Error invoking agent:', error);
       request.response.complete();
       throw error;
     }

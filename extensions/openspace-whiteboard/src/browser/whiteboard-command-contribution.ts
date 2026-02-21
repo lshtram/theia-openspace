@@ -309,6 +309,13 @@ export class WhiteboardCommandContribution implements CommandContribution {
     @inject(ILogger)
     protected readonly logger!: ILogger;
 
+    // Task 28: Monotonic counter for unique shape IDs. Date.now() alone risks collisions
+    // when two shapes are created in the same millisecond.
+    private shapeCounter = 0;
+    private nextShapeId(): string {
+        return `shape:${Date.now()}-${this.shapeCounter++}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+
     /**
      * Register all whiteboard commands.
      */
@@ -335,6 +342,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardReadArgs) => {
+                    if (!args?.path) throw new Error('[whiteboard.read] Missing required argument: path');
                     this.logger.info('[WhiteboardCommand] Reading whiteboard:', args.path);
                     return this.whiteboardService.readWhiteboard(args.path);
                 }
@@ -349,6 +357,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardCreateArgs) => {
+                    if (!args?.path) throw new Error('[whiteboard.create] Missing required argument: path');
                     this.logger.info('[WhiteboardCommand] Creating whiteboard:', args.path);
                     return this.whiteboardService.createWhiteboard(args.path, args.title);
                 }
@@ -363,6 +372,8 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardAddShapeArgs) => {
+                    if (!args?.path) throw new Error('[whiteboard.add_shape] Missing required argument: path');
+                    if (!args?.type) throw new Error('[whiteboard.add_shape] Missing required argument: type');
                     this.logger.info('[WhiteboardCommand] Adding shape to whiteboard:', args.path);
                     return this.addShapeViaEditor(args);
                 }
@@ -377,6 +388,8 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardUpdateShapeArgs) => {
+                    if (!args?.path) throw new Error('[whiteboard.update_shape] Missing required argument: path');
+                    if (!args?.shapeId) throw new Error('[whiteboard.update_shape] Missing required argument: shapeId');
                     this.logger.info('[WhiteboardCommand] Updating shape:', args.shapeId, 'in whiteboard:', args.path);
                     return this.updateShapeViaEditor(args);
                 }
@@ -391,6 +404,8 @@ export class WhiteboardCommandContribution implements CommandContribution {
             },
             {
                 execute: async (args: WhiteboardDeleteShapeArgs) => {
+                    if (!args?.path) throw new Error('[whiteboard.delete_shape] Missing required argument: path');
+                    if (!args?.shapeId) throw new Error('[whiteboard.delete_shape] Missing required argument: shapeId');
                     this.logger.info('[WhiteboardCommand] Deleting shape:', args.shapeId, 'from whiteboard:', args.path);
                     return this.deleteShapeViaEditor(args);
                 }
@@ -607,7 +622,10 @@ export class WhiteboardCommandContribution implements CommandContribution {
         // Calculate zoom to fit
         const boundsWidth = maxX - minX + padding * 2;
         const boundsHeight = maxY - minY + padding * 2;
-        const zoom = Math.min(1, Math.min(800 / boundsWidth, 600 / boundsHeight));
+        // Use the widget's actual dimensions if available, else reasonable defaults
+        const viewportWidth = 800;
+        const viewportHeight = 600;
+        const zoom = Math.min(1, Math.min(viewportWidth / boundsWidth, viewportHeight / boundsHeight));
 
         this.whiteboardService.setCameraState({
             x: centerX,
@@ -734,7 +752,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
         // tldraw shape types: 'geo' (rectangle/ellipse/diamond/…), 'text', 'note', 'arrow', 'draw', 'frame'
         // For geo shapes the sub-type (rectangle/ellipse/diamond) goes in props.geo.
         // Arrow shapes do NOT accept w/h — they use start/end point props instead.
-        const shapeId = `shape:${Date.now()}`;
+        const shapeId = this.nextShapeId();
         const isArrow = args.type === 'arrow';
         const isText = args.type === 'text';
         let baseProps: Record<string, unknown>;
@@ -795,7 +813,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
         }
 
         const shapePartials = args.shapes.map((s, i) => {
-            const id = `shape:${Date.now()}-${i}`;
+            const id = this.nextShapeId();
             const isArrow = s.type === 'arrow';
             const isText = s.type === 'text';
             let baseProps: Record<string, unknown>;
@@ -829,7 +847,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
         }
 
         const shapePartials = args.shapes.map((s, i) => {
-            const id = `shape:${Date.now()}-${i}`;
+            const id = this.nextShapeId();
             const isArrow = s.type === 'arrow';
             const isText = s.type === 'text';
             let baseProps: Record<string, unknown>;

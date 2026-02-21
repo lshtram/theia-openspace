@@ -469,6 +469,9 @@ export class OpenCodeProxy implements OpenCodeService {
         // Disconnect existing connection if any
         this.disconnectSSE();
 
+        // Task 14: Clear user message ID set on session/project change to prevent unbounded growth
+        this.userMessageIds.clear();
+
         this.currentDirectory = directory;
 
         this.logger.info(`[OpenCodeProxy] Connecting SSE for directory ${directory}`);

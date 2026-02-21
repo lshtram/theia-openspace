@@ -29,7 +29,7 @@ export class MarkdownViewerToolbarContribution
             // The tab-bar toolbar calls executeCommand(commandId, widget), so we
             // receive the exact widget the toolbar button was rendered for.
             execute: (widget: Widget) => {
-                console.log('[MarkdownViewerToolbar] execute called, widget:', widget?.id, 'isMarkdown:', widget instanceof MarkdownViewerWidget);
+                if (process.env.NODE_ENV !== 'production') { console.log('[MarkdownViewerToolbar] execute called, widget:', widget?.id, 'isMarkdown:', widget instanceof MarkdownViewerWidget); }
                 if (widget instanceof MarkdownViewerWidget && !widget.isDisposed) {
                     widget.toggleMode();
                 } else {

@@ -375,6 +375,9 @@ const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streami
  */
 export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService, commandService, preferenceService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
+    // Task 23: Ref to always access latest messages in stable callbacks without stale closure.
+    const messagesRef = React.useRef<Message[]>(messages);
+    messagesRef.current = messages;
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
     const [isStreaming, setIsStreaming] = React.useState(false);
@@ -684,7 +687,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         })() : undefined;
 
         if (process.env.NODE_ENV !== 'production') {
-            console.log('[ChatWidget] Sending message with model:', model || 'default');
+            if (process.env.NODE_ENV !== 'production') { console.log('[ChatWidget] Sending message with model:', model || 'default'); }
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await sessionService.sendMessage(parts as any as MessagePartInput[], model);
@@ -748,7 +751,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             stderr: '',
             exitCode: -1,
             timestamp: Date.now(),
-            afterMessageIndex: messages.length - 1,
+            afterMessageIndex: messagesRef.current.length - 1,
         };
         setShellOutputs(prev => [...prev, placeholderEntry]);
 
@@ -766,7 +769,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     : entry
             ));
         }
-    }, [openCodeService, workspaceRoot, messages.length]);
+    // Task 23: Use messagesRef.current to read latest messages without stale closure.
+    // Removing messages.length from deps — the ref always has the current value.
+    }, [openCodeService, workspaceRoot]);
 
     const drainQueue = React.useCallback(async () => {
         if (isSendingRef.current) return;

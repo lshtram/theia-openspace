@@ -353,7 +353,7 @@ export interface PresentationOpenArgs {
 }
 
 export interface PresentationNavigateArgs {
-    direction?: 'prev' | 'next';
+    direction?: 'prev' | 'next' | 'first' | 'last';
     slideIndex?: number;
 }
 

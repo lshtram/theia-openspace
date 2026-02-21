@@ -21,8 +21,9 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
 import * as path from 'path';
-import { isSensitiveFile } from '../common/sensitive-files';
 import { OpenCodeService } from '../common/opencode-protocol';
+import { isSensitiveFile } from '../common/sensitive-files';
+import { validatePath as sharedValidatePath } from './path-validator';
 
 /**
  * File information returned by list command.
@@ -191,85 +192,20 @@ export class FileCommandContribution implements CommandContribution {
 
     /**
      * Validate a file path against workspace root.
-     * Implements GAP-1 (path traversal) and symlink protection per §17.1.
-     * 
-     * T1-3: Added symlink detection warning.
-     * 
+     * Task 21: Delegates to shared path-validator utility (standardised on fsPath()).
+     *
      * @param filePath The file path to validate (relative or absolute)
      * @returns The validated absolute path if allowed, null if denied
      */
     async validatePath(filePath: string): Promise<string | null> {
-        try {
-            // Step 1: Get workspace root
-            const workspaceRoot = this.workspaceService.tryGetRoots()[0];
-            if (!workspaceRoot) {
-                this.logger.warn('[FileCommand] No workspace root found');
-                return null;
-            }
-            const rootUri = workspaceRoot.resource;
-            const rootPath = rootUri.path.fsPath();
-
-            // Step 2: Resolve the path (handle relative paths)
-            let resolvedPath: string;
-            if (path.isAbsolute(filePath)) {
-                resolvedPath = filePath;
-            } else {
-                resolvedPath = path.join(rootPath, filePath);
-            }
-
-            // Step 3: Check for path traversal (..)
-            let normalizedPath = path.normalize(resolvedPath);
-            if (normalizedPath.includes('..')) {
-                this.logger.warn(`[FileCommand] Path traversal attempt rejected: ${filePath}`);
-                return null;
-            }
-
-            // Step 4: T1-3 - Check for symlink traversal outside workspace
-            // In browser context, we cannot use fs.realpath() - detect symlink patterns
-            const pathComponents = normalizedPath.split(path.sep);
-            for (const component of pathComponents) {
-                if (component === '..') {
-                    this.logger.warn(`[FileCommand] Path traversal via symlink rejected: ${filePath}`);
-                    return null;
-                }
-            }
-
-            // Check if resolved path starts with workspace root
-            const normalizedRoot = path.normalize(rootPath);
-            if (!normalizedPath.startsWith(normalizedRoot) && 
-                !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
-                this.logger.warn(`[FileCommand] Path outside workspace rejected: ${filePath}`);
-                return null;
-            }
-
-            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
-            if (this.openCodeService) {
-                const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
-                if (!result.valid) {
-                    this.logger.warn(`[FileCommand] Path rejected by symlink check: ${result.error}`);
-                    return null;
-                }
-                // Update to the canonically resolved path before further checks
-                normalizedPath = result.resolvedPath || normalizedPath;
-            }
-
-            // Step 5: Check against sensitive file patterns (§17.4) - using shared module
-            const relativePath = normalizedPath.replace(rootPath, '').replace(/^[\\/]/, '');
-            const fileName = path.basename(normalizedPath);
-            
-            // Use shared sensitive file check from common module
-            if (isSensitiveFile(relativePath) || isSensitiveFile(fileName)) {
-                this.logger.warn(`[FileCommand] Sensitive file access denied: ${filePath}`);
-                return null;
-            }
-
-            return normalizedPath;
-        } catch (error) {
-            this.logger.error('[FileCommand] Path validation error:', error);
-            return null;
-        }
+        return sharedValidatePath(
+            filePath,
+            this.workspaceService,
+            this.logger,
+            this.openCodeService,
+            { logTag: '[FileCommand]' }
+        );
     }
-
     /**
      * Validate a path for write operations.
      * Implements SC-3.5.2: Critical file protection.
@@ -506,8 +442,11 @@ export class FileCommandContribution implements CommandContribution {
             // Collect results
             const results: string[] = [];
             
-            // Perform basic recursive search
-            await this.searchInDirectory(rootUri, args.query, args.includePattern || '**/*', excludePatterns, results);
+            // Perform basic recursive search (Task 9: depth/result limits enforced inside)
+            const { truncated } = await this.searchInDirectory(rootUri, args.query, args.includePattern || '**/*', excludePatterns, results);
+            if (truncated) {
+                this.logger.warn('[FileCommand] Search results truncated (hit depth or result limit)');
+            }
             
             return { success: true, results };
         } catch (error) {
@@ -516,27 +455,54 @@ export class FileCommandContribution implements CommandContribution {
         }
     }
 
+    // Task 9: Large workspace protection constants
+    private static readonly SKIP_DIRS = new Set([
+        'node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage', '.cache', '.yarn'
+    ]);
+    private static readonly MAX_SEARCH_DEPTH = 10;
+    private static readonly MAX_SEARCH_RESULTS = 1000;
+
     /**
      * Recursively search for files containing the query string.
+     * Enforces depth limit, result cap, and skips known large directories.
      */
     private async searchInDirectory(
         dirUri: URI, 
         query: string, 
         includePattern: string, 
         excludePatterns: string[],
-        results: string[]
-    ): Promise<void> {
+        results: string[],
+        depth = 0
+    ): Promise<{ truncated: boolean }> {
+        if (depth > FileCommandContribution.MAX_SEARCH_DEPTH) {
+            return { truncated: true };
+        }
+        if (results.length >= FileCommandContribution.MAX_SEARCH_RESULTS) {
+            return { truncated: true };
+        }
+
         try {
             const stat = await this.fileService.resolve(dirUri);
             if (!stat.isDirectory) {
-                return;
+                return { truncated: false };
             }
 
             const children = stat.children || [];
+            let truncated = false;
             
             for (const child of children) {
+                if (results.length >= FileCommandContribution.MAX_SEARCH_RESULTS) {
+                    truncated = true;
+                    break;
+                }
+
                 const childPath = child.resource.path.toString();
                 
+                // Skip well-known large directories
+                if (child.isDirectory && FileCommandContribution.SKIP_DIRS.has(child.name)) {
+                    continue;
+                }
+
                 // Check if path matches exclude patterns
                 const shouldExclude = excludePatterns.some(pattern => {
                     const normalizedPattern = pattern.replace('**/', '').replace('**', '');
@@ -549,7 +515,10 @@ export class FileCommandContribution implements CommandContribution {
 
                 if (child.isDirectory) {
                     // Recurse into subdirectory
-                    await this.searchInDirectory(child.resource, query, includePattern, excludePatterns, results);
+                    const sub = await this.searchInDirectory(child.resource, query, includePattern, excludePatterns, results, depth + 1);
+                    if (sub.truncated) {
+                        truncated = true;
+                    }
                 } else if (child.isFile) {
                     // Check if file matches include pattern (basic extension check)
                     const fileName = child.name;
@@ -566,8 +535,10 @@ export class FileCommandContribution implements CommandContribution {
                     }
                 }
             }
+            return { truncated };
         } catch (error) {
             // Silently handle permission errors
+            return { truncated: false };
         }
     }
 }

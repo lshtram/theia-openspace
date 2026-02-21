@@ -9,11 +9,16 @@ import { WhiteboardCommandContribution } from './whiteboard-command-contribution
 
 export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Register the Whiteboard Widget
+  // Task 27: Do NOT bind as singleton — factory creates a new instance per URI.
   bind(WhiteboardWidget).toSelf();
   bind(WidgetFactory)
     .toDynamicValue((context) => ({
       id: WhiteboardWidget.ID,
-      createWidget: () => context.container.get<WhiteboardWidget>(WhiteboardWidget),
+      createWidget: () => {
+        const child = context.container.createChild();
+        child.bind(WhiteboardWidget).toSelf();
+        return child.get(WhiteboardWidget);
+      },
     }))
     .whenTargetNamed(WhiteboardWidget.ID);
 

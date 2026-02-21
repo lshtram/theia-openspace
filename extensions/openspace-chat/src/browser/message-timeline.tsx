@@ -304,7 +304,6 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
             }
         }
         return plan;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messages]);
 
     return (

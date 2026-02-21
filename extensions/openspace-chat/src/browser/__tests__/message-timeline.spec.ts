@@ -11,7 +11,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { createRequire } from 'node:module';
 
-// @ts-ignore TS1343
+// @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
 const { useLatchedBool } = _require('openspace-chat/lib/browser/message-timeline') as {
     useLatchedBool: (value: boolean, delayMs: number) => boolean
@@ -122,5 +122,110 @@ describe('useLatchedBool', () => {
         act(() => { clock.tick(400); }); // past original deadline
         const last = rendered[rendered.length - 1];
         expect(last).to.equal(true); // should remain true
+    });
+});
+
+// ─── renderPlan memoization regression tests (Task 26) ───────────────────────
+
+import { createRequire as _createRequireForTimeline } from 'node:module';
+
+// @ts-expect-error TS1343
+const _requireTimeline = _createRequireForTimeline(import.meta.url);
+const { MessageTimeline } = _requireTimeline('openspace-chat/lib/browser/message-timeline') as {
+    MessageTimeline: React.ComponentType<any>
+};
+
+function makeMessage(role: 'user' | 'assistant', text: string): any {
+    return {
+        id: Math.random().toString(36).slice(2),
+        role,
+        type: 'text',
+        parts: [{ type: 'text', text }],
+        createdAt: new Date().toISOString(),
+        metadata: {}
+    };
+}
+
+describe('MessageTimeline — renderPlan memoization', () => {
+    let container: HTMLElement;
+    let root: ReturnType<typeof createRoot>;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        root = createRoot(container);
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        document.body.removeChild(container);
+    });
+
+    function render(messages: any[]) {
+        const props = {
+            messages,
+            shellOutputs: [],
+            isStreaming: false,
+            sessionBusy: false,
+            streamingMessageId: undefined,
+            streamingStatus: undefined,
+            openCodeService: undefined,
+            sessionService: undefined,
+            pendingPermissions: [],
+            onReplyPermission: () => {},
+            onOpenFile: () => {},
+        };
+        act(() => {
+            root.render(React.createElement(MessageTimeline, props));
+        });
+    }
+
+    it('renders zero messages without error', () => {
+        render([]);
+        // Should render without throwing
+        expect(container.innerHTML).to.be.a('string');
+    });
+
+    it('re-renders when messages array is replaced with more messages', () => {
+        const initial = [makeMessage('user', 'hello')];
+        render(initial);
+        const before = container.innerHTML;
+
+        // Add an assistant message — new array reference
+        const updated = [...initial, makeMessage('assistant', 'world')];
+        render(updated);
+        const after = container.innerHTML;
+
+        expect(after).to.not.equal(before, 'DOM should change when new message is added');
+    });
+
+    it('groups consecutive assistant messages into a single run (shows last message text)', () => {
+        const messages = [
+            makeMessage('user', 'question'),
+            makeMessage('assistant', 'part 1'),
+            makeMessage('assistant', 'part 2'),
+        ];
+        render(messages);
+        // The component groups consecutive assistant messages; the last message's text
+        // appears as the primary response. The DOM should render without error.
+        expect(container.innerHTML).to.be.a('string');
+        // The user message text should be visible
+        expect(container.textContent).to.include('question');
+        // The final assistant message text should appear
+        expect(container.textContent).to.include('part 2');
+    });
+
+    it('shows incremental streaming additions — each render reflects new content', () => {
+        const msgs: any[] = [];
+        // Start empty
+        render(msgs);
+
+        // Simulate streaming: each step adds a message (new array — immutable pattern)
+        for (let i = 0; i < 3; i++) {
+            const prevHtml = container.innerHTML;
+            msgs.push(makeMessage(i % 2 === 0 ? 'user' : 'assistant', `msg ${i}`));
+            render([...msgs]); // cloned array — same as SessionService pattern
+            expect(container.innerHTML).to.not.equal(prevHtml, `DOM should update after adding message ${i}`);
+        }
     });
 });

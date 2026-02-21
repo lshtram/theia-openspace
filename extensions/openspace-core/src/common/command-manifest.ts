@@ -141,10 +141,13 @@ export interface TabInfo {
 /**
  * Agent command interface for Hub command relay.
  */
-export interface AgentCommand {
+export interface ManifestAgentCommand {
     cmd: string;
     args: unknown;
     sessionId?: string;
     /** Correlation ID used by MCP hub to match command results to pending Promises */
     requestId?: string;
 }
+
+/** @deprecated Use ManifestAgentCommand */
+export type AgentCommand = ManifestAgentCommand;

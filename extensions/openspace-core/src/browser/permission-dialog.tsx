@@ -213,7 +213,13 @@ export const PermissionDialog: React.FC<PermissionDialogProps> = ({ manager }) =
                 ref={dialogRef}
                 tabIndex={-1}
                 onFocus={() => setHasFocus(true)}
-                onBlur={() => setHasFocus(false)}
+                onBlur={(e) => {
+                    // Task 20: Only set hasFocus(false) when focus leaves the dialog entirely.
+                    // Using relatedTarget to distinguish intra-dialog tab navigation from real blur.
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setHasFocus(false);
+                    }
+                }}
             >
                 <div className="openspace-permission-header">
                     <h2 id="permission-dialog-title">Permission Required</h2>

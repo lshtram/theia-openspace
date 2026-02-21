@@ -30,6 +30,8 @@ import Reveal from 'reveal.js';
 import RevealMarkdown from 'reveal.js/plugin/markdown/markdown.esm.js';
 import 'reveal.js/dist/reveal.css';
 import 'reveal.js/dist/theme/black.css';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const DOMPurify = require('@theia/core/shared/dompurify');
 
 export interface DeckOptions {
     title?: string;
@@ -197,7 +199,15 @@ More content</pre>
                 </section>`;
         } else {
             slidesEl.innerHTML = deck.slides.map(slide => {
-                const escapedContent = (slide.content ?? '').replace(/<\/script>/g, '<\\/script>');
+                // Task 4: Sanitize slide content to prevent XSS via crafted .deck.md files
+                const rawContent = slide.content ?? '';
+                const sanitized = DOMPurify.sanitize(rawContent, {
+                    ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
+                        'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
+                        'tr','th','td','span','div','sup','sub'],
+                    ALLOWED_ATTR: ['href','src','alt','class','id','style']
+                });
+                const escapedContent = sanitized.replace(/<\/script>/g, '<\\/script>');
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
                 return `<section data-markdown=""${notesAttr}><script type="text/template">${escapedContent}</script></section>`;
             }).join('');
