@@ -17,13 +17,12 @@ export class KokoroAdapter implements TtsProvider {
 
   // Instance variable — not module-level singleton — so dispose() can release it
   private model: KokoroTTSInstance | null = null;
-  private modelLoading = false;
+  private modelLoadPromise: Promise<KokoroTTSInstance> | null = null;
   private modelLoadError: Error | null = null;
 
   async isAvailable(): Promise<boolean> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('kokoro-js');
+      await import('kokoro-js');
       return true;
     } catch {
       return false;
@@ -49,6 +48,8 @@ export class KokoroAdapter implements TtsProvider {
       }
       audioBytes = new Uint8Array(int16.buffer);
     } else if (audioData instanceof Uint8Array) {
+      // M-8: unexpected format — log warning; we cannot safely convert without knowing source format
+      console.warn('[KokoroAdapter] unexpected Uint8Array audio output — check kokoro-js version');
       audioBytes = audioData;
     } else {
       audioBytes = new Uint8Array(0);
@@ -60,33 +61,28 @@ export class KokoroAdapter implements TtsProvider {
   async dispose(): Promise<void> {
     this.model = null;
     this.modelLoadError = null;
+    this.modelLoadPromise = null;
   }
 
-  private async getModel(): Promise<KokoroTTSInstance> {
-    if (this.model) return this.model;
-    if (this.modelLoadError) throw this.modelLoadError;
-    if (this.modelLoading) {
-      // Poll until loading completes
-      while (this.modelLoading) await new Promise(r => setTimeout(r, 100));
-      if (this.modelLoadError) throw this.modelLoadError;
-      return this.model!;
+  // L-1: Share the loading Promise so concurrent callers reuse it instead of spin-polling
+  private getModel(): Promise<KokoroTTSInstance> {
+    if (this.model) return Promise.resolve(this.model);
+    if (this.modelLoadError) return Promise.reject(this.modelLoadError);
+    if (!this.modelLoadPromise) {
+      this.modelLoadPromise = (async () => {
+        // C-1: kokoro-js is ESM-only — must use dynamic import(), not require()
+        const { KokoroTTS } = await import('kokoro-js') as { KokoroTTS: KokoroTTSConstructor };
+        this.model = await KokoroTTS.from_pretrained(
+          'onnx-community/Kokoro-82M-v1.0-ONNX',
+          { dtype: 'q8', device: 'cpu' }
+        );
+        return this.model!;
+      })().catch((err: Error) => {
+        this.modelLoadError = err;
+        this.modelLoadPromise = null;
+        throw err;
+      });
     }
-
-    this.modelLoading = true;
-    try {
-      // kokoro-js is ESM-only, use require() in CommonJS context
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const kokoroModule = require('kokoro-js') as { KokoroTTS: KokoroTTSConstructor };
-      this.model = await kokoroModule.KokoroTTS.from_pretrained(
-        'onnx-community/Kokoro-82M-v1.0-ONNX',
-        { dtype: 'q8', device: 'cpu' }
-      );
-      return this.model!;
-    } catch (err) {
-      this.modelLoadError = err as Error;
-      throw err;
-    } finally {
-      this.modelLoading = false;
-    }
+    return this.modelLoadPromise;
   }
 }
