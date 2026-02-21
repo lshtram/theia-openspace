@@ -225,8 +225,15 @@ const AnsiBlock: React.FC<{ code: string }> = ({ code }) => {
             setTimeout(() => setCopied(false), 1500);
         });
     };
+    // Restore ESC byte if absent: LLMs/message sources often strip \x1b,
+    // leaving bare [32m-style sequences. Also handles literal \\x1b strings.
+    const normalized = code
+        .replace(/\\x1b/g, '\x1b')
+        .replace(/\\033/g, '\x1b')
+        .replace(/\\e(?=\[)/gi, '\x1b')
+        .replace(/(?<!\x1b)(\[[\d;]*m)/g, '\x1b$1');
     // anser converts ANSI codes to <span class="ansi-red"> etc.
-    const html = Anser.ansiToHtml(Anser.escapeForHtml(code), { use_classes: true });
+    const html = Anser.ansiToHtml(Anser.escapeForHtml(normalized), { use_classes: true });
     return (
         <div className="md-code-block">
             <div className="md-code-header">
