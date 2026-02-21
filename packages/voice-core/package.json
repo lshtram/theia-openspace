@@ -4,10 +4,15 @@
   "description": "Platform-agnostic STT/TTS core for OpenSpace voice extensions",
   "license": "MIT",
   "repository": "https://github.com/openspace-ai/theia-openspace",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "files": ["lib/**"],
+  "files": [
+    "lib/**",
+    "src/**"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf lib tsconfig.tsbuildinfo",
