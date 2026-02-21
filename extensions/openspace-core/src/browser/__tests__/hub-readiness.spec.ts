@@ -1,0 +1,66 @@
+import { expect } from 'chai';
+import * as sinon from 'sinon';
+import { waitForHub } from '../hub-readiness';
+
+describe('waitForHub()', () => {
+    let originalFetch: unknown;
+
+    beforeEach(() => {
+        originalFetch = (globalThis as Record<string, unknown>)['fetch'];
+    });
+
+    afterEach(() => {
+        (globalThis as Record<string, unknown>)['fetch'] = originalFetch;
+        sinon.restore();
+    });
+
+    it('resolves immediately when Hub responds 200 on first attempt', async () => {
+        const fetchStub = sinon.stub().resolves({ ok: true, status: 200 });
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 10 });
+
+        expect(fetchStub.callCount).to.equal(1);
+        expect(fetchStub.firstCall.args[0]).to.equal('http://localhost:3000/mcp');
+        expect(fetchStub.firstCall.args[1]).to.deep.include({ method: 'GET' });
+    });
+
+    it('retries and resolves once Hub becomes available', async () => {
+        const fetchStub = sinon.stub();
+        fetchStub.onCall(0).rejects(new TypeError('network error'));
+        fetchStub.onCall(1).resolves({ ok: false, status: 503 });
+        fetchStub.onCall(2).resolves({ ok: true, status: 200 });
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        await waitForHub('http://localhost:3000/mcp', { maxAttempts: 5, intervalMs: 10 });
+
+        expect(fetchStub.callCount).to.equal(3);
+    });
+
+    it('throws HubNotReadyError after exhausting all attempts', async () => {
+        const fetchStub = sinon.stub().rejects(new TypeError('network error'));
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        let thrown: Error | undefined;
+        try {
+            await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 10 });
+        } catch (e) {
+            thrown = e as Error;
+        }
+
+        expect(thrown).to.be.instanceOf(Error);
+        expect(thrown!.message).to.include('Hub not ready');
+        expect(fetchStub.callCount).to.equal(3);
+    });
+
+    it('treats a non-ok HTTP status as unavailable and retries', async () => {
+        const fetchStub = sinon.stub();
+        fetchStub.onCall(0).resolves({ ok: false, status: 404 });
+        fetchStub.onCall(1).resolves({ ok: true, status: 200 });
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 10 });
+
+        expect(fetchStub.callCount).to.equal(2);
+    });
+});
