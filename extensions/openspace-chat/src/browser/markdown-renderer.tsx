@@ -4,20 +4,44 @@
  * Uses markdown-it (already a project dependency via @theia/core/shared/markdown-it)
  * with highlight.js for syntax highlighting, and DOMPurify for sanitization.
  *
- * This replaces a hand-rolled line-by-line parser with an established, well-tested
- * library that correctly handles: tables, links, blockquotes, nested lists, images,
- * strikethrough, inline HTML, and all other CommonMark + GFM constructs.
+ * Extended features:
+ * - Mermaid diagrams (```mermaid blocks → MermaidBlock React component)
+ * - ANSI terminal color blocks (```ansi blocks → AnsiBlock React component)
+ * - Improved diff highlighting (CSS-driven, see chat-widget.css)
+ * - Emoji shortcodes (:smile: → emoji via markdown-it-emoji)
+ * - Inline math ($...$, $$...$$) via markdown-it-texmath + KaTeX
  */
 
 import * as React from '@theia/core/shared/react';
+
 // Re-exported from @theia/core — no additional dependency needed
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const MarkdownIt = require('@theia/core/shared/markdown-it');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const DOMPurify = require('@theia/core/shared/dompurify');
 
-// highlight.js — transitive dep via @theia/preview; declared implicitly.
-// We load it exactly as markdown-renderer did before: lazy language registration.
+// markdown-it-emoji — already in node_modules (hoisted from @theia/core)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const markdownItEmoji = require('markdown-it-emoji');
+
+// markdown-it-texmath + KaTeX for math rendering
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const texmath = require('markdown-it-texmath');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const katex = require('katex');
+
+// KaTeX CSS — needed for math rendering
+import 'katex/dist/katex.min.css';
+
+// Mermaid — for diagram rendering
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const mermaid = require('mermaid');
+
+// Anser — for ANSI terminal color rendering
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Anser = require('anser');
+
+// highlight.js — transitive dep via @theia/preview
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const hljs: HLJSApi = require('highlight.js/lib/core');
 
@@ -73,35 +97,161 @@ function highlightCode(code: string, lang: string): string {
     return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ─── Mermaid initialization ───────────────────────────────────────────────────
+
+function getMermaidTheme(): string {
+    return document.body.classList.contains('theia-light') ? 'neutral' : 'dark';
+}
+
+let _mermaidInitialized = false;
+function ensureMermaidInitialized(): void {
+    if (_mermaidInitialized) { return; }
+    _mermaidInitialized = true;
+    mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme() });
+}
+
 // ─── markdown-it instance ────────────────────────────────────────────────────
-// Configured once at module load. html:false keeps us safe; linkify:true turns
-// bare URLs into links; typographer:true gives smart quotes and dashes.
+
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
-// Override the fenced code block renderer so we can inject our CodeBlock React
-// component. We use a placeholder sentinel that renderMarkdown() later replaces
-// with actual React nodes — this lets us keep the copy-button UX.
-//
-// Approach: render fences as a special <oc-code-block> HTML element with the
-// language and base64-encoded content as attributes, then in renderMarkdown()
-// we post-process the HTML to extract these and render proper React nodes.
-//
-// Simpler alternative (used here): don't use React for code blocks at all —
-// render them as plain HTML with an inline data attribute, then attach a click
-// handler via event delegation in the container div.
-//
-// Actually: we keep the CodeBlock React component by splitting the rendering.
-// renderMarkdown() extracts fenced code segments first (pre-parse), renders
-// them as <CodeBlock> React nodes, and lets markdown-it handle everything else.
-// Replace fence rendering with a sentinel so non-code HTML is rendered by
-// markdown-it normally, and code blocks get our React <CodeBlock> component.
-// See renderMarkdown() for the full split-and-merge logic.
+// Plugin: emoji shortcodes (:smile: → 😄)
+md.use(markdownItEmoji.full);
+
+// Plugin: math via KaTeX ($...$ and $$...$$)
+// texmath renders math to HTML directly — we emit it as an oc-math sentinel
+// so we can pass it through DOMPurify with KaTeX's required tags.
+md.use(texmath, { engine: katex, delimiters: 'dollars' });
+
+// Override the fenced code block renderer to emit typed sentinel elements.
+// Supported sentinel types:
+//   - <oc-mermaid data-code="...base64..."></oc-mermaid>  → MermaidBlock
+//   - <oc-ansi data-code="...base64..."></oc-ansi>        → AnsiBlock
+//   - <oc-code lang="..." data-code="...base64..."></oc-code>  → CodeBlock
 md.renderer.rules.fence = (tokens: any[], idx: number) => {
     const token = tokens[idx];
     const lang = token.info.trim().split(/\s+/)[0] || '';
-    // Encode content as base64 to survive HTML attribute quoting
     const encoded = btoa(unescape(encodeURIComponent(token.content)));
+
+    if (lang === 'mermaid') {
+        return `<oc-mermaid data-code="${encoded}"></oc-mermaid>`;
+    }
+    if (lang === 'ansi') {
+        return `<oc-ansi data-code="${encoded}"></oc-ansi>`;
+    }
     return `<oc-code lang="${lang}" data-code="${encoded}"></oc-code>`;
+};
+
+// ─── MermaidBlock React component ────────────────────────────────────────────
+
+/**
+ * Renders a Mermaid diagram from source text.
+ * Detects Theia's active color theme and re-renders when it changes.
+ */
+const MermaidBlock: React.FC<{ code: string }> = ({ code }) => {
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [error, setError] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        ensureMermaidInitialized();
+
+        let cancelled = false;
+        const container = containerRef.current;
+        if (!container) { return; }
+
+        const renderDiagram = async () => {
+            if (cancelled || !containerRef.current) { return; }
+            try {
+                // Re-initialize with current theme before each render
+                mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme() });
+                // Generate unique ID required by mermaid API
+                const id = `mermaid-${Math.random().toString(36).slice(2)}`;
+                const { svg } = await mermaid.render(id, code);
+                if (!cancelled && containerRef.current) {
+                    containerRef.current.innerHTML = svg;
+                    setError(null);
+                }
+            } catch (e: unknown) {
+                if (!cancelled) {
+                    setError(e instanceof Error ? e.message : String(e));
+                }
+            }
+        };
+
+        renderDiagram();
+
+        // Watch for Theia theme changes (adds/removes theia-light class on body)
+        const observer = new MutationObserver(() => {
+            renderDiagram();
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+        return () => {
+            cancelled = true;
+            observer.disconnect();
+        };
+    }, [code]);
+
+    if (error) {
+        return (
+            <div className="md-code-block">
+                <div className="md-code-header">
+                    <span className="md-code-lang">mermaid</span>
+                </div>
+                <pre className="md-code-body md-mermaid-error">
+                    <code>{error}</code>
+                </pre>
+            </div>
+        );
+    }
+
+    return (
+        <div className="md-mermaid-container">
+            <div ref={containerRef} className="md-mermaid-diagram" />
+        </div>
+    );
+};
+
+// ─── AnsiBlock React component ────────────────────────────────────────────────
+
+/**
+ * Renders an ANSI terminal color block.
+ * Converts ANSI escape sequences to HTML using `anser` with CSS class output.
+ */
+const AnsiBlock: React.FC<{ code: string }> = ({ code }) => {
+    const [copied, setCopied] = React.useState(false);
+    const copy = () => {
+        navigator.clipboard.writeText(code).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        });
+    };
+    // anser converts ANSI codes to <span class="ansi-red"> etc.
+    const html = Anser.ansiToHtml(Anser.escapeForHtml(code), { use_classes: true });
+    return (
+        <div className="md-code-block">
+            <div className="md-code-header">
+                <span className="md-code-lang">terminal</span>
+                <button type="button" className="md-code-copy oc-icon-btn" onClick={copy} title="Copy">
+                    {copied ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                    ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                        </svg>
+                    )}
+                    {copied ? 'Copied' : 'Copy'}
+                </button>
+            </div>
+            <pre className="md-code-body md-ansi-body">
+                <code className="ansi-output" dangerouslySetInnerHTML={{ __html: html }} />
+            </pre>
+        </div>
+    );
 };
 
 // ─── CodeBlock React component ───────────────────────────────────────────────
@@ -143,42 +293,69 @@ const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => 
     );
 };
 
+// ─── KaTeX DOMPurify allowed tags ────────────────────────────────────────────
+// KaTeX renders math to HTML with many custom elements that DOMPurify would strip.
+// We allow the minimal set needed for KaTeX output.
+const KATEX_TAGS = [
+    'math', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'msubsup', 'mfrac',
+    'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover',
+    'munder', 'munderover', 'annotation', 'semantics', 'svg', 'path', 'defs',
+    'use', 'g', 'rect', 'line', 'circle', 'polygon', 'marker', 'span',
+];
+const KATEX_ATTRS = [
+    'xmlns', 'class', 'style', 'display', 'mathvariant', 'columnalign',
+    'rowspan', 'colspan', 'd', 'fill', 'stroke', 'stroke-width',
+    'viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+    'r', 'cx', 'cy', 'points', 'id', 'href', 'transform',
+    'aria-hidden', 'focusable', 'preserveAspectRatio', 'overflow',
+];
+
 // ─── renderMarkdown ───────────────────────────────────────────────────────────
 
 /**
  * Render a markdown string to an array of React nodes.
  *
  * Strategy:
- * 1. Run markdown-it to produce HTML (with fenced code blocks replaced by
- *    <oc-code> sentinel elements).
- * 2. Sanitize with DOMPurify (ADD_TAGS for our sentinel).
- * 3. Split the HTML on <oc-code> sentinels and interleave:
+ * 1. Run markdown-it to produce HTML (with fenced code blocks and other
+ *    special blocks replaced by sentinel elements).
+ * 2. Sanitize with DOMPurify (ADD_TAGS for sentinels + KaTeX tags).
+ * 3. Split the HTML on sentinels and interleave:
  *    - Plain HTML segments → rendered via dangerouslySetInnerHTML in a <div>
- *    - Code sentinels → rendered as <CodeBlock> React components
- *
- * This gives us full CommonMark + GFM rendering (tables, links, blockquotes,
- * nested lists, strikethrough, etc.) while keeping the interactive copy-button
- * code block UX.
+ *    - Code sentinels → <CodeBlock> React components
+ *    - Mermaid sentinels → <MermaidBlock> React components
+ *    - ANSI sentinels → <AnsiBlock> React components
  */
 export function renderMarkdown(text: string): React.ReactNode[] {
     if (!text) { return []; }
 
-    // Step 1: render to HTML with sentinel code blocks
+    // Step 1: render to HTML with sentinel elements for special blocks
     const rawHtml = md.render(text);
 
-    // Step 2: sanitize — allow our sentinel tag through
+    // Step 2: sanitize — allow our sentinels and KaTeX output through
     const sanitized = DOMPurify.sanitize(rawHtml, {
-        ADD_TAGS: ['oc-code'],
-        ADD_ATTR: ['lang', 'data-code'],
+        ADD_TAGS: ['oc-code', 'oc-mermaid', 'oc-ansi', ...KATEX_TAGS],
+        ADD_ATTR: ['lang', 'data-code', ...KATEX_ATTRS],
         ALLOW_UNKNOWN_PROTOCOLS: true,
     });
 
-    // Step 3: split on <oc-code ...></oc-code> sentinels
-    const sentinelRe = /<oc-code lang="([^"]*)" data-code="([^"]*)"[^>]*><\/oc-code>/g;
+    // Step 3: split on sentinel elements and interleave React components
+    // Matches: <oc-code lang="..." data-code="..."></oc-code>
+    //          <oc-mermaid data-code="..."></oc-mermaid>
+    //          <oc-ansi data-code="..."></oc-ansi>
+    const sentinelRe = /<(oc-code|oc-mermaid|oc-ansi)([^>]*)><\/\1>/g;
     const nodes: React.ReactNode[] = [];
     let last = 0;
     let match: RegExpExecArray | null;
     let key = 0;
+
+    function decodeBase64(encoded: string): string {
+        try { return decodeURIComponent(escape(atob(encoded))); } catch { return encoded; }
+    }
+
+    function extractAttr(attrs: string, name: string): string {
+        const m = attrs.match(new RegExp(`${name}="([^"]*)"`));
+        return m ? m[1] : '';
+    }
 
     while ((match = sentinelRe.exec(sanitized)) !== null) {
         // HTML before the sentinel
@@ -189,15 +366,22 @@ export function renderMarkdown(text: string): React.ReactNode[] {
                     dangerouslySetInnerHTML={{ __html: htmlBefore }} />
             );
         }
-        // Decode the code content from base64
-        const lang = match[1];
-        let code = '';
-        try {
-            code = decodeURIComponent(escape(atob(match[2])));
-        } catch {
-            code = match[2];
+
+        const tag = match[1];
+        const attrs = match[2];
+        const encodedCode = extractAttr(attrs, 'data-code');
+        const code = decodeBase64(encodedCode).trimEnd();
+
+        if (tag === 'oc-mermaid') {
+            nodes.push(<MermaidBlock key={key++} code={code} />);
+        } else if (tag === 'oc-ansi') {
+            nodes.push(<AnsiBlock key={key++} code={code} />);
+        } else {
+            // oc-code
+            const lang = extractAttr(attrs, 'lang');
+            nodes.push(<CodeBlock key={key++} lang={lang} code={code} />);
         }
-        nodes.push(<CodeBlock key={key++} lang={lang} code={code.trimEnd()} />);
+
         last = match.index + match[0].length;
     }
 

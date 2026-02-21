@@ -2088,3 +2088,114 @@
 .model-manage-btn:hover {
     background: var(--theia-button-secondaryHoverBackground, var(--theia-list-hoverBackground));
 }
+
+/* ── Mermaid diagram rendering ─────────────────────────────────────────── */
+
+.openspace-chat-widget .md-mermaid-container {
+    margin: 8px 0;
+    padding: 12px 0;
+    text-align: center;
+    background: transparent;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.openspace-chat-widget .md-mermaid-diagram {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.openspace-chat-widget .md-mermaid-diagram svg {
+    max-width: 100%;
+    height: auto;
+    background: transparent !important;
+}
+
+.openspace-chat-widget .md-mermaid-error {
+    color: var(--theia-errorForeground, #f44747);
+}
+
+/* ── ANSI terminal color output ────────────────────────────────────────── */
+
+.openspace-chat-widget .md-ansi-body {
+    background: var(--theia-terminal-background, #1e1e1e);
+}
+
+.openspace-chat-widget .ansi-output {
+    font-family: var(--theia-code-font-family, 'Menlo', 'Monaco', monospace);
+    font-size: var(--theia-code-font-size, 12px);
+    line-height: 1.5;
+}
+
+/* ANSI color classes produced by anser with use_classes:true */
+.ansi-black         { color: rgb(0, 0, 0); }
+.ansi-red           { color: rgb(187, 0, 0); }
+.ansi-green         { color: rgb(0, 187, 0); }
+.ansi-yellow        { color: rgb(187, 187, 0); }
+.ansi-blue          { color: rgb(0, 0, 187); }
+.ansi-magenta       { color: rgb(187, 0, 187); }
+.ansi-cyan          { color: rgb(0, 187, 187); }
+.ansi-white         { color: rgb(255, 255, 255); }
+.ansi-bright-black  { color: rgb(85, 85, 85); }
+.ansi-bright-red    { color: rgb(255, 85, 85); }
+.ansi-bright-green  { color: rgb(0, 255, 0); }
+.ansi-bright-yellow { color: rgb(255, 255, 85); }
+.ansi-bright-blue   { color: rgb(85, 85, 255); }
+.ansi-bright-magenta{ color: rgb(255, 85, 255); }
+.ansi-bright-cyan   { color: rgb(85, 255, 255); }
+.ansi-bright-white  { color: rgb(255, 255, 255); }
+
+/* ANSI background color classes */
+.ansi-black-bg          { background-color: rgb(0, 0, 0); }
+.ansi-red-bg            { background-color: rgb(187, 0, 0); }
+.ansi-green-bg          { background-color: rgb(0, 187, 0); }
+.ansi-yellow-bg         { background-color: rgb(187, 187, 0); }
+.ansi-blue-bg           { background-color: rgb(0, 0, 187); }
+.ansi-magenta-bg        { background-color: rgb(187, 0, 187); }
+.ansi-cyan-bg           { background-color: rgb(0, 187, 187); }
+.ansi-white-bg          { background-color: rgb(255, 255, 255); }
+.ansi-bright-black-bg   { background-color: rgb(85, 85, 85); }
+.ansi-bright-red-bg     { background-color: rgb(255, 85, 85); }
+.ansi-bright-green-bg   { background-color: rgb(0, 255, 0); }
+.ansi-bright-yellow-bg  { background-color: rgb(255, 255, 85); }
+.ansi-bright-blue-bg    { background-color: rgb(85, 85, 255); }
+.ansi-bright-magenta-bg { background-color: rgb(255, 85, 255); }
+.ansi-bright-cyan-bg    { background-color: rgb(85, 255, 255); }
+.ansi-bright-white-bg   { background-color: rgb(255, 255, 255); }
+
+/* ANSI text styles */
+.ansi-bold        { font-weight: bold; }
+.ansi-dim         { opacity: 0.7; }
+.ansi-italic      { font-style: italic; }
+.ansi-underline   { text-decoration: underline; }
+.ansi-blink       { /* blink suppressed — visual noise */ }
+.ansi-strike      { text-decoration: line-through; }
+
+/* ── Diff highlighting improvements ───────────────────────────────────── */
+/* highlight.js emits .hljs-addition and .hljs-deletion with only text color;
+   we add background colors for cleaner visual diff scanning. */
+
+.openspace-chat-widget .hljs-addition {
+    background-color: rgba(0, 255, 0, 0.08);
+    display: inline-block;
+    width: 100%;
+}
+
+.openspace-chat-widget .hljs-deletion {
+    background-color: rgba(255, 0, 0, 0.10);
+    display: inline-block;
+    width: 100%;
+}
+
+/* ── KaTeX math rendering ──────────────────────────────────────────────── */
+/* KaTeX inline and block math. Scoping to .md-body avoids conflicts. */
+
+.openspace-chat-widget .md-body .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 0.5em 0;
+}
+
+.openspace-chat-widget .md-body .katex {
+    font-size: 1.1em;
+}
