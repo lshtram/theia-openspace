@@ -45,20 +45,12 @@ const BUILTIN_SLASH_COMMANDS: Array<{ name: string; description: string; local: 
 ];
 
 /**
- * Simple fuzzy match: checks if all characters in the query appear
- * in order in the target string (case-insensitive).
+ * Case-insensitive substring match. Used consistently throughout the UI for
+ * all typeahead/search filtering (agents, slash commands, model selector).
+ * Prefer this over hand-rolled fuzzy matching — see CODING_STANDARDS.md.
  */
-const fuzzyMatch = (query: string, target: string): boolean => {
-    const q = query.toLowerCase();
-    const t = target.toLowerCase();
-    let qi = 0;
-    for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-        if (t[ti] === q[qi]) {
-            qi++;
-        }
-    }
-    return qi === q.length;
-};
+const matchesQuery = (query: string, target: string): boolean =>
+    target.toLowerCase().includes(query.toLowerCase());
 
 export const PromptInput: React.FC<PromptInputProps> = ({
     onSend,
@@ -137,7 +129,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         // Agents: filter serverAgents (with AVAILABLE_AGENTS as fallback if server list is empty)
         const agentSource = serverAgents.length > 0 ? serverAgents : AVAILABLE_AGENTS;
         const matchedAgents = agentSource
-            .filter(agent => fuzzyMatch(typeaheadQuery, agent.name))
+            .filter(agent => matchesQuery(typeaheadQuery, agent.name))
             .map(agent => ({ type: 'agent' as const, name: agent.name, description: agent.description }));
 
         // Just typed '@' with no query — show agents only, no file search
@@ -822,7 +814,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     };
 
     const filteredSlashCommands = allSlashCommands.filter(c =>
-        c.name.toLowerCase().includes(slashQuery.toLowerCase())
+        matchesQuery(slashQuery, c.name)
     );
     const showStop = isStreaming && !hasContent;
 

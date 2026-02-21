@@ -910,6 +910,128 @@
 }
 
 /* ─── Markdown renderer styles ───────────────────────────────── */
+
+/* md-body: wraps HTML output from markdown-it. Targets native HTML tags
+   so we get full CommonMark/GFM rendering (links, blockquotes, nested lists,
+   tables, images, strikethrough) without custom class names. */
+.message-bubble .md-body {
+    line-height: 1.6;
+}
+
+/* Paragraphs */
+.message-bubble .md-body p {
+    margin: 0 0 8px;
+    line-height: 1.6;
+}
+.message-bubble .md-body p:last-child { margin-bottom: 0; }
+
+/* Headings */
+.message-bubble .md-body h1,
+.message-bubble .md-body h2,
+.message-bubble .md-body h3,
+.message-bubble .md-body h4,
+.message-bubble .md-body h5,
+.message-bubble .md-body h6 {
+    color: var(--oc-text-bright, #fff);
+    font-weight: 600;
+    margin: 12px 0 6px;
+}
+.message-bubble .md-body h1 { font-size: 16px; }
+.message-bubble .md-body h2 { font-size: 14px; }
+.message-bubble .md-body h3,
+.message-bubble .md-body h4,
+.message-bubble .md-body h5,
+.message-bubble .md-body h6 { font-size: 13px; }
+
+/* Lists */
+.message-bubble .md-body ul,
+.message-bubble .md-body ol {
+    padding-left: 20px;
+    margin: 4px 0 8px;
+    line-height: 1.6;
+}
+.message-bubble .md-body li { margin: 2px 0; }
+
+/* Horizontal rule */
+.message-bubble .md-body hr {
+    border: none;
+    border-top: 1px solid var(--oc-border, rgba(0,0,0,0.12));
+    margin: 12px 0;
+}
+
+/* Tables */
+.message-bubble .md-body .md-table-wrap,
+.message-bubble .md-body div.md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-bubble .md-body table {
+    border-collapse: collapse;
+    font-size: 12px;
+    width: auto;
+    overflow-x: auto;
+    display: block;
+    white-space: nowrap;
+    margin: 8px 0;
+}
+
+.message-bubble .md-body th,
+.message-bubble .md-body td {
+    border: 1px solid var(--oc-border, rgba(255,255,255,0.12));
+    padding: 4px 10px;
+    text-align: left;
+}
+
+.message-bubble .md-body th {
+    background: rgba(255,255,255,0.06);
+    font-weight: 600;
+    color: var(--oc-text-bright, #fff);
+}
+
+.message-bubble .md-body tr:nth-child(even) td {
+    background: rgba(255,255,255,0.03);
+}
+
+/* Inline code */
+.message-bubble .md-body code {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #ce9178;
+    font-family: var(--theia-code-font-family, monospace);
+}
+
+/* Blockquotes */
+.message-bubble .md-body blockquote {
+    border-left: 3px solid var(--oc-accent, #007acc);
+    margin: 8px 0;
+    padding: 4px 12px;
+    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
+}
+.message-bubble .md-body blockquote p { margin: 0; }
+
+/* Links */
+.message-bubble .md-body a {
+    color: var(--oc-accent, #007acc);
+    text-decoration: none;
+}
+.message-bubble .md-body a:hover {
+    text-decoration: underline;
+}
+
+/* Strikethrough (GFM) */
+.message-bubble .md-body s,
+.message-bubble .md-body del { opacity: 0.6; }
+
+/* Images */
+.message-bubble .md-body img {
+    max-width: 100%;
+    border-radius: 4px;
+}
+
+/* ─── Legacy md-* classes (kept for any direct usage) ─────────── */
 .message-bubble .md-para {
     margin: 0 0 8px;
     line-height: 1.6;

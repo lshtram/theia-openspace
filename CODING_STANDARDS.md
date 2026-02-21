@@ -8,6 +8,7 @@
 - **Validation first:** No code is written without a corresponding validation step (test, compile check, or lint).
 - **Single responsibility:** Functions and classes should be small, single-purpose, and testable.
 - **Fail fast:** Public functions must begin with assertions on their inputs.
+- **Libraries over hand-rolling:** Always prefer a well-established external library over a custom implementation. Before writing any utility (parsing, formatting, searching, sanitizing, animating, etc.), check whether the project already has a suitable library in its dependency tree. Hand-rolled implementations are only acceptable when: (1) no suitable library exists, (2) the implementation is trivially short (< 10 lines) with no edge cases, OR (3) the user has explicitly approved the custom approach. When in doubt, ask. _Examples of past mistakes to avoid: hand-rolled markdown parser (replaced by `markdown-it`), hand-rolled fuzzy match (replaced by `String.includes`), ANSI stripper (use `strip-ansi`)._
 
 ## 2. Style Guide
 
