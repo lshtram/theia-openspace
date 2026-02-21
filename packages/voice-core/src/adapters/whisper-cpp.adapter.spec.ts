@@ -12,20 +12,20 @@ describe('WhisperCppAdapter', () => {
         capturedArgs = args;
         return makeFakeProc(0) as any;
       };
-      const adapter = new WhisperCppAdapter('whisper', mockSpawn);
+      const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', mockSpawn);
       assert.strictEqual(await adapter.isAvailable(), true);
       assert.ok(capturedArgs.includes('--help'));
     });
 
     it('returns false when binary not found (ENOENT)', async () => {
       const mockSpawn: SpawnFn = () => makeErrorProc('ENOENT') as any;
-      const adapter = new WhisperCppAdapter('whisper', mockSpawn);
+      const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', mockSpawn);
       assert.strictEqual(await adapter.isAvailable(), false);
     });
 
     it('returns false when binary exits non-zero', async () => {
       const mockSpawn: SpawnFn = () => makeFakeProc(1) as any;
-      const adapter = new WhisperCppAdapter('whisper', mockSpawn);
+      const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', mockSpawn);
       assert.strictEqual(await adapter.isAvailable(), false);
     });
   });
@@ -33,14 +33,14 @@ describe('WhisperCppAdapter', () => {
   describe('transcribe()', () => {
     it('returns transcribed text from stdout', async () => {
       const mockSpawn: SpawnFn = () => makeTranscribeProc('hello world') as any;
-      const adapter = new WhisperCppAdapter('whisper', mockSpawn);
+      const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', mockSpawn);
       const result = await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' });
       assert.strictEqual(result.text, 'hello world');
     });
 
     it('rejects when whisper exits with non-zero code', async () => {
       const mockSpawn: SpawnFn = () => makeFakeProc(1, 'model not found') as any;
-      const adapter = new WhisperCppAdapter('whisper', mockSpawn);
+      const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', mockSpawn);
       await assert.rejects(
         () => adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' }),
         /exited 1/
