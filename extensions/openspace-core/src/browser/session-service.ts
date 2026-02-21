@@ -28,6 +28,9 @@ import {
     PermissionNotification
 } from '../common/opencode-protocol';
 import * as SDKTypes from '../common/opencode-sdk-types';
+import * as fs from 'fs';
+import * as path from 'path';
+import { waitForHub as waitForHubFn } from './hub-readiness';
 
 /**
  * Streaming update event data for incremental message updates.
@@ -129,6 +132,10 @@ export interface SessionService extends Disposable {
  */
 @injectable()
 export class SessionServiceImpl implements SessionService {
+
+    private readonly HUB_MCP_URL = 'http://localhost:3000/mcp';
+    private readonly HUB_READINESS_ATTEMPTS = 20;
+    private readonly HUB_READINESS_INTERVAL_MS = 500;
 
     @inject(OpenCodeService)
     protected readonly openCodeService!: OpenCodeService;
@@ -248,6 +255,45 @@ export class SessionServiceImpl implements SessionService {
         if (this._loadingCounter === 0) {
             this.onIsLoadingChangedEmitter.fire(false);
         }
+    }
+
+    /**
+     * Read MCP config from opencode.json in the project worktree.
+     */
+    private getMcpConfig(): Record<string, unknown> | undefined {
+        try {
+            const worktree = this._activeProject?.worktree;
+            if (!worktree) {
+                this.logger.warn('[SessionService] No worktree available for MCP config');
+                return undefined;
+            }
+            const configPath = path.join(worktree, 'opencode.json');
+            if (!fs.existsSync(configPath)) {
+                this.logger.warn('[SessionService] opencode.json not found at: ' + configPath);
+                return undefined;
+            }
+            const configContent = fs.readFileSync(configPath, 'utf-8');
+            const config = JSON.parse(configContent);
+            if (config.mcp) {
+                this.logger.info('[SessionService] Found MCP config in opencode.json');
+                return config.mcp as Record<string, unknown>;
+            }
+            this.logger.warn('[SessionService] No mcp section in opencode.json');
+            return undefined;
+        } catch (error) {
+            this.logger.error('[SessionService] Error reading MCP config: ' + (error instanceof Error ? error.message : String(error)));
+            return undefined;
+        }
+    }
+
+    /**
+     * Protected wrapper around waitForHub so tests can stub it.
+     */
+    protected async waitForHub(): Promise<void> {
+        await waitForHubFn(this.HUB_MCP_URL, {
+            maxAttempts: this.HUB_READINESS_ATTEMPTS,
+            intervalMs: this.HUB_READINESS_INTERVAL_MS,
+        });
     }
 
     /**
@@ -572,8 +618,15 @@ export class SessionServiceImpl implements SessionService {
         this.incrementLoading();
 
         try {
+            // Gate on hub readiness before creating a session that needs MCP tools
+            this.logger.info('[SessionService] Waiting for Hub MCP server to be ready...');
+            await this.waitForHub();
+            this.logger.info('[SessionService] Hub is ready, proceeding with session creation');
+
             // Create session via backend
-            const session = await this.openCodeService.createSession(this._activeProject.id, { title });
+            const mcpConfig = this.getMcpConfig();
+            this.logger.info('[SessionService] MCP config: ' + (mcpConfig ? 'found' : 'not found'));
+            const session = await this.openCodeService.createSession(this._activeProject.id, { title, mcp: mcpConfig });
 
             this.logger.debug(`[SessionService] Created session: ${session.id}`);
 

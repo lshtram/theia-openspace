@@ -360,6 +360,46 @@ describe('SessionService', () => {
             expect(src).to.match(/temp-part.*randomUUID|randomUUID.*temp-part/);
         });
     });
+
+    describe('createSession() hub readiness gate', () => {
+        let waitForHubStub: sinon.SinonStub;
+
+        beforeEach(() => {
+            mockOpenCodeService.getProjects.resolves([mockProject]);
+            mockOpenCodeService.createSession.resolves(mockSession);
+            mockOpenCodeService.getSession.resolves(mockSession);
+            mockOpenCodeService.getMessages.resolves([]);
+            // Stub the protected waitForHub wrapper on the prototype
+            waitForHubStub = sinon.stub(
+                Object.getPrototypeOf(sessionService),
+                'waitForHub'
+            );
+        });
+
+        it('awaits hub readiness before creating a session', async () => {
+            waitForHubStub.resolves();
+            await sessionService.setActiveProject('proj-1');
+            await sessionService.createSession('test');
+            expect(waitForHubStub.calledOnce).to.be.true;
+            expect(mockOpenCodeService.createSession.calledOnce).to.be.true;
+        });
+
+        it('propagates HubNotReadyError and does not call createSession', async () => {
+            waitForHubStub.rejects(new Error('Hub not ready after 20 attempts'));
+            await sessionService.setActiveProject('proj-1');
+
+            let thrown: Error | undefined;
+            try {
+                await sessionService.createSession('test');
+            } catch (e) {
+                thrown = e as Error;
+            }
+
+            expect(thrown).to.exist;
+            expect(thrown!.message).to.include('Hub not ready');
+            expect(mockOpenCodeService.createSession.called).to.be.false;
+        });
+    });
 });
 
 describe('isStreaming hysteresis', () => {
