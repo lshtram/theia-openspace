@@ -46,15 +46,34 @@ export class AudioFsm {
     try {
       const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const audio = new Uint8Array(arrayBuffer);
+
+      // C-2: MediaRecorder produces compressed WebM/Opus audio.
+      // Decode to raw Float32 PCM at 16 kHz before sending to the STT backend.
+      // whisper.cpp requires raw PCM — sending WebM bytes into a WAV container produces garbage.
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      let decoded: AudioBuffer;
+      try {
+        decoded = await audioCtx.decodeAudioData(arrayBuffer);
+      } finally {
+        // Always close the AudioContext to free resources
+        audioCtx.close();
+      }
+
+      // Convert mono Float32 → Int16 PCM
+      const f32 = decoded.getChannelData(0);
+      const int16 = new Int16Array(f32.length);
+      for (let i = 0; i < f32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32768)));
+      }
 
       const response = await fetch(this.options.sttEndpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/octet-stream',
+          'Content-Type': 'audio/raw',
           'X-Voice-Language': this.options.language,
+          'X-Sample-Rate': '16000',
         },
-        body: audio,
+        body: new Uint8Array(int16.buffer),
       });
 
       if (!response.ok) throw new Error(`STT endpoint returned ${response.status}`);
