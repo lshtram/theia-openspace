@@ -19,14 +19,24 @@ export default new ContainerModule((bind) => {
       sttEndpoint: '/openspace/voice/stt',
       language: sessionFsm.policy.language,
       onTranscript: (text) => {
-        // Inject transcript into chat input textarea
-        const chatInput = document.querySelector<HTMLTextAreaElement>(
-          '.theia-ai-chat-input textarea, [data-chat-input]'
-        );
-        if (chatInput) {
-          chatInput.value = text;
-          chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-          chatInput.focus();
+        // Inject transcript into the contentEditable chat input div
+        const editor = document.querySelector<HTMLElement>('.prompt-input-editor');
+        if (editor) {
+          editor.focus();
+          // Place cursor at end
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+          // execCommand triggers React onChange for contentEditable divs —
+          // same approach used by prompt-input.tsx handlePaste
+          document.execCommand('insertText', false, text);
+        } else {
+          console.warn('[VoiceInput] Could not find .prompt-input-editor to inject transcript');
         }
       },
       onError: (err) => console.error('[VoiceInput] STT error:', err),
