@@ -2,8 +2,11 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
+import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
+import { StatusBar, StatusBarAlignment } from '@theia/core/lib/browser/status-bar/status-bar';
 import { QuickPickService, QuickPickValue } from '@theia/core/lib/common/quick-pick-service';
 import { SessionFsm } from './session-fsm';
+import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
 import type { VoicePolicy } from '../common/voice-policy';
 import { NARRATION_MODES } from '../common/voice-policy';
@@ -14,20 +17,62 @@ export const VOICE_COMMANDS = {
   STOP_NARRATION:  { id: 'openspace.voice.stop_narration', label: 'Voice: Stop Narration' },
 };
 
+const STATUS_BAR_ID = 'openspace-voice-status';
+
 @injectable()
-export class VoiceCommandContribution implements CommandContribution, KeybindingContribution {
-  @inject(SessionFsm)      private readonly sessionFsm!: SessionFsm;
-  @inject(NarrationFsm)    private readonly narrationFsm!: NarrationFsm;
-  @inject(QuickPickService) private readonly quickPickService!: QuickPickService;
+export class VoiceCommandContribution
+  implements CommandContribution, KeybindingContribution, FrontendApplicationContribution {
+
+  @inject(SessionFsm)       private readonly sessionFsm!: SessionFsm;
+  @inject(AudioFsm)         private readonly audioFsm!: AudioFsm;
+  @inject(NarrationFsm)     private readonly narrationFsm!: NarrationFsm;
+  @inject(QuickPickService)  private readonly quickPickService!: QuickPickService;
+  @inject(StatusBar)         private readonly statusBar!: StatusBar;
+
+  private recording = false;
+
+  // ── FrontendApplicationContribution ──────────────────────────────────────
+
+  onStart(): void {
+    // Show initial idle indicator in the status bar
+    this.updateStatusBar();
+  }
+
+  // ── CommandContribution ───────────────────────────────────────────────────
 
   registerCommands(registry: CommandRegistry): void {
 
     registry.registerCommand(VOICE_COMMANDS.TOGGLE_VOICE, {
-      execute: () => {
+      execute: async () => {
+        // If voice is not enabled, enable it first
         if (this.sessionFsm.state === 'inactive') {
           this.sessionFsm.enable();
+        }
+
+        if (!this.recording) {
+          // Start recording
+          this.recording = true;
+          this.sessionFsm.pushToTalkStart();
+          this.updateStatusBar();
+          try {
+            await this.audioFsm.startCapture();
+          } catch (err) {
+            console.error('[VoiceInput] startCapture failed:', err);
+            this.recording = false;
+            this.sessionFsm.pushToTalkEnd();
+            this.updateStatusBar();
+          }
         } else {
-          this.sessionFsm.disable();
+          // Stop recording and transcribe
+          this.recording = false;
+          this.updateStatusBar();
+          try {
+            await this.audioFsm.stopCapture();
+          } catch (err) {
+            console.error('[VoiceInput] stopCapture failed:', err);
+          }
+          this.sessionFsm.pushToTalkEnd();
+          this.updateStatusBar();
         }
       },
     });
@@ -41,20 +86,61 @@ export class VoiceCommandContribution implements CommandContribution, Keybinding
           return;
         }
         await this.showPolicyWizard();
+        this.updateStatusBar();
       },
     });
 
     registry.registerCommand(VOICE_COMMANDS.STOP_NARRATION, {
       execute: () => {
         this.narrationFsm.stop();
+        this.updateStatusBar();
       },
     });
   }
+
+  // ── KeybindingContribution ────────────────────────────────────────────────
 
   registerKeybindings(registry: KeybindingRegistry): void {
     registry.registerKeybinding({
       command: VOICE_COMMANDS.TOGGLE_VOICE.id,
       keybinding: 'ctrl+shift+v',
+    });
+  }
+
+  // ── Status bar ────────────────────────────────────────────────────────────
+
+  private updateStatusBar(): void {
+    const voiceEnabled = this.sessionFsm.state !== 'inactive';
+
+    if (!voiceEnabled) {
+      this.statusBar.setElement(STATUS_BAR_ID, {
+        text: '$(mic-off) Voice off',
+        tooltip: 'Voice disabled — run "Voice: Set Policy" to enable',
+        alignment: StatusBarAlignment.RIGHT,
+        priority: 200,
+        command: VOICE_COMMANDS.SET_POLICY.id,
+      });
+      return;
+    }
+
+    if (this.recording) {
+      this.statusBar.setElement(STATUS_BAR_ID, {
+        text: '$(record) REC',
+        tooltip: 'Recording… press Ctrl+Shift+V again to stop and transcribe',
+        alignment: StatusBarAlignment.RIGHT,
+        priority: 200,
+        color: '#e53e3e',
+        command: VOICE_COMMANDS.TOGGLE_VOICE.id,
+      });
+      return;
+    }
+
+    this.statusBar.setElement(STATUS_BAR_ID, {
+      text: '$(mic) Voice ready',
+      tooltip: 'Press Ctrl+Shift+V to start recording',
+      alignment: StatusBarAlignment.RIGHT,
+      priority: 200,
+      command: VOICE_COMMANDS.TOGGLE_VOICE.id,
     });
   }
 

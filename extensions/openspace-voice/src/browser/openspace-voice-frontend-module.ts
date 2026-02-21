@@ -2,6 +2,7 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { KeybindingContribution } from '@theia/core/lib/browser/keybinding';
+import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
@@ -78,6 +79,7 @@ export default new ContainerModule((bind) => {
   bind(VoiceCommandContribution).toSelf().inSingletonScope();
   bind(CommandContribution).toService(VoiceCommandContribution);
   bind(KeybindingContribution).toService(VoiceCommandContribution);
+  bind(FrontendApplicationContribution).toService(VoiceCommandContribution);
 
   bind(VoiceInputWidget).toSelf().inSingletonScope();
 });
