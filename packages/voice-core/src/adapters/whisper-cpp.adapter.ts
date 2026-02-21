@@ -15,6 +15,7 @@ export class WhisperCppAdapter implements SttProvider {
   constructor(
     private readonly binaryPath: string = 'whisper',
     private readonly modelFolder: string = '/usr/local/share/whisper',
+    private readonly modelFile: string = 'ggml-base.en.bin',  // M-4: configurable model filename
     private readonly spawnFn: SpawnFn = spawn,
   ) {}
 
@@ -39,39 +40,59 @@ export class WhisperCppAdapter implements SttProvider {
     const wavBuffer = buildWavBuffer(request.audio, request.sampleRate ?? 16000, 1);
     fs.writeFileSync(tmpFile, wavBuffer);
 
+    // H-3: whisper.cpp writes transcript to a .txt file, not stdout.
+    // Use: -otxt flag + -of <prefix> for output, -f <wavfile> for input.
+    const outPrefix = tmpFile.replace(/\.wav$/, '');
+    const outTxtFile = outPrefix + '.txt';
+
     try {
       return await new Promise<SttTranscriptionResult>((resolve, reject) => {
+        // L-2: settled guard prevents double-reject on cancellation
+        let settled = false;
+        const settle = (fn: () => void): void => {
+          if (!settled) { settled = true; fn(); }
+        };
+
         const proc = this.spawnFn(
           this.binaryPath,
-          ['--language', request.language, '-m', path.join(this.modelFolder, 'ggml-base.en.bin'), '--output-txt', tmpFile],
-          { stdio: ['ignore', 'pipe', 'pipe'] },
+          [
+            '-m', path.join(this.modelFolder, this.modelFile),
+            '--language', request.language,
+            '-otxt',        // enable text output to file
+            '-of', outPrefix,  // output file prefix (creates outPrefix.txt)
+            '-f', tmpFile,  // input audio file
+          ],
+          { stdio: ['ignore', 'ignore', 'pipe'] },  // only stderr for error detection
         );
 
-        const stdout: Buffer[] = [];
         const stderr: Buffer[] = [];
-
-        proc.stdout!.on('data', (chunk: Buffer) => stdout.push(chunk));
         proc.stderr!.on('data', (chunk: Buffer) => stderr.push(chunk));
 
-        proc.on('error', (err) => reject(new Error(`whisper.cpp spawn failed: ${err.message}`)));
+        proc.on('error', (err) => settle(() => reject(new Error(`whisper.cpp spawn failed: ${err.message}`))));
         proc.on('close', (code) => {
           if (code !== 0) {
             const errText = Buffer.concat(stderr).toString('utf8').trim();
-            reject(new Error(`whisper.cpp exited ${code}: ${errText}`));
+            settle(() => reject(new Error(`whisper.cpp exited ${code}: ${errText}`)));
             return;
           }
-          const text = Buffer.concat(stdout).toString('utf8').trim();
-          resolve({ text });
+          try {
+            const text = fs.readFileSync(outTxtFile, 'utf8').trim();
+            settle(() => resolve({ text }));
+          } catch (readErr) {
+            settle(() => reject(new Error(`whisper.cpp output file not found: ${readErr}`)));
+          } finally {
+            try { fs.unlinkSync(outTxtFile); } catch { /* ignore */ }
+          }
         });
 
         // Cancel support: kill process on request
         token?.onCancellationRequested(() => {
           proc.kill();
-          reject(new Error('STT transcription cancelled'));
+          settle(() => reject(new Error('STT transcription cancelled')));
         });
       });
     } finally {
-      // Always clean up temp file
+      // Always clean up temp WAV file
       try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
     }
   }
