@@ -54,19 +54,12 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
         );
     }).inSingletonScope();
 
-    // 5. SessionService wiring - Wire SessionService to SyncService to break circular DI dependency
-    // This MUST happen after both services are bound, so we use a separate binding that depends on both
-    bind(SessionServiceWiring).toDynamicValue(ctx => {
-        const syncService = ctx.container.get<OpenCodeSyncServiceImpl>(OpenCodeSyncService);
-        const sessionService = ctx.container.get<SessionService>(SessionService);
-        
-        // Use queueMicrotask to ensure DI is fully resolved before wiring
-        queueMicrotask(() => {
-            syncService.setSessionService(sessionService);
-        });
-        
-        return null;
-    }).inSingletonScope();
+    // 5. SessionService wiring - Wire SessionService to SyncService.
+    // Task 19: Removed queueMicrotask wiring here — BridgeContribution.onStart() already handles
+    // this in a well-defined lifecycle phase, so the queueMicrotask caused duplicate wiring.
+    // Binding retained (returns null) to avoid breaking existing injection points that may
+    // depend on the SessionServiceWiring token being present in the container.
+    bind(SessionServiceWiring).toConstantValue(null);
 
     // 6. Application contributions
     // BridgeContribution runs on app startup (collects commands, publishes manifest, connects to Hub)
@@ -79,5 +72,5 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     bind(CommandContribution).to(TerminalCommandContribution).inSingletonScope();
     bind(CommandContribution).to(FileCommandContribution).inSingletonScope();
 
-    console.log('[OpenSpaceCore] Frontend module loaded');
+    if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceCore] Frontend module loaded'); }
 });

@@ -45,19 +45,17 @@ export const SENSITIVE_FILE_PATTERNS: RegExp[] = [
     /\.pem$/,
     /\.key$/,
     /\.cert$/,
-    /[/\\]\.ssh[/\\]/,        // Matches /.ssh/ or .\ssh\
-    /\.ssh\//i,                 // Matches .ssh/ anywhere in path
-    /secrets/,
-    /secret/i,                  // Matches secret (singular or plural)
+    /(?:^|[/\\])\.ssh[/\\]/,  // Matches .ssh/ at start or after a separator
+    /(?:^|[/\\])\.?secrets?(?:[/\\.]|$)/i,  // Task 15: Matches actual secrets files/dirs, not 'secret-santa.ts'
     /credentials/,
-    /config.*secret/i,
+    /config.*secret/,
     /\.htpasswd$/,
     /\.aws/,
     /azure\.json$/,
     /gcloud/,
-    /service-account\.json$/i,
-    /firebase-adminsdk/i,
-    /database\.yml/i,
+    /service-account\.json$/,
+    /firebase-adminsdk/,
+    /database\.yml/,
 ];
 
 /**

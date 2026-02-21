@@ -20,7 +20,6 @@ import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { MutableHubState, AgentCommand, PaneStateSnapshot, CommandDefinition } from '../common/command-manifest';
 import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
-import * as os from 'os';
 
 /**
  * OpenSpace Hub - HTTP server bridging Theia frontend with the opencode MCP agent.
@@ -71,17 +70,25 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     private validateOrigin(req: Request, res: Response, next: () => void): void {
         const origin = req.headers.origin || req.headers.referer || '';
 
+        // Task 6: Reject requests with empty/undefined origin to prevent
+        // unauthenticated local process access to hub endpoints
+        if (!origin) {
+            this.logger.warn('[Hub] Rejected request with missing Origin header');
+            res.status(403).json({ error: 'Forbidden: Origin header required' });
+            return;
+        }
+
         const isAllowed = this.allowedOrigins.some(allowed =>
-            origin.startsWith(allowed) || origin === ''
+            origin.startsWith(allowed)
         );
 
-        if (!isAllowed && origin !== '') {
+        if (!isAllowed) {
             this.logger.warn(`[Hub] Rejected request from invalid origin: ${origin}`);
             res.status(403).json({ error: 'Forbidden: Invalid origin' });
             return;
         }
 
-        const allowedOrigin = origin || this.allowedOrigins[0];
+        const allowedOrigin = origin;
         res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
@@ -99,7 +106,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
      */
     configure(app: Application): void {
         // Resolve workspace root (use HOME as fallback)
-        const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd() || os.homedir();
+        const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd();
         this.mcpServer = new OpenSpaceMcpServer(workspaceRoot);
 
         // Apply origin validation middleware to all /openspace/* routes

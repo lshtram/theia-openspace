@@ -54,5 +54,5 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   bind(OpenSpaceHub).toSelf().inSingletonScope();
   bind(BackendApplicationContribution).toService(OpenSpaceHub);
 
-  console.log('[OpenSpaceCore] Backend module loaded - OpenCodeService exposed at /services/opencode');
+  if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceCore] Backend module loaded - OpenCodeService exposed at /services/opencode'); }
 });

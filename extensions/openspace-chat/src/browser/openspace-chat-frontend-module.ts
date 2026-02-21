@@ -19,7 +19,7 @@ import './style/prompt-input.css';
 export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // Chat agent
     bind(ChatAgent).to(OpenspaceChatAgent).inSingletonScope();
-    console.log('[OpenSpaceChat] Chat agent registered');
+    if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceChat] Chat agent registered'); }
 
     // Chat widget
     bind(ChatWidget).toSelf().inSingletonScope();

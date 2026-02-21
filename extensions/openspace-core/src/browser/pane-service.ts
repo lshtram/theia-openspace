@@ -422,17 +422,10 @@ export class PaneServiceImpl implements PaneService {
                 return { success: false };
             }
 
-            // Note: Theia's ApplicationShell doesn't have a direct resize API
-            // This would require accessing the underlying panel's layout
-            // For now, we emit the layout change and return success
-            // A full implementation would need to manipulate the DockPanel's layout data
-            
-            this.logger.debug(`[PaneService] Resizing pane ${args.paneId} to ${args.width}% x ${args.height}%`);
-            
-            // Emit layout change event
-            this.emitLayoutChange();
-
-            return { success: true };
+            // Task 17: Theia's ApplicationShell doesn't expose a direct resize API.
+            // Return a clear error instead of silently pretending to succeed.
+            this.logger.warn(`[PaneService] resizePane: resize is not implemented — Theia ApplicationShell has no direct resize API`);
+            return { success: false, error: 'resizePane is not implemented' } as { success: boolean };
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.logger.error(`[PaneService] Error resizing pane: ${errorMsg}`);

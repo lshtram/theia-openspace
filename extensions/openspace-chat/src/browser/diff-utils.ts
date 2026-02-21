@@ -26,8 +26,10 @@ export function computeSimpleDiff(oldText: string, newText: string): DiffResult 
     let additions = 0;
     let deletions = 0;
 
-    // Too large — show as full replacement
-    if (oldLines.length + newLines.length > 2000) {
+    // Task 24: Apply per-file line limit BEFORE LCS to prevent O(m*n) memory explosion.
+    // LCS allocates m*n cells; 1000x1000 = 1M cells is borderline, 5000x5000 = 200MB crashes the tab.
+    const MAX_DIFF_LINES = 1000;
+    if (oldLines.length > MAX_DIFF_LINES || newLines.length > MAX_DIFF_LINES) {
         for (const l of oldLines) { lines.push({ type: 'del', text: l }); deletions++; }
         for (const l of newLines) { lines.push({ type: 'add', text: l }); additions++; }
         return { lines, additions, deletions };

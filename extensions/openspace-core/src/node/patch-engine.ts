@@ -293,7 +293,9 @@ export class PatchEngine {
                 bytes: Buffer.byteLength(nextContent, 'utf-8'),
             };
         });
-        this.writeQueues.set(filePath, next.catch(() => {}));
+        this.writeQueues.set(filePath, next.catch(err => {
+            console.error('[PatchEngine] Write queue error for', filePath, err);
+        }));
         await next;
         return result;
     }
@@ -302,11 +304,13 @@ export class PatchEngine {
      * Load version map from disk. Call once on startup.
      */
     async loadVersions(): Promise<void> {
-        if (!fs.existsSync(this.versionsFilePath)) {
-            return; // All versions start at 0
+        try {
+            await fs.promises.access(this.versionsFilePath);
+        } catch {
+            return; // File doesn't exist — all versions start at 0
         }
         try {
-            const raw = fs.readFileSync(this.versionsFilePath, 'utf-8');
+            const raw = await fs.promises.readFile(this.versionsFilePath, 'utf-8');
             const data = JSON.parse(raw) as Record<string, number>;
             this.versions = new Map(Object.entries(data));
         } catch {
@@ -320,14 +324,12 @@ export class PatchEngine {
      */
     private async saveVersions(): Promise<void> {
         const dir = path.dirname(this.versionsFilePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
+        await fs.promises.mkdir(dir, { recursive: true });
         const data: Record<string, number> = {};
         for (const [k, v] of this.versions) {
             data[k] = v;
         }
-        fs.writeFileSync(this.versionsFilePath, JSON.stringify(data, null, 2), 'utf-8');
+        await fs.promises.writeFile(this.versionsFilePath, JSON.stringify(data, null, 2), 'utf-8');
     }
 
     /**

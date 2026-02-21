@@ -39,7 +39,7 @@ class MockWorkspaceService {
     tryGetRoots() {
         return [{ 
             resource: { 
-                path: { toString: () => '/workspace/test-project' } 
+                path: { toString: () => '/workspace/test-project', fsPath: () => '/workspace/test-project' } 
             } as any, 
             name: 'test-project',
             isFile: () => false,

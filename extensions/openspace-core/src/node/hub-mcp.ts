@@ -337,7 +337,7 @@ export class OpenSpaceMcpServer {
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
-                    const content = fs.readFileSync(resolved, 'utf-8');
+                    const content = await fs.promises.readFile(resolved, 'utf-8');
                     return { content: [{ type: 'text', text: content }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
@@ -421,12 +421,25 @@ export class OpenSpaceMcpServer {
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
-                    const original = fs.readFileSync(resolved, 'utf-8');
-                    if (!original.includes(args.oldText)) {
-                        return { content: [{ type: 'text', text: 'Error: oldText not found in file' }], isError: true };
+                    const original = await fs.promises.readFile(resolved, 'utf-8');
+
+                    // Task 7: Count occurrences to prevent silent multi-location replacement
+                    const occurrences = original.split(args.oldText).length - 1;
+                    if (occurrences === 0) {
+                        return { content: [{ type: 'text', text: JSON.stringify({ error: 'oldText not found in file' }) }], isError: true };
                     }
-                    const patched = original.split(args.oldText).join(args.newText);
-                    fs.writeFileSync(resolved, patched, 'utf-8');
+                    if (occurrences > 1) {
+                        return { content: [{ type: 'text', text: JSON.stringify({
+                            error: `oldText found ${occurrences} times. Provide more surrounding context to uniquely identify the target location.`
+                        }) }], isError: true };
+                    }
+
+                    // Exactly one occurrence — safe to replace
+                    const patched = original.replace(args.oldText, args.newText);
+
+                    // Task 11: Route through ArtifactStore for atomic write + backup + audit
+                    const relPath = path.relative(this.workspaceRoot, resolved);
+                    await this.artifactStore.write(relPath, patched, { actor: 'agent', reason: 'openspace.file.patch MCP tool' });
                     return { content: [{ type: 'text', text: `Patched ${resolved}` }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };

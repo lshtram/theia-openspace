@@ -764,8 +764,18 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         e.preventDefault();
         const plainText = e.clipboardData.getData('text/plain');
         if (plainText) {
-            // Use execCommand for undo support
-            document.execCommand('insertText', false, plainText);
+            // Use modern Selection API to insert plain text (avoids deprecated document.execCommand)
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                const textNode = document.createTextNode(plainText);
+                range.insertNode(textNode);
+                range.setStartAfter(textNode);
+                range.setEndAfter(textNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
         }
     };
 

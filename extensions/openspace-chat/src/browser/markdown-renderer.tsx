@@ -167,7 +167,10 @@ const MermaidBlock: React.FC<{ code: string }> = ({ code }) => {
                 const id = `mermaid-${Math.random().toString(36).slice(2)}`;
                 const { svg } = await mermaid.render(id, code);
                 if (!cancelled && containerRef.current) {
-                    containerRef.current.innerHTML = svg;
+                    // Task 1: Sanitize SVG output before innerHTML assignment to prevent XSS
+                    containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
+                        USE_PROFILES: { svg: true, svgFilters: true }
+                    });
                     setError(null);
                 }
             } catch (e: unknown) {
@@ -231,9 +234,12 @@ const AnsiBlock: React.FC<{ code: string }> = ({ code }) => {
         .replace(/\\x1b/g, '\x1b')
         .replace(/\\033/g, '\x1b')
         .replace(/\\e(?=\[)/gi, '\x1b')
+        // eslint-disable-next-line no-control-regex
         .replace(/(?<!\x1b)(\[[\d;]*m)/g, '\x1b$1');
     // anser converts ANSI codes to <span class="ansi-red"> etc.
-    const html = Anser.ansiToHtml(Anser.escapeForHtml(normalized), { use_classes: true });
+    const rawHtml = Anser.ansiToHtml(Anser.escapeForHtml(normalized), { use_classes: true });
+    // Task 3: Sanitize ANSI output for defense-in-depth against XSS
+    const html = DOMPurify.sanitize(rawHtml);
     return (
         <div className="md-code-block">
             <div className="md-code-header">
@@ -342,7 +348,7 @@ export function renderMarkdown(text: string): React.ReactNode[] {
     const sanitized = DOMPurify.sanitize(rawHtml, {
         ADD_TAGS: ['oc-code', 'oc-mermaid', 'oc-ansi', ...KATEX_TAGS],
         ADD_ATTR: ['lang', 'data-code', ...KATEX_ATTRS],
-        ALLOW_UNKNOWN_PROTOCOLS: true,
+        ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel|vscode|theia):/i,
     });
 
     // Step 3: split on sentinel elements and interleave React components

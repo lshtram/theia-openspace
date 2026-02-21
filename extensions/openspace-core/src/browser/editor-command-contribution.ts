@@ -25,8 +25,8 @@ import { URI } from '@theia/core/lib/common/uri';
 import * as monaco from '@theia/monaco-editor-core';
 import { Position, EditorWidget } from '@theia/editor/lib/browser';
 import * as path from 'path';
-import { isSensitiveFile } from '../common/sensitive-files';
 import { OpenCodeService } from '../common/opencode-protocol';
+import { validatePath as sharedValidatePath } from './path-validator';
 
 /**
  * Range interface for highlighting code regions.
@@ -284,86 +284,20 @@ export class EditorCommandContribution implements CommandContribution {
 
     /**
      * Validate a file path against workspace root.
-     * Implements GAP-1 (path traversal) and GAP-9 (symlink protection) per §17.1.
-     * Implements sensitive file blocking per §17.4.
-     * 
-     * T1-3: Added symlink detection warning.
-     * 
+     * Task 21: Delegates to shared path-validator utility (standardised on fsPath()).
+     *
      * @param filePath The file path to validate (relative or absolute)
      * @returns The validated absolute path if allowed, null if denied
      */
     async validatePath(filePath: string): Promise<string | null> {
-        try {
-            // Step 1: Get workspace root
-            const workspaceRoot = this.workspaceService.tryGetRoots()[0];
-            if (!workspaceRoot) {
-                this.logger.warn('[EditorCommand] No workspace root found');
-                return null;
-            }
-            const rootUri = workspaceRoot.resource;
-            const rootPath = rootUri.path.toString();
-
-            // Step 2: Resolve the path (handle relative paths)
-            let resolvedPath: string;
-            if (path.isAbsolute(filePath)) {
-                resolvedPath = filePath;
-            } else {
-                resolvedPath = path.join(rootPath, filePath);
-            }
-
-            // Step 3: Check for path traversal (..)
-            let normalizedPath = path.normalize(resolvedPath);
-            if (normalizedPath.includes('..')) {
-                this.logger.warn(`[EditorCommand] Path traversal attempt rejected: ${filePath}`);
-                return null;
-            }
-
-            // Step 4: Check for symlink traversal outside workspace
-            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
-            const pathComponents = normalizedPath.split(path.sep);
-            for (const component of pathComponents) {
-                if (component === '..') {
-                    this.logger.warn(`[EditorCommand] Path traversal via symlink rejected: ${filePath}`);
-                    return null;
-                }
-            }
-            
-            // Check if resolved path starts with workspace root
-            const normalizedRoot = path.normalize(rootPath);
-            if (!normalizedPath.startsWith(normalizedRoot) && 
-                !normalizedPath.replace(/[\\/]/g, '/').startsWith(normalizedRoot.replace(/[\\/]/g, '/'))) {
-                this.logger.warn(`[EditorCommand] Path outside workspace rejected: ${filePath}`);
-                return null;
-            }
-
-            // T1-3: Resolve symlinks via Node backend (browser can't call fs.realpath)
-            if (this.openCodeService) {
-                const result = await this.openCodeService.validatePath(normalizedPath, normalizedRoot);
-                if (!result.valid) {
-                    this.logger.warn(`[EditorCommand] Path rejected by symlink check: ${result.error}`);
-                    return null;
-                }
-                // Update to the canonically resolved path before further checks
-                normalizedPath = result.resolvedPath || normalizedPath;
-            }
-
-            // Step 5: Check against sensitive file patterns (§17.4) - using shared module
-            const fileName = path.basename(normalizedPath);
-            const relativePath = normalizedPath.replace(rootPath, '').replace(/^\//, '');
-            
-            // Use shared sensitive file check from common module
-            if (isSensitiveFile(fileName) || isSensitiveFile(relativePath)) {
-                this.logger.warn(`[EditorCommand] Sensitive file access denied: ${filePath}`);
-                return null;
-            }
-
-            return normalizedPath;
-        } catch (error) {
-            this.logger.error('[EditorCommand] Path validation error:', error);
-            return null;
-        }
+        return sharedValidatePath(
+            filePath,
+            this.workspaceService,
+            this.logger,
+            this.openCodeService,
+            { logTag: '[EditorCommand]' }
+        );
     }
-
     /**
      * Get or create a unique highlight ID.
      */

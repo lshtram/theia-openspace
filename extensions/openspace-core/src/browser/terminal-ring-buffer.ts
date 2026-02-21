@@ -187,7 +187,10 @@ const DANGEROUS_PATTERN_STRINGS: string[] = [
     '^mkfs\\s+',                // Filesystem creation
     '^wipefs\\s+',              // Filesystem wipe
     '^shred\\s+',               // Secure file deletion
-    '^curl.*>',                 // Download to system path (any redirect)
+    '^curl.*\\|\\s*(bash|sh|zsh|fish|ksh|csh)',  // Task 18: curl | shell (pipe-to-shell execution)
+    '^wget.*\\|\\s*(bash|sh|zsh|fish|ksh|csh)',  // wget | shell
+    '^curl.*-o\\s+',              // Task 18: curl with output file (explicit)
+    // Note: '^curl.*>' removed (Task 18) — was a false positive for 'curl http://... > output.json'
     '^wget.*-O\\s+/',           // Wget output to file
     '^wget\\s+.*\\s+/',         // Wget to system path (any position)
     '^chown\\s+-R\\s+\\w+\\s+/', // Recursive ownership change

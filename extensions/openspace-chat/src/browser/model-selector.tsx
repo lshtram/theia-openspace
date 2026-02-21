@@ -122,12 +122,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
             const providers = await sessionService.getAvailableModels();
             setProviders(providers);
             
-            // Set default model if none selected
+            // Task 25: Select first available model across ALL providers, not just providers[0].
+            // providers[0] may have an empty models map; scan all providers for the first model.
             if (!sessionService.activeModel && providers.length > 0) {
-                const firstProvider = providers[0];
-                const firstModel = Object.values(firstProvider.models)[0];
-                if (firstModel) {
-                    const defaultModel = `${firstProvider.id}/${firstModel.id}`;
+                type ModelEntry = { providerId: string; modelId: string };
+                const firstAvailable = providers.reduce<ModelEntry | undefined>((found, provider) => {
+                    if (found) return found;
+                    const firstModel = Object.values(provider.models)[0];
+                    return firstModel ? { providerId: provider.id, modelId: firstModel.id } : undefined;
+                }, undefined);
+
+                if (firstAvailable) {
+                    const defaultModel = `${firstAvailable.providerId}/${firstAvailable.modelId}`;
                     sessionService.setActiveModel(defaultModel);
                 }
             }

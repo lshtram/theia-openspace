@@ -5,5 +5,5 @@ import { LanguageGrammarContribution } from './language-grammar-contribution';
 export default new ContainerModule(bind => {
     bind(LanguageGrammarContribution).toSelf().inSingletonScope();
     bind(LanguageGrammarDefinitionContribution).toService(LanguageGrammarContribution);
-    console.log('[OpenSpaceLanguages] Frontend module loaded');
+    if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceLanguages] Frontend module loaded'); }
 });

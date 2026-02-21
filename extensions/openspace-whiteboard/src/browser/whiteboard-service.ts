@@ -188,9 +188,11 @@ export class WhiteboardService {
         
         const store = (data.store ?? {}) as Record<string, unknown>;
         const existing = store[shapeId] as WhiteboardRecord | undefined;
-        if (existing) {
-            store[shapeId] = { ...existing, ...props };
+        // Task 30: Throw when shape doesn't exist so callers can detect stale IDs.
+        if (!existing) {
+            throw new Error(`Shape '${shapeId}' not found in whiteboard '${path}'`);
         }
+        store[shapeId] = { ...existing, ...props };
         const updatedData = { ...data, store } as unknown as WhiteboardData;
         
         // Save to file
@@ -208,6 +210,10 @@ export class WhiteboardService {
         const { data } = await this.readWhiteboard(path);
         
         const store = { ...(data.store ?? {}) } as Record<string, unknown>;
+        // Task 30: Throw when shape doesn't exist so callers can detect stale IDs.
+        if (!(shapeId in store)) {
+            throw new Error(`Shape '${shapeId}' not found in whiteboard '${path}'`);
+        }
         delete store[shapeId];
         const updatedData = { ...data, store } as unknown as WhiteboardData;
         

@@ -43,7 +43,7 @@ export class OpenSpaceFilterContribution implements FilterContribution {
                 if (this.isDebugContribution(contrib) || this.isScmContribution(contrib)) {
                     const ctor = (contrib as { constructor?: { name?: string } }).constructor;
                     const name = ctor?.name;
-                    console.log('[OpenSpaceFilter] Filtering out contribution:', name);
+                    if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceFilter] Filtering out contribution:', name); }
                     return false;
                 }
                 return true;
@@ -52,6 +52,7 @@ export class OpenSpaceFilterContribution implements FilterContribution {
     }
     
     private isDebugContribution(contrib: unknown): boolean {
+        if (!contrib || typeof contrib !== 'object') { return false; }
         // Use constructor name check - use partial match for "Debug"
         const ctor = (contrib as { constructor?: { name?: string } }).constructor;
         const name = ctor?.name || '';
@@ -61,6 +62,7 @@ export class OpenSpaceFilterContribution implements FilterContribution {
     }
     
     private isScmContribution(contrib: unknown): boolean {
+        if (!contrib || typeof contrib !== 'object') { return false; }
         const ctor = (contrib as { constructor?: { name?: string } }).constructor;
         const name = ctor?.name || '';
         

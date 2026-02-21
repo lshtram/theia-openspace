@@ -15,6 +15,7 @@ import { Preference } from '@theia/preferences/lib/browser/util/preference-types
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol';
 import { OpenspacePreferences } from './openspace-preferences';
+import { resolveEffectiveEnabled, toggleModel, toggleAll, toggleProvider } from './ai-models-toggle-logic';
 
 // ─── React Component ──────────────────────────────────────────────────────────
 
@@ -65,35 +66,23 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
 
     // Effective enabled set: empty = all enabled
     const effectiveEnabled = React.useMemo(() =>
-        enabled.length === 0 ? new Set(allModelIds) : new Set(enabled),
+        resolveEffectiveEnabled(enabled, allModelIds),
         [enabled, allModelIds]
     );
 
     const isAllEnabled = enabled.length === 0 || enabled.length === allModelIds.length;
 
-    const toggleModel = (fullId: string) => {
-        const current = enabled.length === 0 ? allModelIds : [...enabled];
-        const next = current.includes(fullId)
-            ? current.filter(id => id !== fullId)
-            : [...current, fullId];
-        // If all are enabled, store as empty (canonical default)
-        save(next.length === allModelIds.length ? [] : next);
+    const handleToggleModel = (fullId: string) => {
+        save(toggleModel(fullId, enabled, allModelIds));
     };
 
-    const toggleAll = (on: boolean) => save(on ? [] : []);
+    const handleToggleAll = (on: boolean) => save(toggleAll(on));
 
-    const toggleProvider = (providerId: string, on: boolean) => {
+    const handleToggleProvider = (providerId: string, on: boolean) => {
         const providerModelIds = Object.keys(
             providers.find(p => p.id === providerId)?.models ?? {}
         ).map(mId => `${providerId}/${mId}`);
-        const base = enabled.length === 0 ? allModelIds : [...enabled];
-        let next: string[];
-        if (on) {
-            next = [...new Set([...base, ...providerModelIds])];
-        } else {
-            next = base.filter(id => !providerModelIds.includes(id));
-        }
-        save(next.length === allModelIds.length ? [] : next);
+        save(toggleProvider(providerId, on, enabled, allModelIds, providerModelIds));
     };
 
     if (loading) {
@@ -108,12 +97,12 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
             <div className="ai-models-global-controls">
                 <button
                     className={`ai-models-bulk-btn ${isAllEnabled ? 'active' : ''}`}
-                    onClick={() => toggleAll(true)}
+                    onClick={() => handleToggleAll(true)}
                     title="Enable all models"
                 >All</button>
                 <button
                     className="ai-models-bulk-btn"
-                    onClick={() => toggleAll(false)}
+                    onClick={() => handleToggleAll(false)}
                     title="Disable all models"
                 >None</button>
             </div>
@@ -131,11 +120,11 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
                             </span>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-all"
-                                onClick={() => toggleProvider(provider.id, true)}
+                                onClick={() => handleToggleProvider(provider.id, true)}
                             >All</button>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-none"
-                                onClick={() => toggleProvider(provider.id, false)}
+                                onClick={() => handleToggleProvider(provider.id, false)}
                             >None</button>
                         </div>
                         {Object.entries(provider.models).map(([modelId, model]) => {
@@ -150,7 +139,7 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
                                         <input
                                             type="checkbox"
                                             checked={isEnabled}
-                                            onChange={() => toggleModel(fullId)}
+                                            onChange={() => handleToggleModel(fullId)}
                                             className="ai-models-checkbox"
                                         />
                                         <span className="ai-models-model-name">{model.name}</span>
