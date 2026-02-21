@@ -99,7 +99,7 @@ const PROGRAMMATIC_SCROLL_WINDOW = 250;
  * between SSE chunks) from causing visible UI flicker while a second flag
  * (sessionBusy) is about to arrive from the server.
  */
-function useLatchedBool(value: boolean, delayMs: number): boolean {
+export function useLatchedBool(value: boolean, delayMs: number): boolean {
     const [latched, setLatched] = React.useState(value);
     const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
