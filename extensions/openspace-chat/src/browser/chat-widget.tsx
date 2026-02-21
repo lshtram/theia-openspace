@@ -22,6 +22,9 @@ import { Disposable } from '@theia/core/lib/common/disposable';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { OpenerService, open as openWithOpener } from '@theia/core/lib/browser';
 import { URI } from '@theia/core/lib/common/uri';
+import { CommandService } from '@theia/core/lib/common/command';
+import { PreferenceService } from '@theia/core/lib/common/preferences';
+import { CommonCommands } from '@theia/core/lib/browser/common-frontend-contribution';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
@@ -55,6 +58,12 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
 
     @inject(OpenerService)
     protected readonly openerService!: OpenerService;
+
+    @inject(CommandService)
+    protected readonly commandService!: CommandService;
+
+    @inject(PreferenceService)
+    protected readonly preferenceService!: PreferenceService;
 
     constructor() {
         super();
@@ -115,6 +124,8 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
             workspaceRoot={this.getWorkspaceRoot()}
             messageService={this.messageService}
             openerService={this.openerService}
+            commandService={this.commandService}
+            preferenceService={this.preferenceService}
         />;
     }
 }
@@ -125,6 +136,8 @@ interface ChatComponentProps {
     workspaceRoot: string;
     messageService: MessageService;
     openerService: OpenerService;
+    commandService: CommandService;
+    preferenceService: PreferenceService;
 }
 
 /**
@@ -158,6 +171,8 @@ interface ChatHeaderBarProps {
     onNewSession: () => void;
     onDeleteSession: () => void;
     onToggleDropdown: () => void;
+    enabledModels: string[];
+    onManageModels: () => void;
 }
 
 const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
@@ -173,7 +188,9 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onSessionSwitch,
     onNewSession,
     onDeleteSession,
-    onToggleDropdown
+    onToggleDropdown,
+    enabledModels,
+    onManageModels
 }) => {
     const [showMenu, setShowMenu] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
@@ -268,7 +285,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
             </div>
 
             {/* Model selector pill */}
-            <ModelSelector sessionService={sessionService} />
+            <ModelSelector sessionService={sessionService} enabledModels={enabledModels} onManageModels={onManageModels} />
 
             {/* New session */}
             <button
@@ -338,14 +355,17 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
-const ChatFooter: React.FC<{ isStreaming: boolean; streamingStatus: string }> = ({ isStreaming, streamingStatus }) => (
-    <div className="chat-footer-bar">
-        <div className="chat-footer-status">
-            <div className={`status-dot ${isStreaming ? 'streaming' : 'connected'}`} />
-            <span>{isStreaming ? (streamingStatus || 'Thinking') : 'Ready'}</span>
+const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streamingStatus: string }> = ({ isStreaming, sessionBusy, streamingStatus }) => {
+    const active = isStreaming || sessionBusy;
+    return (
+        <div className="chat-footer-bar">
+            <div className="chat-footer-status">
+                <div className={`status-dot ${active ? 'streaming' : 'connected'}`} />
+                <span>{active ? (streamingStatus || 'Thinking') : 'Ready'}</span>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 /**
  * React component for chat interface.
@@ -353,13 +373,14 @@ const ChatFooter: React.FC<{ isStreaming: boolean; streamingStatus: string }> = 
  * T3-10: Added messageService prop for dialogs
  * Exported for unit testing.
  */
-export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService, commandService, preferenceService }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [showSessionList, setShowSessionList] = React.useState(false);
     const [isStreaming, setIsStreaming] = React.useState(false);
     const [streamingStatus, setStreamingStatus] = React.useState('');
     const [streamingMessageId, setStreamingMessageId] = React.useState<string | undefined>();
+    const [sessionBusy, setSessionBusy] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
     const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
@@ -370,6 +391,24 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const disposablesRef = React.useRef<Disposable[]>([]);
     // Shell mode: locally-executed command outputs displayed inline in the timeline
     const [shellOutputs, setShellOutputs] = React.useState<ShellOutput[]>([]);
+
+    // Read enabled models from preference (empty = all enabled)
+    const [enabledModels, setEnabledModels] = React.useState<string[]>(
+        preferenceService.get<string[]>('openspace.models.enabled', []) ?? []
+    );
+
+    React.useEffect(() => {
+        const disposable = preferenceService.onPreferenceChanged(change => {
+            if (change.preferenceName === 'openspace.models.enabled') {
+                setEnabledModels(preferenceService.get<string[]>('openspace.models.enabled', []) ?? []);
+            }
+        });
+        return () => disposable.dispose();
+    }, [preferenceService]);
+
+    const handleManageModels = React.useCallback(() => {
+        commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, 'AI Models');
+    }, [commandService]);
 
     // Subscribe to model changes
     React.useEffect(() => {
@@ -497,6 +536,13 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             setStreamingStatus(status);
         });
 
+        // Subscribe to session status changes (server-authoritative busy/idle/retry)
+        const currentStatus = sessionService.sessionStatus;
+        setSessionBusy(currentStatus ? currentStatus.type !== 'idle' : false);
+        const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string }) => {
+            setSessionBusy(status.type !== 'idle');
+        }) ?? { dispose: () => {} };
+
         // Subscribe to session changes to reload list
         const sessionChangedDisposable = sessionService.onActiveSessionChanged(() => {
             loadSessions();
@@ -524,6 +570,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             messagesDisposable,
             streamingStateDisposable,
             streamingStatusDisposable,
+            sessionStatusDisposable,
             sessionChangedDisposable,
             projectChangedDisposable,
             questionChangedDisposable,
@@ -793,6 +840,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     onNewSession={handleNewSession}
                     onDeleteSession={handleDeleteSession}
                     onToggleDropdown={handleToggleDropdown}
+                    enabledModels={enabledModels}
+                    onManageModels={handleManageModels}
                 />
                 {!hasActiveSession ? (
                     <div className="chat-no-session">
@@ -805,7 +854,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             messages={messages}
                             shellOutputs={shellOutputs}
                             isStreaming={isStreaming}
+                            sessionBusy={sessionBusy}
                             streamingMessageId={streamingMessageId}
+                            streamingStatus={streamingStatus}
                             openCodeService={openCodeService}
                             sessionService={sessionService}
                             pendingPermissions={pendingPermissions}
@@ -848,7 +899,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             openCodeService={openCodeService}
                             sessionId={activeSession?.id}
                         />
-                        <ChatFooter isStreaming={isStreaming} streamingStatus={streamingStatus} />
+                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} />
                     </>
                 )}
             </div>

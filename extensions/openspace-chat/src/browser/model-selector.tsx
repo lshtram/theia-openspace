@@ -20,6 +20,8 @@ import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol'
 
 interface ModelSelectorProps {
     sessionService: SessionService;
+    enabledModels: string[];
+    onManageModels: () => void;
 }
 
 interface FlatModel {
@@ -40,7 +42,7 @@ interface FlatModel {
  * - Keyboard navigation
  * - Recently used models section
  */
-export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) => {
+export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, enabledModels, onManageModels }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
     const [activeModel, setActiveModel] = React.useState<string | undefined>(sessionService.activeModel);
     const [isOpen, setIsOpen] = React.useState(false);
@@ -52,7 +54,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-    // Flatten and filter models based on search
+    // Flatten and filter models based on search and enabled list
     const filteredModels = React.useMemo<FlatModel[]>(() => {
         const models: FlatModel[] = [];
         const query = searchQuery.toLowerCase();
@@ -60,6 +62,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
         for (const provider of providers) {
             for (const [, model] of Object.entries(provider.models)) {
                 const fullId = `${provider.id}/${model.id}`;
+
+                // Apply enabled filter (empty = all enabled)
+                if (enabledModels.length > 0 && !enabledModels.includes(fullId)) {
+                    continue;
+                }
+
                 const matchesSearch = !query || 
                     model.name.toLowerCase().includes(query) ||
                     provider.name.toLowerCase().includes(query) ||
@@ -77,7 +85,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
             }
         }
         return models;
-    }, [providers, searchQuery]);
+    }, [providers, searchQuery, enabledModels]);
 
     // Group filtered models by provider
     const groupedModels = React.useMemo(() => {
@@ -345,6 +353,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService }) 
                             ))}
                         </div>
                     )}
+
+                    {/* Footer: Manage Models */}
+                    <div className="model-dropdown-footer">
+                        <button
+                            type="button"
+                            className="model-manage-btn"
+                            onClick={() => { handleClose(); onManageModels(); }}
+                        >
+                            Manage Models
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
