@@ -14,6 +14,21 @@ import { test, expect, Page } from '@playwright/test';
 /**
  * Helper: Wait for Theia to be fully initialized
   */
+async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
+    // Theia may show a "Do you trust the authors?" dialog on first open.
+    // Dismiss it by clicking "Yes, I trust the authors" so UI interactions proceed.
+    try {
+        const trustDialog = page.locator('.workspace-trust-dialog');
+        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        if (isVisible) {
+            await page.locator('.workspace-trust-dialog .theia-button.main').click();
+            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+    } catch {
+        // Dialog not present or already dismissed — safe to continue
+    }
+}
+
 async function waitForTheiaReady(page: Page) {
   // Wait for Theia shell to be present
   await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
@@ -21,6 +36,7 @@ async function waitForTheiaReady(page: Page) {
   
   // Wait for Theia app shell to be attached using proper waiting
   await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
+  await dismissWorkspaceTrustDialog(page);
 }
 
 /**
