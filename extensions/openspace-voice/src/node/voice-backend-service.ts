@@ -6,6 +6,7 @@ import { NarrationPreprocessor, type LlmCaller } from './narration-preprocessor'
 export interface TranscribeSpeechRequest {
   audio: Uint8Array;
   language: string;
+  sampleRate?: number;
 }
 
 export interface TranscribeSpeechResult {
@@ -52,7 +53,7 @@ export class VoiceBackendService {
   }
 
   async transcribeSpeech(request: TranscribeSpeechRequest): Promise<TranscribeSpeechResult> {
-    return this.sttProvider.transcribe({ audio: request.audio, language: request.language });
+    return this.sttProvider.transcribe({ audio: request.audio, language: request.language, sampleRate: request.sampleRate });
   }
 
   async narrateText(request: NarrateTextRequest): Promise<NarrateTextResult> {
