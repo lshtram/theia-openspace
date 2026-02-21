@@ -20,6 +20,7 @@ import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-w
 import MarkdownIt from 'markdown-it';
 import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
+import { attachTabDblClickToggle } from 'openspace-core/lib/browser/tab-dblclick-toggle';
 
 export type ViewerMode = 'preview' | 'edit';
 
@@ -207,22 +208,12 @@ export class MarkdownViewerWidget extends ReactWidget implements StatefulWidget,
     }
 
     protected attachTabDblClickListener(): void {
-        // this.node is the widget body. The dock panel contains both the
-        // widget stack and the tab bar as sibling panels.
-        const dockPanel = this.node.closest('.lm-DockPanel');
-        if (!dockPanel) { return; }
-        const tabBarContent = dockPanel.querySelector('.lm-TabBar-content');
-        if (!tabBarContent) { return; }
-        const handler = (e: Event) => {
-            const tab = (e.target as HTMLElement).closest('.lm-TabBar-tab');
-            if (!tab) { return; }
-            const label = tab.querySelector('.lm-TabBar-tabLabel');
-            if (label && label.textContent === this.title.label) {
-                this.toggleMode();
-            }
-        };
-        tabBarContent.addEventListener('dblclick', handler);
-        this.toDisposeOnDetach.push({ dispose: () => tabBarContent.removeEventListener('dblclick', handler) });
+        const disposable = attachTabDblClickToggle(
+            this.node,
+            () => this.title.label,
+            () => this.toggleMode(),
+        );
+        this.toDisposeOnDetach.push(disposable);
     }
 
     protected onBeforeDetach(msg: Message): void {
