@@ -103,7 +103,7 @@ export class VoiceCommandContribution
   registerKeybindings(registry: KeybindingRegistry): void {
     registry.registerKeybinding({
       command: VOICE_COMMANDS.TOGGLE_VOICE.id,
-      keybinding: 'ctrl+shift+v',
+      keybinding: 'ctrl+m',
     });
   }
 
