@@ -51,8 +51,9 @@ activity bar on the left with icons for Explorer, Search, Extensions, Sessions, 
 
 1. Press **`Cmd+Shift+P`** to open the Command Palette
 2. Type **`>voice`** (include the `>`)
-3. You should see exactly these two commands:
+3. You should see exactly these three commands:
    - `Voice: Set Policy`
+   - `Voice: Stop Narration`
    - `Voice: Toggle Voice Input`  (keybinding: `Ctrl+Shift+V`)
 
 This confirms the `openspace-voice` Theia extension loaded successfully and wired
@@ -63,16 +64,24 @@ its commands into the IDE.
 ## Step 3 — Enable voice (Set Policy)
 
 1. Command Palette (`Cmd+Shift+P`) -> type `>voice` -> select **`Voice: Set Policy`**
-2. A quick-pick or input dialog appears — set:
-   - `enabled`: `true`
-   - `narrationMode`: `narrate-off` (keep TTS off for now)
-   - `speed`: `1.0`
-   - `voice`: `af_sarah`
-3. Confirm / press Enter
+2. A 3-step interactive quick-pick wizard appears:
 
-The session FSM transitions: **`inactive` -> `active`**
+   **Step 1/3 — Enable voice?**
+   - Choose `Enabled` (the current setting is marked `✓ current`)
+
+   **Step 2/3 — Narration mode**
+   - Choose `narrate-off` (keep TTS off for now)
+
+   **Step 3/3 — Playback speed**
+   - Choose `1.0×` (normal speed)
+
+3. After all three picks the policy is applied immediately.
+
+The session FSM transitions: **`inactive` -> `active`** when enabled is set to true.
 
 The voice input keybinding `Ctrl+Shift+V` is now live.
+
+> Pressing Escape at any step cancels the wizard and leaves the policy unchanged.
 
 ---
 

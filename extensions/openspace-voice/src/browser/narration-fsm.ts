@@ -51,6 +51,13 @@ export class NarrationFsm {
     this.audioCtx?.resume();
   }
 
+  stop(): void {
+    this.queue = [];
+    this.audioCtx?.close();
+    this.audioCtx = null;
+    this._state = 'idle';
+  }
+
   // M-6: Iterative drain loop replaces recursive processQueue() to avoid stack growth
   private async drainLoop(first: NarrationRequest): Promise<void> {
     let current: NarrationRequest | undefined = first;
