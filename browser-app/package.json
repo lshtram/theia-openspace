@@ -48,7 +48,7 @@
     "@theia/cli": "1.68.2"
   },
   "scripts": {
-    "build": "theia build --mode development",
+    "build": "theia build --mode development && mkdir -p lib/frontend && cp resources/favicon.svg lib/frontend/favicon.svg",
     "start": "THEIA_CONFIG_DIR=$(mktemp -d) theia start --port 3000 --plugins=local-dir:../plugins/builtin",
     "watch": "theia build --watch --mode development",
     "clean": "rimraf lib src-gen"

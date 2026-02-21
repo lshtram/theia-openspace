@@ -1,7 +1,7 @@
 // extensions/openspace-settings/src/browser/ai-models-preference-renderer.tsx
 
 import * as React from '@theia/core/shared/react';
-import * as ReactDOM from '@theia/core/shared/react-dom';
+import { createRoot, Root } from '@theia/core/shared/react-dom/client';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { interfaces } from '@theia/core/shared/inversify';
 import { PreferenceService, PreferenceScope } from '@theia/core/lib/common/preferences';
@@ -176,6 +176,8 @@ export class AiModelsPreferenceRenderer extends PreferenceNodeRenderer {
     @inject(SessionService)
     protected readonly sessionService!: SessionService;
 
+    private _root: Root | undefined;
+
     @postConstruct()
     protected override init(): void {
         super.init();
@@ -190,17 +192,18 @@ export class AiModelsPreferenceRenderer extends PreferenceNodeRenderer {
     }
 
     private mountReact(): void {
-        ReactDOM.render(
+        this._root = createRoot(this.domNode);
+        this._root.render(
             <AiModelsManager
                 preferenceService={this.preferenceService}
                 sessionService={this.sessionService}
-            />,
-            this.domNode
+            />
         );
     }
 
     override dispose(): void {
-        ReactDOM.unmountComponentAtNode(this.domNode);
+        this._root?.unmount();
+        this._root = undefined;
         super.dispose();
     }
 }
