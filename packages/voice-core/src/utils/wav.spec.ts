@@ -25,3 +25,12 @@ describe('buildWavBuffer', () => {
     assert.strictEqual(buf.length, 144);
   });
 });
+
+  it('encodes stereo (channels=2) with correct blockAlign and byteRate', () => {
+    const pcm = new Uint8Array(8);
+    const buf = buildWavBuffer(pcm, 44100, 2);
+    const view = new DataView(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    assert.strictEqual(view.getUint16(22, true), 2, 'numChannels should be 2');
+    assert.strictEqual(view.getUint16(32, true), 4, 'blockAlign = 2 channels * 2 bytes = 4');
+    assert.strictEqual(view.getUint32(28, true), 176400, 'byteRate = 44100 * 4 = 176400');
+  });

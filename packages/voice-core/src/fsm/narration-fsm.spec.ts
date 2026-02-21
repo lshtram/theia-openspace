@@ -58,4 +58,31 @@ describe('NarrationFsm', () => {
     fsm.resume();
     assert.strictEqual(fsm.state, 'playing');
   });
+
+  // Task 12: gap tests
+  it('throws VoiceFsmError on pause() when idle', () => {
+    const fsm = new NarrationFsm();
+    assert.throws(() => fsm.pause(), (err: unknown) => err instanceof Error && err.constructor.name === 'VoiceFsmError');
+  });
+
+  it('throws VoiceFsmError on pause() when queued', () => {
+    const fsm = new NarrationFsm();
+    fsm.enqueue(REQ);
+    assert.strictEqual(fsm.state, 'queued');
+    assert.throws(() => fsm.pause(), (err: unknown) => err instanceof Error && err.constructor.name === 'VoiceFsmError');
+  });
+
+  it('enqueue() while playing and complete() returns that next item', () => {
+    const req2: NarrationRequest = { text: 'second', mode: 'narrate-everything', voice: 'af_sarah', speed: 1 };
+    const fsm = new NarrationFsm();
+    fsm.enqueue(REQ);
+    fsm.startProcessing();
+    fsm.audioReady();
+    assert.strictEqual(fsm.state, 'playing');
+    fsm.enqueue(req2);
+    const next = fsm.complete();
+    assert.ok(next !== undefined, 'complete() should return next queued item');
+    assert.strictEqual(next.text, 'second');
+    assert.strictEqual(fsm.state, 'queued');
+  });
 });
