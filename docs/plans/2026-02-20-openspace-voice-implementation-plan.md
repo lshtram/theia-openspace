@@ -1630,3 +1630,26 @@ npx vsce publish    # requires token
 2. **Parallel Session (separate)** — Open new session with executing-plans skill
 
 Which approach?
+
+---
+
+## Infrastructure Notes
+
+### Worktree node_modules (INFRA-1)
+
+The `feature-voice` worktree has its own `node_modules` directory (~1.1 GB, gitignored).
+This is expected: the voice branch adds `kokoro-js`, `node-record-lpcm16`, `@vscode/vsce`, and
+other heavy dependencies that are not in the main branch.
+
+**CI must run `yarn install` from the worktree root before building:**
+
+```bash
+cd .worktrees/feature-voice
+yarn install
+yarn workspace @openspace-ai/voice-core run build
+yarn workspace @openspace-ai/voice-core run test
+```
+
+The worktree `node_modules` is separate from the main repo `node_modules` and is fully
+self-contained. Do not attempt to share `node_modules` between the main worktree and the
+feature worktree.
