@@ -37,9 +37,14 @@ export function registerDictationCommand(
         // Start recording — node-record-lpcm16 wraps sox/arecord/rec
         recorder = record.record({ sampleRate: 16000, channels: 1, audioType: 'raw' });
 
-        recorder.stream().on('data', (chunk: Buffer) => pcmChunks.push(chunk));
-        recorder.stream().on('error', (err: Error) => {
-          throw err;
+        // H-2: call stream() once — calling it twice may return different objects
+        // H-1: do not throw inside EventEmitter listener — it becomes an uncaught exception
+        let recordingError: Error | null = null;
+        const stream = recorder.stream();
+        stream.on('data', (chunk: Buffer) => pcmChunks.push(chunk));
+        stream.on('error', (err: Error) => {
+          recordingError = err;
+          try { recorder!.stop(); } catch { /* ignore */ }
         });
 
         // Show non-modal notification while recording
@@ -50,6 +55,10 @@ export function registerDictationCommand(
         );
 
         recorder.stop();
+
+        // Now safe to re-throw — caught by outer try/catch
+        if (recordingError) throw recordingError;
+
         deps.audioFsm.stopCapture();
 
         // Process audio
