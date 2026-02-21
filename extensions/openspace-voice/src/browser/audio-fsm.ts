@@ -84,6 +84,8 @@ export class AudioFsm {
     } catch (err) {
       this._state = validateAudioTransition({ from: this._state, trigger: 'sttError' });
       this.options.onError?.(err as Error);
+      // Auto-reset to idle so the next capture attempt doesn't hit error:startCapture
+      this._state = validateAudioTransition({ from: this._state, trigger: 'reset' });
     }
   }
 

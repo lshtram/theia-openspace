@@ -38,7 +38,9 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                     // M-5: Await provider initialization before handling requests
                     await this.readyPromise;
                     const audio = new Uint8Array(req.body as Buffer);
-                    const language = (req.headers['x-voice-language'] as string) ?? 'en-US';
+                    const rawLanguage = (req.headers['x-voice-language'] as string) ?? 'en-US';
+                    // whisper.cpp uses ISO 639-1 two-letter codes (e.g. "en"), not BCP-47 (e.g. "en-US")
+                    const language = rawLanguage.split('-')[0].split('_')[0].toLowerCase();
                     // M-5: Read X-Sample-Rate header and pass it to the STT provider
                     const sampleRateHeader = req.headers['x-sample-rate'] as string | undefined;
                     const sampleRate = sampleRateHeader ? parseInt(sampleRateHeader, 10) : 16000;
