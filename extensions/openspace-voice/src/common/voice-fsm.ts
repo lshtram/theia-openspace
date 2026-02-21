@@ -67,6 +67,11 @@ export function validateNarrationTransition(req: { from: NarrationState; trigger
     case 'playing:pause': return 'paused';
     case 'paused:resume': return 'playing';
     case 'playing:complete': return 'idle';
+    // M-7: Error transitions — use validator (not direct assignment) to reset FSM on error
+    case 'queued:error': return 'idle';
+    case 'processing:error': return 'idle';
+    case 'playing:error': return 'idle';
+    case 'paused:error': return 'idle';
     default: return fail('narration', from, trigger);
   }
 }

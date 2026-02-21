@@ -6,11 +6,18 @@ type TransitionTable = Partial<Record<`${NarrationState}:${NarrationTrigger}`, N
 
 const TRANSITIONS: TransitionTable = {
   'idle:enqueue': 'queued',
-  'queued:enqueue': 'queued',         // additional items while queued
+  // Note: 'queued:enqueue' is intentionally absent — enqueue() pushes to queue array
+  // for non-idle states without calling transition(), so this entry would be dead code.
   'queued:startProcessing': 'processing',
   'processing:audioReady': 'playing',
   'playing:pause': 'paused',
   'paused:resume': 'playing',
+  'playing:complete': 'idle',
+  // M-7: Error transitions — allow FSM to return to idle from any active state
+  'queued:error': 'idle',
+  'processing:error': 'idle',
+  'playing:error': 'idle',
+  'paused:error': 'idle',
 };
 
 export interface NarrationRequest {
@@ -41,6 +48,7 @@ export class NarrationFsm {
   audioReady(): void { this._state = this.transition('audioReady'); }
   pause(): void { this._state = this.transition('pause'); }
   resume(): void { this._state = this.transition('resume'); }
+  error(): void { this._state = this.transition('error'); }
 
   /** Marks current item done. Returns next request if any, or undefined if queue is empty. */
   complete(): NarrationRequest | undefined {
@@ -50,7 +58,7 @@ export class NarrationFsm {
     if (next) {
       this._state = 'queued';  // more work to do
     } else {
-      this._state = 'idle';
+      this._state = this.transition('complete');  // playing → idle
     }
     return next;
   }

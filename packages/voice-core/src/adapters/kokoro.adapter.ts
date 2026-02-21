@@ -22,7 +22,7 @@ export class KokoroAdapter implements TtsProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await import('kokoro-js');
+      await import('kokoro-js' as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       return true;
     } catch {
       return false;
@@ -71,7 +71,8 @@ export class KokoroAdapter implements TtsProvider {
     if (!this.modelLoadPromise) {
       this.modelLoadPromise = (async () => {
         // C-1: kokoro-js is ESM-only — must use dynamic import(), not require()
-        const { KokoroTTS } = await import('kokoro-js') as { KokoroTTS: KokoroTTSConstructor };
+        const kokoroModule = await import('kokoro-js' as any) as { KokoroTTS: KokoroTTSConstructor };  // eslint-disable-line @typescript-eslint/no-explicit-any
+        const { KokoroTTS } = kokoroModule;
         this.model = await KokoroTTS.from_pretrained(
           'onnx-community/Kokoro-82M-v1.0-ONNX',
           { dtype: 'q8', device: 'cpu' }

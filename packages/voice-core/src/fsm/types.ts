@@ -4,7 +4,7 @@ export type AudioState = 'idle' | 'listening' | 'processing' | 'error';
 export type AudioTrigger = 'startCapture' | 'stopCapture' | 'transcriptReady' | 'sttError' | 'reset';
 
 export type NarrationState = 'idle' | 'queued' | 'processing' | 'playing' | 'paused';
-export type NarrationTrigger = 'enqueue' | 'startProcessing' | 'audioReady' | 'pause' | 'resume' | 'complete';
+export type NarrationTrigger = 'enqueue' | 'startProcessing' | 'audioReady' | 'pause' | 'resume' | 'complete' | 'error';
 
 export type SessionState = 'inactive' | 'active' | 'suspended';
 export type SessionTrigger = 'enable' | 'disable' | 'pushToTalkStart' | 'pushToTalkEnd';

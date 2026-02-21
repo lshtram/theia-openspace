@@ -32,8 +32,8 @@ export class NarrationFsm {
     if (this._state === 'idle') {
       this._state = validateNarrationTransition({ from: this._state, trigger: 'enqueue' });
       // Start processing asynchronously so callers see 'queued' state
-      Promise.resolve().then(() => this.processQueue(request)).catch((err) => {
-        this._state = 'idle';
+      Promise.resolve().then(() => this.drainLoop(request)).catch((err) => {
+        this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
         this.options.onError?.(err as Error);
       });
     } else {
@@ -51,48 +51,54 @@ export class NarrationFsm {
     this.audioCtx?.resume();
   }
 
-  private async processQueue(request: NarrationRequest): Promise<void> {
-    this._state = validateNarrationTransition({ from: this._state, trigger: 'startProcessing' });
-
-    try {
-      const response = await fetch(this.options.narrateEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) throw new Error(`Narrate endpoint returned ${response.status}`);
-      const result = await response.json() as {
-        segments: Array<{ type: string; audioBase64?: string; utteranceId?: string }>;
-      };
-
-      this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
-
-      if (!this.audioCtx) {
-        this.audioCtx = new AudioContext();
+  // M-6: Iterative drain loop replaces recursive processQueue() to avoid stack growth
+  private async drainLoop(first: NarrationRequest): Promise<void> {
+    let current: NarrationRequest | undefined = first;
+    while (current) {
+      this._state = validateNarrationTransition({ from: this._state, trigger: 'startProcessing' });
+      try {
+        await this.fetchAndPlay(current);
+        this._state = validateNarrationTransition({ from: this._state, trigger: 'complete' });
+        this.options.onPlaybackComplete?.();
+      } catch (err) {
+        // M-7: Use validateNarrationTransition (not direct assignment) for error transitions
+        this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
+        this.options.onError?.(err as Error);
+        return;
       }
-
-      for (const segment of result.segments) {
-        if (segment.type === 'speech' && segment.audioBase64) {
-          const bytes = Uint8Array.from(atob(segment.audioBase64), (c) => c.charCodeAt(0));
-          await this.playAudioBuffer(bytes);
-        } else if (segment.type === 'utterance' && segment.utteranceId) {
-          await this.playUtterance(segment.utteranceId);
-        }
-      }
-
-      this._state = validateNarrationTransition({ from: this._state, trigger: 'complete' });
-      this.options.onPlaybackComplete?.();
-
-      // Process next in queue
-      if (this.queue.length > 0) {
-        const next = this.queue.shift()!;
+      current = this.queue.shift();
+      if (current) {
+        // More items to process -- transition back to queued before next iteration
         this._state = validateNarrationTransition({ from: this._state, trigger: 'enqueue' });
-        await this.processQueue(next);
       }
-    } catch (err) {
-      this._state = 'idle'; // reset on error
-      this.options.onError?.(err as Error);
+    }
+  }
+
+  private async fetchAndPlay(request: NarrationRequest): Promise<void> {
+    const response = await fetch(this.options.narrateEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) throw new Error(`Narrate endpoint returned ${response.status}`);
+    const result = await response.json() as {
+      segments: Array<{ type: string; audioBase64?: string; utteranceId?: string }>;
+    };
+
+    this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
+
+    if (!this.audioCtx) {
+      this.audioCtx = new AudioContext();
+    }
+
+    for (const segment of result.segments) {
+      if (segment.type === 'speech' && segment.audioBase64) {
+        const bytes = Uint8Array.from(atob(segment.audioBase64), (c) => c.charCodeAt(0));
+        await this.playAudioBuffer(bytes);
+      } else if (segment.type === 'utterance' && segment.utteranceId) {
+        await this.playUtterance(segment.utteranceId);
+      }
     }
   }
 
@@ -100,7 +106,8 @@ export class NarrationFsm {
     if (!this.audioCtx) return;
     const int16 = new Int16Array(pcmBytes.buffer);
     const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32767;
+    // L-4: Correct Int16->Float32 conversion uses / 32768 (not / 32767)
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
 
     const buffer = this.audioCtx.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);
@@ -119,7 +126,7 @@ export class NarrationFsm {
     const url = `${this.options.utteranceBaseUrl}/${utteranceId}`;
     try {
       const response = await fetch(url);
-      if (!response.ok) return; // skip missing utterances silently
+      if (!response.ok) return;
       const arrayBuffer = await response.arrayBuffer();
       if (!this.audioCtx) return;
       const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
