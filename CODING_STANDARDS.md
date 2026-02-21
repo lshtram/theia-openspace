@@ -71,7 +71,11 @@ try {
 - **Commits:** Concise, descriptive messages. Focus on "why" not "what".
 - **Branches:** Feature branches via worktree for BUILD workflow.
 - **No secrets:** Never commit API keys, tokens, or credentials.
-- **E2E tests before push (REQUIRED):** Any change that touches real functionality — Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path — MUST have the full E2E suite run and passing before `git push`. Run: `yarn test:e2e`. Unit tests alone are not sufficient for functional changes. If E2E tests fail, the push is blocked until fixed.
+- **E2E tests before push (REQUIRED):** Any change that touches real functionality — Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path — MUST have the full E2E suite run and passing before `git push`. Run: `npm run test:e2e`. Unit tests alone are not sufficient for functional changes. If E2E tests fail, the push is blocked until fixed.
+- **E2E server pre-requisites (MANDATORY):** E2E tests require **both** servers to be running:
+  - **Theia** on port `3000` — `yarn start:browser`
+  - **OpenCode** on port `7890` — `opencode serve`
+  `npm run test:e2e` handles this automatically via `scripts/e2e-precheck.sh`, which starts any missing server and waits until both are healthy before Playwright launches. Never skip the pre-check. Never invoke `playwright test` directly unless both servers are already verified up. If you are an AI agent running tests, always use `npm run test:e2e` — not `npx playwright test` — so the servers are guaranteed.
 
 ---
 

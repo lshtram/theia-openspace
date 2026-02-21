@@ -30,10 +30,14 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "mocha",
-    "test:e2e": "playwright test",
+    "test:e2e": "bash scripts/e2e-precheck.sh && playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:coverage": "nyc mocha",
-    "test:watch": "mocha --watch"
+    "test:watch": "mocha --watch",
+    "servers:start": "bash scripts/servers.sh start",
+    "servers:stop": "bash scripts/servers.sh stop",
+    "servers:status": "bash scripts/e2e-precheck.sh --status",
+    "e2e:precheck": "bash scripts/e2e-precheck.sh"
   },
   "resolutions": {
     "@theia/monaco-editor-core": "1.96.302"

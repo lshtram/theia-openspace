@@ -1,96 +1,113 @@
 /**
  * Global Setup for E2E Tests
- * 
- * Ensures the OpenCode server is running before tests start.
- * This is a requirement for integration tests that communicate with the backend.
+ *
+ * Ensures the OpenCode server (:7890) is running before tests start.
+ * Theia (:3000) is handled separately by playwright.config.ts webServer.
+ *
+ * Environment variables:
+ *   OPENCODE_BIN   — path to opencode binary (default: auto-detect)
+ *   OPENCODE_PORT  — OpenCode port (default: 7890)
+ *
+ * NOTE: Use `npm run test:e2e` (not `npx playwright test` directly).
+ * The npm script runs scripts/e2e-precheck.sh first, which brings up any
+ * missing server and waits for both :3000 and :7890 to be healthy before
+ * Playwright is launched.
  */
 
 import { FullConfig } from '@playwright/test';
 import * as http from 'http';
-import { spawn } from 'child_process';
+import * as path from 'path';
+import { spawn, ChildProcess } from 'child_process';
+import * as fs from 'fs';
 
-const OPENCODE_PORT = 7890;
-const OPENCODE_URL = `http://localhost:${OPENCODE_PORT}`;
+// ─── Configuration ───────────────────────────────────────────────────────────
 
-/**
- * Check if a URL is responding
- */
+const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT ?? '7890', 10);
+const OPENCODE_URL  = `http://localhost:${OPENCODE_PORT}`;
+const READY_TIMEOUT_MS = 120_000;
+const POLL_INTERVAL_MS = 1_000;
+const PROJECT_ROOT  = path.resolve(__dirname, '..');
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function log(msg: string): void {
+    console.log(`[Global Setup] ${msg}`);
+}
+
 function isServerRunning(url: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.get(url, (res) => {
-      resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 500);
+    return new Promise((resolve) => {
+        const req = http.get(url, (res) => {
+            resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 500);
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(3_000, () => { req.destroy(); resolve(false); });
     });
-    req.on('error', () => resolve(false));
-    req.setTimeout(3000, () => { req.destroy(); resolve(false); });
-  });
 }
 
-/**
- * Start the OpenCode server
- */
-function startOpenCodeServer(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const opencodePath = process.env.OPENCODE_BIN || '/Users/opencode/.opencode/bin/opencode';
-    
-    console.log(`[Global Setup] Starting OpenCode server on port ${OPENCODE_PORT}...`);
-    
-    const proc = spawn(opencodePath, ['serve', '--port', String(OPENCODE_PORT)], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false
+function waitUntilReady(url: string, label: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const deadline = Date.now() + READY_TIMEOUT_MS;
+        const tick = async (): Promise<void> => {
+            if (await isServerRunning(url)) {
+                log(`${label} ready at ${url}`);
+                resolve();
+                return;
+            }
+            if (Date.now() >= deadline) {
+                reject(new Error(`${label} did not become ready within ${READY_TIMEOUT_MS / 1000}s`));
+                return;
+            }
+            const elapsed = Math.round((Date.now() - (deadline - READY_TIMEOUT_MS)) / 1000);
+            log(`Waiting for ${label}... (${elapsed}s)`);
+            setTimeout(tick, POLL_INTERVAL_MS);
+        };
+        tick();
     });
-    
-    proc.stdout?.on('data', (data) => process.stdout.write(`[opencode] ${data}`));
-    proc.stderr?.on('data', (data) => process.stderr.write(`[opencode] ${data}`));
-    
-    // Wait for server to be ready
-    const startTime = Date.now();
-    const maxWait = 60000;
-    
-    const checkInterval = setInterval(() => {
-      isServerRunning(OPENCODE_URL).then((running) => {
-        if (running) {
-          clearInterval(checkInterval);
-          console.log('[Global Setup] OpenCode server ready');
-          resolve();
-        } else if (Date.now() - startTime > maxWait) {
-          clearInterval(checkInterval);
-          proc.kill();
-          reject(new Error('OpenCode server failed to start within 60s'));
-        }
-      });
-    }, 1000);
-  });
 }
 
-async function globalSetup(_config: FullConfig) {
-  console.log('[Global Setup] Checking OpenCode server...');
-  
-  // Check if server is already running
-  const isRunning = await isServerRunning(OPENCODE_URL);
-  
-  if (isRunning) {
-    console.log(`[Global Setup] OpenCode server already running at ${OPENCODE_URL}`);
-  } else {
-    // Server not running - try to start it
-    try {
-      await startOpenCodeServer();
-    } catch (err) {
-      console.error('[Global Setup] Failed to start OpenCode server:', err);
-      throw err;
+// ─── OpenCode ────────────────────────────────────────────────────────────────
+
+function resolveOpenCodeBin(): string {
+    if (process.env.OPENCODE_BIN) return process.env.OPENCODE_BIN;
+    const candidates = [
+        '/opt/homebrew/bin/opencode',
+        '/usr/local/bin/opencode',
+        `${process.env.HOME}/.opencode/bin/opencode`,
+        '/Users/opencode/.opencode/bin/opencode',
+    ];
+    for (const c of candidates) {
+        if (fs.existsSync(c)) return c;
     }
-  }
+    return 'opencode'; // fallback to PATH
+}
 
-  // Also verify the Theia dev server is reachable (required for browser tests)
-  const isTheiaRunning = await isServerRunning('http://localhost:3000');
-  if (!isTheiaRunning) {
-    console.error('\n[Global Setup] ERROR: Theia dev server is not running on port 3000.');
-    console.error('[Global Setup] Browser-based E2E tests require a running Theia server.');
-    console.error('[Global Setup] Start it with: yarn start:browser');
-    console.error('[Global Setup] Then re-run: npm run test:e2e\n');
-    // Don't throw — let the individual browser tests fail with Playwright's native error.
-    // This message surfaces first so the developer knows what went wrong.
-    console.warn('[Global Setup] Continuing — browser tests will fail. API-only tests will pass.');
-  }
+function startOpenCode(): Promise<ChildProcess> {
+    return new Promise((resolve, reject) => {
+        const bin = resolveOpenCodeBin();
+        log(`Starting OpenCode (${bin} serve --port ${OPENCODE_PORT})...`);
+        const proc = spawn(bin, ['serve', '--port', String(OPENCODE_PORT)], {
+            cwd: PROJECT_ROOT,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            detached: false,
+        });
+        proc.stdout?.on('data', (d) => process.stdout.write(`[opencode] ${d}`));
+        proc.stderr?.on('data', (d) => process.stderr.write(`[opencode] ${d}`));
+        proc.on('error', (err) => reject(new Error(`Failed to spawn OpenCode: ${err.message}`)));
+        setTimeout(() => resolve(proc), 500);
+    });
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+
+async function globalSetup(_config: FullConfig): Promise<void> {
+    const running = await isServerRunning(OPENCODE_URL);
+    if (running) {
+        log(`OpenCode already running at ${OPENCODE_URL}`);
+    } else {
+        log('OpenCode not running — starting it...');
+        await startOpenCode();
+        await waitUntilReady(OPENCODE_URL, 'OpenCode');
+    }
 }
 
 export default globalSetup;
