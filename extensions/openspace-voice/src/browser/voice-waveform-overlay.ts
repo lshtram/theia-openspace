@@ -3,6 +3,8 @@
 const OVERLAY_ID = 'openspace-voice-waveform-overlay';
 const WIDTH = 200;
 const HEIGHT = 48;
+const BAR_COUNT = 32;
+const BAR_GAP = 3;
 const BAR_COLOR = '#e53e3e';
 const BG_COLOR = 'rgba(20, 20, 20, 0.85)';
 const BORDER_RADIUS = '6px';
@@ -11,15 +13,17 @@ export class VoiceWaveformOverlay {
   private container: HTMLDivElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private smoothedValues: Float32Array = new Float32Array(BAR_COUNT);
+  private smoothingFactor = 0.3;
 
   show(): void {
-    if (this.container) return; // already visible
+    if (this.container) return;
 
     const container = document.createElement('div');
     container.id = OVERLAY_ID;
     Object.assign(container.style, {
       position: 'fixed',
-      bottom: '28px',       // sit just above the status bar (~22px tall)
+      bottom: '28px',
       right: '12px',
       width: `${WIDTH}px`,
       height: `${HEIGHT}px`,
@@ -48,7 +52,7 @@ export class VoiceWaveformOverlay {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
 
-    // Draw a flat silent waveform as initial state
+    this.smoothedValues.fill(0);
     this._drawFlat();
   }
 
@@ -61,21 +65,25 @@ export class VoiceWaveformOverlay {
 
     ctx.clearRect(0, 0, W, H);
 
-    // Draw the bar-chart waveform.
-    // data[i] is a byte (0–255); 128 = zero-crossing (silence).
-    // We draw each sample as a vertical bar centred on H/2,
-    // height proportional to how far it deviates from 128.
-    const barCount = data.length;
-    const barW = W / barCount;
+    const totalGap = BAR_GAP * (BAR_COUNT - 1);
+    const barW = (W - totalGap) / BAR_COUNT;
 
     ctx.fillStyle = BAR_COLOR;
 
-    for (let i = 0; i < barCount; i++) {
-      const deviation = Math.abs(data[i] - 128) / 128; // 0.0 – 1.0
-      const barH = Math.max(2, deviation * H);
-      const x = i * barW;
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const srcIndex = Math.floor((i / BAR_COUNT) * data.length);
+      const rawDeviation = Math.abs(data[srcIndex] - 128) / 128;
+      const target = Math.max(0.05, rawDeviation);
+
+      this.smoothedValues[i] += (target - this.smoothedValues[i]) * this.smoothingFactor;
+
+      const barH = Math.max(4, this.smoothedValues[i] * H * 0.9);
+      const x = i * (barW + BAR_GAP);
       const y = (H - barH) / 2;
-      ctx.fillRect(x, y, Math.max(1, barW - 1), barH);
+
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, barW / 3);
+      ctx.fill();
     }
   }
 
@@ -85,6 +93,7 @@ export class VoiceWaveformOverlay {
       this.container = null;
       this.canvas = null;
       this.ctx = null;
+      this.smoothedValues.fill(0);
     }
   }
 
@@ -95,6 +104,17 @@ export class VoiceWaveformOverlay {
     const H = this.canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = BAR_COLOR;
-    ctx.fillRect(0, H / 2 - 1, W, 2); // thin flat line at silence
+
+    const totalGap = BAR_GAP * (BAR_COUNT - 1);
+    const barW = (W - totalGap) / BAR_COUNT;
+
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const x = i * (barW + BAR_GAP);
+      const barH = 4;
+      const y = (H - barH) / 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, barW / 3);
+      ctx.fill();
+    }
   }
 }
