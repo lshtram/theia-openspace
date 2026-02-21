@@ -33,12 +33,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.show();
   context.subscriptions.push(statusBar);
 
-  // Set context key to false — commands show "still initializing" until ready
+  // Set context key to false -- commands show "still initializing" until ready
   await vscode.commands.executeCommand('setContext', 'openspace-voice.ready', false);
 
   // Register commands immediately so keybindings work, but they check ready state
   registerDictationCommand(context, { sttAdapter, sessionFsm, audioFsm });
-  registerReadAloudCommand(context, { ttsAdapter, sessionFsm });
+  // M-1, L-3: Pass narrationFsm to registerReadAloudCommand
+  registerReadAloudCommand(context, { ttsAdapter, sessionFsm, narrationFsm });
 
   // Register configure command
   context.subscriptions.push(
@@ -47,7 +48,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
-  // Check providers in background — don't block activation
+  // M-1: Register stopNarration command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openspace-voice.stopNarration', () => {
+      if (narrationFsm.state === 'playing') {
+        narrationFsm.pause();
+        vscode.window.showInformationMessage('Narration paused.');
+      } else {
+        vscode.window.showInformationMessage('No narration is currently playing.');
+      }
+    })
+  );
+
+  // Check providers in background -- don't block activation
   checkProviders().catch((err) => {
     console.error('[openspace-voice] Provider check failed:', err);
   });
@@ -112,12 +125,10 @@ function getInstallHtml(missing: string): string {
 # or build from source: https://github.com/ggerganov/whisper.cpp</pre>
     <h3>kokoro-js</h3>
     <pre>npm install -g kokoro-js</pre>
-    <p>After installing, run <strong>Voice: Configure</strong> → "Already Installed"</p>
+    <p>After installing, run <strong>Voice: Configure</strong> -> "Already Installed"</p>
   </body></html>`;
 }
 
 export async function deactivate(): Promise<void> {
   await ttsAdapter?.dispose();
-  // suppress unused variable warning for narrationFsm — it's kept for future use
-  void narrationFsm;
 }
