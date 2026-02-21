@@ -81,7 +81,8 @@ export class OpenSpaceBridgeContribution implements FrontendApplicationContribut
         this.syncService.setSessionService(this.sessionService);
         
         // Register this browser as the MCP command bridge
-        await this.registerBridge();
+        this.registerBridge().catch(err =>
+            this.logger.warn('[BridgeContribution] Bridge registration failed:', err));
         
         // Subscribe to pane state changes
         this.subscribeToPaneState();
