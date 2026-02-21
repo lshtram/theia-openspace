@@ -153,7 +153,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
 
     describe('createMessage()', () => {
         it('makes POST /session/:id/message with parts', async () => {
-            proxy.respondWith({ id: 'm2', parts: [{ type: 'text', text: 'hello' }], role: 'user' });
+            proxy.respondWith({ info: { id: 'm2', parts: [{ type: 'text', text: 'hello' }], role: 'user' }, parts: [{ type: 'text', text: 'hello' }] });
             const message = await proxy.createMessage(
                 'proj-1', 'sess-1',
                 { parts: [{ type: 'text', text: 'hello' } as any] }
@@ -162,7 +162,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
             expect(proxy.capturedUrl).to.include('/session/sess-1/message');
             const body = JSON.parse(proxy.capturedBody!);
             expect(body.parts).to.have.length(1);
-            expect(message.id).to.equal('m2');
+            expect(message.info.id).to.equal('m2');
         });
 
         it('includes model when provided', async () => {
