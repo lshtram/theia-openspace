@@ -90,6 +90,11 @@
           "type": "string",
           "default": "/usr/local/share/whisper",
           "description": "Folder containing whisper GGML model files (e.g., ggml-base.en.bin)"
+        },
+        "openspace-voice.whisperModel": {
+          "type": "string",
+          "default": "ggml-base.en.bin",
+          "description": "Whisper GGML model filename (e.g. ggml-base.en.bin for English-only, ggml-medium.bin for multilingual)"
         }
       }
     }

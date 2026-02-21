@@ -21,8 +21,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const config = vscode.workspace.getConfiguration('openspace-voice');
   const whisperPath = config.get<string>('whisperPath') ?? 'whisper';
   const whisperModelFolder = config.get<string>('whisperModelFolder') ?? '/usr/local/share/whisper';
+  const whisperModel = config.get<string>('whisperModel') ?? 'ggml-base.en.bin';
 
-  sttAdapter = new WhisperCppAdapter(whisperPath, whisperModelFolder);
+  sttAdapter = new WhisperCppAdapter(whisperPath, whisperModelFolder, whisperModel);
   ttsAdapter = new KokoroAdapter();
   sessionFsm = new SessionFsm();
   audioFsm = new AudioFsm();

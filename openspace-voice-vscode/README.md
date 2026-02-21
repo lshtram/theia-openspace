@@ -76,6 +76,7 @@ To change the keybinding, open **Keyboard Shortcuts** (`Cmd+K Cmd+S`) and search
 |---------|---------|-------------|
 | `openspace-voice.whisperPath` | `"whisper"` | Path to whisper.cpp binary |
 | `openspace-voice.whisperModelFolder` | `"/usr/local/share/whisper"` | Folder containing GGML model files |
+| `openspace-voice.whisperModel` | `"ggml-base.en.bin"` | Whisper GGML model filename (e.g. ggml-base.en.bin for English-only, ggml-medium.bin for multilingual) |
 | `openspace-voice.voice` | `"af_sarah"` | Kokoro TTS voice ID |
 | `openspace-voice.speed` | `1.0` | Playback speed (0.5–2.0) |
 | `openspace-voice.language` | `"en-US"` | BCP-47 language tag for STT |
