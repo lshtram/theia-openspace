@@ -5,16 +5,19 @@ const WIDTH = 200;
 const HEIGHT = 48;
 const BAR_COUNT = 32;
 const BAR_GAP = 3;
-const BAR_COLOR = '#e53e3e';
-const BG_COLOR = 'rgba(20, 20, 20, 0.85)';
+const BAR_COLOR = '#63b3ed';      // Light blue (matches Theia/our theme)
+const BG_COLOR = 'rgba(40, 40, 40, 0.5)';  // Gray 50% opacity
 const BORDER_RADIUS = '6px';
+
+const NOISE_FLOOR = 10;           // Values below this are considered silence
+const COMPRESSION_POWER = 0.5;    // Power law compression (0.5 = sqrt)
 
 export class VoiceWaveformOverlay {
   private container: HTMLDivElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private smoothedValues: Float32Array = new Float32Array(BAR_COUNT);
-  private smoothingFactor = 0.3;
+  private smoothingFactor = 0.08;  // Much slower: 8% per frame (words "pass by")
 
   show(): void {
     if (this.container) return;
@@ -72,12 +75,27 @@ export class VoiceWaveformOverlay {
 
     for (let i = 0; i < BAR_COUNT; i++) {
       const srcIndex = Math.floor((i / BAR_COUNT) * data.length);
-      const rawDeviation = Math.abs(data[srcIndex] - 128) / 128;
-      const target = Math.max(0.05, rawDeviation);
+      const sample = data[srcIndex];
 
+      // Apply noise floor - treat quiet sounds as near-zero
+      let deviation = Math.abs(sample - 128);
+      if (deviation < NOISE_FLOOR) {
+        // Very low response below noise floor (still shows a little for feedback)
+        deviation = (deviation / NOISE_FLOOR) * 5;
+      } else {
+        // Above noise floor: apply power law compression to boost quiet sounds
+        const normalized = (deviation - NOISE_FLOOR) / (255 - NOISE_FLOOR);
+        const compressed = Math.pow(normalized, COMPRESSION_POWER);
+        deviation = NOISE_FLOOR + compressed * (255 - NOISE_FLOOR);
+      }
+
+      const normalized = Math.min(1, deviation / 80); // Normalize, boost for visibility
+      const target = Math.max(0.05, normalized);
+
+      // Smoothing with much slower lerp (words "pass by" effect)
       this.smoothedValues[i] += (target - this.smoothedValues[i]) * this.smoothingFactor;
 
-      const barH = Math.max(4, this.smoothedValues[i] * H * 0.9);
+      const barH = Math.max(4, this.smoothedValues[i] * H * 0.85);
       const x = i * (barW + BAR_GAP);
       const y = (H - barH) / 2;
 
