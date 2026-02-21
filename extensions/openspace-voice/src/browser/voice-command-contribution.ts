@@ -8,6 +8,7 @@ import { QuickPickService, QuickPickValue } from '@theia/core/lib/common/quick-p
 import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
+import { VoiceWaveformOverlay } from './voice-waveform-overlay';
 import type { VoicePolicy } from '../common/voice-policy';
 import { NARRATION_MODES } from '../common/voice-policy';
 
@@ -30,6 +31,12 @@ export class VoiceCommandContribution
   @inject(StatusBar)         private readonly statusBar!: StatusBar;
 
   private recording = false;
+
+  private readonly waveformOverlay = new VoiceWaveformOverlay();
+
+  pushVolumeData(data: Uint8Array): void {
+    this.waveformOverlay.push(data);
+  }
 
   // ── FrontendApplicationContribution ──────────────────────────────────────
 
@@ -56,11 +63,13 @@ export class VoiceCommandContribution
           this.updateStatusBar();
           try {
             await this.audioFsm.startCapture();
+            this.waveformOverlay.show();
           } catch (err) {
             console.error('[VoiceInput] startCapture failed:', err);
             this.recording = false;
             this.sessionFsm.pushToTalkEnd();
             this.updateStatusBar();
+            this.waveformOverlay.hide();
           }
         } else {
           // Stop recording and transcribe
@@ -73,6 +82,7 @@ export class VoiceCommandContribution
           }
           this.sessionFsm.pushToTalkEnd();
           this.updateStatusBar();
+            this.waveformOverlay.hide();
         }
       },
     });

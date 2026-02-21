@@ -40,6 +40,12 @@ export default new ContainerModule((bind) => {
         }
       },
       onError: (err) => console.error('[VoiceInput] STT error:', err),
+      onVolumeData: (data) => {
+        try {
+          const contrib = container.get(VoiceCommandContribution);
+          contrib.pushVolumeData(data);
+        } catch { /* contribution not yet ready */ }
+      },
     });
   }).inSingletonScope();
 
