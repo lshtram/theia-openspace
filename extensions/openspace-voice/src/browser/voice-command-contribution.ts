@@ -41,7 +41,10 @@ export class VoiceCommandContribution
   // ── FrontendApplicationContribution ──────────────────────────────────────
 
   onStart(): void {
-    // Show initial idle indicator in the status bar
+    // Sync FSM state with policy: if policy says enabled, ensure FSM is enabled
+    if (this.sessionFsm.policy.enabled && this.sessionFsm.state === 'inactive') {
+      this.sessionFsm.enable();
+    }
     this.updateStatusBar();
   }
 
