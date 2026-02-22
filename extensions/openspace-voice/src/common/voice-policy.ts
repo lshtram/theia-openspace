@@ -36,7 +36,7 @@ export interface VoicePolicy {
 
 export const DEFAULT_VOICE_POLICY: VoicePolicy = {
   enabled: true,
-  narrationMode: 'narrate-off',
+  narrationMode: 'narrate-everything',
   speed: 1.0,
   voice: 'af_sarah',
   language: 'en-US',

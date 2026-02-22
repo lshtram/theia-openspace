@@ -70,27 +70,35 @@ export default new ContainerModule((bind) => {
     // Subscribe to agent message streaming completion for narration
     const coreSessionService = container.get<{
       onMessageStreaming: (handler: (update: { messageId: string; delta: string; isDone: boolean }) => void) => void;
-      messages: Array<{ role: string; parts?: Array<{ text?: string }> }>;
+      messages: Array<{ role: string; parts?: Array<{ type?: string; text?: string }> }>;
     }>(SessionService);
 
+    if (!coreSessionService?.onMessageStreaming) {
+      return narrationFsm;
+    }
+
+    let lastNarratedMessageId: string | null = null;
     coreSessionService.onMessageStreaming((update) => {
       if (!update.isDone) return;
       if (sessionFsm.state === 'inactive') return;
       if (sessionFsm.policy.narrationMode === 'narrate-off') return;
 
+      // Deduplicate: guard against any residual duplicate isDone:true fires for the same message
+      if (update.messageId && update.messageId === lastNarratedMessageId) return;
+
       // Find the completed assistant message
-      const messages = coreSessionService.messages;
-      const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+      const lastAssistant = [...coreSessionService.messages].reverse().find((m) => m.role === 'assistant');
       if (!lastAssistant) return;
 
-      // Extract text content from message parts
+      // Extract text content from message parts (type === 'text' only)
       const text = lastAssistant.parts
-        ?.filter((p) => typeof p.text === 'string')
+        ?.filter((p) => p.type === 'text' && typeof p.text === 'string')
         .map((p) => p.text as string)
         .join('')
         .trim();
 
       if (text) {
+        lastNarratedMessageId = update.messageId;
         narrationFsm.enqueue({
           text,
           mode: sessionFsm.policy.narrationMode,

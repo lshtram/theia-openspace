@@ -4,7 +4,7 @@ import type { CancellationToken } from '../providers/stt-provider.interface';
 
 // Minimal type for KokoroTTS to avoid hard dependency on kokoro-js types at compile time
 interface KokoroTTSInstance {
-  generate(text: string, options: { voice: string }): Promise<{ data: Float32Array | Uint8Array } | null>;
+  generate(text: string, options: { voice: string }): Promise<any>;
 }
 
 interface KokoroTTSConstructor {
@@ -21,12 +21,8 @@ export class KokoroAdapter implements TtsProvider {
   private modelLoadError: Error | null = null;
 
   async isAvailable(): Promise<boolean> {
-    try {
-      await import('kokoro-js' as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-      return true;
-    } catch {
-      return false;
-    }
+    // Always return true - let synthesize handle errors
+    return true;
   }
 
   async synthesize(
@@ -38,9 +34,10 @@ export class KokoroAdapter implements TtsProvider {
     const audio = await model.generate(request.text, { voice });
 
     let audioBytes: Uint8Array;
-    const audioData = audio?.data;
+    // kokoro-js returns { audio: Float32Array, sampling_rate: number }
+    const audioData = audio?.audio;
 
-    if (audioData instanceof Float32Array) {
+    if (audioData && audioData.constructor === Float32Array) {
       const int16 = new Int16Array(audioData.length);
       for (let i = 0; i < audioData.length; i++) {
         // Correct scale: full negative range is -32768, positive clamped to 32767
@@ -55,7 +52,7 @@ export class KokoroAdapter implements TtsProvider {
       audioBytes = new Uint8Array(0);
     }
 
-    return { audio: audioBytes, sampleRate: 24000 };
+    return { audio: audioBytes, sampleRate: audio?.sampling_rate ?? 24000 };
   }
 
   async dispose(): Promise<void> {
@@ -69,9 +66,12 @@ export class KokoroAdapter implements TtsProvider {
     if (this.model) return Promise.resolve(this.model);
     if (this.modelLoadError) return Promise.reject(this.modelLoadError);
     if (!this.modelLoadPromise) {
-      this.modelLoadPromise = (async () => {
-        // C-1: kokoro-js is ESM-only — must use dynamic import(), not require()
-        const kokoroModule = await import('kokoro-js' as any) as { KokoroTTS: KokoroTTSConstructor };  // eslint-disable-line @typescript-eslint/no-explicit-any
+        this.modelLoadPromise = (async () => {
+        // kokoro-js is ESM-only but ships a CJS build at dist/kokoro.cjs.
+        // We require the CJS entrypoint directly to avoid ESM/CJS interop issues
+        // in the bundled Theia backend (which runs as CommonJS).
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const kokoroModule = require('kokoro-js/dist/kokoro.cjs');
         const { KokoroTTS } = kokoroModule;
         this.model = await KokoroTTS.from_pretrained(
           'onnx-community/Kokoro-82M-v1.0-ONNX',
