@@ -15,12 +15,6 @@ const DEFAULT_EXCLUDED_EXTENSIONS = [
     '.mp3', '.mp4', '.wav', '.avi', '.mkv',
 ];
 
-const TEXT_EXTENSIONS = [
-    '.txt', '.md', '.markdown', '.mdown', '.csv', '.json', '.yaml', '.yml',
-    '.xml', '.html', '.css', '.js', '.ts', '.tsx', '.jsx', '.py', '.sh',
-    '.bat', '.ps1', '.log', '.ini', '.conf', '.cfg', '.toml', '.sql',
-];
-
 const DEFAULT_VIEWER_PATTERN = /viewer/i;
 
 @injectable()
@@ -37,10 +31,7 @@ export class ViewerToggleService {
             return false;
         }
         const viewerHandler = await this.findViewerHandler(uri);
-        if (!viewerHandler) {
-            return false;
-        }
-        return this.canReadAsText(uri);
+        return viewerHandler !== undefined;
     }
 
     getToggleState(uri: URI): 'preview' | 'edit' {
@@ -67,10 +58,5 @@ export class ViewerToggleService {
     protected isExcludedExtension(uri: URI): boolean {
         const ext = uri.path.ext.toLowerCase();
         return this.excludedExtensions.includes(ext);
-    }
-
-    protected canReadAsText(uri: URI): boolean {
-        const ext = uri.path.ext.toLowerCase();
-        return TEXT_EXTENSIONS.includes(ext) || !this.isExcludedExtension(uri);
     }
 }

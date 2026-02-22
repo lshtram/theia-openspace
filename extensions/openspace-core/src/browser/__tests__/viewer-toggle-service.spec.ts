@@ -5,7 +5,7 @@
 
 import { expect } from 'chai';
 import { URI } from '@theia/core/lib/common/uri';
-import { ViewerToggleService } from '../viewer-toggle-service';
+import { ViewerToggleService } from '../viewer-toggle/viewer-toggle-service';
 
 // Minimal stub for OpenerService — only what ViewerToggleService needs
 function makeOpenerService(handlers: Array<{ id: string; priority: number }>) {
