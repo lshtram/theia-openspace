@@ -269,8 +269,8 @@ describe('PresentationService.createPresentation — path resolution', () => {
         expect(calledUri).to.include('openspace/decks/myslides.deck.md');
     });
 
-    it('respects absolute file:// path unchanged', async () => {
-        const abs = 'file:///tmp/myslides.deck.md';
+    it('respects absolute file:// path inside workspace unchanged', async () => {
+        const abs = 'file:///workspace/talks/myslides.deck.md';
         await service.createPresentation(abs, 'My Slides');
         const calledUri = createStub.firstCall.args[0].toString();
         expect(calledUri).to.equal(abs);
