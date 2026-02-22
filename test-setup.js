@@ -30,6 +30,11 @@ if (typeof document !== 'undefined') {
     }
 }
 
+// Polyfill scrollIntoView — not implemented in jsdom
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = function () { /* noop */ };
+}
+
 // Configure Theia FrontendApplicationConfigProvider before importing any Theia modules
 const { FrontendApplicationConfigProvider } = require('@theia/core/lib/browser/frontend-application-config-provider');
 FrontendApplicationConfigProvider.set({
