@@ -156,10 +156,22 @@ describe('WhiteboardService.createWhiteboard — path resolution', () => {
         expect(calledUri).to.include('openspace/whiteboards/myboard.whiteboard.json');
     });
 
-    it('respects absolute file:// path, does not modify it', async () => {
-        const abs = 'file:///tmp/myboard.whiteboard.json';
+    it('respects absolute file:// path inside workspace unchanged', async () => {
+        const abs = 'file:///workspace/boards/myboard.whiteboard.json';
         await service.createWhiteboard(abs);
         const calledUri = createStub.firstCall.args[0].toString();
         expect(calledUri).to.equal(abs);
+    });
+
+    it('throws when absolute file:// path escapes workspace root', async () => {
+        const outsidePath = 'file:///tmp/evil.whiteboard.json';
+        let caught: Error | undefined;
+        try {
+            await service.createWhiteboard(outsidePath);
+        } catch (err) {
+            caught = err as Error;
+        }
+        expect(caught).to.be.instanceOf(Error);
+        expect(caught!.message).to.include('escapes workspace root');
     });
 });
