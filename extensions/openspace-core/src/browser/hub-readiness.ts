@@ -34,10 +34,11 @@ export async function waitForHub(url: string, options: HubReadinessOptions = {})
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), intervalMs * 2);
         try {
-            const response = await fetch(url, { method: 'GET', signal: controller.signal });
-            if (response.ok) {
-                return; // Hub is ready
-            }
+            // Any HTTP response (even 4xx/5xx) means the server is up and listening.
+            // The /mcp SSE endpoint returns 406 for plain GET requests (it requires
+            // Accept: text/event-stream), so we must not treat 406 as "not ready".
+            await fetch(url, { method: 'GET', signal: controller.signal });
+            return; // Hub is ready — any response (including 4xx) means it's listening
         } catch {
             // Network error or AbortError — Hub not yet listening, fall through to retry
         } finally {

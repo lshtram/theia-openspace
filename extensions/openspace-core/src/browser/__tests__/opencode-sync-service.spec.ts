@@ -27,16 +27,33 @@ import { expect } from 'chai';
 import { OpenCodeSyncServiceImpl } from '../opencode-sync-service';
 import { SessionService } from '../session-service';
 
+const SESSION_ID = 'test-session-id';
+
 /**
  * Build a minimal stub SessionService. Only onActiveSessionChanged needs to
  * be present because setSessionService() subscribes to that event.
  */
-function makeSessionServiceStub(): SessionService {
-    return {
+function makeSessionServiceStub(sessionId = SESSION_ID): SessionService & { updateSessionStatusCalled: number } {
+    const stub = {
         onActiveSessionChanged: () => ({ dispose: () => undefined }),
-        // SessionService extends Disposable; provide a no-op
         dispose: () => undefined,
-    } as unknown as SessionService;
+        activeSession: { id: sessionId } as any,
+        updateSessionStatus: () => { stub.updateSessionStatusCalled++; },
+        updateSessionStatusCalled: 0,
+    } as unknown as SessionService & { updateSessionStatusCalled: number };
+    return stub;
+}
+
+function makeService(): OpenCodeSyncServiceImpl {
+    const service = new OpenCodeSyncServiceImpl();
+    (service as any).logger = {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+    };
+    (service as any).commandRegistry = { getCommand: () => undefined, executeCommand: () => undefined };
+    return service;
 }
 
 describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
@@ -66,8 +83,7 @@ describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
     it('should NOT expose window.__openspace_test__ when NODE_ENV is production', () => {
         process.env.NODE_ENV = 'production';
 
-        const service = new OpenCodeSyncServiceImpl();
-        (service as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
+        const service = makeService();
         service.setSessionService(makeSessionServiceStub());
 
         expect((window as any).__openspace_test__).to.be.undefined;
@@ -76,8 +92,7 @@ describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
     it('should expose window.__openspace_test__ when NODE_ENV is not production', () => {
         process.env.NODE_ENV = 'test';
 
-        const service = new OpenCodeSyncServiceImpl();
-        (service as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
+        const service = makeService();
         service.setSessionService(makeSessionServiceStub());
 
         expect((window as any).__openspace_test__).to.not.be.undefined;
@@ -85,4 +100,29 @@ describe('OpenCodeSyncService - Test Hook Security (T2-15)', () => {
         expect(typeof (window as any).__openspace_test__.getLastDispatchedCommand).to.equal('function');
         expect(typeof (window as any).__openspace_test__.injectMessageEvent).to.equal('function');
     });
+});
+
+describe('OpenCodeSyncService - Event buffering during DI init race (Bug A)', () => {
+
+    it('buffers status_changed events arriving before setSessionService() and processes them after wiring', () => {
+        const service = makeService();
+
+        // Simulate SSE event arriving before setSessionService() is called
+        // (the DI race condition: new connection, events arrive before BridgeContribution.onStart fires)
+        service.onSessionEvent({
+            type: 'status_changed',
+            sessionId: SESSION_ID,
+            sessionStatus: { type: 'busy' },
+        } as any);
+
+        // At this point, with the current (broken) implementation, the event is swallowed.
+        // After the fix, it should be queued.
+
+        const stub = makeSessionServiceStub();
+        service.setSessionService(stub);
+
+        // After wiring, the buffered event should have been drained and processed
+        expect(stub.updateSessionStatusCalled).to.equal(1);
+    });
+
 });

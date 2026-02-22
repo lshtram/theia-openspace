@@ -1,7 +1,6 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { ChatAgent, ChatAgentLocation } from '@theia/ai-chat/lib/common/chat-agents';
 import { MutableChatRequestModel, TextChatResponseContentImpl } from '@theia/ai-chat/lib/common/chat-model';
-import { Disposable } from '@theia/core/lib/common/disposable';
 import { SessionService, StreamingUpdate } from 'openspace-core/lib/browser/session-service';
 import { MessagePartInput } from 'openspace-core/lib/common/opencode-protocol';
 

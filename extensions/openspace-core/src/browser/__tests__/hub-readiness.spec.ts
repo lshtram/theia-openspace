@@ -25,16 +25,18 @@ describe('waitForHub()', () => {
         expect(fetchStub.firstCall.args[1]).to.deep.include({ method: 'GET' });
     });
 
-    it('retries and resolves once Hub becomes available', async () => {
+    it('retries and resolves once Hub becomes available (network error retried, any HTTP response = ready)', async () => {
         const fetchStub = sinon.stub();
         fetchStub.onCall(0).rejects(new TypeError('network error'));
         fetchStub.onCall(1).resolves({ ok: false, status: 503 });
-        fetchStub.onCall(2).resolves({ ok: true, status: 200 });
         (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
 
+        // With the fix: any HTTP response (including 503) means Hub is listening.
+        // Only network errors (ECONNREFUSED, AbortError) should trigger retries.
         await waitForHub('http://localhost:3000/mcp', { maxAttempts: 5, intervalMs: 10 });
 
-        expect(fetchStub.callCount).to.equal(3);
+        // Call 0: network error → retry. Call 1: 503 → Hub is listening → done.
+        expect(fetchStub.callCount).to.equal(2);
     });
 
     it('throws HubNotReadyError after exhausting all attempts', async () => {
@@ -53,15 +55,16 @@ describe('waitForHub()', () => {
         expect(fetchStub.callCount).to.equal(3);
     });
 
-    it('treats a non-ok HTTP status as unavailable and retries', async () => {
+    it('treats any HTTP response (including 4xx/5xx) as Hub-is-ready — only network errors trigger retries', async () => {
         const fetchStub = sinon.stub();
-        fetchStub.onCall(0).resolves({ ok: false, status: 404 });
-        fetchStub.onCall(1).resolves({ ok: true, status: 200 });
+        // 406 is what /mcp returns for plain GET — must be treated as "ready"
+        fetchStub.onCall(0).resolves({ ok: false, status: 406 });
         (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
 
         await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 10 });
 
-        expect(fetchStub.callCount).to.equal(2);
+        // 406 means the server is listening — should resolve immediately on first call
+        expect(fetchStub.callCount).to.equal(1);
     });
 
     it('aborts a hung fetch and retries', async () => {

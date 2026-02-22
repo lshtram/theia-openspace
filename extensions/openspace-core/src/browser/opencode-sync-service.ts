@@ -76,10 +76,19 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      * SessionService is NOT injected via @inject to break a circular DI dependency:
      *   OpenCodeSyncService → SessionService → OpenCodeService → OpenCodeClient → OpenCodeSyncService
      * Instead, it is wired lazily via setSessionService() after DI resolution completes.
-     * This is safe because all callback methods (onSessionEvent, etc.) are only invoked
-     * by RPC events that arrive well after DI initialization.
+     *
+     * Race condition: SSE events from opencode can arrive before BridgeContribution.onStart()
+     * calls setSessionService(). To handle this, events that arrive before wiring are queued
+     * in _pendingEvents and replayed when setSessionService() is finally called.
      */
     private _sessionService?: SessionService;
+
+    /**
+     * Queue of events that arrived before setSessionService() was called.
+     * Each entry stores the method name and argument to replay after wiring.
+     * Cleared after draining in setSessionService().
+     */
+    private _pendingEvents: Array<{ method: string; arg: unknown }> = [];
 
     @inject(CommandRegistry)
     private commandRegistry!: CommandRegistry;
@@ -104,6 +113,22 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 this.logger.debug(`[SyncService] Streaming messages cleared: session changed to ${newId}`);
             }
         });
+
+        // Drain any events that arrived before wiring completed (DI init race condition).
+        // Events are queued in _pendingEvents by the individual handler methods when
+        // _sessionService is undefined. Replay them now in arrival order.
+        if (this._pendingEvents.length > 0) {
+            this.logger.info(`[SyncService] Draining ${this._pendingEvents.length} queued events`);
+            const events = this._pendingEvents;
+            this._pendingEvents = [];
+            for (const { method, arg } of events) {
+                try {
+                    (this as unknown as Record<string, (a: unknown) => void>)[method](arg);
+                } catch (err) {
+                    this.logger.error(`[SyncService] Error replaying queued event (${method}):`, err);
+                }
+            }
+        }
 
         // T2-15: Only expose test hooks in non-production builds.
         // process.env.NODE_ENV is replaced by webpack DefinePlugin at build time,
@@ -136,6 +161,19 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             );
         }
         return this._sessionService;
+    }
+
+    /**
+     * Queue an event for replay after setSessionService() is called.
+     * Returns true if the event was queued (caller should return early).
+     */
+    private queueIfNotReady(method: string, arg: unknown): boolean {
+        if (!this._sessionService) {
+            this._pendingEvents.push({ method, arg });
+            this.logger.info(`[SyncService] Queued ${method} event (SessionService not yet wired)`);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -172,6 +210,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onSessionEvent(event: SessionNotification): void {
         try {
+            if (this.queueIfNotReady('onSessionEvent', event)) { return; }
             this.logger.debug(`[SyncService] Session event: ${event.type}, sessionId=${event.sessionId}`);
 
             // Only process events for the currently active session
@@ -258,6 +297,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onMessageEvent(event: MessageNotification): void {
         try {
+            if (this.queueIfNotReady('onMessageEvent', event)) { return; }
             this.logger.debug(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}`);
 
             // Only process events for the currently active session
@@ -439,6 +479,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onMessagePartDelta(event: MessagePartDeltaNotification): void {
         try {
+            if (this.queueIfNotReady('onMessagePartDelta', event)) { return; }
             this.logger.debug(`[SyncService] Part delta: msg=${event.messageID}, part=${event.partID}, field=${event.field}, len=${event.delta.length}`);
 
             // Only process events for the currently active session
@@ -483,6 +524,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onFileEvent(event: FileNotification): void {
         try {
+            if (this.queueIfNotReady('onFileEvent', event)) { return; }
             this.logger.debug(`[SyncService] File event: ${event.type}, path=${event.path || 'unknown'}`);
 
             // Only process events for the currently active session
@@ -528,6 +570,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onPermissionEvent(event: PermissionNotification): void {
         try {
+            if (this.queueIfNotReady('onPermissionEvent', event)) { return; }
             this.logger.debug(`[SyncService] Permission event: ${event.type}, permissionId=${event.permissionId || 'unknown'}`);
 
             // Only process events for the currently active session
@@ -573,6 +616,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      */
     onQuestionEvent(event: QuestionNotification): void {
         try {
+            if (this.queueIfNotReady('onQuestionEvent', event)) { return; }
             this.logger.debug(`[SyncService] Question event: type=${event.type}, requestId=${event.requestId}, sessionId=${event.sessionId}`);
 
             // Only process events for the currently active session
