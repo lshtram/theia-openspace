@@ -528,8 +528,13 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     setMessages(pendingMessages);
                     pendingMessages = null;
                 }
-                setStreamingMessageId(undefined);
-                setStreamingStatus('');
+                // Only clear streaming UI state if the server also considers the turn done.
+                // sessionStatus.type becomes 'idle' when the entire turn finishes.
+                const serverIdle = sessionService.sessionStatus?.type === 'idle';
+                if (serverIdle) {
+                    setStreamingMessageId(undefined);
+                    setStreamingStatus('');
+                }
             }
         });
 
@@ -544,6 +549,12 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         setSessionBusy(currentStatus ? currentStatus.type !== 'idle' : false);
         const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string }) => {
             setSessionBusy(status.type !== 'idle');
+            // When the server reports idle, clear any deferred streaming UI state
+            // that was held open during the turn (see onIsStreamingChanged guard above).
+            if (status.type === 'idle') {
+                setStreamingMessageId(undefined);
+                setStreamingStatus('');
+            }
         }) ?? { dispose: () => {} };
 
         // Subscribe to session changes to reload list
@@ -897,7 +908,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             onBuiltinCommand={handleBuiltinCommand}
                             onShellCommand={handleShellCommand}
                             onStop={() => sessionService.abort()}
-                            isStreaming={isStreaming}
+                            isStreaming={isStreaming || sessionBusy}
                             disabled={pendingQuestions.length > 0}
                             placeholder={pendingQuestions.length > 0 ? 'Answer the question above to continue...' : queuedCount > 0 ? `${queuedCount} message${queuedCount > 1 ? 's' : ''} queued — send more...` : 'Type your message, @mention files/agents, or attach images...'}
                             workspaceRoot={workspaceRoot}
