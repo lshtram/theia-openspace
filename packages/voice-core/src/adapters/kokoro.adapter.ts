@@ -26,7 +26,11 @@ export class KokoroAdapter implements TtsProvider {
       return this.availabilityCache;
     }
     try {
-      require.resolve('kokoro-js/dist/kokoro.cjs');
+      // Use the package root — kokoro-js@1.2.1 exports map does NOT expose
+      // './dist/kokoro.cjs' as a direct subpath, so require.resolve on the
+      // subpath throws ERR_PACKAGE_PATH_NOT_EXPORTED even when the package is
+      // installed. Using the package root respects the exports map.
+      require.resolve('kokoro-js');
       this.availabilityCache = true;
     } catch {
       this.availabilityCache = false;
@@ -76,11 +80,13 @@ export class KokoroAdapter implements TtsProvider {
     if (this.modelLoadError) return Promise.reject(this.modelLoadError);
     if (!this.modelLoadPromise) {
         this.modelLoadPromise = (async () => {
-        // kokoro-js is ESM-only but ships a CJS build at dist/kokoro.cjs.
-        // We require the CJS entrypoint directly to avoid ESM/CJS interop issues
-        // in the bundled Theia backend (which runs as CommonJS).
+        // kokoro-js is ESM-only but ships a CJS build.
+        // Use the package root rather than a deep subpath — kokoro-js@1.2.1's
+        // exports map does NOT list './dist/kokoro.cjs' as a named subpath,
+        // so requiring it directly throws ERR_PACKAGE_PATH_NOT_EXPORTED.
+        // The package root resolves correctly via the "node.require" condition.
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const kokoroModule = require('kokoro-js/dist/kokoro.cjs');
+        const kokoroModule = require('kokoro-js');
         const { KokoroTTS } = kokoroModule;
         this.model = await KokoroTTS.from_pretrained(
           'onnx-community/Kokoro-82M-v1.0-ONNX',

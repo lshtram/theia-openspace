@@ -59,7 +59,12 @@ export class ViewerToggleService {
      * we break the cycle.
      */
     protected async findViewerHandler(uri: URI): Promise<OpenHandler | undefined> {
-        const handlers = this.handlersProvider.getContributions();
+        // Pass recursive=true so that OpenHandler contributions bound in parent DI
+        // containers (e.g. @theia/preview's markdown viewer registered in the root
+        // container) are visible here. Without recursive=true only handlers bound
+        // in this extension's own container are returned, making canToggle() always
+        // return false for files whose viewer lives in another module.
+        const handlers = this.handlersProvider.getContributions(true);
         for (const h of handlers) {
             if (h.id === SELF_ID || !this.isViewerHandler(h)) {
                 continue;

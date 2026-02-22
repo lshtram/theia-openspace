@@ -42,7 +42,9 @@ export class ViewerToggleOpenHandler implements OpenHandler {
 
     async open(uri: URI, options?: OpenerOptions): Promise<object | undefined> {
         const state = this.toggleService.getToggleState(uri);
-        const handlers = this.handlersProvider.getContributions();
+        // Pass recursive=true so handlers from parent DI containers are visible
+        // (same reason as ViewerToggleService.findViewerHandler).
+        const handlers = this.handlersProvider.getContributions(true);
 
         if (state === 'edit') {
             // Delegate to the first non-viewer, non-self handler (i.e. text editor).
