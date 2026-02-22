@@ -276,6 +276,18 @@ describe('PresentationService.createPresentation — path resolution', () => {
         expect(calledUri).to.equal(abs);
     });
 
+    it('throws when absolute file:// path escapes workspace root', async () => {
+        const outsidePath = 'file:///tmp/evil.deck.md';
+        let caught: Error | undefined;
+        try {
+            await service.createPresentation(outsidePath, 'Evil');
+        } catch (err) {
+            caught = err as Error;
+        }
+        expect(caught).to.be.instanceOf(Error);
+        expect(caught!.message).to.include('escapes workspace root');
+    });
+
     it('throws when no workspace is open', async () => {
         (service as any).workspaceService = {
             roots: Promise.resolve([]),
