@@ -31,7 +31,7 @@
  */
 export interface WhiteboardData {
     store: Record<string, unknown>;
-    schema: { schemaVersion: number; sequences: Record<string, unknown> };
+    schema: { schemaVersion: number; sequences?: Record<string, unknown> };
 }
 
 /**

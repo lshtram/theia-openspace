@@ -82,6 +82,8 @@ export class WhiteboardWidget extends ReactWidget {
         this.update();
     }
 
+    // WhiteboardData is a tldraw-free approximation of TLStoreSnapshot;
+    // structurally compatible at runtime — cast avoids tldraw import in whiteboard-types.ts
     setData(data: WhiteboardData, filePath?: string): void {
         this.pendingSnapshot = data as unknown as TLStoreSnapshot;
         this.savedSnapshot = data as unknown as TLStoreSnapshot;
