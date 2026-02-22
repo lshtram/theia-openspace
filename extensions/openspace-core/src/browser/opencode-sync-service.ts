@@ -379,13 +379,15 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             }
         }
 
-        // Route ALL parts as upserts (replace if existing, insert if new).
-        // This handles tool parts AND text/reasoning parts correctly:
-        // - Tool parts get upserted with latest state
-        // - Text parts get replaced (text streaming is done via message.part.delta)
+        // Only upsert tool/non-text parts from message.partial events.
+        // Text and reasoning parts are managed exclusively by message.part.delta → applyPartDelta,
+        // which appends deltas incrementally. If we also upsert them here (with the full accumulated
+        // text snapshot from the SDK), the delta appended afterward causes duplication:
+        //   e.g. partial carries "hello world", then delta appends "world" → "hello worldworld".
         const allParts = event.data.parts || [];
-        if (allParts.length > 0) {
-            this.sessionService.updateStreamingMessageParts(event.messageId, allParts);
+        const toolParts = allParts.filter((p: any) => p.type !== 'text' && p.type !== 'reasoning');
+        if (toolParts.length > 0) {
+            this.sessionService.updateStreamingMessageParts(event.messageId, toolParts);
         }
 
         // Notify streaming subscribers so the UI can identify which message is streaming
@@ -393,7 +395,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // Pass empty delta — text is handled by message.part.delta.
         this.sessionService.updateStreamingMessage(event.messageId, '', false);
 
-        this.logger.debug(`[SyncService] Message partial: ${event.messageId}, parts=${allParts.length}`);
+        this.logger.debug(`[SyncService] Message partial: ${event.messageId}, parts=${allParts.length} (tool parts upserted: ${toolParts.length})`);
     }
 
     /**

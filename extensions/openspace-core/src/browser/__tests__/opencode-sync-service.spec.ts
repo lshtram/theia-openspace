@@ -26,6 +26,7 @@
 import { expect } from 'chai';
 import { OpenCodeSyncServiceImpl } from '../opencode-sync-service';
 import { SessionService } from '../session-service';
+import { SessionServiceImpl } from '../session-service';
 
 const SESSION_ID = 'test-session-id';
 
@@ -125,4 +126,131 @@ describe('OpenCodeSyncService - Event buffering during DI init race (Bug A)', ()
         expect(stub.updateSessionStatusCalled).to.equal(1);
     });
 
+});
+
+/**
+ * Build a minimal real SessionServiceImpl for streaming duplication tests.
+ * Bypasses DI by injecting stubs directly via property assignment.
+ */
+function makeRealSessionService(sessionId = SESSION_ID): SessionServiceImpl {
+    const mockOpenCodeService = {
+        getProjects: () => Promise.resolve([]),
+        getSessions: () => Promise.resolve([]),
+        getMessages: () => Promise.resolve([]),
+        connectToProject: () => Promise.resolve(),
+    } as any;
+
+    const storage: Record<string, string> = {};
+    // Stub localStorage only if not already stubbed
+    try {
+        Object.defineProperty(window, 'localStorage', {
+            value: {
+                getItem: (key: string) => storage[key] ?? null,
+                setItem: (key: string, value: string) => { storage[key] = value; },
+                removeItem: (key: string) => { delete storage[key]; },
+            },
+            configurable: true,
+            writable: true,
+        });
+    } catch { /* already stubbed */ }
+
+    const svc = new SessionServiceImpl();
+    (svc as any).openCodeService = mockOpenCodeService;
+    (svc as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
+
+    // Pre-load a session and a message so streaming methods have something to target
+    (svc as any)._activeSession = { id: sessionId };
+    (svc as any)._messages = [{
+        id: 'msg-1',
+        sessionID: sessionId,
+        role: 'assistant',
+        parts: [],
+        time: { created: Date.now() },
+    }];
+
+    return svc;
+}
+
+describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
+    /**
+     * Regression test for text duplication caused by message.part.updated (carrying full
+     * accumulated text) conflicting with message.part.delta (incremental appends).
+     *
+     * When the backend fires message.part.updated BEFORE message.part.delta for the same
+     * token, updateStreamingMessageParts replaces the text part with the full snapshot,
+     * then applyPartDelta appends the same delta again on top → duplication.
+     *
+     * Fix: handleMessagePartial must filter out text/reasoning parts before calling
+     * updateStreamingMessageParts — only tool parts should be upserted from message.part.updated.
+     * Text parts must only be written via message.part.delta → applyPartDelta.
+     */
+    it('does not duplicate text when message.part.updated fires before message.part.delta for same token', () => {
+        const sessionId = 'streaming-session';
+        const messageId = 'msg-streaming';
+        const partId = 'part-1';
+
+        // Build sync service with real SessionService
+        const syncSvc = makeService();
+        const sessionSvc = makeRealSessionService(sessionId);
+        // Override the pre-loaded message to use our IDs
+        (sessionSvc as any)._messages = [{
+            id: messageId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [],
+            time: { created: Date.now() },
+        }];
+        syncSvc.setSessionService(sessionSvc);
+
+        // Step 1: First token arrives via delta — "hello "
+        syncSvc.onMessagePartDelta({
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: partId,
+            field: 'text',
+            delta: 'hello ',
+        });
+
+        // Step 2: message.part.updated arrives carrying the FULL accumulated text "hello world"
+        // (i.e., it has been batched and includes a token not yet sent via delta)
+        syncSvc.onMessageEvent({
+            type: 'partial',
+            sessionId: sessionId,
+            projectId: '',
+            messageId: messageId,
+            data: {
+                info: {
+                    id: messageId,
+                    sessionID: sessionId,
+                    role: 'assistant',
+                    time: { created: Date.now() },
+                } as any,
+                parts: [{
+                    id: partId,
+                    sessionID: sessionId,
+                    messageID: messageId,
+                    type: 'text',
+                    text: 'hello world',
+                }],
+            },
+        } as any);
+
+        // Step 3: The delta for "world" arrives AFTER part.updated already set the full text.
+        // This is the race: part.updated already contains "world", but the delta arrives too.
+        syncSvc.onMessagePartDelta({
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: partId,
+            field: 'text',
+            delta: 'world',
+        });
+
+        // Assert: text should be exactly "hello world", not "hello worldworld"
+        // (the "world" delta should NOT be double-applied if part.updated already set it)
+        const messages = sessionSvc.messages;
+        expect(messages).to.have.lengthOf(1);
+        const parts = messages[0].parts as any[];
+        expect(parts).to.have.lengthOf(1);
+        expect(parts[0].text).to.equal('hello world');
+    });
 });
