@@ -26,7 +26,7 @@ export class KokoroAdapter implements TtsProvider {
       return this.availabilityCache;
     }
     try {
-      require.resolve('kokoro-js');
+      require.resolve('kokoro-js/dist/kokoro.cjs');
       this.availabilityCache = true;
     } catch {
       this.availabilityCache = false;

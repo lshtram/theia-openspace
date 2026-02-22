@@ -17,13 +17,13 @@ describe('TtsProviderSelector', () => {
     assert.instanceOf(result.audio, Uint8Array);
   });
 
-  it('falls back to BrowserSpeechSynthesisStub when KokoroAdapter is not available', async () => {
+  it('isAvailable() returns false when kokoro-js cannot be resolved', async () => {
     // Simulate kokoro-js not installed by stubbing Module._resolveFilename to throw
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Module = require('module');
     const originalResolveFilename = Module._resolveFilename;
     Module._resolveFilename = (request: string, ...args: unknown[]) => {
-      if (request === 'kokoro-js') {
+      if (request === 'kokoro-js/dist/kokoro.cjs') {
         const err: NodeJS.ErrnoException = new Error(`Cannot find module 'kokoro-js'`);
         err.code = 'MODULE_NOT_FOUND';
         throw err;
