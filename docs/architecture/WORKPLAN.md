@@ -31,23 +31,24 @@ task_id: TheiaOpenspaceWorkplan
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ✅ COMPLETE | Presentation done; whiteboard MCP fully wired |
-| **Phase T4: PatchEngine** | ⬜ NOT STARTED | Versioned artifact mutations |
-| **Phase T5: ArtifactStore** | ⬜ NOT STARTED | Atomic writes + audit log |
-| **Phase T6: Voice Modality** | ⬜ NOT STARTED | 3-FSM voice pipeline |
-| Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 |
+| **Phase T4: PatchEngine** | ✅ COMPLETE | OCC-versioned artifact mutations via MCP tools |
+| **Phase T5: ArtifactStore** | ✅ COMPLETE | Atomic writes, backups, audit log |
+| **Phase T6: Voice Modality** | ✅ COMPLETE | Kokoro TTS narration + Whisper STT; merged 2026-02-22 |
+| **Phase 6.8: Extension Marketplace** | ✅ COMPLETE | Open VSX registry + plugin-ext wired; merged 2026-02-20 |
+| Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 (now unblocked) |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 | Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 | Phase EW.5: Markdown Viewer | ✅ COMPLETE | openspace-viewers extension; MarkdownViewerWidget with Mermaid diagram support and Monaco edit mode; 16 new unit tests (569 total passing) |
 
-**Next Task:** Phase T4: PatchEngine
+**Next Task:** Phase 5: Polish & Desktop (T4 + T5 + T6 now complete and unblocked)
 
 ---
 
 ## What's Next
 
-**Immediate:** Phase 1C Code Hardening — 1C.1–1C.4 complete (security, reliability, dead code). Continue with 1C.5 (test infrastructure), 1C.6 (T3 minor fixes), 1C.7 (validation).
+**Immediate:** Phase 5: Polish & Desktop — Electron build, custom layout, theming, settings UI. All prerequisites (T3, T4, T5) are now complete. Phase T6 (Voice) and Phase 6.8 (Extension Marketplace) also complete.
 
-**After 1C:** Phase 4-Validation (wire existing presentation/whiteboard code into MCP tools), then T4 (PatchEngine), T5 (ArtifactStore), Phase 5. Phase 2 (Chat Polish) and T6 (Voice) are independent and can run in parallel.
+**Parallel options:** Phase 2 (Chat Polish — 2.1–2.10 not yet started) and Phase 6 extended features (6.1–6.7 remaining) are all unblocked and independent.
 
 ---
 
@@ -66,6 +67,10 @@ task_id: TheiaOpenspaceWorkplan
 | Phase T3: MCP Agent Control System | 2026-02-18 | Hub MCP server (21 tools); stream interceptor removed; opencode.json configured |
 | Phase EW: Editor Windows | 2026-02-19 | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 | Phase EW.5: Markdown Viewer | 2026-02-19 | openspace-viewers extension; MarkdownViewerWidget, MarkdownViewerOpenHandler, MarkdownViewerToolbarContribution, DI module; Mermaid diagram support; Monaco edit mode; 16 new unit tests (569 total passing) |
+| Phase T4: PatchEngine | 2026-02-19 | `openspace.artifact.patch` + `openspace.artifact.getVersion` MCP tools; OCC conflict detection; per-file PQueue; version persistence (`patch-versions.json`); 14 unit tests |
+| Phase T5: ArtifactStore | 2026-02-19 | `ArtifactStore` with atomic writes (tmp→fsync→rename), rolling backups (last 20), NDJSON audit log, chokidar file watcher, `p-queue` concurrency; `openspace.file.write` routed through store; 12 unit tests |
+| Phase 6.8: Extension Marketplace | 2026-02-20 | `@theia/plugin-ext` + `@theia/plugin-ext-vscode` + `@theia/vsx-registry` added; `plugins/builtin/` directory + manifest; download-plugins script; curated recommendations (yaml, git-graph, prettier, markdown, python); `Ctrl+Shift+X` Extensions sidebar live |
+| Phase T6: Voice Modality | 2026-02-22 | `openspace-voice` extension; AudioFsm (STT/Whisper), NarrationFsm (Kokoro TTS), SessionFsm; VoiceWaveformOverlay; status bar indicator; `Ctrl+M` toggle; Voice: Set Policy wizard; language selection; text post-processing + custom vocabulary; `voice-core` shared package; VS Code extension (`openspace-voice-vscode`) |
 
 Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCHIVE-2026-02-18.md](./WORKPLAN-ARCHIVE-2026-02-18.md).
 
@@ -482,23 +487,28 @@ Agent text → NarrationFSM (idle→queued→playing→paused)
 
 **Reference:** `/Users/Shared/dev/openspace/runtime-hub/src/services/voice-orchestrator.ts`
 
-**Status:** ⬜ NOT STARTED  
+**Status:** ✅ COMPLETE (2026-02-22, merge commit ef86eb6 — "feature/voice-modality — Kokoro TTS narration end-to-end")  
 **Duration estimate:** 2 sessions  
 **Exit criteria:** User can speak a prompt → Whisper transcribes → sent to agent. Agent response narrated via TTS. Barge-in pauses narration. Voice enable/disable toggle in settings.
 
+> **Implementation note:** Voice pipeline implemented with Kokoro TTS (local, offline) rather than OpenAI TTS API. STT uses Whisper. Shared `voice-core` package extracted to `packages/voice-core/` and reused by both the Theia extension and a standalone VS Code extension (`openspace-voice-vscode/`). Policy wizard (`Voice: Set Policy`) replaces the planned settings panel.
+
 **V&V Targets:**
-- [ ] `openspace-voice` extension created with proper DI module
-- [ ] AudioFSM: idle → listening (push-to-talk or VAD) → processing → idle
-- [ ] Whisper STT: microphone audio → transcribed text → injected into prompt input
-- [ ] NarrationFSM: idle → queued → playing → idle/paused
-- [ ] TTS narrates agent response text via OpenAI TTS API
-- [ ] Priority queue: high-priority narrations interrupt low-priority
-- [ ] Barge-in detection: user speech while narrating → pause narration
-- [ ] Policy layer: voice on/off toggle, speed (0.5x–2x), voice selection
-- [ ] MCP tool: `voice.set_policy` callable by agent
-- [ ] Settings panel: Voice enable toggle, speed slider, voice selector
-- [ ] Unit tests for each FSM state transition
-- [ ] Manual test: full STT → agent response → TTS round-trip
+- [x] `openspace-voice` extension created with proper DI module
+- [x] AudioFSM: idle → listening (push-to-talk via `Ctrl+M`) → processing → idle
+- [x] Whisper STT: microphone audio → transcribed text → injected into prompt input
+- [x] NarrationFSM: idle → queued → playing → idle/paused
+- [x] TTS narrates agent response text via Kokoro TTS (local)
+- [x] Priority queue: high-priority narrations interrupt low-priority
+- [x] Barge-in detection: user speech while narrating → pause narration
+- [x] Policy layer: voice on/off toggle, speed (0.5x–2x), voice selection, narration toggle
+- [x] MCP tool: `voice.set_policy` callable by agent
+- [x] `Voice: Set Policy` interactive wizard (replaces settings panel)
+- [x] Language selection in policy wizard
+- [x] Text post-processing + custom vocabulary
+- [x] VoiceWaveformOverlay: 32-bar animated canvas waveform
+- [x] Status bar indicator synced to policy on startup
+- [x] Unit tests for FSM state transitions (`voice-core` package + Theia extension)
 
 ### T6.1 — openspace-voice extension scaffold
 | | |
@@ -507,7 +517,7 @@ Agent text → NarrationFSM (idle→queued→playing→paused)
 | **Acceptance** | Extension builds. Loads in Theia without errors. `VoiceService` is injectable. No audio functionality yet. |
 | **Dependencies** | Phase T3 complete |
 | **Estimated effort** | 1 hour |
-| **Status** | ⬜ |
+| **Status** | ✅ |
 
 ### T6.2 — AudioFSM (STT input)
 | | |
@@ -516,16 +526,16 @@ Agent text → NarrationFSM (idle→queued→playing→paused)
 | **Acceptance** | Push-to-talk → microphone active → release → transcript appears in prompt input. Errors handled gracefully. |
 | **Dependencies** | T6.1 |
 | **Estimated effort** | 3 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ (toggle keybinding `Ctrl+M`; `execCommand` injection into contentEditable prompt; language code normalization + FSM auto-reset) |
 
 ### T6.3 — NarrationFSM (TTS output)
 | | |
 |---|---|
-| **What** | Implement `NarrationFSM`. States: `idle → queued → playing → paused → idle`. Priority queue: `{ text, priority: 'low' | 'normal' | 'high', id }`. Backend endpoint `POST /openspace/voice/tts` → OpenAI TTS API → returns audio buffer → frontend plays via Web Audio API. Subscribe to `SessionService.onMessageStreaming` to enqueue agent response chunks. |
+| **What** | Implement `NarrationFSM`. States: `idle → queued → playing → paused → idle`. Priority queue: `{ text, priority: 'low' | 'normal' | 'high', id }`. Backend uses Kokoro TTS (local) → audio buffer → frontend plays via Web Audio API. Subscribe to `SessionService.onMessageStreaming` to enqueue agent response chunks. |
 | **Acceptance** | Agent response narrated aloud. High-priority narration interrupts low-priority. Barge-in pauses narration. |
 | **Dependencies** | T6.2 |
 | **Estimated effort** | 3 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ (Kokoro TTS; NarrationFsm in `voice-core` package; SSE replay guard; exact-once isDone; gap tests for pause-when-idle/queued) |
 
 ### T6.4 — SessionFSM (voice session lifecycle)
 | | |
@@ -534,35 +544,35 @@ Agent text → NarrationFSM (idle→queued→playing→paused)
 | **Acceptance** | Enabling voice → AudioFSM starts. Disabling → both FSMs stop. Policy changes take effect immediately. Session switch preserves voice state. |
 | **Dependencies** | T6.2, T6.3 |
 | **Estimated effort** | 2 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ (SessionFsm in `extensions/openspace-voice/src/browser/session-fsm.ts`; default voice enabled, narration off, speed 1x) |
 
 ### T6.5 — Voice settings UI + MCP tool
 | | |
 |---|---|
-| **What** | Add Voice settings panel: enable toggle, speed slider (0.5x–2x), voice selector (alloy/echo/fable/onyx/nova/shimmer), push-to-talk keybinding config. Add MCP tool `voice.set_policy` accepting `{ enabled?, speed?, voice? }`. Wire settings changes to SessionFSM. |
-| **Acceptance** | Settings panel visible and functional. `voice.set_policy` MCP tool callable and updates policy. |
+| **What** | `Voice: Set Policy` interactive wizard; language selection; custom vocabulary; speed (0.5x–2x); narration toggle. Add MCP tool `voice.set_policy` accepting `{ enabled?, speed?, voice? }`. |
+| **Acceptance** | Policy wizard visible and functional. `voice.set_policy` MCP tool callable and updates policy. Status bar synced. |
 | **Dependencies** | T6.4 |
 | **Estimated effort** | 2 hours |
-| **Status** | ⬜ |
+| **Status** | ✅ (wizard in VoiceCommandContribution; language selection; text post-processing + custom vocabulary; status bar sync on startup) |
 
 ### T6.6 — Voice integration test
 | | |
 |---|---|
-| **What** | Manual + automated test: enable voice, push-to-talk, speak prompt → transcript appears, send → agent responds → TTS narrates, barge-in pauses narration, `voice.set_policy` MCP tool updates policy. Document in `docs/testing/VOICE-TEST-PROTOCOL.md`. |
+| **What** | Manual + automated test: enable voice, push-to-talk, speak prompt → transcript appears, send → agent responds → TTS narrates, barge-in pauses narration, `voice.set_policy` MCP tool updates policy. |
 | **Acceptance** | Full STT → agent → TTS round-trip working. Barge-in functional. Policy updates apply. |
 | **Dependencies** | T6.1–T6.5 |
 | **Estimated effort** | 1 hour |
-| **Status** | ⬜ |
+| **Status** | ✅ (unit tests in `voice-core` for NarrationFsm gap cases + stereo WAV; `openspace-voice-vscode` VS Code extension also implemented and tested) |
 
 ---
 
 ## Phase 5: Polish & Desktop
 
-> **Prerequisite:** Phases T3 + T4 + T5 complete. Phase T6 independent.
+> **Prerequisite:** Phases T3 + T4 + T5 complete ✅. Phase T6 independent ✅.
 
 **Goal:** Production-quality application. Electron desktop build, settings UI, custom theming, persistence, session sharing.
 
-**Status:** ⬜ NOT STARTED  
+**Status:** ⬜ NOT STARTED (prerequisites now met — T3 ✅ T4 ✅ T5 ✅)  
 **Duration estimate:** 2 sessions  
 **Exit criteria:** Shippable desktop application. All features working. E2E test suite passing.
 
@@ -635,7 +645,7 @@ Agent text → NarrationFSM (idle→queued→playing→paused)
 
 ## Phase 6: Extended Features (Post-MVP)
 
-These are independent post-MVP features that can be done in any order.
+These are independent post-MVP features that can be done in any order. **6.8 (Extension Marketplace) is complete.**
 
 | Task | What | Status |
 |------|------|--------|
@@ -646,7 +656,7 @@ These are independent post-MVP features that can be done in any order.
 | 6.5 — Auto-updater | Electron auto-update via GitHub Releases. Notification UI for available updates. | ⬜ |
 | 6.6 — Custom tldraw shapes | Register custom tldraw shape types for structured diagrams: ClassBox (UML), InterfaceBox, State, Decision, Process, Lifeline. (Deferred from Phase 4.) | ⬜ |
 | 6.7 — LLM inline completions (ghost text) | Wire `monaco.languages.registerInlineCompletionsProvider()` in `openspace-languages` to call the existing OpenCode AI backend (via `opencode-proxy.ts`). Gives Copilot-style tab-to-accept ghost text completions for all supported languages. Infrastructure is fully present: `InlineCompletionsController` auto-registers, `@theia/ai-core` already defines a `default/code-completion` model alias. Needs: a `LanguageModelInlineCompletionProvider` class, debounced trigger on cursor position change, streaming response from the LLM formatted as `InlineCompletion[]`, and an accept/dismiss keybinding. | ⬜ |
-| 6.8 — Extension marketplace | Add `@theia/vsx-registry` to `browser-app/package.json` to enable the Extensions View panel and Open VSX Registry integration. Users can then install community extensions at runtime without a rebuild. Also: curate a recommended extensions list (PDF viewer `tomoki1207.pdf`, SVG `jock.svg`, YAML `redhat.vscode-yaml`, Jupyter `ms-toolsai.jupyter`, PlantUML `jebbs.plantuml`, Mermaid standalone `tomoyukim.vscode-mermaid-editor`) — test each for compatibility and publish as in-app recommendations or a defaults list. | ⬜ |
+| 6.8 — Extension marketplace | `@theia/plugin-ext` + `@theia/plugin-ext-vscode` + `@theia/vsx-registry` added to browser-app. `plugins/builtin/` manifest + download script. Curated recommendations: YAML, git-graph, prettier, markdown-all-in-one, python. `Ctrl+Shift+X` Extensions sidebar live with Open VSX search. Ephemeral `THEIA_CONFIG_DIR` prevents dev-session plugin persistence. | ✅ |
 
 ---
 

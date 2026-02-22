@@ -76,9 +76,29 @@ configs.forEach(config => {
             util: false,
         };
     }
+    // kokoro-js is a Node.js-only TTS library (uses native binaries).
+    // The browser bundle imports voice-core types/FSMs but never invokes KokoroAdapter.
+    // Mark both the package root and the CJS subpath as externals so webpack
+    // doesn't try to resolve or bundle either entry point in the frontend chunk.
+    config.externals = {
+        ...(typeof config.externals === 'object' && !Array.isArray(config.externals) ? config.externals : {}),
+        'kokoro-js': 'commonjs kokoro-js',
+        'kokoro-js/dist/kokoro.cjs': 'commonjs kokoro-js/dist/kokoro.cjs',
+    };
 });
 
 applyFilesystemCache(nodeConfig.config);
+
+// kokoro-js is a Node.js-only TTS library that uses native ONNX binaries.
+// It is NOT suited for webpack bundling: its CJS build is at a subpath not
+// exported via the package exports map, and it requires large binary assets.
+// Mark it as external in ALL webpack configs (frontend + backend).
+// At runtime, Node.js will load it directly from node_modules.
+const kokoroExternals = { 'kokoro-js': 'commonjs kokoro-js', 'kokoro-js/dist/kokoro.cjs': 'commonjs kokoro-js/dist/kokoro.cjs' };
+nodeConfig.config.externals = {
+    ...(typeof nodeConfig.config.externals === 'object' && !Array.isArray(nodeConfig.config.externals) ? nodeConfig.config.externals : {}),
+    ...kokoroExternals,
+};
 
 module.exports = [
     ...configs,
