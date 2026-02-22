@@ -41,6 +41,7 @@
     "openspace-whiteboard": "0.1.0",
     "openspace-layout": "0.1.0",
     "openspace-settings": "0.1.0",
+"openspace-voice": "0.1.0",
     "openspace-languages": "0.1.0",
     "openspace-viewers": "0.1.0"
   },

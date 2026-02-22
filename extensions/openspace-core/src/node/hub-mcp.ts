@@ -155,6 +155,7 @@ export class OpenSpaceMcpServer {
         this.registerFileTools(server);
         this.registerPresentationTools(server);
         this.registerWhiteboardTools(server);
+        this.registerVoiceTools(server);
     }
 
     // ─── Pane Tools (4) ──────────────────────────────────────────────────────
@@ -889,5 +890,26 @@ export class OpenSpaceMcpServer {
 
         walk(dirPath);
         return results;
+    }
+
+    // ─── Voice Tools (1) ─────────────────────────────────────────────────────
+
+    private registerVoiceTools(server: any): void {
+        server.tool(
+            'voice.set_policy',
+            'Update the voice modality policy. Use this to enable/disable voice, change narration mode, speed, or voice ID.',
+            {
+                enabled: z.boolean().optional().describe('Enable or disable voice input and narration'),
+                narrationMode: z.enum(['narrate-off', 'narrate-everything', 'narrate-summary']).optional()
+                    .describe('Narration mode: narrate-off disables TTS, narrate-everything reads all responses, narrate-summary reads a concise summary'),
+                speed: z.number().min(0.5).max(2.0).optional().describe('TTS speed multiplier (0.5–2.0, default 1.0)'),
+                voice: z.string().optional().describe('TTS voice ID (e.g. af_sarah, af_bella)'),
+                narrationPrompts: z.object({
+                    everything: z.string().optional().describe('Override the "narrate-everything" LLM preprocessing prompt'),
+                    summary: z.string().optional().describe('Override the "narrate-summary" LLM preprocessing prompt'),
+                }).optional().describe('Override narration preprocessing prompts'),
+            },
+            async (args: any) => this.executeViaBridge('openspace.voice.set_policy', args)
+        );
     }
 }

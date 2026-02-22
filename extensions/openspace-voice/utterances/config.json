@@ -1,0 +1,7 @@
+{
+  "hmm": ["hmm-1.wav", "hmm-2.wav"],
+  "wow": ["wow-1.wav"],
+  "uh-oh": ["uh-oh-1.wav"],
+  "nice": ["nice-1.wav", "nice-2.wav"],
+  "interesting": ["interesting-1.wav"]
+}

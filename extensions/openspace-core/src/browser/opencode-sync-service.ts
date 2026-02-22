@@ -377,6 +377,31 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // streaming stub to signal as done and replace.
         const streamingStubId = event.previousMessageId || event.messageId;
 
+        // Only signal streaming completion if this message is actually being actively streamed.
+        // The opencode SSE stream replays all past message.updated events on reconnect,
+        // which would fire isDone:true for every historical message. Guard with streamingMessages.
+        if (!this.streamingMessages.has(streamingStubId) && !this.streamingMessages.has(event.messageId)) {
+            this.logger.debug(`[SyncService] Skipping isDone signal for non-streaming message: ${streamingStubId}`);
+            // Still replace the message in case the SSE replay brings updated content.
+            const incomingPartsEarly = event.data.parts || [];
+            const existingMsgEarly = this.sessionService.messages.find(m => m.id === streamingStubId);
+            if (existingMsgEarly && incomingPartsEarly.length > 0) {
+                const finalMsgEarly = { ...event.data.info, parts: incomingPartsEarly };
+                this.sessionService.replaceMessage(streamingStubId, finalMsgEarly);
+            }
+            return;
+        }
+
+        // Clean up streaming state BEFORE firing isDone.
+        // The opencode backend sends multiple message.updated(status=completed) events for the
+        // same message during a single response. By removing from streamingMessages first, any
+        // subsequent handleMessageCompleted calls for this ID will be blocked by the guard above,
+        // ensuring isDone:true fires exactly once per message.
+        this.streamingMessages.delete(streamingStubId);
+        if (streamingStubId !== event.messageId) {
+            this.streamingMessages.delete(event.messageId);
+        }
+
         // Signal streaming completion on the stub that was being streamed
         this.sessionService.updateStreamingMessage(streamingStubId, '', true);
 
@@ -397,12 +422,6 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             this.sessionService.replaceMessage(streamingStubId, finalMessage);
         } else {
             this.sessionService.replaceMessage(event.messageId, finalMessage);
-        }
-
-        // Clean up streaming state
-        this.streamingMessages.delete(streamingStubId);
-        if (streamingStubId !== event.messageId) {
-            this.streamingMessages.delete(event.messageId);
         }
 
         this.logger.debug(`[SyncService] Message completed: ${event.messageId}`);

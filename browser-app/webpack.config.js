@@ -64,6 +64,17 @@ configs.forEach(config => {
             ...config.resolve.alias,
             'hotkeys-js': path.resolve(__dirname, '../node_modules/hotkeys-js/dist/hotkeys.common.js'),
         };
+        // Stub Node.js built-ins used by voice-core adapters (whisper-cpp, kokoro)
+        // These adapters are server-side only; the browser bundle should never call them.
+        config.resolve.fallback = {
+            ...config.resolve.fallback,
+            fs: false,
+            path: false,
+            child_process: false,
+            os: false,
+            stream: false,
+            util: false,
+        };
     }
 });
 

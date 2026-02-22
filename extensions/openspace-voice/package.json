@@ -1,0 +1,27 @@
+{
+  "name": "openspace-voice",
+  "version": "0.1.0",
+  "description": "OpenSpace voice modality — STT input, TTS narration",
+  "keywords": ["theia-extension"],
+  "license": "MIT",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/openspace-voice-frontend-module",
+      "backend": "lib/node/voice-backend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.68.2",
+    "openspace-core": "0.1.0",
+    "@openspace-ai/voice-core": "^1.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "watch": "tsc --watch"
+  }
+}
