@@ -46,9 +46,14 @@ export class ViewerToggleService {
     }
 
     protected async findViewerHandler(uri: URI): Promise<OpenHandler | undefined> {
-        // getOpeners returns handlers sorted by priority (highest first)
+        // getOpeners returns handlers sorted by priority (highest first).
+        // Exclude self to prevent circular recursion when ViewerToggleOpenHandler
+        // is registered and its id matches the /viewer/i pattern.
         const handlers = await this.openerService.getOpeners(uri);
-        return handlers.find(h => this.isViewerHandler(h));
+        return handlers.find(h =>
+            this.isViewerHandler(h) &&
+            h.id !== 'openspace-viewer-toggle-open-handler'
+        );
     }
 
     protected isViewerHandler(handler: OpenHandler): boolean {

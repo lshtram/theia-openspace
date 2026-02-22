@@ -3,6 +3,7 @@ import { FilterContribution } from '@theia/core/lib/common/contribution-filter';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { ServiceConnectionProvider } from '@theia/core/lib/browser/messaging/service-connection-provider';
 import { CommandContribution } from '@theia/core/lib/common/command';
+import { OpenHandler } from '@theia/core/lib/browser';
 
 // Existing
 import { OpenSpaceFilterContribution } from './filter-contribution';
@@ -24,6 +25,11 @@ import { EditorCommandContribution } from './editor-command-contribution';
 import { TerminalCommandContribution } from './terminal-command-contribution';
 import { FileCommandContribution } from './file-command-contribution';
 import { PermissionDialogContribution } from './permission-dialog-contribution';
+
+// Viewer toggle
+import { ViewerToggleService } from './viewer-toggle/viewer-toggle-service';
+import { ViewerToggleOpenHandler } from './viewer-toggle/viewer-toggle-open-handler';
+import { ViewerToggleContribution } from './viewer-toggle/viewer-toggle-contribution';
 
 /**
  * SessionServiceWiring Symbol for DI binding.
@@ -71,6 +77,11 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     bind(CommandContribution).to(EditorCommandContribution).inSingletonScope();
     bind(CommandContribution).to(TerminalCommandContribution).inSingletonScope();
     bind(CommandContribution).to(FileCommandContribution).inSingletonScope();
+
+    // 8. Viewer toggle (generic toggle system for all viewer types)
+    bind(ViewerToggleService).toSelf().inSingletonScope();
+    bind(OpenHandler).to(ViewerToggleOpenHandler).inSingletonScope();
+    bind(FrontendApplicationContribution).to(ViewerToggleContribution).inSingletonScope();
 
     if (process.env.NODE_ENV !== 'production') { console.log('[OpenSpaceCore] Frontend module loaded'); }
 });

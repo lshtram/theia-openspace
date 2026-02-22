@@ -53,6 +53,19 @@ describe('ViewerToggleService', () => {
             const svc = makeService([{ id: 'zip-viewer-handler', priority: 200 }]);
             expect(await svc.canToggle(new URI('file:///test.zip'))).to.be.false;
         });
+
+        it('returns false when only handler is self (openspace-viewer-toggle-open-handler)', async () => {
+            const svc = makeService([{ id: 'openspace-viewer-toggle-open-handler', priority: 150 }]);
+            expect(await svc.canToggle(new URI('file:///test.csv'))).to.be.false;
+        });
+
+        it('returns true when a viewer handler exists alongside self', async () => {
+            const svc = makeService([
+                { id: 'openspace-viewer-toggle-open-handler', priority: 150 },
+                { id: 'csv-viewer-handler', priority: 200 },
+            ]);
+            expect(await svc.canToggle(new URI('file:///test.csv'))).to.be.true;
+        });
     });
 
     describe('getToggleState()', () => {
