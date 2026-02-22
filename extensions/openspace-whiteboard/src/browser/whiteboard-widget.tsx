@@ -24,7 +24,8 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { Tldraw, Editor, TLStoreSnapshot } from 'tldraw';
 import 'tldraw/tldraw.css';
 
-export { WhiteboardData, WhiteboardRecord, WhiteboardUtils } from './whiteboard-types';
+import { WhiteboardData, WhiteboardRecord, WhiteboardUtils } from './whiteboard-types';
+export { WhiteboardData, WhiteboardRecord, WhiteboardUtils };
 
 @injectable()
 export class WhiteboardWidget extends ReactWidget {
@@ -82,12 +83,12 @@ export class WhiteboardWidget extends ReactWidget {
     }
 
     setData(data: WhiteboardData, filePath?: string): void {
-        this.pendingSnapshot = data;
-        this.savedSnapshot = data;
+        this.pendingSnapshot = data as unknown as TLStoreSnapshot;
+        this.savedSnapshot = data as unknown as TLStoreSnapshot;
         this.currentFilePath = filePath;
         if (this.editorRef) {
             // Editor already mounted — apply immediately.
-            this.editorRef.loadSnapshot(data);
+            this.editorRef.loadSnapshot(data as unknown as TLStoreSnapshot);
             this.pendingZoomToFit = true;
         } else {
             // Editor not yet mounted — snapshot will be passed as the prop.
@@ -96,7 +97,7 @@ export class WhiteboardWidget extends ReactWidget {
     }
 
     getData(): WhiteboardData | undefined {
-        return this.savedSnapshot;
+        return this.savedSnapshot as unknown as WhiteboardData | undefined;
     }
 
     /**

@@ -23,11 +23,6 @@ require.extensions['.less'] = () => {};
 // crash that occurs when importing @theia/core/lib/common/preferences/* in Node.js tests.
 // The circular dep: preference-service → common/index → injectable-preference-proxy
 // → preference-service (undefined at that point) → TypeError: Class extends undefined.
-const Module = require('module');
-const _resolveFilename = Module._resolveFilename.bind(Module);
-Module._resolveFilename = function (request, parent, isMain, options) {
-    return _resolveFilename(request, parent, isMain, options);
-};
 // Pre-register a stub for the problematic compiled module before anything loads it.
 const injectablePrefProxyPath = require.resolve(
     '@theia/core/lib/common/preferences/injectable-preference-proxy'
