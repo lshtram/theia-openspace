@@ -384,10 +384,15 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             this.logger.debug(`[SyncService] Skipping isDone signal for non-streaming message: ${streamingStubId}`);
             // Still replace the message in case the SSE replay brings updated content.
             const incomingPartsEarly = event.data.parts || [];
-            const existingMsgEarly = this.sessionService.messages.find(m => m.id === streamingStubId);
-            if (existingMsgEarly && incomingPartsEarly.length > 0) {
+            const existingByStub = this.sessionService.messages.find(m => m.id === streamingStubId);
+            const existingByFinal = !existingByStub && streamingStubId !== event.messageId
+                ? this.sessionService.messages.find(m => m.id === event.messageId)
+                : undefined;
+            const existingMsgEarly = existingByStub || existingByFinal;
+            const lookupId = existingByStub ? streamingStubId : event.messageId;
+            if (existingMsgEarly && incomingPartsEarly.length > 0 && event.data.info) {
                 const finalMsgEarly = { ...event.data.info, parts: incomingPartsEarly };
-                this.sessionService.replaceMessage(streamingStubId, finalMsgEarly);
+                this.sessionService.replaceMessage(lookupId, finalMsgEarly);
             }
             return;
         }

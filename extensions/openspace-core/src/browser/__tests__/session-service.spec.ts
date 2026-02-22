@@ -493,3 +493,153 @@ describe('isStreaming hysteresis', () => {
         expect(service.isStreaming).to.equal(true);
     });
 });
+
+describe('sendMessage() SSE-first message delivery', () => {
+    function createTestService(): SessionServiceImpl {
+        const service = new SessionServiceImpl();
+        (service as any).openCodeService = {
+            getProjects: sinon.stub(),
+            getSession: sinon.stub(),
+            getSessions: sinon.stub(),
+            createSession: sinon.stub(),
+            deleteSession: sinon.stub(),
+            getMessages: sinon.stub(),
+            createMessage: sinon.stub(),
+            abortSession: sinon.stub(),
+            connectToProject: sinon.stub().resolves()
+        };
+        (service as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
+        return service;
+    }
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('does not immediately push the assistant message from RPC result', async () => {
+        const service = createTestService();
+        const mockOpenCodeService = (service as any).openCodeService;
+        (service as any)._activeProject = { id: 'proj-1' };
+        (service as any)._activeSession = { id: 'sess-1' };
+
+        // Mock createMessage to return a result with an assistant message
+        mockOpenCodeService.createMessage = sinon.stub().resolves({
+            info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+            parts: [{ type: 'text', text: 'hello', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+        });
+
+        await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+        // The assistant message should NOT be in _messages immediately after sendMessage resolves.
+        const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+        expect(assistantMessages.length).to.equal(0);
+
+        // Clean up the pending fallback timer
+        const timer = (service as any)._rpcFallbackTimer;
+        if (timer) {
+            clearTimeout(timer);
+            (service as any)._rpcFallbackTimer = undefined;
+        }
+    });
+
+    it('uses RPC result as fallback if SSE has not delivered the message after timeout', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOpenCodeService = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            mockOpenCodeService.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: [{ type: 'text', text: 'hello', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+            });
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // No assistant message yet
+            let assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(0);
+
+            // Advance past the fallback timeout (5 seconds)
+            clock.tick(5100);
+
+            // Now the fallback should have inserted the message
+            assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(1);
+            expect(assistantMessages[0].id).to.equal('msg-final');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('does NOT use RPC fallback if SSE already delivered the message', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOCS = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            mockOCS.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: [{ type: 'text', text: 'hello', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+            });
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // Simulate SSE delivering the message before the fallback fires
+            service.appendMessage({
+                id: 'msg-final',
+                sessionID: 'sess-1',
+                role: 'assistant',
+                time: { created: Date.now() },
+                parts: [{ type: 'text', text: 'hello from SSE' }]
+            } as any);
+
+            // Advance past the fallback timeout
+            clock.tick(5100);
+
+            // Should still be exactly one assistant message (the SSE one)
+            const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(1);
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('cancels RPC fallback timer on abort', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOCS = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            mockOCS.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: [{ type: 'text', text: 'hello', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+            });
+            mockOCS.abortSession = sinon.stub().resolves();
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // Abort before the fallback timer fires
+            await service.abort();
+
+            // Advance past the fallback timeout
+            clock.tick(5100);
+
+            // No assistant message should have been inserted
+            const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(0);
+        } finally {
+            clock.restore();
+        }
+    });
+});
