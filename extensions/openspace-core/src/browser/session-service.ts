@@ -161,6 +161,8 @@ export class SessionServiceImpl implements SessionService {
     private _statusChangeTimeout: ReturnType<typeof setTimeout> | undefined;
     private _streamingDoneTimer: ReturnType<typeof setTimeout> | undefined;
     private readonly STREAMING_DONE_DELAY_MS = 500;
+    private readonly RPC_FALLBACK_DELAY_MS = 5000;
+    private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
     private _sessionStatus: SDKTypes.SessionStatus = { type: 'idle' };
 
     // Emitters
@@ -740,35 +742,34 @@ export class SessionServiceImpl implements SessionService {
                 model
             );
 
-            // The RPC call returns the final assistant message (info + parts).
-            // SSE events (message.part.updated → partial, message.updated → completed) may have
-            // already added/updated this message via appendMessage() / replaceMessage().
-            // To avoid duplicates we only push the assistant message if it isn't in the array yet.
+            // SSE is the single authoritative channel for assistant message delivery.
+            // The RPC result is used only as a timeout-based fallback in case SSE fails
+            // to deliver the message (e.g. SSE disconnected during the turn).
             const assistantMessage: Message = {
                 ...result.info,
                 parts: result.parts || []
             };
 
-            const assistantExists = this._messages.some(m => m.id === assistantMessage.id);
-            if (assistantExists) {
-                // SSE already handled this message (streamed parts via message.part.updated
-                // and completed via message.updated). The RPC result typically has parts: []
-                // because parts arrive via SSE, not the REST response. Only replace if the
-                // RPC result actually carries parts; otherwise we'd wipe SSE-streamed content.
-                const rpcHasParts = (result.parts || []).length > 0;
-                if (rpcHasParts) {
-                    this.replaceMessage(assistantMessage.id, assistantMessage);
-                    this.logger.debug(`[SessionService] Updated existing assistant message via RPC result: ${assistantMessage.id} (${result.parts!.length} parts)`);
-                } else {
-                    this.logger.debug(`[SessionService] Skipping replaceMessage for ${assistantMessage.id}: RPC result has empty parts, SSE already populated content`);
-                }
-            } else {
-                // SSE hasn't arrived yet (or was very fast) — append the assistant message
-                this._messages.push(assistantMessage);
-                this.onMessagesChangedEmitter.fire([...this._messages]);
-                const partsCount = assistantMessage.parts?.length || 0;
-                this.logger.debug(`[SessionService] Added assistant message from RPC: ${assistantMessage.id} with ${partsCount} parts`);
+            // Cancel any previous fallback timer (shouldn't exist, but be safe)
+            if (this._rpcFallbackTimer) {
+                clearTimeout(this._rpcFallbackTimer);
+                this._rpcFallbackTimer = undefined;
             }
+
+            // Start a fallback timer: if SSE hasn't delivered this message within
+            // RPC_FALLBACK_DELAY_MS, insert it from the RPC result.
+            this._rpcFallbackTimer = setTimeout(() => {
+                this._rpcFallbackTimer = undefined;
+                const alreadyExists = this._messages.some(m => m.id === assistantMessage.id);
+                if (!alreadyExists) {
+                    this.logger.info(`[SessionService] SSE fallback: inserting assistant message from RPC result: ${assistantMessage.id}`);
+                    this.appendMessage(assistantMessage);
+                } else {
+                    this.logger.debug(`[SessionService] SSE fallback: message already delivered by SSE: ${assistantMessage.id}`);
+                }
+            }, this.RPC_FALLBACK_DELAY_MS);
+
+            this.logger.debug(`[SessionService] RPC returned assistant message ${assistantMessage.id}, waiting for SSE delivery (fallback in ${this.RPC_FALLBACK_DELAY_MS}ms)`);
 
             this.logger.debug(`[SessionService] State: messages=${this._messages.length}`);
         } catch (error) {
@@ -839,6 +840,11 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
+            // Cancel RPC fallback timer on abort
+            if (this._rpcFallbackTimer) {
+                clearTimeout(this._rpcFallbackTimer);
+                this._rpcFallbackTimer = undefined;
+            }
             // Always clear streaming state
             this._streamingMessageId = undefined;
             if (this._streamingDoneTimer) {
@@ -1006,6 +1012,14 @@ export class SessionServiceImpl implements SessionService {
             return;
         }
 
+        // If SSE is delivering an assistant message, cancel the RPC fallback timer.
+        // SSE is the authoritative channel — once it delivers anything, no fallback needed.
+        if (message.role === 'assistant' && this._rpcFallbackTimer) {
+            clearTimeout(this._rpcFallbackTimer);
+            this._rpcFallbackTimer = undefined;
+            this.logger.debug(`[SessionService] Cancelled RPC fallback timer: SSE delivered assistant message ${message.id}`);
+        }
+
         this._messages.push(message);
         this.onMessagesChangedEmitter.fire([...this._messages]);
     }
@@ -1019,6 +1033,13 @@ export class SessionServiceImpl implements SessionService {
      * @param isDone - Whether streaming is complete
      */
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void {
+        // SSE completed delivery — cancel RPC fallback timer if running
+        if (this._rpcFallbackTimer) {
+            clearTimeout(this._rpcFallbackTimer);
+            this._rpcFallbackTimer = undefined;
+            this.logger.debug(`[SessionService] Cancelled RPC fallback timer: SSE completed message ${messageId}`);
+        }
+
         this.logger.debug(`[SessionService] Streaming update: ${messageId}, isDone=${isDone}`);
 
         // Track which message is streaming
@@ -1227,6 +1248,13 @@ export class SessionServiceImpl implements SessionService {
      * @param delta - String to append
      */
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void {
+        // SSE is actively streaming — cancel RPC fallback timer if running
+        if (this._rpcFallbackTimer) {
+            clearTimeout(this._rpcFallbackTimer);
+            this._rpcFallbackTimer = undefined;
+            this.logger.debug(`[SessionService] Cancelled RPC fallback timer: SSE streaming active for message ${messageId}`);
+        }
+
         const index = this._messages.findIndex(m => m.id === messageId);
         if (index < 0) {
             this.logger.warn(`[SessionService] applyPartDelta: message not found: ${messageId}`);
@@ -1463,6 +1491,10 @@ export class SessionServiceImpl implements SessionService {
         if (this._streamingDoneTimer) {
             clearTimeout(this._streamingDoneTimer);
             this._streamingDoneTimer = undefined;
+        }
+        if (this._rpcFallbackTimer) {
+            clearTimeout(this._rpcFallbackTimer);
+            this._rpcFallbackTimer = undefined;
         }
 
         // Dispose all emitters
