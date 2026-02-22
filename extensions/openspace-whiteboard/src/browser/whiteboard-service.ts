@@ -20,7 +20,7 @@ import { ILogger } from '@theia/core/lib/common/logger';
 import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { WhiteboardData, WhiteboardRecord } from './whiteboard-widget';
+import { WhiteboardData, WhiteboardRecord } from './whiteboard-types';
 import { resolveContentPath } from 'openspace-core/lib/browser/resolve-content-path';
 import { OpenspacePreferences } from 'openspace-settings/lib/browser/openspace-preferences';
 

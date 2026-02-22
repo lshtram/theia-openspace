@@ -16,7 +16,7 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { WhiteboardService } from '../whiteboard-service';
-import { WhiteboardUtils, WhiteboardData } from '../whiteboard-widget';
+import { WhiteboardUtils, WhiteboardData } from '../whiteboard-types';
 
 /** Minimal valid TLStoreSnapshot. */
 function makeSnapshot(store?: Record<string, unknown>): WhiteboardData {
