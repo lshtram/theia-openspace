@@ -2,6 +2,7 @@
 import { injectable } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
+import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import { VoiceBackendService } from './voice-backend-service';
@@ -167,7 +168,7 @@ export class VoiceHubContribution implements BackendApplicationContribution {
 async function callOpenCodeLlm(
     prompt: string,
     text: string,
-    baseUrl = 'http://localhost:7890',
+    baseUrl = process.env.OPENCODE_SERVER_URL ?? 'http://localhost:7890',
 ): Promise<string> {
     const POLL_INTERVAL_MS = 500;
     const TIMEOUT_MS = 30_000;
@@ -220,7 +221,7 @@ async function httpPost<T>(baseUrl: string, path: string, body: unknown): Promis
     const data = JSON.stringify(body);
     return new Promise<T>((resolve, reject) => {
         const parsedUrl = new URL(url);
-        const req = require('http').request(
+        const req = http.request(
             {
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
@@ -228,7 +229,7 @@ async function httpPost<T>(baseUrl: string, path: string, body: unknown): Promis
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             },
-            (res: import('http').IncomingMessage) => {
+            (res: http.IncomingMessage) => {
                 const chunks: Buffer[] = [];
                 res.on('data', (c: Buffer) => chunks.push(c));
                 res.on('end', () => {
@@ -251,14 +252,14 @@ async function httpGet<T>(baseUrl: string, path: string): Promise<T> {
     const url = `${baseUrl}${path}`;
     return new Promise<T>((resolve, reject) => {
         const parsedUrl = new URL(url);
-        require('http').get(
+        http.get(
             {
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
                 path: parsedUrl.pathname + parsedUrl.search,
                 headers: { 'Accept': 'application/json' },
             },
-            (res: import('http').IncomingMessage) => {
+            (res: http.IncomingMessage) => {
                 const chunks: Buffer[] = [];
                 res.on('data', (c: Buffer) => chunks.push(c));
                 res.on('end', () => {
@@ -278,7 +279,7 @@ async function httpDelete(baseUrl: string, path: string): Promise<void> {
     const url = `${baseUrl}${path}`;
     return new Promise<void>((resolve, reject) => {
         const parsedUrl = new URL(url);
-        const req = require('http').request(
+        const req = http.request(
             {
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
@@ -286,7 +287,7 @@ async function httpDelete(baseUrl: string, path: string): Promise<void> {
                 method: 'DELETE',
                 headers: { 'Accept': 'application/json' },
             },
-            (res: import('http').IncomingMessage) => {
+            (res: http.IncomingMessage) => {
                 res.resume(); // drain
                 res.on('end', () => {
                     if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) {
