@@ -2,12 +2,14 @@
 import { assert } from 'chai';
 import { AudioFsm } from '../browser/audio-fsm';
 
-// Mock navigator.mediaDevices for jsdom (navigator is read-only, must use Object.defineProperty)
+// Mock navigator.mediaDevices for jsdom (navigator is read-only, must use Object.defineProperty).
+// jsdom defines userAgent and platform as prototype getters, not own enumerable properties —
+// spread alone misses them. Read them explicitly before overriding so transitive deps
+// (@lumino/domutils reads platform, react-dom reads userAgent) don't see undefined.
 const mockStream = { getTracks: () => [{ stop: () => {} }] } as any;
 const _origNavigator = (global as any).navigator || {};
 Object.defineProperty(global, 'navigator', {
   value: {
-    ...(_origNavigator),
     userAgent: _origNavigator.userAgent,
     platform: _origNavigator.platform,
     mediaDevices: {
