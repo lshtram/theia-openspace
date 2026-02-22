@@ -22,7 +22,24 @@ describe('waitForHub()', () => {
 
         expect(fetchStub.callCount).to.equal(1);
         expect(fetchStub.firstCall.args[0]).to.equal('http://localhost:3000/mcp');
-        expect(fetchStub.firstCall.args[1]).to.deep.include({ method: 'GET' });
+        expect(fetchStub.firstCall.args[1]).to.deep.include({ method: 'POST' });
+    });
+
+    it('probes MCP with POST tools/list using correct headers and JSON-RPC body to avoid 406', async () => {
+        const fetchStub = sinon.stub().resolves({ ok: true, status: 200 });
+        (globalThis as Record<string, unknown>)['fetch'] = fetchStub;
+
+        await waitForHub('http://localhost:3000/mcp', { maxAttempts: 3, intervalMs: 10 });
+
+        expect(fetchStub.callCount).to.equal(1);
+        const [, init] = fetchStub.firstCall.args as [string, RequestInit & { headers?: Record<string, string> }];
+        expect(init.method).to.equal('POST');
+        expect(init.headers).to.deep.include({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+        });
+        const body = JSON.parse(init.body as string);
+        expect(body).to.deep.equal({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
     });
 
     it('retries and resolves once Hub becomes available (network error retried, any HTTP response = ready)', async () => {
