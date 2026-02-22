@@ -19,10 +19,19 @@ export class KokoroAdapter implements TtsProvider {
   private model: KokoroTTSInstance | null = null;
   private modelLoadPromise: Promise<KokoroTTSInstance> | null = null;
   private modelLoadError: Error | null = null;
+  private availabilityCache: boolean | undefined = undefined;
 
   async isAvailable(): Promise<boolean> {
-    // Always return true - let synthesize handle errors
-    return true;
+    if (this.availabilityCache !== undefined) {
+      return this.availabilityCache;
+    }
+    try {
+      require.resolve('kokoro-js');
+      this.availabilityCache = true;
+    } catch {
+      this.availabilityCache = false;
+    }
+    return this.availabilityCache;
   }
 
   async synthesize(
