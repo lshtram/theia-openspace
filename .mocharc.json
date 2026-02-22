@@ -3,10 +3,13 @@
   "extensions": ["ts", "tsx"],
   "spec": [
     "extensions/**/src/node/**/__tests__/*.spec.ts",
-    "extensions/openspace-core/src/browser/__tests__/*.spec.ts",
+    "extensions/**/src/browser/__tests__/*.spec.ts",
+    "extensions/**/src/common/__tests__/*.spec.ts",
+    "extensions/**/src/__tests__/*.spec.ts",
     "packages/**/src/**/*.spec.ts"
   ],
   "timeout": 10000,
+  "exit": true,
   "color": true,
   "reporter": "spec",
   "node-option": [
