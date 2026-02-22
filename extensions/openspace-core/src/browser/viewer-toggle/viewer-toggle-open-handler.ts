@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { inject, injectable } from '@theia/core/shared/inversify';
+import { inject, injectable, named } from '@theia/core/shared/inversify';
 import { URI } from '@theia/core/lib/common/uri';
-import { OpenHandler, OpenerService, OpenerOptions } from '@theia/core/lib/browser';
+import { OpenHandler, OpenerOptions } from '@theia/core/lib/browser';
+import { ContributionProvider } from '@theia/core/lib/common/contribution-provider';
 import { ViewerToggleService } from './viewer-toggle-service';
 
 /**
@@ -24,8 +25,15 @@ export class ViewerToggleOpenHandler implements OpenHandler {
     @inject(ViewerToggleService)
     protected readonly toggleService!: ViewerToggleService;
 
-    @inject(OpenerService)
-    protected readonly openerService!: OpenerService;
+    /**
+     * Inject ContributionProvider<OpenHandler> directly rather than OpenerService.
+     *
+     * OpenerService.getOpeners() calls canHandle() on all handlers including this one,
+     * which would cause infinite recursion: canHandle → canToggle → getOpeners → canHandle.
+     * By iterating contributions directly and skipping self, we break the cycle.
+     */
+    @inject(ContributionProvider) @named(OpenHandler)
+    protected readonly handlersProvider!: ContributionProvider<OpenHandler>;
 
     async canHandle(uri: URI): Promise<number> {
         const can = await this.toggleService.canToggle(uri);
@@ -34,30 +42,27 @@ export class ViewerToggleOpenHandler implements OpenHandler {
 
     async open(uri: URI, options?: OpenerOptions): Promise<object | undefined> {
         const state = this.toggleService.getToggleState(uri);
+        const handlers = this.handlersProvider.getContributions();
 
         if (state === 'edit') {
-            // Delegate to text editor: find the first handler that isn't a viewer
-            // and isn't self.
-            const handlers = await this.openerService.getOpeners(uri);
-            const editorHandler = handlers.find(h =>
-                h.id !== HANDLER_ID &&
-                !/viewer/i.test(h.id)
-            );
-            if (editorHandler) {
-                return editorHandler.open(uri, options);
+            // Delegate to the first non-viewer, non-self handler (i.e. text editor).
+            for (const h of handlers) {
+                if (h.id === HANDLER_ID || /viewer/i.test(h.id)) { continue; }
+                const priority = await h.canHandle(uri, options);
+                if (priority > 0) {
+                    return h.open(uri, options);
+                }
             }
-            // Fallback: let Theia's default opener handle it (skip this handler)
             return undefined;
         }
 
-        // state === 'preview': delegate to the viewer handler
-        const handlers = await this.openerService.getOpeners(uri);
-        const viewerHandler = handlers.find(h =>
-            h.id !== HANDLER_ID &&
-            /viewer/i.test(h.id)
-        );
-        if (viewerHandler) {
-            return viewerHandler.open(uri, options);
+        // state === 'preview': delegate to the highest-priority viewer handler.
+        for (const h of handlers) {
+            if (h.id === HANDLER_ID || !/viewer/i.test(h.id)) { continue; }
+            const priority = await h.canHandle(uri, options);
+            if (priority > 0) {
+                return h.open(uri, options);
+            }
         }
 
         return undefined;

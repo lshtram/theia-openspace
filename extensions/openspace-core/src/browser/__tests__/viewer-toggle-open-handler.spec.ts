@@ -10,10 +10,9 @@ import { ViewerToggleService } from '../viewer-toggle/viewer-toggle-service';
 
 type StubHandler = { id: string; canHandle: (u: URI) => number; open: (u: URI) => Promise<object | undefined> };
 
-function makeOpenerService(handlers: StubHandler[]) {
+function makeHandlersProvider(handlers: StubHandler[]) {
     return {
-        getOpeners: async (_uri: URI) => handlers,
-        getOpener: async () => { throw new Error('not needed'); },
+        getContributions: () => handlers,
     };
 }
 
@@ -32,7 +31,7 @@ function makeHandler(
 ): ViewerToggleOpenHandler {
     const h = new ViewerToggleOpenHandler();
     (h as any).toggleService = makeToggleService(canToggleResult, toggleState);
-    (h as any).openerService = makeOpenerService(handlers);
+    (h as any).handlersProvider = makeHandlersProvider(handlers);
     return h;
 }
 
