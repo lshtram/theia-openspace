@@ -43,7 +43,11 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                     const language = rawLanguage.split('-')[0].split('_')[0].toLowerCase();
                     // M-5: Read X-Sample-Rate header and pass it to the STT provider
                     const sampleRateHeader = req.headers['x-sample-rate'] as string | undefined;
-                    const sampleRate = sampleRateHeader ? parseInt(sampleRateHeader, 10) : 16000;
+                    const parsedRate = sampleRateHeader ? parseInt(sampleRateHeader, 10) : NaN;
+                    // Guard against NaN, non-finite, or out-of-range values
+                    const sampleRate = Number.isFinite(parsedRate) && parsedRate > 0 && parsedRate <= 384000
+                        ? parsedRate
+                        : 16000;
                     const result = await this.voiceService.transcribeSpeech({ audio, language, sampleRate });
                     res.json(result);
                 } catch (err) {
@@ -93,7 +97,16 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                 return;
             }
             res.setHeader('Content-Type', 'audio/wav');
-            fs.createReadStream(filePath).pipe(res);
+            const readStream = fs.createReadStream(filePath);
+            readStream.on('error', (err) => {
+                console.error('[VoiceHub] Stream error serving utterance:', err);
+                if (!res.headersSent) {
+                    res.status(500).send('Error reading audio file');
+                } else {
+                    res.destroy();
+                }
+            });
+            readStream.pipe(res);
         });
 
         console.log('[VoiceHub] Voice routes configured (/openspace/voice/stt, /narrate, /utterances)');

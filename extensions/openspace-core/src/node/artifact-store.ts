@@ -91,9 +91,27 @@ export class ArtifactStore extends EventEmitter {
     }
 
     private assertInsideRoot(absolutePath: string): void {
-        const normalized = path.resolve(absolutePath);
-        const withSep = this.projectRoot + path.sep;
-        if (normalized !== this.projectRoot && !normalized.startsWith(withSep)) {
+        // Use realpath to resolve symlinks before the containment check so that
+        // a symlink inside projectRoot pointing outside cannot escape the policy.
+        let realRoot: string;
+        try {
+            realRoot = fs.realpathSync(this.projectRoot);
+        } catch {
+            realRoot = this.projectRoot;
+        }
+        let realPath: string;
+        try {
+            realPath = fs.realpathSync(absolutePath);
+        } catch {
+            // Path does not exist yet — resolve symlinks in the parent directory
+            try {
+                realPath = path.join(fs.realpathSync(path.dirname(absolutePath)), path.basename(absolutePath));
+            } catch {
+                realPath = path.resolve(absolutePath);
+            }
+        }
+        const withSep = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
+        if (realPath !== realRoot && !realPath.startsWith(withSep)) {
             throw new Error(`Path escapes project root: ${absolutePath}`);
         }
     }

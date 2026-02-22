@@ -752,7 +752,16 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
 
     // Handle shell command execution via ! shell mode
     const handleShellCommand = React.useCallback(async (command: string) => {
-        const cwd = workspaceRoot || '/';
+        if (!workspaceRoot) {
+            // No workspace root available — refuse to execute rather than fall back to '/'
+            const id = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            setShellOutputs(prev => [...prev, {
+                id, command, stdout: '', stderr: 'Cannot execute shell command: no workspace root is set.',
+                exitCode: 1, timestamp: Date.now(), afterMessageIndex: messagesRef.current.length - 1,
+            }]);
+            return;
+        }
+        const cwd = workspaceRoot;
         // Create a placeholder entry immediately so the user sees the command
         const id = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const placeholderEntry: ShellOutput = {

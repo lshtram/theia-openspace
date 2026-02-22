@@ -86,9 +86,27 @@ export class OpenSpaceHub implements BackendApplicationContribution {
             return;
         }
 
-        const isAllowed = this.allowedOrigins.some(allowed =>
-            origin.startsWith(allowed)
-        );
+        // Parse origin as URL and compare protocol+hostname+port strictly to
+        // prevent prefix-matching bypass (e.g. http://localhost:3000.evil.tld).
+        let parsedOrigin: URL;
+        try {
+            parsedOrigin = new URL(origin);
+        } catch {
+            this.logger.warn(`[Hub] Rejected request with unparseable Origin header: ${origin}`);
+            res.status(403).json({ error: 'Forbidden: Invalid origin' });
+            return;
+        }
+        const normalizedOrigin = `${parsedOrigin.protocol}//${parsedOrigin.hostname}:${parsedOrigin.port || (parsedOrigin.protocol === 'https:' ? '443' : '80')}`;
+
+        const isAllowed = this.allowedOrigins.some(allowed => {
+            try {
+                const parsedAllowed = new URL(allowed);
+                const normalizedAllowed = `${parsedAllowed.protocol}//${parsedAllowed.hostname}:${parsedAllowed.port || (parsedAllowed.protocol === 'https:' ? '443' : '80')}`;
+                return normalizedOrigin === normalizedAllowed;
+            } catch {
+                return false;
+            }
+        });
 
         if (!isAllowed) {
             this.logger.warn(`[Hub] Rejected request from invalid origin: ${origin}`);
@@ -117,28 +135,28 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd();
         this.mcpServer = new OpenSpaceMcpServer(workspaceRoot);
 
-        // Apply origin validation middleware to all /openspace/* routes
-        app.use('/openspace/*', (req, res, next) => this.validateOrigin(req, res, next));
-
         // Mount MCP at /mcp (POST, GET, DELETE) — no origin restriction (MCP clients connect directly)
         this.mcpServer.mount(app);
 
         // POST /openspace/register-bridge — browser registers itself as the command bridge
-        app.post('/openspace/register-bridge', (req, res) => this.handleRegisterBridge(req, res));
+        // Require a valid browser origin so arbitrary local processes cannot register as a bridge
+        app.post('/openspace/register-bridge', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleRegisterBridge(req, res));
 
         // POST /openspace/manifest — Receive command manifest from frontend (kept for backwards compat)
-        app.post('/openspace/manifest', (req, res) => this.handleManifest(req, res));
-        app.post('/manifest', (req, res) => this.handleManifest(req, res));
+        app.post('/openspace/manifest', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleManifest(req, res));
+        // Backwards-compat alias: apply the same origin middleware as /openspace/* routes
+        app.post('/manifest', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleManifest(req, res));
 
-        // GET /openspace/instructions — Generate system prompt
+        // GET /openspace/instructions — Generate system prompt (no origin restriction; used by agents and tooling)
         app.get('/openspace/instructions', (req, res) => this.handleInstructions(req, res));
 
         // POST /openspace/state — Receive IDE state updates from frontend
-        app.post('/state', (req, res) => this.handleState(req, res));
-        app.post('/openspace/state', (req, res) => this.handleState(req, res));
+        // Backwards-compat alias: apply the same origin middleware as /openspace/* routes
+        app.post('/state', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleState(req, res));
+        app.post('/openspace/state', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleState(req, res));
 
         // POST /openspace/command-results — Receive command execution results from browser
-        app.post('/openspace/command-results', (req, res) => this.handleCommandResult(req, res));
+        app.post('/openspace/command-results', (req, res, next) => this.validateOrigin(req, res, next), (req, res) => this.handleCommandResult(req, res));
 
         this.logger.info('[Hub] OpenSpace Hub configured (T3 MCP mode)');
     }

@@ -59,15 +59,26 @@ get_pid_by_port() {
     lsof -ti:$port 2>/dev/null || echo ""
 }
 
-# Kill process by PID
+# Kill process by PID — sends SIGTERM first and waits up to 10 seconds for a
+# graceful exit before escalating to SIGKILL as a last resort.
 kill_process() {
     local pid=$1
     if [ -n "$pid" ]; then
-        echo_status "Killing process $pid..."
+        echo_status "Sending SIGTERM to process $pid (graceful stop)..."
         kill $pid 2>/dev/null || true
-        sleep 1
-        # Force kill if still running
+        # Wait up to 10 seconds for graceful shutdown
+        local i=0
+        while [ $i -lt 10 ]; do
+            sleep 1
+            i=$((i + 1))
+            if ! kill -0 $pid 2>/dev/null; then
+                echo_success "Process $pid exited gracefully"
+                return
+            fi
+        done
+        # Escalate to SIGKILL only if process is still running after grace period
         if kill -0 $pid 2>/dev/null; then
+            echo_warning "Process $pid did not exit within 10s — sending SIGKILL"
             kill -9 $pid 2>/dev/null || true
         fi
     fi

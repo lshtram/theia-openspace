@@ -42,9 +42,13 @@ function priv(obj: OpenSpaceMcpServer): any {
     return obj as any;
 }
 
-/** Create an isolated temp directory for file-tool tests. */
+/** Create an isolated temp directory for file-tool tests.
+ *  Uses realpathSync to resolve OS-level symlinks (e.g. /tmp → /private/tmp on macOS)
+ *  so that test assertions match the resolved paths returned by resolveSafePath().
+ */
 function makeTempDir(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mcp-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mcp-test-'));
+    return fs.realpathSync(tmpDir);
 }
 
 /** Build a minimal CommandBridgeResult for promise resolution tests. */

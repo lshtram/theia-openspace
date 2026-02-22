@@ -49,10 +49,10 @@ jobs:
         run: yarn build:browser
       
       - name: Type check
-        run: yarn typecheck || echo "Typecheck script not defined"
+        run: yarn typecheck
       
       - name: Lint
-        run: yarn lint || echo "Lint script not defined"
+        run: yarn lint
       
       - name: Test
-        run: yarn test || echo "Test script not defined"
+        run: yarn test

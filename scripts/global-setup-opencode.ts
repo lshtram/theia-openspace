@@ -97,15 +97,25 @@ function startOpenCode(): Promise<ChildProcess> {
     });
 }
 
+// ─── PID file for teardown ────────────────────────────────────────────────────
+
+/** Path where the PID of a setup-started OpenCode process is written. */
+export const OPENCODE_PID_FILE = path.join(PROJECT_ROOT, '.opencode-e2e.pid');
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function globalSetup(_config: FullConfig): Promise<void> {
     const running = await isServerRunning(OPENCODE_URL);
     if (running) {
         log(`OpenCode already running at ${OPENCODE_URL}`);
+        // Not started by us — teardown should leave it alone
     } else {
         log('OpenCode not running — starting it...');
-        await startOpenCode();
+        const proc = await startOpenCode();
+        if (proc.pid !== undefined) {
+            fs.writeFileSync(OPENCODE_PID_FILE, String(proc.pid), 'utf-8');
+            log(`OpenCode PID ${proc.pid} written to ${OPENCODE_PID_FILE}`);
+        }
         await waitUntilReady(OPENCODE_URL, 'OpenCode');
     }
 }

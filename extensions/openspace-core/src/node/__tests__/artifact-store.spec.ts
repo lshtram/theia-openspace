@@ -9,7 +9,7 @@ describe('ArtifactStore', () => {
     let store: ArtifactStore;
 
     beforeEach(() => {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-store-test-'));
+        tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-store-test-')));
         store = new ArtifactStore(tmpDir);
     });
 

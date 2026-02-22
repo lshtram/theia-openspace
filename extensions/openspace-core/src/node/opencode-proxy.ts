@@ -159,8 +159,10 @@ export class OpenCodeProxy implements OpenCodeService {
 
     /**
      * Make a raw HTTP/HTTPS request and return the response body as a string.
+     * Applies a 30-second timeout; rejects with an error if the upstream stalls.
      */
     protected rawRequest(url: string, method: string, headers: Record<string, string>, body?: string): Promise<{ statusCode: number; body: string }> {
+        const REQUEST_TIMEOUT_MS = 30_000;
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
             const protocol = parsedUrl.protocol === 'https:' ? https : http;
@@ -170,7 +172,8 @@ export class OpenCodeProxy implements OpenCodeService {
                 port: parsedUrl.port,
                 path: parsedUrl.pathname + parsedUrl.search,
                 method,
-                headers
+                headers,
+                timeout: REQUEST_TIMEOUT_MS,
             }, (res: http.IncomingMessage) => {
                 const chunks: Buffer[] = [];
                 res.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -182,6 +185,9 @@ export class OpenCodeProxy implements OpenCodeService {
             });
 
             req.on('error', reject);
+            req.on('timeout', () => {
+                req.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method} ${url}`));
+            });
 
             if (body !== undefined) {
                 req.write(body);
@@ -1070,8 +1076,19 @@ export class OpenCodeProxy implements OpenCodeService {
      * Execute a shell command on the backend using child_process.exec.
      * Used by the shell mode (!) in the chat prompt input.
      * Commands are run with a 30-second timeout and 1MB output limit.
+     * The cwd must be a non-empty absolute path; execution is refused otherwise.
      */
     async executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }> {
+        // Enforce a valid absolute cwd — never fall back to an implicit directory.
+        if (!cwd || !path.isAbsolute(cwd)) {
+            return {
+                stdout: '',
+                stderr: `Shell execution refused: cwd must be an absolute path, got: ${JSON.stringify(cwd)}`,
+                exitCode: 1,
+                error: 'Invalid cwd',
+            };
+        }
+
         const MAX_OUTPUT = 1024 * 1024; // 1MB
         const TIMEOUT = 30_000; // 30 seconds
 

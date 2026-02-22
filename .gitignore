@@ -33,6 +33,7 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+.opencode-e2e.pid
 
 # Build artifacts
 dist/
@@ -51,6 +52,9 @@ tmp/
 
 # OpenCode
 .claude/
+
+# Lock files — project uses Yarn; prevent accidental npm lockfile commits
+package-lock.json
 
 # Build outputs
 browser-app/

@@ -37,7 +37,30 @@
 - Use exact version pins for @theia/* packages (e.g., "1.68.2" not "^1.68.0")
 - Delegate to Scout for research, Builder for implementation, Janitor for validation
 
-## Release Gate: E2E Tests Required Before Push (Added 2026-02-19)
+## E2E Testing Protocol: Incremental Execution (Added 2026-02-22)
+
+**Rule:** Never run the entire e2e suite in a single command — it times out and gives no useful signal.
+
+**Incremental approach:**
+1. Run the **first test only**. If the environment is broken (server not responding, wrong origin, etc.), it will fail fast. Fix the root cause before continuing.
+2. Once the first test passes, run **5 tests** with a reasonable timeout. Fix any failures before proceeding.
+3. Keep increasing the batch size (5 → 10 → 20 → all) only after the previous batch passes cleanly.
+
+**Commands:**
+```bash
+# Step 1: single test
+npx playwright test app-load.spec.ts --reporter=line
+
+# Step 2: small batch (pick a meaningful group)
+npx playwright test app-load.spec.ts mcp-tools.spec.ts --reporter=line
+
+# Step 3: larger batch
+npx playwright test app-load.spec.ts mcp-tools.spec.ts chat-message-flow.spec.ts --reporter=line
+```
+
+**Rationale:** Each e2e test can take 10–60 seconds (with retries). Running 88 tests at once exceeds the 5-minute bash timeout and gives no incremental feedback on what failed or why.
+
+
 
 **Rule:** Any commit that touches real functionality (Hub routes, MCP tools, browser extensions, ArtifactStore, PatchEngine, or any production code path) MUST have the full E2E test suite pass before `git push`.
 

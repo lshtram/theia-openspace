@@ -11,7 +11,7 @@ describe('PatchEngine', () => {
     let engine: PatchEngine;
 
     beforeEach(() => {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'patch-engine-test-'));
+        tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'patch-engine-test-')));
         store = new ArtifactStore(tmpDir);
         engine = new PatchEngine(tmpDir, store);
     });

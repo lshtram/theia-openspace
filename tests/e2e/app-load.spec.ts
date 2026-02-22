@@ -59,20 +59,27 @@ test.describe('App Load Smoke Tests', () => {
     });
 
     test('Hub manifest endpoint accepts valid manifest POST', async ({ page }) => {
+        // Navigate first so the page has an origin (http://localhost:3000),
+        // then use page.evaluate fetch — the browser will include Origin automatically.
+        await page.goto(BASE_URL);
+        await waitForTheiaReady(page);
+
         // POST /openspace/manifest — accepts a manifest with a commands array
         // Returns {"success":true} when manifest is valid, 400 when invalid.
-        const response = await page.request.post(`${BASE_URL}/openspace/manifest`, {
-            data: {
-                commands: [
-                    { id: 'openspace.editor.open', name: 'Open Editor', description: 'Open a file' }
-                ]
-            }
-        });
+        // Use in-page fetch so the browser sets Origin: http://localhost:3000
+        const result = await page.evaluate(async (url: string) => {
+            const res = await fetch(`${url}/openspace/manifest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commands: [{ id: 'openspace.editor.open', name: 'Open Editor', description: 'Open a file' }] })
+            });
+            const body = await res.json();
+            return { status: res.status, body };
+        }, BASE_URL);
 
         // Must return 200 with success=true when a valid manifest is posted
-        expect(response.status()).toBe(200);
-        const body = await response.json();
-        expect(body).toHaveProperty('success', true);
+        expect(result.status).toBe(200);
+        expect(result.body).toHaveProperty('success', true);
     });
 
     test('Hub instructions endpoint returns non-empty string containing openspace tool references', async ({ page }) => {

@@ -11,6 +11,9 @@ export default defineConfig({
    * Theia (:3000) is handled by webServer below. */
   globalSetup: require.resolve('./scripts/global-setup-opencode'),
   
+  /* Global teardown — stops any OpenCode server process started by globalSetup. */
+  globalTeardown: require.resolve('./scripts/global-teardown-opencode'),
+  
   /* Maximum time one test can run for */
   timeout: 60 * 1000,
   

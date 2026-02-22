@@ -811,14 +811,38 @@ export class OpenSpaceMcpServer {
 
     /**
      * Resolve a path safely, ensuring it stays within the workspace root.
+     * Uses fs.realpath to resolve symlinks before the containment check so that
+     * a symlink inside the workspace that points outside cannot escape the policy.
+     * For paths that do not yet exist, the parent directory is realpath-resolved.
      * Throws if the resolved path escapes the workspace.
      */
     private resolveSafePath(filePath: string): string {
         const resolved = path.resolve(this.workspaceRoot, filePath);
-        if (!resolved.startsWith(this.workspaceRoot + path.sep) && resolved !== this.workspaceRoot) {
+        // Resolve symlinks in the workspace root itself (once, cached-style via sync call)
+        let realRoot: string;
+        try {
+            realRoot = fs.realpathSync(this.workspaceRoot);
+        } catch {
+            realRoot = this.workspaceRoot;
+        }
+        // Resolve symlinks in the candidate path; fall back to parent resolution for
+        // non-existent targets (e.g. a file about to be created).
+        let realResolved: string;
+        try {
+            realResolved = fs.realpathSync(resolved);
+        } catch {
+            // Path does not exist yet — resolve the nearest existing parent instead
+            try {
+                realResolved = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
+            } catch {
+                realResolved = resolved;
+            }
+        }
+        const rootWithSep = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
+        if (!realResolved.startsWith(rootWithSep) && realResolved !== realRoot) {
             throw new Error(`Path traversal detected: "${filePath}" resolves outside workspace root`);
         }
-        return resolved;
+        return realResolved;
     }
 
     private listDirectory(dirPath: string, recursive: boolean, base?: string): string[] {
@@ -846,6 +870,14 @@ export class OpenSpaceMcpServer {
 
     private searchFiles(dirPath: string, pattern: string, globFilter?: string): string[] {
         const results: string[] = [];
+
+        // Safety limits to prevent DoS via large trees / large files / pathological regex
+        const MAX_RESULTS = 500;
+        const MAX_FILES_SCANNED = 5_000;
+        const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
+        const MAX_DEPTH = 20;
+        const REGEX_TIMEOUT_MS = 5_000; // 5-second wall-clock budget for the entire search
+
         let regex: RegExp;
         try {
             regex = new RegExp(pattern);
@@ -859,7 +891,15 @@ export class OpenSpaceMcpServer {
             ? (globFilter.includes('*') ? globFilter.slice(globFilter.lastIndexOf('*') + 1) : globFilter)
             : null;
 
-        const walk = (dir: string): void => {
+        let filesScanned = 0;
+        const deadline = Date.now() + REGEX_TIMEOUT_MS;
+
+        const walk = (dir: string, depth: number): void => {
+            if (results.length >= MAX_RESULTS) return;
+            if (filesScanned >= MAX_FILES_SCANNED) return;
+            if (depth > MAX_DEPTH) return;
+            if (Date.now() > deadline) return;
+
             let entries: fs.Dirent[];
             try {
                 entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -867,20 +907,28 @@ export class OpenSpaceMcpServer {
                 return;
             }
             for (const entry of entries) {
+                if (results.length >= MAX_RESULTS) break;
+                if (filesScanned >= MAX_FILES_SCANNED) break;
+                if (Date.now() > deadline) break;
+
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) {
                     if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
-                        walk(full);
+                        walk(full, depth + 1);
                     }
                 } else if (!ext || entry.name.endsWith(ext)) {
+                    filesScanned++;
                     try {
+                        const stat = fs.statSync(full);
+                        if (stat.size > MAX_FILE_SIZE_BYTES) continue; // skip oversized files
                         const content = fs.readFileSync(full, 'utf-8');
                         const lines = content.split('\n');
-                        lines.forEach((line, idx) => {
-                            if (regex.test(line)) {
-                                results.push(`${full}:${idx + 1}: ${line.trim()}`);
+                        for (let idx = 0; idx < lines.length; idx++) {
+                            if (results.length >= MAX_RESULTS) break;
+                            if (regex.test(lines[idx])) {
+                                results.push(`${full}:${idx + 1}: ${lines[idx].trim()}`);
                             }
-                        });
+                        }
                     } catch {
                         // skip unreadable files
                     }
@@ -888,7 +936,7 @@ export class OpenSpaceMcpServer {
             }
         };
 
-        walk(dirPath);
+        walk(dirPath, 0);
         return results;
     }
 
