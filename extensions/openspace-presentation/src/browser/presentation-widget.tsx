@@ -18,6 +18,7 @@ import * as React from '@theia/core/shared/react';
 import { injectable, inject, optional, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { Message } from '@theia/core/lib/browser';
+import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { URI } from '@theia/core/lib/common/uri';
@@ -252,6 +253,19 @@ More content</pre>
             ? PresentationWidget.ICON_EDIT
             : PresentationWidget.ICON_PRESENTATION;
         this.update();
+        // When switching back to presentation mode, React replaces the Monaco
+        // container with a fresh .presentation-container shell on this update()
+        // call. The ref fires synchronously during React's commit, but Reveal.js
+        // needs the DOM to be fully laid out. Use rAF to write slides and
+        // re-initialize Reveal after the browser's next layout pass.
+        if (this.mode === 'presentation') {
+            requestAnimationFrame(() => {
+                this.writeSlidesDom();
+                this.initializeReveal().catch(err =>
+                    console.error('[PresentationWidget] Failed to re-initialize reveal.js after toggle:', err)
+                );
+            });
+        }
     }
 
     /**
@@ -296,7 +310,15 @@ More content</pre>
                     minHeight: -1,
                 }
             );
-            this.monacoEditor.getControl().layout();
+            // Defer layout() until after the browser has done a layout pass.
+            // The React commit that swapped .presentation-container for
+            // .presentation-editor-container happens synchronously; the browser
+            // hasn't recalculated offsetWidth/offsetHeight yet at this point, so
+            // calling layout() immediately yields {width:0, height:0} and Monaco
+            // renders a single-line editor. rAF lets the browser finish layout first.
+            requestAnimationFrame(() => {
+                this.monacoEditor?.getControl().layout();
+            });
 
             let saveTimer: ReturnType<typeof setTimeout> | undefined;
             this.editorDisposables.push(
@@ -396,6 +418,19 @@ More content</pre>
             () => this.toggleMode(),
         );
         this.toDisposeOnDetach.push(disposable);
+    }
+
+    protected onResize(msg: Widget.ResizeMessage): void {
+        super.onResize(msg);
+        // Relay Lumino resize events to Monaco so it fills the widget correctly
+        // both on initial mount and on subsequent panel resizes.
+        if (this.monacoEditor) {
+            this.monacoEditor.getControl().layout();
+        }
+        // Relay to reveal.js as well
+        if (this.revealDeck) {
+            this.revealDeck.layout();
+        }
     }
 
     protected onBeforeDetach(msg: Message): void {

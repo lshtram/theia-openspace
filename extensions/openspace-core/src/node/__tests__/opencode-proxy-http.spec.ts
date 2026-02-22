@@ -162,7 +162,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
             expect(proxy.capturedUrl).to.include('/session/sess-1/message');
             const body = JSON.parse(proxy.capturedBody!);
             expect(body.parts).to.have.length(1);
-            expect(message.id).to.equal('m2');
+            expect(message.info.id).to.equal('m2');
         });
 
         it('includes model when provided', async () => {

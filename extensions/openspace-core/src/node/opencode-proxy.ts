@@ -271,7 +271,7 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<Session>(`/session/${encodeURIComponent(sessionId)}`);
     }
 
-    async createSession(_projectId: string, session: Partial<Session>): Promise<Session> {
+    async createSession(_projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session> {
         // OpenCode API: POST /session - body: { parentID?, title? }
         return this.post<Session>(`/session`, session);
     }

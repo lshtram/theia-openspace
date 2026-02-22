@@ -44,10 +44,10 @@ function buildContribution(fetchStub?: sinon.SinonStub) {
     const syncService = makeSyncService();
     const sessionService = makeSessionService();
 
-    (bc as Record<string, unknown>)['paneService'] = paneService;
-    (bc as Record<string, unknown>)['logger'] = logger;
-    (bc as Record<string, unknown>)['syncService'] = syncService;
-    (bc as Record<string, unknown>)['sessionService'] = sessionService;
+    (bc as unknown as Record<string, unknown>)['paneService'] = paneService;
+    (bc as unknown as Record<string, unknown>)['logger'] = logger;
+    (bc as unknown as Record<string, unknown>)['syncService'] = syncService;
+    (bc as unknown as Record<string, unknown>)['sessionService'] = sessionService;
 
     // Stub fetch globally (BridgeContribution uses globalThis.fetch)
     const fetch = fetchStub ?? sinon.stub().resolves({ ok: true });

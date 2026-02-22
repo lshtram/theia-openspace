@@ -24,7 +24,6 @@ import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service
 import { URI } from '@theia/core/lib/common/uri';
 import * as monaco from '@theia/monaco-editor-core';
 import { Position, EditorWidget } from '@theia/editor/lib/browser';
-import * as path from 'path';
 import { OpenCodeService } from '../common/opencode-protocol';
 import { validatePath as sharedValidatePath } from './path-validator';
 
