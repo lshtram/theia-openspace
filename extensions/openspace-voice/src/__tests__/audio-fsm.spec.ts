@@ -4,8 +4,12 @@ import { AudioFsm } from '../browser/audio-fsm';
 
 // Mock navigator.mediaDevices for jsdom (navigator is read-only, must use Object.defineProperty)
 const mockStream = { getTracks: () => [{ stop: () => {} }] } as any;
+const _origNavigator = (global as any).navigator || {};
 Object.defineProperty(global, 'navigator', {
   value: {
+    ...(_origNavigator),
+    userAgent: _origNavigator.userAgent,
+    platform: _origNavigator.platform,
     mediaDevices: {
       getUserMedia: async (_constraints: any) => mockStream,
     },
