@@ -153,7 +153,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
 
     describe('createMessage()', () => {
         it('makes POST /session/:id/message with parts', async () => {
-            proxy.respondWith({ id: 'm2', parts: [{ type: 'text', text: 'hello' }], role: 'user' });
+            proxy.respondWith({ info: { id: 'm2', role: 'user', parts: [], time: { created: 0 } }, parts: [{ type: 'text', text: 'hello' }] });
             const message = await proxy.createMessage(
                 'proj-1', 'sess-1',
                 { parts: [{ type: 'text', text: 'hello' } as any] }
@@ -166,7 +166,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
         });
 
         it('includes model when provided', async () => {
-            proxy.respondWith({ id: 'm3', parts: [], role: 'user' });
+            proxy.respondWith({ info: { id: 'm3', role: 'user', parts: [], time: { created: 0 } }, parts: [] });
             await proxy.createMessage(
                 'proj-1', 'sess-1',
                 { parts: [] },
@@ -177,7 +177,7 @@ describe('OpenCodeProxy — HTTP methods', () => {
         });
 
         it('omits model when not provided', async () => {
-            proxy.respondWith({ id: 'm4', parts: [], role: 'user' });
+            proxy.respondWith({ info: { id: 'm4', role: 'user', parts: [], time: { created: 0 } }, parts: [] });
             await proxy.createMessage('proj-1', 'sess-1', { parts: [] });
             const body = JSON.parse(proxy.capturedBody!);
             expect(body.model).to.be.undefined;
