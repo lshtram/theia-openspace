@@ -1980,24 +1980,71 @@
     gap: 0;
 }
 
-/* Trigger bar — spinner + status + timer shown during streaming */
-.openspace-chat-widget .turn-group-trigger-bar {
+/* ── Activity bar — shown at the bottom of TurnGroup while streaming ───────── */
+@keyframes oc-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+}
+
+@keyframes oc-phrase-in {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0);   }
+}
+
+.openspace-chat-widget .turn-group-activity-bar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 0;
+    gap: 5px;
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
     font-size: 11px;
-    color: var(--theia-descriptionForeground, var(--oc-text-dim, #858585));
-}
-
-.openspace-chat-widget .turn-group-chevron-indicator {
-    flex-shrink: 0;
-    color: var(--oc-accent, #007acc);
-    opacity: 0.8;
-}
-
-.openspace-chat-widget .turn-group-status {
     font-weight: 500;
+    /* Shimmer background */
+    background: linear-gradient(
+        90deg,
+        var(--theia-editor-background, #1e1e1e) 0%,
+        var(--theia-focusBorder, #007acc) 40%,
+        var(--theia-editor-background, #1e1e1e) 60%,
+        var(--theia-editor-background, #1e1e1e) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: oc-shimmer 2.4s linear infinite;
+    /* Fallback colour for engines that don't support background-clip: text */
+    color: var(--theia-descriptionForeground, #858585);
+}
+
+/* Icon slot — zero-size until an asset (gif/svg) is assigned */
+.openspace-chat-widget .turn-group-activity-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0;
+    height: 14px;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: width 0.2s ease;
+}
+
+/* When an icon src is set via JS, expand the slot */
+.openspace-chat-widget .turn-group-activity-icon:not(:empty) {
+    width: 16px;
+    margin-right: 1px;
+}
+
+.openspace-chat-widget .turn-group-activity-icon img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+
+/* Phrase text — slightly larger than the surrounding bar meta-text */
+.openspace-chat-widget .turn-group-activity-phrase {
+    font-size: 13px;
+    animation: oc-phrase-in 0.35s ease both;
 }
 
 /* Streaming body container — sidebar + body side by side */
@@ -2019,6 +2066,8 @@
 .openspace-chat-widget .turn-group-streaming .turn-group-body {
     flex: 1;
     min-width: 0;
+    color: var(--theia-descriptionForeground, #858585);
+    opacity: 0.8;
 }
 
 .openspace-chat-widget .turn-group-header {
