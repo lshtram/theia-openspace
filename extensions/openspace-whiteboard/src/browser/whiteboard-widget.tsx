@@ -348,14 +348,14 @@ export class WhiteboardWidget extends ReactWidget {
         // Capture the latest store state using tldraw's native serialisation.
         this.savedSnapshot = this.editorRef.getSnapshot().document;
         if (this.autoSaveEnabled && this.currentFilePath) {
-            // Debounce: wait 1 s of inactivity before writing to disk.
+            // Debounce: wait 300 ms of inactivity before writing to disk.
             if (this.autoSaveTimer !== undefined) {
                 clearTimeout(this.autoSaveTimer);
             }
             this.autoSaveTimer = setTimeout(() => {
                 this.autoSaveTimer = undefined;
                 this.persistToDisk();
-            }, 1000);
+            }, 300);
         }
     }
 
