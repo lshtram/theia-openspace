@@ -2,7 +2,22 @@
 
 ## Current Milestones
 
-### Phase T3: MCP Agent Control System (2026-02-18) ✅ COMPLETE
+### Phase 5: Chat UX Polish (2026-02-23) 🔄 IN PROGRESS
+
+| Item | Status | Commit |
+|---|---|---|
+| SSE replay duplication fix | ✅ | `4853261` |
+| Streaming status → category key refactor | ✅ | `4853261` |
+| `streaming-vocab.ts` — curated 21-entry pools, chaos tier (1%) | ✅ | `f48ff7a` |
+| Activity bar — stable verb per phase, no rotation | ✅ | `f48ff7a` |
+| Activity phrase font-size bump (13px) | ✅ | `f48ff7a` |
+| Intermediate step body text dimmed (descriptionForeground/0.8) | ✅ | `f48ff7a` |
+| DIAG console.log calls removed | ✅ | `f48ff7a` |
+| GIF animation slot — icon span wired, awaiting user assets | ⬜ | — |
+
+**Pushed to origin/master.** Both commits on `master`, ahead of the previous `e970817` state.
+
+
 - **Status:** ✅ COMPLETE
 - **Build:** ✅ PASS (0 errors, all 6 extensions + backend + frontend bundles)
 - **Unit Tests:** ✅ 387/387 passing (including 12 new security gate tests)
