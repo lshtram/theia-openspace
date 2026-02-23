@@ -135,6 +135,36 @@ More content`;
         });
     });
 
+    describe('extractSlideDirectives — background image handling', () => {
+        it('should extract data-background-image from .slide comment', () => {
+            const content = `<!-- .slide: data-background-image="https://example.com/img.jpg" -->\n# Title`;
+            const { directives, cleanContent } = PresentationWidget.extractSlideDirectives(content);
+            expect(directives).to.include('data-background-image="https://example.com/img.jpg"');
+            expect(cleanContent).to.not.include('<!--');
+        });
+
+        it('should extract multiple data-background-* attributes', () => {
+            const content = `<!-- .slide: data-background-image="img.jpg" data-background-opacity="0.3" -->\n# Slide`;
+            const { directives } = PresentationWidget.extractSlideDirectives(content);
+            expect(directives).to.include('data-background-image="img.jpg"');
+            expect(directives).to.include('data-background-opacity="0.3"');
+        });
+
+        it('should reject non-allowed attributes', () => {
+            const content = `<!-- .slide: onclick="alert(1)" data-background-color="#fff" -->\n# Slide`;
+            const { directives } = PresentationWidget.extractSlideDirectives(content);
+            expect(directives).to.not.include('onclick');
+            expect(directives).to.include('data-background-color="#fff"');
+        });
+
+        it('should return empty directives and unchanged content when no .slide comments', () => {
+            const content = `# Normal slide\nSome content`;
+            const { directives, cleanContent } = PresentationWidget.extractSlideDirectives(content);
+            expect(directives).to.equal('');
+            expect(cleanContent).to.equal(content);
+        });
+    });
+
     describe('parseDeckContent — edge cases', () => {
         it('should return empty slides array for empty input', () => {
             const deck = PresentationWidget.parseDeckContent('');

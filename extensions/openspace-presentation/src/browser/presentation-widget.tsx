@@ -201,9 +201,13 @@ More content</pre>
                 </section>`;
         } else {
             slidesEl.innerHTML = deck.slides.map(slide => {
-                // Task 4: Sanitize slide content to prevent XSS via crafted .deck.md files
+                // Extract <!-- .slide: --> directives BEFORE sanitization, since DOMPurify
+                // strips HTML comments by default. The directives are applied as attributes
+                // on the <section> element (e.g. data-background-image="...").
                 const rawContent = slide.content ?? '';
-                const sanitized = DOMPurify.sanitize(rawContent, {
+                const { directives, cleanContent } = PresentationWidget.extractSlideDirectives(rawContent);
+                // Task 4: Sanitize slide content to prevent XSS via crafted .deck.md files
+                const sanitized = DOMPurify.sanitize(cleanContent, {
                     ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
                         'tr','th','td','span','div','sup','sub'],
@@ -211,9 +215,36 @@ More content</pre>
                 });
                 const escapedContent = sanitized.replace(/<\/script>/g, '<\\/script>');
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
-                return `<section data-markdown=""${notesAttr}><script type="text/template">${escapedContent}</script></section>`;
+                return `<section data-markdown=""${notesAttr}${directives}><script type="text/template">${escapedContent}</script></section>`;
             }).join('');
         }
+    }
+
+    /**
+     * Extract <!-- .slide: key="value" --> directives from slide content.
+     * These are reveal.js markdown plugin directives that must be applied as
+     * attributes on the <section> element. DOMPurify strips HTML comments, so
+     * we extract them before sanitization.
+     *
+     * Only data-background-* and data-notes attributes are allowed through.
+     * Returns a string of attributes to append to the <section> tag, and
+     * the content with the comment directives removed.
+     */
+    static extractSlideDirectives(content: string): { directives: string; cleanContent: string } {
+        const directiveRe = /<!--\s*\.slide:\s*(.*?)\s*-->/gs;
+        const allowedAttrRe = /\b(data-background-(?:image|opacity|color|video|size|position|repeat|transition|interactive)|data-notes)=["']([^"']*)["']/g;
+        let directives = '';
+        const cleanContent = content.replace(directiveRe, (_match, attrs: string) => {
+            // Only pass through known-safe data-background-* and data-notes attrs
+            let match: RegExpExecArray | null;
+            while ((match = allowedAttrRe.exec(attrs)) !== null) {
+                const attrName = match[1];
+                const attrValue = match[2].replace(/"/g, '&quot;');
+                directives += ` ${attrName}="${attrValue}"`;
+            }
+            return '';
+        });
+        return { directives, cleanContent: cleanContent.trim() };
     }
 
     /**
