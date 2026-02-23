@@ -715,8 +715,10 @@ export class WhiteboardCommandContribution implements CommandContribution {
      * - Maps hex/unknown colours to tldraw named colours.
      * - Converts plain `text` strings to the `richText` ProseMirror doc format
      *   used by all tldraw 4.x shape types (geo, text, note, frame, etc.).
+     * - Supplies a default empty `richText` doc for shape types that require it
+     *   when neither `text` nor `richText` is provided (prevents tldraw crash).
      */
-    private sanitizeProps(props: Record<string, unknown>, _shapeType?: string): Record<string, unknown> {
+    private sanitizeProps(props: Record<string, unknown>, shapeType?: string): Record<string, unknown> {
         const out = { ...props };
 
         // Colour normalisation
@@ -738,6 +740,13 @@ export class WhiteboardCommandContribution implements CommandContribution {
                     content: [{ type: 'paragraph', content: [{ type: 'text', text: textContent }] }]
                 };
             }
+        }
+
+        // tldraw 4.x requires a richText field for geo, text, note, and frame shapes.
+        // Supply an empty doc if it's still missing to prevent "Unknown node type: undefined" crash.
+        const RICH_TEXT_TYPES = ['geo', 'text', 'note', 'frame'];
+        if (shapeType && RICH_TEXT_TYPES.includes(shapeType) && !out['richText']) {
+            out['richText'] = { type: 'doc', content: [] };
         }
 
         return out;

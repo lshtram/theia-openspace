@@ -323,6 +323,43 @@ const KATEX_ATTRS = [
     'aria-hidden', 'focusable', 'preserveAspectRatio', 'overflow',
 ];
 
+// ─── linkifyFilePaths ─────────────────────────────────────────────────────────
+
+/**
+ * Scan an HTML string and wrap bare absolute file paths (not already inside
+ * an <a href="..."> attribute) as clickable <a href="file://..."> links.
+ *
+ * Strategy: split the HTML string into alternating [text-outside-tags, tag]
+ * segments. Only text-outside-tags segments are processed; tag segments are
+ * left verbatim. Inside text segments we replace path-like tokens.
+ *
+ * Matches:
+ *   Unix:    /absolute/path/file.ext   (starts with /, at least one component)
+ *   Windows: C:\path\file.ext or C:/path/file.ext
+ *
+ * We require at least one path separator and one non-space character to avoid
+ * false-positives on single-segment strings like "/n".
+ */
+function linkifyFilePaths(html: string): string {
+    // Unix path: /foo/bar (at least two segments) or /foo/bar.ext
+    // Windows: [A-Z]:[\\/]...
+    const FILE_PATH_RE = /(?<!["\\'=])((?:\/[^\s/<>"']+){2,}|(?:[A-Za-z]:[/\\][^\s<>"']+[/\\][^\s<>"']+))/g;
+
+    // Split on HTML tags so we never touch attribute values or tag contents.
+    // Odd-indexed parts are tags; even-indexed parts are text between tags.
+    const parts = html.split(/(<[^>]*>)/);
+    for (let i = 0; i < parts.length; i += 2) {
+        // Even index = text content between tags
+        parts[i] = parts[i].replace(FILE_PATH_RE, (path) => {
+            const encoded = path.replace(/&amp;/g, '&').split('').map(c =>
+                encodeURIComponent(c).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%5C/g, '\\')
+            ).join('');
+            return `<a href="file://${encoded}" class="md-file-link">${path}</a>`;
+        });
+    }
+    return parts.join('');
+}
+
 // ─── renderMarkdown ───────────────────────────────────────────────────────────
 
 /**
@@ -345,11 +382,19 @@ export function renderMarkdown(text: string, onOpenFile?: (filePath: string) => 
     const rawHtml = md.render(text);
 
     // Step 2: sanitize — allow our sentinels and KaTeX output through
-    const sanitized = DOMPurify.sanitize(rawHtml, {
+    let sanitized = DOMPurify.sanitize(rawHtml, {
         ADD_TAGS: ['oc-code', 'oc-mermaid', 'oc-ansi', ...KATEX_TAGS],
         ADD_ATTR: ['lang', 'data-code', ...KATEX_ATTRS],
         ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel|vscode|theia|file):/i,
     });
+
+    // Step 2b: wrap bare absolute file paths (not already inside <a>) as file:// links
+    // so the md-body click handler can intercept them.
+    // Matches Unix (/foo/bar.ts) and Windows (C:\foo\bar.ts) paths that appear as
+    // plain text outside of HTML tags. We exclude paths already inside href="..." attrs.
+    if (onOpenFile) {
+        sanitized = linkifyFilePaths(sanitized);
+    }
 
     // Step 3: split on sentinel elements and interleave React components
     // Matches: <oc-code lang="..." data-code="..."></oc-code>
