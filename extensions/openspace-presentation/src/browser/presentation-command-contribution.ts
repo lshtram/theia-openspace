@@ -19,6 +19,7 @@ import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/com
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { ApplicationShell, WidgetManager } from '@theia/core/lib/browser';
 import { ILogger } from '@theia/core/lib/common/logger';
+import { URI } from '@theia/core/lib/common/uri';
 import { PresentationService, 
     PresentationListArgs, 
     PresentationReadArgs, 
@@ -414,6 +415,12 @@ export class PresentationCommandContribution implements CommandContribution, Key
             'split-right'; // default
 
         widget.uri = path;
+
+        // Set tab title from filename
+        const uriObj = path.startsWith('file://') ? new URI(path) : URI.fromFilePath(path);
+        const base = uriObj.path.base;
+        widget.title.label = base.endsWith('.deck.md') ? base.slice(0, -'.deck.md'.length) : base;
+        widget.title.caption = widget.title.label;
 
         // Set content BEFORE addWidget so that when onAfterAttach fires
         // (synchronously during addWidget), deckContent is already populated

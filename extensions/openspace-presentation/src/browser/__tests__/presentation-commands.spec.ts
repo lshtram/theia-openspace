@@ -18,9 +18,35 @@ import { expect } from 'chai';
 import { PresentationCommandIds, PresentationArgumentSchemas } from '../presentation-command-contribution';
 
 /**
+ * Derive the tab label from a .deck.md path (mirrors the logic in open-handler and command-contribution).
+ */
+function deckTabLabel(filePath: string): string {
+    const base = filePath.split('/').pop() ?? filePath;
+    return base.endsWith('.deck.md') ? base.slice(0, -'.deck.md'.length) : base;
+}
+
+/**
  * Tests for PresentationCommandContribution exports.
  * These tests verify that all 9 commands are properly defined with correct argument schemas.
  */
+
+describe('deckTabLabel — tab title derived from filename', () => {
+    it('should strip .deck.md from a simple filename', () => {
+        expect(deckTabLabel('/workspace/design/my-talk.deck.md')).to.equal('my-talk');
+    });
+
+    it('should strip .deck.md from a nested path', () => {
+        expect(deckTabLabel('design/deck/sse-explained-v2.deck.md')).to.equal('sse-explained-v2');
+    });
+
+    it('should return basename unchanged for non-.deck.md files', () => {
+        expect(deckTabLabel('/workspace/foo/bar.md')).to.equal('bar.md');
+    });
+
+    it('should handle path with no directory separator', () => {
+        expect(deckTabLabel('slides.deck.md')).to.equal('slides');
+    });
+});
 
 describe('PresentationCommandContribution Exports', () => {
     describe('Command IDs', () => {
