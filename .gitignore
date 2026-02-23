@@ -74,3 +74,7 @@ MANUAL_TESTING_*.md
 OPENCODE_*.md
 codereview-*.md
 test.txt
+
+# Archives — preserved for reference but not committed
+docs/archive/
+archive/
