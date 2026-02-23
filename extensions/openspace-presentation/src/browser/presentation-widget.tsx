@@ -120,6 +120,7 @@ export class PresentationWidget extends ReactWidget {
     protected deckContent: string = '';
     protected containerRef: React.RefObject<HTMLDivElement>;
     protected mode: PresentationMode = 'presentation';
+    private _resizing: boolean = false;
     protected monacoEditor: MonacoEditor | undefined;
     protected monacoModelRef: IReference<MonacoEditorModel> | undefined;
     protected mountingEditor: boolean = false;
@@ -407,10 +408,16 @@ More content</pre>
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
         if (this.mode === 'presentation') {
-            this.writeSlidesDom();
-            this.initializeReveal().catch(err =>
-                console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
-            );
+            // Defer slide writing until React has committed its first render.
+            // onAfterAttach fires synchronously during Lumino's DOM insertion,
+            // before React's useLayoutEffect/componentDidMount runs. rAF lets
+            // the browser do a layout pass so containerRef.current is non-null.
+            requestAnimationFrame(() => {
+                this.writeSlidesDom();
+                this.initializeReveal().catch(err =>
+                    console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
+                );
+            });
         }
         const disposable = attachTabDblClickToggle(
             this.node,
@@ -427,9 +434,15 @@ More content</pre>
         if (this.monacoEditor) {
             this.monacoEditor.getControl().layout();
         }
-        // Relay to reveal.js as well
-        if (this.revealDeck) {
-            this.revealDeck.layout();
+        // Guard against re-entrant calls: reveal.layout() may trigger a DOM
+        // resize, which would fire onResize again, causing a stack overflow.
+        if (this.revealDeck && !this._resizing) {
+            this._resizing = true;
+            try {
+                this.revealDeck.layout();
+            } finally {
+                this._resizing = false;
+            }
         }
     }
 
