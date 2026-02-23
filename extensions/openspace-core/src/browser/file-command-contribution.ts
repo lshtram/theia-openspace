@@ -20,7 +20,7 @@ import { ILogger } from '@theia/core/lib/common/logger';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
-import * as path from 'path';
+import * as path from './browser-path';
 import { OpenCodeService } from '../common/opencode-protocol';
 import { isSensitiveFile } from '../common/sensitive-files';
 import { validatePath as sharedValidatePath } from './path-validator';

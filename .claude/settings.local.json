@@ -3,7 +3,14 @@
     "allow": [
       "Bash(xargs:*)",
       "Bash(yarn build:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(sort:*)",
+      "Bash(while read f)",
+      "Bash(do ls -lh \"$f\")",
+      "Bash(git -C /Users/Shared/dev/theia-openspace/.worktrees/feature-voice status --short -- node_modules)",
+      "Bash(claude plugin:*)",
+      "Bash(head:*)"
     ]
   }
 }

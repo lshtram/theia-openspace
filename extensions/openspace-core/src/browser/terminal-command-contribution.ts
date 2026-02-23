@@ -22,7 +22,7 @@ import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-servi
 import { TerminalWidget, TerminalWidgetOptions } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { TerminalRingBuffer, sanitizeOutput, isDangerous } from './terminal-ring-buffer';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import * as path from 'path';
+import * as path from './browser-path';
 import { OpenCodeService } from '../common/opencode-protocol';
 
 /**

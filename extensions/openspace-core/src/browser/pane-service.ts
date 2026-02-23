@@ -27,7 +27,7 @@ import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { EditorWidget } from '@theia/editor/lib/browser';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { URI } from '@theia/core/lib/common/uri';
-import * as path from 'path';
+import * as path from './browser-path';
 
 /**
  * Argument types for PaneService operations.

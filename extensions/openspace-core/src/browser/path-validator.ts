@@ -23,7 +23,7 @@
  * now standardised on `fsPath()` which is the correct choice for filesystem operations.
  */
 
-import * as path from 'path';
+import * as path from './browser-path';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { OpenCodeService } from '../common/opencode-protocol';

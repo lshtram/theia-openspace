@@ -29,7 +29,7 @@ import {
 } from '../common/opencode-protocol';
 import * as SDKTypes from '../common/opencode-sdk-types';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from './browser-path';
 import { waitForHub as waitForHubFn } from './hub-readiness';
 
 /**
