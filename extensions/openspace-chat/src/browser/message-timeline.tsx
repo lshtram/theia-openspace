@@ -306,6 +306,40 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         return plan;
     }, [messages]);
 
+    /**
+     * Map each renderPlan item to the highest message index it covers.
+     * Used to interleave shell outputs at the correct position.
+     */
+    const planMaxIndices = React.useMemo(() =>
+        renderPlan.map(item =>
+            item.kind === 'user' ? item.index : item.indices[item.indices.length - 1]
+        ),
+        [renderPlan]
+    );
+
+    /**
+     * Group shell outputs by their insertion position in the render plan.
+     * A shell with afterMessageIndex=N is inserted after the renderPlan item
+     * whose max message index >= N. Shells without a valid position go at the end.
+     */
+    const shellsByPlanIndex = React.useMemo(() => {
+        const map: Record<number, ShellOutput[]> = {};
+        for (const shell of shellOutputs) {
+            const afterIdx = (shell as any).afterMessageIndex;
+            if (typeof afterIdx === 'number' && afterIdx >= 0) {
+                // Find the renderPlan item that covers this message index
+                const planIdx = planMaxIndices.findIndex(maxIdx => maxIdx >= afterIdx);
+                if (planIdx >= 0) {
+                    (map[planIdx] ??= []).push(shell);
+                    continue;
+                }
+            }
+            // No valid position — render at the end (key = -1)
+            (map[-1] ??= []).push(shell);
+        }
+        return map;
+    }, [shellOutputs, planMaxIndices]);
+
     return (
         <div className="message-timeline">
             <div
@@ -327,24 +361,32 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                         </div>
                     ) : (
                         renderPlan.map((item, planIdx) => {
+                            const renderShellsAfter = () => (
+                                (shellsByPlanIndex[planIdx] || []).map(entry => (
+                                    <ShellOutputBlock key={entry.id} output={entry} />
+                                ))
+                            );
+
                             if (item.kind === 'user') {
                                 const index = item.index;
                                 const message = messages[index];
                                 const { isFirst, isLast } = getMessageGroupInfo(index);
                                 return (
-                                    <MessageBubble
-                                        key={message.id}
-                                        message={message}
-                                        isUser={true}
-                                        isStreaming={false}
-                                        isFirstInGroup={isFirst}
-                                        isLastInGroup={isLast}
-                                        openCodeService={openCodeService}
-                                        sessionService={sessionService}
-                                        pendingPermissions={pendingPermissions}
-                                        onReplyPermission={onReplyPermission}
-                                        onOpenFile={onOpenFile}
-                                    />
+                                    <React.Fragment key={message.id}>
+                                        <MessageBubble
+                                            message={message}
+                                            isUser={true}
+                                            isStreaming={false}
+                                            isFirstInGroup={isFirst}
+                                            isLastInGroup={isLast}
+                                            openCodeService={openCodeService}
+                                            sessionService={sessionService}
+                                            pendingPermissions={pendingPermissions}
+                                            onReplyPermission={onReplyPermission}
+                                            onOpenFile={onOpenFile}
+                                        />
+                                        {renderShellsAfter()}
+                                    </React.Fragment>
                                 );
                             }
 
@@ -392,19 +434,21 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             // Simple case: no steps (only text parts) — render last message as a normal bubble
                             if (!hasSteps) {
                                 return (
-                                    <MessageBubble
-                                        key={lastMessage.id}
-                                        message={lastMessage}
-                                        isUser={false}
-                                        isStreaming={isRunStreaming}
-                                        isFirstInGroup={true}
-                                        isLastInGroup={true}
-                                        openCodeService={openCodeService}
-                                        sessionService={sessionService}
-                                        pendingPermissions={pendingPermissions}
-                                        onReplyPermission={onReplyPermission}
-                                        onOpenFile={onOpenFile}
-                                    />
+                                    <React.Fragment key={lastMessage.id}>
+                                        <MessageBubble
+                                            message={lastMessage}
+                                            isUser={false}
+                                            isStreaming={isRunStreaming}
+                                            isFirstInGroup={true}
+                                            isLastInGroup={true}
+                                            openCodeService={openCodeService}
+                                            sessionService={sessionService}
+                                            pendingPermissions={pendingPermissions}
+                                            onReplyPermission={onReplyPermission}
+                                            onOpenFile={onOpenFile}
+                                        />
+                                        {renderShellsAfter()}
+                                    </React.Fragment>
                                 );
                             }
 
@@ -459,12 +503,13 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                             />
                                         </div>
                                     )}
+                                    {renderShellsAfter()}
                                 </React.Fragment>
                             );
                         })
                     )}
-                    {/* Shell command outputs — rendered at the bottom of the timeline */}
-                    {shellOutputs.map(entry => (
+                    {/* Shell outputs without a valid afterMessageIndex — rendered at the end */}
+                    {(shellsByPlanIndex[-1] || []).map(entry => (
                         <ShellOutputBlock key={entry.id} output={entry} />
                     ))}
                     {/* Standalone trigger bar — shown when session is active but no TurnGroup is visible yet.

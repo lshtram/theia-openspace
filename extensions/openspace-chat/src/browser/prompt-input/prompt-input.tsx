@@ -20,6 +20,45 @@ import '../style/prompt-input.css';
 // Simple unique ID generator
 const generateId = () => crypto.randomUUID();
 
+/**
+ * Sanitize HTML for safe innerHTML assignment.
+ * Strips dangerous elements (script, iframe, object, embed, form) and
+ * removes inline event-handler attributes (on*) and javascript: URLs.
+ * Preserves safe structural elements like spans (pills), divs, etc.
+ */
+function sanitizeHtml(html: string): string {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const body = doc.body;
+
+    // Remove dangerous elements entirely
+    const dangerousTags = ['script', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'];
+    for (const tag of dangerousTags) {
+        const els = body.querySelectorAll(tag);
+        els.forEach(el => el.remove());
+    }
+
+    // Walk all remaining elements and strip dangerous attributes
+    const allElements = body.querySelectorAll('*');
+    for (const el of allElements) {
+        // Remove inline event handlers (onclick, onerror, onmouseover, etc.)
+        const attrs = Array.from(el.attributes);
+        for (const attr of attrs) {
+            if (attr.name.startsWith('on')) {
+                el.removeAttribute(attr.name);
+            }
+        }
+        // Remove javascript: URLs from href/src/action
+        for (const urlAttr of ['href', 'src', 'action']) {
+            const val = el.getAttribute(urlAttr);
+            if (val && /^\s*javascript\s*:/i.test(val)) {
+                el.removeAttribute(urlAttr);
+            }
+        }
+    }
+
+    return body.innerHTML;
+}
+
 // B07: Structured history entry — stores both plain text (for dedup) and innerHTML (for pill restoration)
 interface HistoryEntry {
     text: string;   // plain text content (for dedup comparison)
@@ -358,8 +397,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         setHistoryIndex(newIndex);
                         if (editorRef.current) {
                             // B07: Restore innerHTML to bring pills back as interactive elements
+                            // C1 fix: sanitize to prevent XSS from stored HTML
                             const entry = historyEntries[newIndex];
-                            editorRef.current.innerHTML = entry.html;
+                            editorRef.current.innerHTML = sanitizeHtml(entry.html);
                             // Move cursor to end of restored content
                             const range = document.createRange();
                             const sel = window.getSelection();
@@ -382,7 +422,8 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     if (editorRef.current) {
                         if (newIndex === -1) {
                             // B07: Restore draft innerHTML so pills come back as interactive elements
-                            editorRef.current.innerHTML = savedDraft;
+                            // C1 fix: sanitize to prevent XSS from stored HTML
+                            editorRef.current.innerHTML = sanitizeHtml(savedDraft);
                             // Move cursor to end of restored content
                             const draftRange = document.createRange();
                             const draftSel = window.getSelection();
@@ -392,8 +433,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                             draftSel?.addRange(draftRange);
                         } else {
                             // B07: Restore innerHTML to bring pills back as interactive elements
+                            // C1 fix: sanitize to prevent XSS from stored HTML
                             const entry = historyEntries[newIndex];
-                            editorRef.current.innerHTML = entry.html;
+                            editorRef.current.innerHTML = sanitizeHtml(entry.html);
                             // Move cursor to end of restored content
                             const range = document.createRange();
                             const sel = window.getSelection();
