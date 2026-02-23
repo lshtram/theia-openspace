@@ -12,6 +12,10 @@ task_id: TheiaOpenspaceRequirements
 > **Status:** IN-PROGRESS — features added as Phase 0+ implementation proceeds.  
 > **Format:** Each feature has a unique ID, description, and test reference.
 
+> **Last Updated:** 2026-02-23 — Status synchronized with WORKPLAN.md.  
+> See `docs/architecture/WORKPLAN.md` for the authoritative phase completion record.  
+> Phases 0, 1, 1B1, 1C, 2B, 3, T3, 4, T4, T5, T6, EW, EW.5, 6.8 are fully complete.
+
 ---
 
 ## Feature Categories
@@ -92,55 +96,55 @@ task_id: TheiaOpenspaceRequirements
 
 ### FEAT-CORE-001: RPC Protocol Definitions
 **Description:** TypeScript interfaces for opencode-protocol.ts, session-protocol.ts, command-manifest.ts, pane-protocol.ts.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.1  
 **Verifying Test:** All protocol types compile; RPC service path constant defined.
 
 ### FEAT-CORE-002: OpenCodeProxy Backend
 **Description:** HTTP proxy service implementing OpenCodeService interface, translating RPC to opencode REST API.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.2  
 **Verifying Test:** Unit tests confirm proxy correctly translates RPC calls to HTTP requests; can list projects from running opencode server.
 
 ### FEAT-CORE-003: SSE Event Forwarding
 **Description:** SSE connection to opencode server with event forwarding to frontend via JSON-RPC callbacks.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.3  
 **Verifying Test:** Message sent via another client appears in Theia within 200ms; reconnection works after connection drop.
 
 ### FEAT-CORE-004: OpenSpace Hub
 **Description:** HTTP+SSE server with endpoints: /manifest, /openspace/instructions, /commands, /state, /events.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.5  
 **Verifying Test:** Hub starts with Theia; GET /openspace/instructions returns valid prompt; POST /commands → GET /events relay works.
 
 ### FEAT-CORE-005: BridgeContribution
 **Description:** Frontend service publishing command manifest to Hub, listening for SSE AGENT_COMMAND events, dispatching to CommandRegistry.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.7  
 **Verifying Test:** On startup, Hub receives manifest; SSE connection established; commands dispatched correctly.
 
 ### FEAT-CORE-006: SessionService
 **Description:** Frontend service managing active project/session state with optimistic updates.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.6  
 **Verifying Test:** Can switch projects/sessions; messages update in real-time via SSE.
 
 ### FEAT-CORE-007: SyncService
 **Description:** Frontend service implementing OpenCodeClient, forwarding backend events to SessionService.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.8  
 **Verifying Test:** Events from opencode server reflected in SessionService state within 200ms.
 
 ### FEAT-CORE-008: Session CRUD UI
 **Description:** Create, delete, switch sessions from chat UI or sidebar.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.11  
 **Verifying Test:** Can create new session, switch between sessions (messages change), delete session.
 
 ### FEAT-CORE-009: OpenCode Instructions Integration
 **Description:** opencode.json configured with instructions URL pointing to Hub.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 1.12  
 **Verifying Test:** opencode includes OpenSpace instructions block in agent system prompt.
 
@@ -202,60 +206,60 @@ task_id: TheiaOpenspaceRequirements
 
 ### FEAT-AGENT-001: PaneService
 **Description:** Programmatic pane control wrapping ApplicationShell.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.1  
 **Verifying Test:** Pane operations work; listPanes() returns accurate layout with geometry.
 
 ### FEAT-AGENT-002: Pane Commands
 **Description:** openspace.pane.open, .close, .focus, .list, .resize commands in CommandRegistry.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.2  
 **Verifying Test:** Commands executable from command palette; list returns correct layout.
 
 ### FEAT-AGENT-003: Editor Commands
 **Description:** openspace.editor.open, .scroll_to, .highlight, .clear_highlight, .read_file, .close commands.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.3  
 **Verifying Test:** Can open file at line 42, highlight lines 42-50, clear highlights from command palette.
 
 ### FEAT-AGENT-004: Terminal Commands
 **Description:** openspace.terminal.create, .send, .read_output, .list, .close commands with ring buffer.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.4  
 **Verifying Test:** Create terminal, send "echo hello", read back "hello" from output buffer.
 
 ### FEAT-AGENT-005: File Commands
 **Description:** openspace.file.read, .write, .list, .search commands with workspace-root constraint.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.5  **Verifying Test:** Commands work; cannot read/write outside workspace root.
 
 ### FEAT-AGENT-006: Stream Interceptor
 **Description:** Scans response stream for %%OS{...}%% blocks, strips from visible text, POSTs to Hub.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete (retired — replaced by MCP in Phase T3)  
 **Phase:** 3.6  
 **Verifying Test:** Response with %%OS{}%% block → user sees clean text, Hub receives command; handles split chunks correctly.
 
 ### FEAT-AGENT-007: Command Manifest Auto-generation
 **Description:** BridgeContribution builds manifest from all openspace.* commands with argument schemas.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.7  
 **Verifying Test:** Hub manifest cache contains all commands with full schemas; updates automatically on new commands.
 
 ### FEAT-AGENT-008: System Prompt Generation
 **Description:** Hub generates system prompt from manifest + live IDE state.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.8  
 **Verifying Test:** GET /openspace/instructions returns well-formatted prompt with examples; updates on state changes.
 
 ### FEAT-AGENT-009: Pane State Publishing
 **Description:** BridgeContribution publishes pane state changes to Hub for live IDE state in prompt.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 3.10  
 **Verifying Test:** Open file → /openspace/instructions includes it; close it → it disappears.
 
 ### FEAT-AGENT-010: End-to-End Agent Control
 **Description:** Full round-trip: agent emits %%OS{}%% → IDE action performed.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete (via MCP tools — %%OS{}%% syntax retired in T3)  
 **Phase:** 3.9  
 **Verifying Test:** Agent can open file, scroll, highlight, create terminal via %%OS{}%% blocks.
 
@@ -265,19 +269,19 @@ task_id: TheiaOpenspaceRequirements
 
 ### FEAT-PRES-001: Presentation Widget
 **Description:** ReactWidget embedding reveal.js for .deck.md files.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.1  
 **Verifying Test:** .deck.md file opens as presentation widget; arrow keys navigate slides.
 
 ### FEAT-PRES-002: Presentation Open Handler
 **Description:** WidgetOpenHandler for .deck.md files with priority 200.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.2  
 **Verifying Test:** Double-clicking .deck.md opens presentation widget, not text editor.
 
 ### FEAT-PRES-003: Presentation Commands
 **Description:** All presentation commands in CommandRegistry: list, read, create, update_slide, open, navigate, play, pause, stop.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.3  
 **Verifying Test:** Agent can create deck, open, navigate slides via commands; all in manifest.
 
@@ -287,19 +291,19 @@ task_id: TheiaOpenspaceRequirements
 
 ### FEAT-WB-001: Whiteboard Widget
 **Description:** ReactWidget embedding tldraw for .whiteboard.json files.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.4  
 **Verifying Test:** .whiteboard.json opens as whiteboard widget; user can draw shapes, type text.
 
 ### FEAT-WB-002: Whiteboard Open Handler
 **Description:** WidgetOpenHandler for .whiteboard.json files with priority 200.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.5  
 **Verifying Test:** Double-clicking .whiteboard.json opens whiteboard widget.
 
 ### FEAT-WB-003: Whiteboard Commands
 **Description:** All whiteboard commands in CommandRegistry: list, read, create, add_shape, update_shape, delete_shape, open, camera.*.  
-**Status:** ⬜ Pending  
+**Status:** ✅ Complete  
 **Phase:** 4.6  
 **Verifying Test:** Agent can create whiteboard, add shapes, control camera via commands; all in manifest.
 
