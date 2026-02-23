@@ -176,14 +176,31 @@ describe('MessageBubble separation logic', () => {
             }
         });
 
-        it('should create TurnGroup when message has reasoning parts', () => {
+        it('should create TurnGroup when message has reasoning parts (during streaming)', () => {
             const msg = makeMessage('assistant', [
                 reasoningPart('Let me think about this...'),
                 textPart('The answer is 42.'),
             ]);
-            const { container, unmount } = mount({ message: msg, isUser: false });
+            // Must be streaming for reasoning to be included in parts
+            const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: true });
             try {
                 expect(container.querySelector('.turn-group')).to.not.be.null;
+            } finally {
+                unmount();
+            }
+        });
+
+        it('should NOT create TurnGroup for reasoning-only parts after completion', () => {
+            const msg = makeMessage('assistant', [
+                reasoningPart('Let me think about this...'),
+                textPart('The answer is 42.'),
+            ]);
+            // After completion (isStreaming=false), reasoning is filtered out
+            // leaving only [text] — no TurnGroup needed
+            const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: false });
+            try {
+                expect(container.querySelector('.turn-group')).to.be.null;
+                expect(container.textContent).to.include('The answer is 42.');
             } finally {
                 unmount();
             }
@@ -623,14 +640,15 @@ describe('MessageBubble separation logic', () => {
             }
         });
 
-        it('[reasoning, text] — reasoning triggers separation, text is final', () => {
+        it('[reasoning, text] — reasoning triggers separation during streaming, text is final', () => {
+            // During streaming, reasoning triggers hasIntermediateParts=true
             const msg = makeMessage('assistant', [
                 reasoningPart('Thinking deeply...'),
                 textPart('My conclusion.'),
             ]);
-            const { container, unmount } = mount({ message: msg, isUser: false });
+            const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: true });
             try {
-                // reasoning triggers hasIntermediateParts=true
+                // reasoning triggers hasIntermediateParts=true → TurnGroup visible during streaming
                 expect(container.querySelector('.turn-group')).to.not.be.null;
                 // "My conclusion." is outside TurnGroup
                 const textEls = Array.from(container.querySelectorAll('.part-text'));
@@ -640,6 +658,176 @@ describe('MessageBubble separation logic', () => {
                 expect(conclusionEls.length).to.equal(1);
                 const turnGroup = container.querySelector('.turn-group');
                 expect(turnGroup!.contains(conclusionEls[0])).to.be.false;
+            } finally {
+                unmount();
+            }
+        });
+
+        it('[reasoning, text] — reasoning is NOT in expanded TurnGroup after completion', () => {
+            // The OpenCode reference client completely filters reasoning parts from
+            // the DOM after completion. They should not appear even when "Show steps"
+            // is expanded. Currently the component hides them behind a collapsed
+            // TurnGroup, but if expanded they are still there — that's the bug.
+            const msg = makeMessage('assistant', [
+                reasoningPart('Internal thinking process...'),
+                toolPart('bash', { status: 'completed', input: { command: 'echo test' } }),
+                textPart('My final answer.'),
+            ]);
+            // Render with isStreaming=true first so TurnGroup starts expanded,
+            // then switch to isStreaming=false to simulate completion with expanded view
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = createRoot(container);
+            // First render: streaming (so TurnGroup opens and wasStreaming=true)
+            act(() => {
+                root.render(React.createElement(MessageBubble, {
+                    message: msg, isUser: false, isStreaming: true,
+                    openCodeService: stubOpenCodeService,
+                    sessionService: stubSessionService,
+                }));
+            });
+            // Second render: not streaming (TurnGroup collapses)
+            act(() => {
+                root.render(React.createElement(MessageBubble, {
+                    message: msg, isUser: false, isStreaming: false,
+                    openCodeService: stubOpenCodeService,
+                    sessionService: stubSessionService,
+                }));
+            });
+            // Click "Show steps" to expand the TurnGroup
+            const showStepsBtn = container.querySelector('.turn-group-header') as HTMLElement;
+            if (showStepsBtn) {
+                act(() => { showStepsBtn.click(); });
+            }
+            try {
+                // After expanding: reasoning should NOT be in the DOM
+                const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
+                expect(reasoningEls.length).to.equal(0,
+                    'Reasoning parts should not appear even in expanded TurnGroup after completion');
+                // But tool parts should still be visible
+                expect(container.querySelector('.part-tool')).to.not.be.null;
+                // Response text should be visible
+                expect(container.textContent).to.include('My final answer.');
+            } finally {
+                act(() => { root.unmount(); });
+                container.remove();
+            }
+        });
+
+        it('[reasoning, text] — reasoning IS visible in expanded TurnGroup during streaming', () => {
+            // During streaming, reasoning should be shown (like OpenCode reference client).
+            const msg = makeMessage('assistant', [
+                reasoningPart('Let me think about this...'),
+                textPart('Partial answer so far.'),
+            ]);
+            const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: true });
+            try {
+                // Reasoning SHOULD appear during streaming
+                const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
+                expect(reasoningEls.length).to.be.greaterThan(0,
+                    'Reasoning parts should be visible during streaming');
+                expect(container.textContent).to.include('Let me think about this...');
+                // Response text also visible
+                expect(container.textContent).to.include('Partial answer so far.');
+            } finally {
+                unmount();
+            }
+        });
+
+        it('[reasoning, tool, text] — reasoning filtered from parts after completion', () => {
+            // After completion: reasoning must be filtered from parts, not just hidden.
+            // Tool calls and text remain visible.
+            const msg = makeMessage('assistant', [
+                reasoningPart('I need to check the files...'),
+                toolPart('bash', { status: 'completed', input: { command: 'ls' } }),
+                textPart('Here are the files.'),
+            ]);
+            // Render as streaming first, then switch to completed
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = createRoot(container);
+            act(() => {
+                root.render(React.createElement(MessageBubble, {
+                    message: msg, isUser: false, isStreaming: true,
+                    openCodeService: stubOpenCodeService,
+                    sessionService: stubSessionService,
+                }));
+            });
+            act(() => {
+                root.render(React.createElement(MessageBubble, {
+                    message: msg, isUser: false, isStreaming: false,
+                    openCodeService: stubOpenCodeService,
+                    sessionService: stubSessionService,
+                }));
+            });
+            // Expand the TurnGroup
+            const showStepsBtn = container.querySelector('.turn-group-header') as HTMLElement;
+            if (showStepsBtn) {
+                act(() => { showStepsBtn.click(); });
+            }
+            try {
+                // Reasoning should be absent from the DOM entirely
+                const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
+                expect(reasoningEls.length).to.equal(0,
+                    'Reasoning should be filtered from parts after completion');
+                // Tool should still be visible when expanded
+                expect(container.querySelector('.part-tool')).to.not.be.null;
+                // Response text visible
+                expect(container.textContent).to.include('Here are the files.');
+            } finally {
+                act(() => { root.unmount(); });
+                container.remove();
+            }
+        });
+
+        it('[reasoning] only — no parts remain after filtering, no crash', () => {
+            // Edge case: only reasoning parts, no text, not streaming
+            // After filtering reasoning, the message has nothing to show
+            const msg = makeMessage('assistant', [
+                reasoningPart('Just thinking...'),
+            ]);
+            const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: false });
+            try {
+                // No reasoning content should be visible anywhere
+                expect(container.textContent).to.not.include('Just thinking...');
+            } finally {
+                unmount();
+            }
+        });
+
+        it('isIntermediateStep=true — reasoning visible after completion', () => {
+            // Intermediate-step content is shown under the outer Show/Hide steps disclosure.
+            // Reasoning should remain available there after completion.
+            const msg = makeMessage('assistant', [
+                reasoningPart('Intermediate thinking...'),
+                toolPart('read', { status: 'completed', input: { filePath: '/a.ts' } }),
+            ]);
+            const { container, unmount } = mount({
+                message: msg, isUser: false, isIntermediateStep: true, isStreaming: false,
+            });
+            try {
+                const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
+                expect(reasoningEls.length).to.be.greaterThan(0,
+                    'Reasoning in intermediate step should be visible after completion');
+                // Tool should still be visible
+                expect(container.querySelector('.part-tool')).to.not.be.null;
+            } finally {
+                unmount();
+            }
+        });
+
+        it('isIntermediateStep=true — reasoning VISIBLE during streaming', () => {
+            const msg = makeMessage('assistant', [
+                reasoningPart('Thinking while streaming...'),
+                toolPart('bash', { status: 'running', input: { command: 'ls' } }),
+            ]);
+            const { container, unmount } = mount({
+                message: msg, isUser: false, isIntermediateStep: true, isStreaming: true,
+            });
+            try {
+                const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
+                expect(reasoningEls.length).to.be.greaterThan(0,
+                    'Reasoning in intermediate step should be visible during streaming');
             } finally {
                 unmount();
             }

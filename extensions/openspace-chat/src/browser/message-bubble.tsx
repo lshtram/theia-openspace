@@ -987,7 +987,15 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     onOpenFile,
     isIntermediateStep = false,
 }) => {
-    const parts = message.parts || [];
+    const rawParts = message.parts || [];
+    // Filter reasoning from completed *final bubbles* only.
+    // For intermediate-step rendering (inside Show steps), keep reasoning so it remains
+    // visible under the steps disclosure after completion.
+    const hideReasoning = !isStreaming && !isIntermediateStep;
+    const parts = React.useMemo(
+        () => hideReasoning ? rawParts.filter(p => p.type !== 'reasoning') : rawParts,
+        [rawParts, hideReasoning]
+    );
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
     // ── Elapsed timer using server timestamps ─────────────────────────

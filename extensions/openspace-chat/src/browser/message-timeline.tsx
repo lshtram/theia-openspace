@@ -398,6 +398,12 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             // "busy" state until the prompt loop exits. For non-last runs, use
                             // per-message streaming state.
                             const isLastRun = planIdx === renderPlan.length - 1;
+                            // "Active" state for business logic (response extraction):
+                            // do not extract/show final response while the run is still active.
+                            const isRunActive = isLastRun
+                                ? sessionActive
+                                : isStreaming && indices.some(i => streamingMessageId === messages[i].id);
+                            // "Streaming" state for UI chrome: latched on last run to avoid header flicker.
                             const isRunStreaming = isLastRun
                                 ? sessionActiveLatch
                                 : isStreaming && indices.some(i => streamingMessageId === messages[i].id);
@@ -425,6 +431,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                 }
                             }
                             const hasResponse = responsePartIndex >= 0;
+                            const shouldRenderResponse = hasResponse && !isRunActive;
 
                             // Determine if there are any "steps" (tool/reasoning parts) in the run.
                             const hasSteps = indices.some(idx =>
@@ -461,7 +468,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                             const isMessageStreaming = isStreaming && streamingMessageId === m.id;
                                             const isLastMsg = idx === indices[indices.length - 1];
                                             // For the last message, filter out the response text part so it's not duplicated
-                                            const filteredMessage = isLastMsg && hasResponse
+                                            const filteredMessage = isLastMsg && shouldRenderResponse
                                                 ? { ...m, parts: (m.parts || []).filter((_, pi) => pi !== responsePartIndex) }
                                                 : m;
                                             // Skip rendering if the filtered message has no parts left
@@ -486,7 +493,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                                     </TurnGroup>
 
                                     {/* Response section — the final text answer, rendered below the TurnGroup */}
-                                    {hasResponse && (
+                                    {shouldRenderResponse && (
                                         <div className="turn-response">
                                             <MessageBubble
                                                 key={`response-${lastMessage.id}`}

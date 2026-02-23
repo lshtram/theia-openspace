@@ -20,7 +20,7 @@
     "build:dev": "node scripts/build-summary.js --mode dev",
     "build:clean": "node scripts/clean-build.js",
     "build:verbose": "yarn build:extensions && yarn build:browser",
-    "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-settings build && yarn --silent --cwd extensions/openspace-languages build && yarn --silent --cwd extensions/openspace-viewers build",
+  "build:extensions": "yarn --silent --cwd extensions/openspace-core build && yarn --silent --cwd extensions/openspace-settings build && yarn --silent --cwd extensions/openspace-chat build && yarn --silent --cwd extensions/openspace-presentation build && yarn --silent --cwd extensions/openspace-whiteboard build && yarn --silent --cwd extensions/openspace-voice build && yarn --silent --cwd extensions/openspace-layout build && yarn --silent --cwd extensions/openspace-languages build && yarn --silent --cwd extensions/openspace-viewers build",
     "build:browser": "yarn --silent --cwd browser-app build",
     "build:electron": "yarn --cwd electron-app build",
     "start:browser": "yarn --cwd browser-app start",

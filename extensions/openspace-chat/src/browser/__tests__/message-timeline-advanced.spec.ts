@@ -351,6 +351,61 @@ describe('MessageTimeline — Timeline Structure', () => {
         }
     });
 
+    it('keeps reasoning inside steps after completion (visible when Show steps is expanded)', () => {
+        const messages = [
+            makeMessage('u1', 'user', [textPart('hello')]),
+            makeMessage('a1', 'assistant', [
+                { type: 'reasoning', text: 'I should greet briefly.' },
+                textPart('Hello! How can I help you today?')
+            ]),
+        ];
+
+        const { container, unmount } = mount({
+            messages,
+            isStreaming: false,
+            sessionBusy: false,
+        });
+        try {
+            const toggle = container.querySelector('.turn-group-header') as HTMLButtonElement | null;
+            expect(toggle, 'Show steps toggle should render').to.not.be.null;
+            act(() => {
+                toggle!.click();
+            });
+
+            const stepsBody = container.querySelector('.turn-group-body');
+            expect(stepsBody, 'expanded steps body should exist').to.not.be.null;
+            expect(stepsBody!.textContent).to.include('I should greet briefly.');
+
+            const response = container.querySelector('.turn-response');
+            expect(response, 'final response should still render separately').to.not.be.null;
+            expect(response!.textContent).to.include('Hello! How can I help you today?');
+        } finally {
+            unmount();
+        }
+    });
+
+    it('does not render turn-response while assistant run is still streaming', () => {
+        const messages = [
+            makeMessage('u1', 'user', [textPart('check this')]),
+            makeMessage('a1', 'assistant', [toolPart('read'), textPart('Working through file details...')]),
+        ];
+        const { container, unmount } = mount({
+            messages,
+            isStreaming: true,
+            sessionBusy: true,
+            streamingMessageId: 'a1',
+        });
+        try {
+            expect(container.querySelector('.turn-group')).to.not.be.null;
+            // While active, all content should stay in steps; response section appears only after completion.
+            expect(container.querySelector('.turn-response')).to.be.null;
+            const turnGroup = container.querySelector('.turn-group');
+            expect(turnGroup!.textContent).to.include('Working through file');
+        } finally {
+            unmount();
+        }
+    });
+
     it('simple assistant message (text only, no tools) renders as plain MessageBubble without TurnGroup', () => {
         const messages = [
             makeMessage('u1', 'user', [textPart('hi')]),

@@ -159,22 +159,31 @@ export class OpenCodeProxy implements OpenCodeService {
 
     /**
      * Make a raw HTTP/HTTPS request and return the response body as a string.
-     * Applies a 30-second timeout; rejects with an error if the upstream stalls.
+     * Applies a timeout unless timeoutMs <= 0 (no timeout).
      */
-    protected rawRequest(url: string, method: string, headers: Record<string, string>, body?: string): Promise<{ statusCode: number; body: string }> {
-        const REQUEST_TIMEOUT_MS = 30_000;
+    protected rawRequest(
+        url: string,
+        method: string,
+        headers: Record<string, string>,
+        body?: string,
+        timeoutMs = 30_000
+    ): Promise<{ statusCode: number; body: string }> {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
             const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
-            const req = protocol.request({
+            const requestOptions: http.RequestOptions = {
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
                 path: parsedUrl.pathname + parsedUrl.search,
                 method,
                 headers,
-                timeout: REQUEST_TIMEOUT_MS,
-            }, (res: http.IncomingMessage) => {
+            };
+            if (timeoutMs > 0) {
+                requestOptions.timeout = timeoutMs;
+            }
+
+            const req = protocol.request(requestOptions, (res: http.IncomingMessage) => {
                 const chunks: Buffer[] = [];
                 res.on('data', (chunk: Buffer) => chunks.push(chunk));
                 res.on('end', () => {
@@ -185,9 +194,11 @@ export class OpenCodeProxy implements OpenCodeService {
             });
 
             req.on('error', reject);
-            req.on('timeout', () => {
-                req.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method} ${url}`));
-            });
+            if (timeoutMs > 0) {
+                req.on('timeout', () => {
+                    req.destroy(new Error(`Request timed out after ${timeoutMs}ms: ${method} ${url}`));
+                });
+            }
 
             if (body !== undefined) {
                 req.write(body);
@@ -199,14 +210,14 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Make an HTTP request and return the parsed JSON response.
      */
-    protected async requestJson<T>(options: { url: string; type: string; data?: string; headers?: Record<string, string> }): Promise<T> {
+    protected async requestJson<T>(options: { url: string; type: string; data?: string; headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
         const headers: Record<string, string> = {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             ...options.headers
         };
 
-        const { statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data);
+        const { statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs);
 
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${body}`);
@@ -227,13 +238,14 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Make a POST request with optional body.
      */
-    protected async post<T>(endpoint: string, body?: unknown, queryParams?: Record<string, string | undefined>): Promise<T> {
+    protected async post<T>(endpoint: string, body?: unknown, queryParams?: Record<string, string | undefined>, timeoutMs?: number): Promise<T> {
         const url = this.buildUrl(endpoint, queryParams);
         this.logger.debug(`[OpenCodeProxy] POST ${url}`);
         return this.requestJson<T>({
             url,
             type: 'POST',
-            data: body ? JSON.stringify(body) : undefined
+            data: body ? JSON.stringify(body) : undefined,
+            timeoutMs
         });
     }
 
@@ -364,7 +376,9 @@ export class OpenCodeProxy implements OpenCodeService {
         if (model) {
             body.model = model;
         }
-        return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, body);
+        // Message generation can legitimately run well beyond 30 seconds.
+        // Do not apply the default HTTP timeout here.
+        return this.post<MessageWithParts>(`/session/${encodeURIComponent(sessionId)}/message`, body, undefined, 0);
     }
 
     // =========================================================================
@@ -472,6 +486,12 @@ export class OpenCodeProxy implements OpenCodeService {
             return;
         }
 
+        // Skip disconnect/reconnect if already connected to the same directory
+        if (this.sseConnected && this.currentDirectory === directory) {
+            this.logger.debug(`[OpenCodeProxy] SSE already connected to ${directory}, skipping reconnect`);
+            return;
+        }
+
         // Disconnect existing connection if any
         this.disconnectSSE();
 
@@ -560,8 +580,15 @@ export class OpenCodeProxy implements OpenCodeService {
             }
 
             this.logger.info(`[OpenCodeProxy] SSE connected to ${url}`);
+            const isReconnect = this.reconnectAttempts > 0;
             this.sseConnected = true;
             this.reconnectAttempts = 0; // Reset on successful connection
+
+            // Notify client so it can clear accumulated streaming text before replayed deltas arrive
+            if (isReconnect && this._client) {
+                this.logger.info('[OpenCodeProxy] SSE reconnected — notifying client to clear streaming state');
+                this._client.onSSEReconnect();
+            }
 
             // Process incoming data chunks
             response.on('data', (chunk: Buffer) => {
