@@ -71,7 +71,7 @@ build-output.log
 PHASE-*.md
 PHASE-*.txt
 MANUAL_TESTING_*.md
-OPENCODE_*.md
+/OPENCODE_*.md
 codereview-*.md
 test.txt
 
