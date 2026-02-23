@@ -83,6 +83,11 @@ export class WhiteboardOpenHandler implements OpenHandler {
         // T2-22: Store URI on widget for findByUri comparison
         widget.uri = uri.toString();
 
+        // Set tab title from filename (strip .whiteboard.json extension)
+        const base = uri.path.base;
+        widget.title.label = base.endsWith('.whiteboard.json') ? base.slice(0, -'.whiteboard.json'.length) : base;
+        widget.title.caption = widget.title.label;
+
         // Read file content and set it on the widget
         try {
             const content = await this.readFileContent(uri);

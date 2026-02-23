@@ -550,7 +550,12 @@ export class WhiteboardCommandContribution implements CommandContribution {
         // Load content
         widget.loadFromJson(content);
         widget.setFilePath(uri.toString());
-        
+
+        // Set tab title from filename (strip .whiteboard.json extension)
+        const base = uri.path.base;
+        widget.title.label = base.endsWith('.whiteboard.json') ? base.slice(0, -'.whiteboard.json'.length) : base;
+        widget.title.caption = widget.title.label;
+
         // Add to shell if not already attached, then activate
         if (!widget.isAttached) {
             this.shell.addWidget(widget, { area: 'main' });

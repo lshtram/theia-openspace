@@ -18,6 +18,24 @@ import { expect } from 'chai';
 import { WhiteboardCommandIds, WhiteboardArgumentSchemas } from '../whiteboard-command-contribution';
 
 /**
+ * Derive the tab label from a .whiteboard.json path (mirrors the logic in open-handler and command-contribution).
+ */
+function whiteboardTabLabel(filePath: string): string {
+    const base = filePath.split('/').pop() ?? filePath;
+    return base.endsWith('.whiteboard.json') ? base.slice(0, -'.whiteboard.json'.length) : base;
+}
+
+describe('whiteboardTabLabel — tab title derived from filename', () => {
+    it('should strip .whiteboard.json from a simple filename', () => {
+        expect(whiteboardTabLabel('/workspace/boards/my-board.whiteboard.json')).to.equal('my-board');
+    });
+
+    it('should return basename unchanged for non-.whiteboard.json files', () => {
+        expect(whiteboardTabLabel('/workspace/foo/notes.json')).to.equal('notes.json');
+    });
+});
+
+/**
  * Tests for WhiteboardCommandContribution exports.
  * These tests verify that all 10 commands are properly defined with correct argument schemas.
  */
