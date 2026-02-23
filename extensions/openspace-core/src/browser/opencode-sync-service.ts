@@ -538,6 +538,15 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
             // Ensure streaming tracker exists (message.part.delta may arrive before message.created)
             if (!this.streamingMessages.has(event.messageID)) {
+                // If this message already exists and is completed, this delta is a replayed
+                // SSE event from a reconnect for a historical message — drop it to prevent
+                // appending on top of already-final content (which causes N× duplication).
+                const existingMsg = this.sessionService.messages.find(m => m.id === event.messageID);
+                if (existingMsg && (existingMsg.time as any)?.completed) {
+                    this.logger.debug(`[SyncService] Dropping replayed delta for completed message: ${event.messageID}`);
+                    return;
+                }
+
                 this.streamingMessages.set(event.messageID, { text: '' });
                 // Create a stub message so applyPartDelta has something to target
                 this.sessionService.appendMessage({

@@ -1426,26 +1426,34 @@ export class SessionServiceImpl implements SessionService {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const part = msg.parts[j] as any;
                 if (part.type === 'tool') {
-                    return this.toolNameToStatus(part.tool || '');
+                    return this.toolNameToCategory(part.tool || '');
+                }
+                if (part.type === 'reasoning') {
+                    return 'reasoning';
                 }
                 if (part.type === 'text') {
-                    return 'Thinking';
+                    return 'thinking';
                 }
             }
         }
-        return 'Considering next steps';
+        return 'idle';
     }
 
-    private toolNameToStatus(toolName: string): string {
+    /**
+     * Maps a tool name to a StreamingCategory key.
+     * These keys are consumed by the streaming-vocab module in the browser
+     * extension which resolves them to display phrases.
+     */
+    private toolNameToCategory(toolName: string): string {
         const name = toolName.toLowerCase();
-        if (/^(bash|shell)$/.test(name)) return 'Running commands';
-        if (/^task$/.test(name)) return 'Delegating work';
-        if (/^(todowrite|todoread|todo_write|todo_read)$/.test(name)) return 'Planning next steps';
-        if (/^read$/.test(name)) return 'Gathering context';
-        if (/^(list|grep|glob|find|ripgrep|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/.test(name)) return 'Searching the codebase';
-        if (/^(webfetch|web_fetch)$/.test(name)) return 'Searching the web';
-        if (/^(edit|write)$/.test(name)) return 'Making edits';
-        return 'Considering next steps';
+        if (/^(bash|bash_\d+|execute|run_command|run|shell|cmd|terminal)$/.test(name)) return 'bash';
+        if (/^task$/.test(name)) return 'task';
+        if (/^(todowrite|todoread|todo_write|todo_read)$/.test(name)) return 'todo';
+        if (/^read$/.test(name)) return 'read';
+        if (/^(list|list_files|grep|glob|find|rg|ripgrep|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files|search)$/.test(name)) return 'search';
+        if (/^(webfetch|web_fetch)$/.test(name)) return 'webfetch';
+        if (/^(edit|write)$/.test(name)) return 'edit';
+        return 'mcp';
     }
 
     private updateStreamingStatus(messages: Message[]): void {
