@@ -338,7 +338,7 @@ const KATEX_ATTRS = [
  *    - Mermaid sentinels → <MermaidBlock> React components
  *    - ANSI sentinels → <AnsiBlock> React components
  */
-export function renderMarkdown(text: string): React.ReactNode[] {
+export function renderMarkdown(text: string, onOpenFile?: (filePath: string) => void): React.ReactNode[] {
     if (!text) { return []; }
 
     // Step 1: render to HTML with sentinel elements for special blocks
@@ -348,7 +348,7 @@ export function renderMarkdown(text: string): React.ReactNode[] {
     const sanitized = DOMPurify.sanitize(rawHtml, {
         ADD_TAGS: ['oc-code', 'oc-mermaid', 'oc-ansi', ...KATEX_TAGS],
         ADD_ATTR: ['lang', 'data-code', ...KATEX_ATTRS],
-        ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel|vscode|theia):/i,
+        ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel|vscode|theia|file):/i,
     });
 
     // Step 3: split on sentinel elements and interleave React components
@@ -370,12 +370,27 @@ export function renderMarkdown(text: string): React.ReactNode[] {
         return m ? m[1] : '';
     }
 
+    function handleMdBodyClick(e: React.MouseEvent<HTMLDivElement>): void {
+        if (!onOpenFile) return;
+        const target = e.target as HTMLElement;
+        const anchor = target.closest('a') as HTMLAnchorElement | null;
+        if (!anchor) return;
+        const href = anchor.getAttribute('href') || '';
+        if (href.startsWith('file://')) {
+            e.preventDefault();
+            // Decode percent-encoded path and strip the file:// prefix
+            const filePath = decodeURIComponent(href.replace(/^file:\/\//, ''));
+            onOpenFile(filePath);
+        }
+    }
+
     while ((match = sentinelRe.exec(sanitized)) !== null) {
         // HTML before the sentinel
         const htmlBefore = sanitized.slice(last, match.index).trim();
         if (htmlBefore) {
             nodes.push(
                 <div key={key++} className="md-body"
+                    onClick={onOpenFile ? handleMdBodyClick : undefined}
                     dangerouslySetInnerHTML={{ __html: htmlBefore }} />
             );
         }
@@ -403,6 +418,7 @@ export function renderMarkdown(text: string): React.ReactNode[] {
     if (htmlAfter) {
         nodes.push(
             <div key={key++} className="md-body"
+                onClick={onOpenFile ? handleMdBodyClick : undefined}
                 dangerouslySetInnerHTML={{ __html: htmlAfter }} />
         );
     }

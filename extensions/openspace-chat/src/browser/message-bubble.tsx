@@ -86,7 +86,7 @@ function renderPart(
 ): React.ReactNode {
     switch (part.type) {
         case 'text':
-            return renderTextPart(part, index);
+            return renderTextPart(part, index, onOpenFile);
         case 'tool':
             return renderToolPart(part, index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
         case 'reasoning':
@@ -102,12 +102,12 @@ function renderPart(
 }
 
 /** Render text part with markdown rendering. */
-function renderTextPart(part: any, index: number): React.ReactNode {
+function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
     const text: string = part.text || '';
     if (!text) return null;
     return (
         <div key={`text-${index}`} className="part-text">
-            {renderMarkdown(text)}
+            {renderMarkdown(text, onOpenFile)}
         </div>
     );
 }

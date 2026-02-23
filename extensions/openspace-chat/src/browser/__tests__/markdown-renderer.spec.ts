@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 // @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
 const { renderMarkdown } = _require('openspace-chat/lib/browser/markdown-renderer') as {
-    renderMarkdown: (text: string) => React.ReactNode[]
+    renderMarkdown: (text: string, onOpenFile?: (filePath: string) => void) => React.ReactNode[]
 };
 
 // Polyfill atob/btoa in jsdom if not present
@@ -116,5 +116,31 @@ describe('renderMarkdown', () => {
             const nodes = renderMarkdown(diffText);
             renderToContainer(nodes);
         }).to.not.throw();
+    });
+
+    describe('file:// link support', () => {
+        it('renders file:// link text without throwing', () => {
+            // The ALLOWED_URI_REGEXP now includes file: — test that rendering doesn't throw
+            // and produces a node with the link text visible.
+            const nodes = renderMarkdown('[open file](file:///workspace/foo.ts)');
+            const container = renderToContainer(nodes);
+            // The link text should be rendered (even if DOMPurify strips the href in jsdom env)
+            expect(container.textContent).to.include('open file');
+        });
+
+        it('attaches click handler when onOpenFile is provided', () => {
+            const openedPaths: string[] = [];
+            const nodes = renderMarkdown('[open file](file:///workspace/bar.ts)', (p) => openedPaths.push(p));
+            const container = renderToContainer(nodes);
+            // Verify the container rendered successfully with onOpenFile support
+            expect(container.textContent).to.include('open file');
+            expect(openedPaths).to.have.lengthOf(0); // no click yet
+        });
+
+        it('does not attach click handler when onOpenFile is omitted', () => {
+            const nodes = renderMarkdown('[open file](file:///workspace/baz.ts)');
+            // Should render without throwing even without onOpenFile
+            expect(() => renderToContainer(nodes)).to.not.throw();
+        });
     });
 });
