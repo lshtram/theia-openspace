@@ -265,7 +265,21 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
                 case 'shared':
                 case 'unshared':
+                    if (event.data) {
+                        this.sessionService.notifySessionChanged(event.data);
+                    }
+                    break;
+
                 case 'compacted':
+                    if (event.data) {
+                        this.sessionService.notifySessionChanged(event.data);
+                    }
+                    // Compaction replaces the entire message history with a summary —
+                    // reload messages so the UI reflects the new compacted content.
+                    this.sessionService.reloadMessages().catch(e =>
+                        this.logger.warn('[SyncService] Failed to reload messages after compaction:', e)
+                    );
+                    break;
                 case 'reverted':
                 case 'unreverted':
                     if (event.data) {

@@ -122,6 +122,8 @@ export interface SessionService extends Disposable {
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
     /** Clear accumulated text/reasoning on all parts of a streaming message. Called before SSE reconnect replay. */
     clearStreamingPartText(messageId: string): void;
+    /** Reload messages for the active session (used after compaction). */
+    reloadMessages(): Promise<void>;
 
     // Question state
     readonly pendingQuestions: SDKTypes.QuestionRequest[];
@@ -1098,6 +1100,10 @@ export class SessionServiceImpl implements SessionService {
      * Load messages for the active session.
      * Private method called automatically when session changes.
      */
+    async reloadMessages(): Promise<void> {
+        return this.loadMessages();
+    }
+
     private async loadMessages(): Promise<void> {
         if (!this._activeSession || !this._activeProject) {
             return;

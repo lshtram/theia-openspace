@@ -2307,3 +2307,56 @@
 .openspace-chat-widget .md-body .katex {
     font-size: 1.1em;
 }
+
+/* ── Agent / compaction / patch / snapshot parts ───────────────────────── */
+
+.message-bubble .part-agent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    opacity: 0.85;
+    font-size: 0.88em;
+    color: var(--theia-descriptionForeground);
+}
+.message-bubble .part-agent-name {
+    font-family: var(--theia-editor-font-family, monospace);
+}
+
+.message-bubble .compaction-marker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    color: var(--theia-descriptionForeground);
+    font-size: 0.85em;
+}
+.message-bubble .compaction-line {
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.3;
+}
+
+.message-bubble .part-patch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.88em;
+    color: var(--theia-descriptionForeground);
+}
+.message-bubble .part-patch-label {
+    font-family: var(--theia-editor-font-family, monospace);
+    opacity: 0.85;
+}
+
+.message-bubble .part-snapshot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.85em;
+    color: var(--theia-descriptionForeground);
+    opacity: 0.75;
+}
