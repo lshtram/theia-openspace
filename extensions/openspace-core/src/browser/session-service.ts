@@ -109,7 +109,9 @@ export interface SessionService extends Disposable {
     /** Remove a part from a message when a message.part.removed SSE is received. */
     notifyPartRemoved(sessionId: string, messageId: string, partId: string): void;
     /** Update session status from server-authoritative SSE event. */
-    updateSessionStatus(status: SDKTypes.SessionStatus): void;
+    updateSessionStatus(status: SDKTypes.SessionStatus, sessionId?: string): void;
+    /** Get the current status for any session by ID. */
+    getSessionStatus(sessionId: string): SDKTypes.SessionStatus | undefined;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
     /** Clear accumulated text/reasoning on all parts of a streaming message. Called before SSE reconnect replay. */
     clearStreamingPartText(messageId: string): void;
@@ -171,7 +173,7 @@ export class SessionServiceImpl implements SessionService {
     private readonly STREAMING_DONE_DELAY_MS = 500;
     private readonly RPC_FALLBACK_DELAY_MS = 5000;
     private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
-    private _sessionStatus: SDKTypes.SessionStatus = { type: 'idle' };
+    private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -240,7 +242,7 @@ export class SessionServiceImpl implements SessionService {
     }
 
     get sessionStatus(): SDKTypes.SessionStatus {
-        return this._sessionStatus;
+        return this._sessionStatuses.get(this._activeSession?.id ?? '') ?? { type: 'idle' };
     }
 
     get pendingQuestions(): SDKTypes.QuestionRequest[] {
@@ -408,6 +410,17 @@ export class SessionServiceImpl implements SessionService {
                 }
             }
 
+            // Hydrate session statuses from server on project switch
+            try {
+                const statuses = await this.openCodeService.getSessionStatuses(project.id);
+                for (const { sessionId, status } of statuses) {
+                    this._sessionStatuses.set(sessionId, status);
+                }
+                this.logger.debug(`[SessionService] Hydrated ${statuses.length} session statuses`);
+            } catch (e) {
+                this.logger.warn(`[SessionService] Could not hydrate session statuses: ${e}`);
+            }
+
             // Clear active session if it belonged to a different project
             if (this._activeSession && this._activeSession.projectID !== projectId) {
                 this.logger.debug(`[SessionService] Clearing session from different project`);
@@ -484,6 +497,16 @@ export class SessionServiceImpl implements SessionService {
      */
     async setActiveSession(sessionId: string): Promise<void> {
         this.logger.info(`[SessionService] Operation: setActiveSession(${sessionId})`);
+
+        // Abort any in-progress prompt on the current session before switching
+        if (this._activeSession && this._activeSession.id !== sessionId && this._isStreaming && this._activeProject) {
+            try {
+                await this.openCodeService.abortSession(this._activeProject.id, this._activeSession.id);
+                this.logger.debug(`[SessionService] Aborted session ${this._activeSession.id} before switch`);
+            } catch (e) {
+                this.logger.warn(`[SessionService] Could not abort session before switch: ${e}`);
+            }
+        }
 
         // Cancel any in-flight session load operation
         this.sessionLoadAbortController?.abort();
@@ -1020,7 +1043,8 @@ export class SessionServiceImpl implements SessionService {
             // Fetch messages from backend
             const messagesWithParts = await this.openCodeService.getMessages(
                 this._activeProject.id,
-                this._activeSession.id
+                this._activeSession.id,
+                400
             );
 
             // Convert MessageWithParts[] to Message[] (combine info + parts)
@@ -1313,6 +1337,7 @@ export class SessionServiceImpl implements SessionService {
 
         this._activeSession = undefined;
         this._messages = [];
+        this._sessionStatuses.delete(sessionId);
         window.localStorage.removeItem('openspace.activeSessionId');
         this.onActiveSessionChangedEmitter.fire(undefined);
         this.onMessagesChangedEmitter.fire([]);
@@ -1359,10 +1384,16 @@ export class SessionServiceImpl implements SessionService {
      * This is the definitive busy/idle signal that spans the entire agent turn,
      * including gaps between tool rounds.
      */
-    updateSessionStatus(status: SDKTypes.SessionStatus): void {
-        this.logger.debug(`[SessionService] Session status: ${status.type}`);
-        this._sessionStatus = status;
+    updateSessionStatus(status: SDKTypes.SessionStatus, sessionId?: string): void {
+        const id = sessionId ?? this._activeSession?.id;
+        if (!id) { return; }
+        this.logger.debug(`[SessionService] Session status [${id}]: ${status.type}`);
+        this._sessionStatuses.set(id, status);
         this.onSessionStatusChangedEmitter.fire(status);
+    }
+
+    getSessionStatus(sessionId: string): SDKTypes.SessionStatus | undefined {
+        return this._sessionStatuses.get(sessionId);
     }
 
     /**

@@ -308,6 +308,16 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.get<Session>(`/session/${encodeURIComponent(sessionId)}`);
     }
 
+    async getSessionStatuses(_projectId: string): Promise<Array<{ sessionId: string; status: SDKTypes.SessionStatus }>> {
+        // OpenCode API: GET /session/status - returns Record<string, SessionStatus>
+        try {
+            const data = await this.get<Record<string, SDKTypes.SessionStatus>>(`/session/status`);
+            return Object.entries(data).map(([sessionId, status]) => ({ sessionId, status }));
+        } catch {
+            return [];
+        }
+    }
+
     async createSession(_projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session> {
         // OpenCode API: POST /session - body: { parentID?, title? }
         return this.post<Session>(`/session`, session);
@@ -374,9 +384,11 @@ export class OpenCodeProxy implements OpenCodeService {
     // Message Methods
     // =========================================================================
 
-    async getMessages(_projectId: string, sessionId: string): Promise<MessageWithParts[]> {
+    async getMessages(_projectId: string, sessionId: string, limit = 400, before?: string): Promise<MessageWithParts[]> {
         // OpenCode API: GET /session/:id/message
-        return this.get<MessageWithParts[]>(`/session/${encodeURIComponent(sessionId)}/message`);
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (before) { params.set('before', before); }
+        return this.get<MessageWithParts[]>(`/session/${encodeURIComponent(sessionId)}/message?${params}`);
     }
 
     async getMessage(_projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts> {

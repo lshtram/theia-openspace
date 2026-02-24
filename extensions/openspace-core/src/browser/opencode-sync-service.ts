@@ -286,7 +286,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
                 case 'status_changed':
                     if (event.sessionStatus) {
-                        this.sessionService.updateSessionStatus(event.sessionStatus);
+                        this.sessionService.updateSessionStatus(event.sessionStatus, event.sessionId);
                     }
                     break;
 

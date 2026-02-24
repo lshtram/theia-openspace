@@ -201,8 +201,10 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     connectToProject(directory: string): Promise<void>;
 
     // Session methods
-    getSessions(projectId: string): Promise<Session[]>;
+     getSessions(projectId: string): Promise<Session[]>;
     getSession(projectId: string, sessionId: string): Promise<Session>;
+    /** Bulk-fetch current status for all sessions. Hydrates status map on reconnect. */
+    getSessionStatuses(projectId: string): Promise<Array<{ sessionId: string; status: SDKTypes.SessionStatus }>>;
     createSession(projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session>;
     deleteSession(projectId: string, sessionId: string): Promise<void>;
     initSession(projectId: string, sessionId: string): Promise<Session>;
@@ -215,7 +217,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session>;
 
     // Message methods
-    getMessages(projectId: string, sessionId: string): Promise<MessageWithParts[]>;
+    getMessages(projectId: string, sessionId: string, limit?: number, before?: string): Promise<MessageWithParts[]>;
     getMessage(projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts>;
     createMessage(projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts>;
 
