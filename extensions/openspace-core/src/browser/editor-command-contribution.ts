@@ -425,6 +425,13 @@ export class EditorCommandContribution implements CommandContribution {
                     revealOption: 'centerIfOutsideViewport',
                 };
                 const editorWidget = await this.editorManager.open(uri, options);
+                if (args.highlight) {
+                    const targetLine = args.line > 0 ? args.line : 1;
+                    await this.highlightCode({
+                        path: args.path,
+                        ranges: [{ startLine: targetLine, endLine: targetLine }],
+                    });
+                }
                 return { success: true, editorId: editorWidget.id };
             }
 

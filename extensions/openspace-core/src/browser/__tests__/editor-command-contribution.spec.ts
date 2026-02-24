@@ -32,6 +32,7 @@ import {
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import { OpenerService } from '@theia/core/lib/browser/opener-service';
 import { OpenCodeService } from '../../common/opencode-protocol';
 import * as sinon from 'sinon';
 
@@ -94,6 +95,9 @@ function createTestContainer(openCodeService?: MockOpenCodeService) {
     container.bind(WorkspaceService).toConstantValue(new MockWorkspaceService() as unknown as WorkspaceService);
     container.bind(FileService).toConstantValue(new MockFileService() as unknown as FileService);
     container.bind(EditorManager).toConstantValue(new MockEditorManager() as unknown as EditorManager);
+    container.bind(OpenerService).toConstantValue({
+        getOpeners: async () => [],
+    } as unknown as OpenerService);
     container.bind(ILogger).toConstantValue({
         info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined,
     });
