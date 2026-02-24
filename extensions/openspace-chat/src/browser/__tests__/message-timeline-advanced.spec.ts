@@ -124,7 +124,7 @@ function mount(props: Partial<any> = {}) {
 }
 
 afterEach(() => {
-    if (_cleanup) { try { _cleanup(); } catch {} _cleanup = undefined; }
+    if (_cleanup) { try { _cleanup(); } catch (_) { /* ignore */ } _cleanup = undefined; }
     document.body.innerHTML = '';
 });
 

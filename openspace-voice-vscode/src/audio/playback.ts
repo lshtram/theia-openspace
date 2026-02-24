@@ -28,11 +28,12 @@ function playWavFile(filePath: string): Promise<void> {
         cmd = 'afplay';
         args = [filePath];
         break;
-      case 'win32':
+      case 'win32': {
         cmd = 'powershell';
         const escaped = filePath.replace(/'/g, "''");
         args = ['-c', `(New-Object Media.SoundPlayer '${escaped}').PlaySync()`];
         break;
+      }
       default: // linux
         cmd = 'aplay';
         args = [filePath];
