@@ -412,6 +412,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // We keep empty stubs so part IDs and canonical types (e.g. reasoning) exist
         // before deltas arrive. We still ignore non-empty text/reasoning snapshots to
         // avoid append duplication when message.part.delta for the same token follows.
+        //
+        // NOTE (A4 investigation 2026-02-24): Tool call state transitions (pending → running →
+        // completed → error) are handled correctly. updateStreamingMessageParts() in session-service
+        // matches parts by ID and replaces them in-place, so each message.part.updated carrying a new
+        // state will overwrite the previous part record. No bug here.
         const allParts = event.data.parts || [];
         const toolParts = allParts.filter((p: any) => {
             if (p.type !== 'text' && p.type !== 'reasoning') {
