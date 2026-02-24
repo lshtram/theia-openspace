@@ -180,6 +180,32 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         });
     }, [sessionService]);
 
+    // Track focused option index for keyboard navigation
+    const [focusedIndex, setFocusedIndex] = React.useState(-1);
+
+    // Reset focused index when dropdown opens/closes or filtered models change
+    React.useEffect(() => {
+        if (!isOpen) {
+            setFocusedIndex(-1);
+        }
+    }, [isOpen]);
+
+    React.useEffect(() => {
+        setFocusedIndex(-1);
+    }, [filteredModels]);
+
+    // Scroll focused option into view and actually focus the element
+    React.useEffect(() => {
+        if (focusedIndex >= 0 && dropdownRef.current) {
+            const options = dropdownRef.current.querySelectorAll('[role="option"]');
+            if (options[focusedIndex]) {
+                const el = options[focusedIndex] as HTMLElement;
+                el.scrollIntoView({ block: 'nearest' });
+                el.focus();
+            }
+        }
+    }, [focusedIndex]);
+
     // Handle keyboard navigation
     const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
         if (!isOpen) {
@@ -193,8 +219,34 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         if (e.key === 'Escape') {
             e.preventDefault();
             handleClose();
+            return;
         }
-    }, [isOpen, handleOpen, handleClose]);
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setFocusedIndex(prev => {
+                const count = filteredModels.length;
+                if (count === 0) return -1;
+                return prev < count - 1 ? prev + 1 : 0;
+            });
+            return;
+        }
+
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setFocusedIndex(prev => {
+                const count = filteredModels.length;
+                if (count === 0) return -1;
+                return prev > 0 ? prev - 1 : count - 1;
+            });
+            return;
+        }
+
+        if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < filteredModels.length) {
+            e.preventDefault();
+            handleSelect(filteredModels[focusedIndex].fullId);
+        }
+    }, [isOpen, handleOpen, handleClose, filteredModels, focusedIndex, handleSelect]);
 
     // Close on outside click
     React.useEffect(() => {
@@ -235,12 +287,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         <div
             className="model-selector"
             ref={dropdownRef}
+            onKeyDown={handleKeyDown}
         >
             <button
                 type="button"
                 className="model-selector-pill"
                 onClick={handleToggle}
-                onKeyDown={handleKeyDown}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
                 title={activeModel || 'Select a model'}
@@ -273,6 +325,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Escape') {
+                                    e.stopPropagation();
                                     if (searchQuery) {
                                         setSearchQuery('');
                                     } else {
@@ -330,14 +383,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                             {recentModelObjects.length > 0 && !searchQuery && (
                                 <div className="model-section">
                                     <div className="model-section-header">Recent</div>
-                                    {recentModelObjects.map(model => (
-                                        <ModelOption
-                                            key={`recent-${model.fullId}`}
-                                            model={model}
-                                            isSelected={model.fullId === activeModel}
-                                            onSelect={handleSelect}
-                                        />
-                                    ))}
+                                    {recentModelObjects.map(model => {
+                                        const flatIdx = filteredModels.indexOf(model);
+                                        return (
+                                            <ModelOption
+                                                key={`recent-${model.fullId}`}
+                                                model={model}
+                                                isSelected={model.fullId === activeModel}
+                                                isFocused={flatIdx === focusedIndex}
+                                                onSelect={handleSelect}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -347,14 +404,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                                     <div className="model-provider-header">
                                         {providerName}
                                     </div>
-                                    {models.map(model => (
-                                        <ModelOption
-                                            key={model.fullId}
-                                            model={model}
-                                            isSelected={model.fullId === activeModel}
-                                            onSelect={handleSelect}
-                                        />
-                                    ))}
+                                    {models.map(model => {
+                                        const flatIdx = filteredModels.indexOf(model);
+                                        return (
+                                            <ModelOption
+                                                key={model.fullId}
+                                                model={model}
+                                                isSelected={model.fullId === activeModel}
+                                                isFocused={flatIdx === focusedIndex}
+                                                onSelect={handleSelect}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             ))}
                         </div>
@@ -380,10 +441,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 interface ModelOptionProps {
     model: FlatModel;
     isSelected: boolean;
+    isFocused?: boolean;
     onSelect: (fullId: string) => void;
 }
 
-const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, onSelect }) => {
+const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, onSelect }) => {
     const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -393,11 +455,12 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, onSelect }
 
     return (
         <div
-            className={`model-option ${isSelected ? 'selected' : ''}`}
+            className={`model-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
             onClick={() => onSelect(model.fullId)}
             onKeyDown={handleKeyDown}
             role="option"
             aria-selected={isSelected}
+            aria-current={isFocused || undefined}
             tabIndex={0}
         >
             <span className="model-option-name">

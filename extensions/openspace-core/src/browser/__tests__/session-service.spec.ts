@@ -616,3 +616,305 @@ describe('sendMessage() SSE-first message delivery', () => {
         }
     });
 });
+
+describe('sendMessage() RPC fallback empty-parts safety net', () => {
+    function createTestService(): SessionServiceImpl {
+        const service = new SessionServiceImpl();
+        (service as any).openCodeService = {
+            getProjects: sinon.stub(),
+            getSession: sinon.stub(),
+            getSessions: sinon.stub(),
+            createSession: sinon.stub(),
+            deleteSession: sinon.stub(),
+            getMessages: sinon.stub(),
+            getMessage: sinon.stub(),
+            createMessage: sinon.stub(),
+            abortSession: sinon.stub(),
+            connectToProject: sinon.stub().resolves()
+        };
+        (service as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
+        return service;
+    }
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('fetches full message via getMessage when RPC result has empty parts', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOCS = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            // createMessage returns empty parts (as observed in the bug)
+            mockOCS.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: []
+            });
+
+            // getMessage returns the full message with parts
+            mockOCS.getMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: [{ type: 'text', text: 'hello world', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+            });
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // Advance past the fallback timeout
+            clock.tick(5100);
+
+            // Allow the async getMessage call to resolve
+            await clock.tickAsync(0);
+
+            // The fallback should have fetched from getMessage and inserted with parts
+            const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(1);
+            expect(assistantMessages[0].parts).to.have.lengthOf(1);
+            expect((assistantMessages[0].parts![0] as any).text).to.equal('hello world');
+
+            // getMessage should have been called
+            expect(mockOCS.getMessage.calledOnce).to.be.true;
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('does NOT call getMessage when RPC result already has parts', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOCS = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            // createMessage returns populated parts
+            mockOCS.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: [{ type: 'text', text: 'hello', id: 'p1', sessionID: 'sess-1', messageID: 'msg-final' }]
+            });
+
+            mockOCS.getMessage = sinon.stub();
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // Advance past the fallback timeout
+            clock.tick(5100);
+
+            // getMessage should NOT have been called
+            expect(mockOCS.getMessage.called).to.be.false;
+
+            // Message should be inserted directly from createMessage result
+            const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(1);
+            expect((assistantMessages[0].parts![0] as any).text).to.equal('hello');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('falls back to empty-parts message if getMessage also fails', async () => {
+        const clock = sinon.useFakeTimers();
+        try {
+            const service = createTestService();
+            const mockOCS = (service as any).openCodeService;
+            (service as any)._activeProject = { id: 'proj-1' };
+            (service as any)._activeSession = { id: 'sess-1' };
+
+            // createMessage returns empty parts
+            mockOCS.createMessage = sinon.stub().resolves({
+                info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
+                parts: []
+            });
+
+            // getMessage also fails
+            mockOCS.getMessage = sinon.stub().rejects(new Error('Network error'));
+
+            await service.sendMessage([{ type: 'text', text: 'hi' }]);
+
+            // Advance past the fallback timeout
+            clock.tick(5100);
+
+            // Allow the async getMessage rejection to resolve
+            await clock.tickAsync(0);
+
+            // Should still insert the message (with empty parts) as last resort
+            const assistantMessages = service.messages.filter((m: any) => m.role === 'assistant');
+            expect(assistantMessages.length).to.equal(1);
+            expect(assistantMessages[0].id).to.equal('msg-final');
+        } finally {
+            clock.restore();
+        }
+    });
+});
+
+describe('applyPartDelta SSE reconnect duplication', () => {
+    function createTestService(): SessionServiceImpl {
+        const service = new SessionServiceImpl();
+        (service as any).openCodeService = {
+            getProjects: sinon.stub(),
+            getSession: sinon.stub(),
+            getSessions: sinon.stub(),
+            createSession: sinon.stub(),
+            deleteSession: sinon.stub(),
+            getMessages: sinon.stub(),
+            createMessage: sinon.stub(),
+            abortSession: sinon.stub(),
+            connectToProject: sinon.stub().resolves()
+        };
+        (service as any).logger = {
+            info: sinon.stub(),
+            warn: sinon.stub(),
+            error: sinon.stub(),
+            debug: sinon.stub(),
+        };
+        return service;
+    }
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('applyPartDelta accumulates text correctly on first pass', () => {
+        const service = createTestService();
+        // Seed a message
+        service.appendMessage({
+            id: 'msg-1', sessionID: 'sess-1', role: 'assistant',
+            time: { created: Date.now() }, parts: []
+        } as any);
+
+        // Apply deltas for text part
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'Hello ');
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'world!');
+
+        const msg = service.messages.find(m => m.id === 'msg-1')!;
+        const part = msg.parts!.find((p: any) => p.id === 'part-1') as any;
+        expect(part.text).to.equal('Hello world!');
+    });
+
+    it('BUG: replayed deltas cause text duplication without clearStreamingPartText', () => {
+        const service = createTestService();
+        // Seed a message
+        service.appendMessage({
+            id: 'msg-1', sessionID: 'sess-1', role: 'assistant',
+            time: { created: Date.now() }, parts: []
+        } as any);
+
+        // First pass: original SSE connection delivers deltas
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'Hello ');
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'world!');
+
+        // Verify text after first pass
+        let msg = service.messages.find(m => m.id === 'msg-1')!;
+        let part = (msg.parts! as any[]).find(p => p.id === 'part-1');
+        expect(part.text).to.equal('Hello world!');
+
+        // SSE reconnect: server replays ALL deltas from the beginning.
+        // Without clearing, text will be "Hello world!Hello world!" (2x duplication).
+        // With clearStreamingPartText, text is reset first, then replayed correctly.
+        service.clearStreamingPartText('msg-1');
+
+        // Replayed deltas (same as original)
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'Hello ');
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'world!');
+
+        msg = service.messages.find(m => m.id === 'msg-1')!;
+        part = (msg.parts! as any[]).find(p => p.id === 'part-1');
+        expect(part.text).to.equal('Hello world!');
+    });
+
+    it('clearStreamingPartText resets reasoning fields too', () => {
+        const service = createTestService();
+        service.appendMessage({
+            id: 'msg-1', sessionID: 'sess-1', role: 'assistant',
+            time: { created: Date.now() }, parts: []
+        } as any);
+
+        // Accumulate reasoning
+        service.applyPartDelta('msg-1', 'part-r', 'reasoning', 'Thinking...');
+
+        let msg = service.messages.find(m => m.id === 'msg-1')!;
+        let part = (msg.parts! as any[]).find(p => p.id === 'part-r');
+        expect(part.reasoning).to.equal('Thinking...');
+
+        // Clear and replay
+        service.clearStreamingPartText('msg-1');
+
+        service.applyPartDelta('msg-1', 'part-r', 'reasoning', 'Thinking...');
+
+        msg = service.messages.find(m => m.id === 'msg-1')!;
+        part = (msg.parts! as any[]).find(p => p.id === 'part-r');
+        expect(part.reasoning).to.equal('Thinking...');
+    });
+
+    it('clearStreamingPartText preserves tool parts (non-text/reasoning)', () => {
+        const service = createTestService();
+        service.appendMessage({
+            id: 'msg-1', sessionID: 'sess-1', role: 'assistant',
+            time: { created: Date.now() },
+            parts: [
+                { type: 'tool', id: 'tool-1', tool: 'bash', state: { status: 'completed' } },
+            ]
+        } as any);
+
+        // Add text via delta
+        service.applyPartDelta('msg-1', 'part-1', 'text', 'Result: ');
+
+        // Clear streaming text — tool parts should remain untouched
+        service.clearStreamingPartText('msg-1');
+
+        const msg = service.messages.find(m => m.id === 'msg-1')!;
+        const toolPart = (msg.parts! as any[]).find(p => p.id === 'tool-1');
+        expect(toolPart).to.exist;
+        expect(toolPart.type).to.equal('tool');
+        expect(toolPart.tool).to.equal('bash');
+
+        // Text part should have its text field cleared
+        const textPart = (msg.parts! as any[]).find(p => p.id === 'part-1');
+        expect(textPart).to.exist;
+        expect(textPart.text).to.equal('');
+    });
+
+    it('clearStreamingPartText is a no-op for unknown message ID', () => {
+        const service = createTestService();
+        // Should not throw
+        service.clearStreamingPartText('nonexistent-msg');
+    });
+
+    it('5x duplication scenario — clear prevents repeated accumulation', () => {
+        const service = createTestService();
+        service.appendMessage({
+            id: 'msg-1', sessionID: 'sess-1', role: 'assistant',
+            time: { created: Date.now() }, parts: []
+        } as any);
+
+        const deltas = ['The ', 'answer ', 'is ', '42.'];
+
+        // First connection
+        for (const d of deltas) {
+            service.applyPartDelta('msg-1', 'part-1', 'text', d);
+        }
+        let msg = service.messages.find(m => m.id === 'msg-1')!;
+        let part = (msg.parts! as any[]).find(p => p.id === 'part-1');
+        expect(part.text).to.equal('The answer is 42.');
+
+        // Simulate 4 reconnects (each replays all deltas)
+        for (let reconnect = 0; reconnect < 4; reconnect++) {
+            service.clearStreamingPartText('msg-1');
+            for (const d of deltas) {
+                service.applyPartDelta('msg-1', 'part-1', 'text', d);
+            }
+        }
+
+        msg = service.messages.find(m => m.id === 'msg-1')!;
+        part = (msg.parts! as any[]).find(p => p.id === 'part-1');
+        // With clearStreamingPartText, the text is rebuilt each time — no duplication
+        expect(part.text).to.equal('The answer is 42.');
+    });
+});

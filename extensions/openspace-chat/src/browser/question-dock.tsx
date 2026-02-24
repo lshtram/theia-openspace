@@ -420,6 +420,7 @@ const MultiQuestionDock: React.FC<QuestionDockProps> = ({ question, onAnswer, on
                             type="button"
                             className="qdock-btn-accent"
                             onClick={handleSubmit}
+                            disabled={answers.every(a => a.length === 0)}
                         >
                             Submit
                         </button>

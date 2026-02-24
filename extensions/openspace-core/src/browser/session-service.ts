@@ -100,11 +100,14 @@ export interface SessionService extends Disposable {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updateStreamingMessageParts(messageId: string, toolParts: any[]): void;
     replaceMessage(messageId: string, message: Message): void;
+    fetchMessageFromBackend(messageId: string): Promise<Message | undefined>;
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
     /** Update session status from server-authoritative SSE event. */
     updateSessionStatus(status: SDKTypes.SessionStatus): void;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
+    /** Clear accumulated text/reasoning on all parts of a streaming message. Called before SSE reconnect replay. */
+    clearStreamingPartText(messageId: string): void;
 
     // Question state
     readonly pendingQuestions: SDKTypes.QuestionRequest[];
@@ -269,6 +272,12 @@ export class SessionServiceImpl implements SessionService {
                 this.logger.warn('[SessionService] No worktree available for MCP config');
                 return undefined;
             }
+            // In browser bundles, Node fs may be unavailable/polyfilled.
+            // MCP config is optional, so gracefully skip when fs APIs are missing.
+            if (typeof (fs as any).existsSync !== 'function' || typeof (fs as any).readFileSync !== 'function') {
+                this.logger.debug('[SessionService] Skipping MCP config read: fs APIs unavailable in browser runtime');
+                return undefined;
+            }
             const configPath = path.join(worktree, 'opencode.json');
             if (!fs.existsSync(configPath)) {
                 this.logger.warn('[SessionService] opencode.json not found at: ' + configPath);
@@ -341,6 +350,8 @@ export class SessionServiceImpl implements SessionService {
                     this.logger.debug(`[SessionService] Restored session: ${sessionId}`);
                 } catch (err) {
                     this.logger.warn('[SessionService] Failed to restore session:', err);
+                    // Persisted session may be stale (deleted in backend). Avoid repeated restore errors.
+                    window.localStorage.removeItem('openspace.activeSessionId');
                 }
             }
 
@@ -538,6 +549,16 @@ export class SessionServiceImpl implements SessionService {
         } catch (error: unknown) {
             const err = error as Error;
             this.logger.error('[SessionService] Error in setActiveSession:', error);
+            // If the persisted session no longer exists on the backend, clear stale local state
+            // so we don't keep retrying it on subsequent loads.
+            if (err.message?.includes('Session not found')) {
+                this.logger.warn(`[SessionService] Clearing stale session ID from localStorage: ${sessionId}`);
+                window.localStorage.removeItem('openspace.activeSessionId');
+                this._activeSession = undefined;
+                this._messages = [];
+                this.onActiveSessionChangedEmitter.fire(undefined);
+                this.onMessagesChangedEmitter.fire([]);
+            }
             this._lastError = err.message || String(error);
             this.onErrorChangedEmitter.fire(this._lastError);
             throw error;
@@ -762,8 +783,15 @@ export class SessionServiceImpl implements SessionService {
                 this._rpcFallbackTimer = undefined;
                 const alreadyExists = this._messages.some(m => m.id === assistantMessage.id);
                 if (!alreadyExists) {
-                    this.logger.info(`[SessionService] SSE fallback: inserting assistant message from RPC result: ${assistantMessage.id}`);
-                    this.appendMessage(assistantMessage);
+                    // If the RPC result has empty parts (common when SSE missed streaming events),
+                    // fetch the full message from the REST API as a safety net.
+                    if (!assistantMessage.parts || assistantMessage.parts.length === 0) {
+                        this.logger.info(`[SessionService] SSE fallback: RPC result has empty parts, fetching full message: ${assistantMessage.id}`);
+                        this.fetchAndInsertFallbackMessage(assistantMessage);
+                    } else {
+                        this.logger.info(`[SessionService] SSE fallback: inserting assistant message from RPC result: ${assistantMessage.id}`);
+                        this.appendMessage(assistantMessage);
+                    }
                 } else {
                     this.logger.debug(`[SessionService] SSE fallback: message already delivered by SSE: ${assistantMessage.id}`);
                 }
@@ -798,6 +826,37 @@ export class SessionServiceImpl implements SessionService {
                 this._isStreaming = false;
                 this.onIsStreamingChangedEmitter.fire(false);
                 this.resetStreamingStatus();
+            }
+        }
+    }
+
+    /**
+     * Fetch the full message from the REST API and insert it as a fallback.
+     * Used when the RPC createMessage result has empty parts (SSE missed streaming events).
+     * If the fetch fails, inserts the original message as a last resort.
+     */
+    private async fetchAndInsertFallbackMessage(fallbackMessage: Message): Promise<void> {
+        try {
+            if (this._activeProject && this._activeSession) {
+                const fullMsg = await this.openCodeService.getMessage(
+                    this._activeProject.id,
+                    this._activeSession.id,
+                    fallbackMessage.id
+                );
+                const messageWithParts: Message = {
+                    ...fullMsg.info,
+                    parts: fullMsg.parts || []
+                };
+                // Check again — SSE may have delivered it while we were fetching
+                if (!this._messages.some(m => m.id === fallbackMessage.id)) {
+                    this.logger.info(`[SessionService] SSE fallback: inserting full message from getMessage: ${fallbackMessage.id} (${messageWithParts.parts?.length || 0} parts)`);
+                    this.appendMessage(messageWithParts);
+                }
+            }
+        } catch (error) {
+            this.logger.warn(`[SessionService] SSE fallback: getMessage failed, inserting original: ${error}`);
+            if (!this._messages.some(m => m.id === fallbackMessage.id)) {
+                this.appendMessage(fallbackMessage);
             }
         }
     }
@@ -1183,6 +1242,27 @@ export class SessionServiceImpl implements SessionService {
         this.onMessagesChangedEmitter.fire([...this._messages]);
     }
 
+    async fetchMessageFromBackend(messageId: string): Promise<Message | undefined> {
+        if (!this._activeProject || !this._activeSession) {
+            return undefined;
+        }
+
+        try {
+            const fullMessage = await this.openCodeService.getMessage(
+                this._activeProject.id,
+                this._activeSession.id,
+                messageId
+            );
+            return {
+                ...fullMessage.info,
+                parts: fullMessage.parts || []
+            } as Message;
+        } catch (error) {
+            this.logger.debug(`[SessionService] fetchMessageFromBackend failed for ${messageId}: ${error}`);
+            return undefined;
+        }
+    }
+
     /**
      * Update active session from external event (backend SSE).
      * Only updates if this is the currently active session.
@@ -1303,6 +1383,34 @@ export class SessionServiceImpl implements SessionService {
         this.updateStreamingStatus(this._messages);
     }
 
+    /**
+     * Clear accumulated text/reasoning on all parts of a streaming message.
+     *
+     * Called before SSE reconnect replay so that replayed deltas don't
+     * append on top of already-accumulated text (which would cause N× duplication).
+     */
+    clearStreamingPartText(messageId: string): void {
+        const index = this._messages.findIndex(m => m.id === messageId);
+        if (index < 0) {
+            return;
+        }
+
+        const message = this._messages[index];
+        const parts = (message.parts || []).map((p: any) => {
+            const copy = { ...p };
+            if (copy.text !== undefined) {
+                copy.text = '';
+            }
+            if (copy.reasoning !== undefined) {
+                copy.reasoning = '';
+            }
+            return copy;
+        });
+
+        this._messages[index] = { ...message, parts };
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+    }
+
     // =========================================================================
     // Streaming Status Methods
     // =========================================================================
@@ -1318,26 +1426,34 @@ export class SessionServiceImpl implements SessionService {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const part = msg.parts[j] as any;
                 if (part.type === 'tool') {
-                    return this.toolNameToStatus(part.tool || '');
+                    return this.toolNameToCategory(part.tool || '');
+                }
+                if (part.type === 'reasoning') {
+                    return 'reasoning';
                 }
                 if (part.type === 'text') {
-                    return 'Thinking';
+                    return 'thinking';
                 }
             }
         }
-        return 'Considering next steps';
+        return 'idle';
     }
 
-    private toolNameToStatus(toolName: string): string {
+    /**
+     * Maps a tool name to a StreamingCategory key.
+     * These keys are consumed by the streaming-vocab module in the browser
+     * extension which resolves them to display phrases.
+     */
+    private toolNameToCategory(toolName: string): string {
         const name = toolName.toLowerCase();
-        if (/^(bash|shell)$/.test(name)) return 'Running commands';
-        if (/^task$/.test(name)) return 'Delegating work';
-        if (/^(todowrite|todoread|todo_write|todo_read)$/.test(name)) return 'Planning next steps';
-        if (/^read$/.test(name)) return 'Gathering context';
-        if (/^(list|grep|glob|find|ripgrep|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/.test(name)) return 'Searching the codebase';
-        if (/^(webfetch|web_fetch)$/.test(name)) return 'Searching the web';
-        if (/^(edit|write)$/.test(name)) return 'Making edits';
-        return 'Considering next steps';
+        if (/^(bash|bash_\d+|execute|run_command|run|shell|cmd|terminal)$/.test(name)) return 'bash';
+        if (/^task$/.test(name)) return 'task';
+        if (/^(todowrite|todoread|todo_write|todo_read)$/.test(name)) return 'todo';
+        if (/^read$/.test(name)) return 'read';
+        if (/^(list|list_files|grep|glob|find|rg|ripgrep|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files|search)$/.test(name)) return 'search';
+        if (/^(webfetch|web_fetch)$/.test(name)) return 'webfetch';
+        if (/^(edit|write)$/.test(name)) return 'edit';
+        return 'mcp';
     }
 
     private updateStreamingStatus(messages: Message[]): void {

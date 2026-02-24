@@ -8,7 +8,7 @@
 
 **Theia OpenSpace** is an AI-native IDE built on Eclipse Theia. You (the AI agent) control the IDE via MCP tools. The human collaborates through the chat panel inside the IDE.
 
-- **Your entry point:** `http://localhost:3000/mcp` — 17 MCP tools
+- **Your entry point:** `http://localhost:3000/mcp` - 17 MCP tools
 - **Your system prompt:** fetched from `http://localhost:3000/openspace/instructions`
 - **Human's interface:** Theia chat panel in the browser at `http://localhost:3000`
 
@@ -16,7 +16,7 @@
 
 ## Current State
 
-See `01_memory/progress.md` for the detailed phase-by-phase completion log.
+See `.opencode/_context/01_memory/progress.md` for the detailed phase-by-phase completion log.
 
 **Summary as of 2026-02-23:**
 - ✅ Phase 0: Scaffold
@@ -27,7 +27,7 @@ See `01_memory/progress.md` for the detailed phase-by-phase completion log.
 - ✅ Phase 4: Modality surfaces (presentation, whiteboard)
 - ✅ Phase T4/T5/T6/EW/EW.5: ArtifactStore, PatchEngine, voice, waveform, streaming UX
 - ✅ Phase 6.8/1C: E2E suite, code hardening
-- 🔄 Phase 5: Polish & Desktop — in progress
+- 🔄 Phase 5: Polish & Desktop - in progress
 - ⬜ Phase 6: Extended features
 
 ---
@@ -44,9 +44,9 @@ See `01_memory/progress.md` for the detailed phase-by-phase completion log.
 | Technical debt | `docs/technical-debt/` |
 | Coding standards | `CODING_STANDARDS.md` |
 | E2E test patterns | `docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md` |
-| Agent memory (current context) | `01_memory/active_context.md` |
-| Agent memory (patterns/gotchas) | `01_memory/patterns.md` |
-| Agent memory (progress log) | `01_memory/progress.md` |
+| Agent memory (current context) | `.opencode/_context/01_memory/active_context.md` |
+| Agent memory (patterns/gotchas) | `.opencode/_context/01_memory/patterns.md` |
+| Agent memory (progress log) | `.opencode/_context/01_memory/progress.md` |
 | Hub MCP server | `extensions/openspace-core/src/node/hub-mcp.ts` |
 | OpenCode proxy | `extensions/openspace-core/src/node/opencode-proxy.ts` |
 | Chat widget | `extensions/openspace-chat/src/browser/chat-widget.tsx` |
@@ -58,37 +58,42 @@ See `01_memory/progress.md` for the detailed phase-by-phase completion log.
 These are accumulated project-specific rules. They are additive to the user-level superpowers skills.
 
 ### Rule 1: Never modify OpenCode server code
-Any files under `/Users/Shared/dev/opencode/` or equivalent are off-limits.  
+Any files under `/Users/Shared/dev/opencode/` or equivalent are off-limits.
 OpenCode is an external dependency. Modifications create a maintenance burden.
 
 ### Rule 2: Never modify Theia core code
-`node_modules/@theia/*` is off-limits. Use proper Theia extension APIs.  
+`node_modules/@theia/*` is off-limits. Use proper Theia extension APIs.
 **Exception:** The `proxy-factory.js` patch (see patterns.md) is a known violation pending upstream fix.
 
 ### Rule 3: Build target may be a worktree
-Before any build step, run `ps aux | grep main.js` to confirm which directory Theia is serving from.  
-If it is a worktree (`.worktrees/<name>/`), build there — not in the repo root.  
-See `01_memory/patterns.md` → "The Server Runs From a Worktree".
+Before any build step, run `ps aux | grep main.js` to confirm which directory Theia is serving from.
+If it is a worktree (`.worktrees/<name>/`), build there - not in the repo root.
+See `.opencode/_context/01_memory/patterns.md` -> "The Server Runs From a Worktree".
 
-### Rule 4: E2E tests — run incrementally
-Never run the full suite in one command; it times out. Start with one spec file, then expand.  
-See `01_memory/patterns.md` → "E2E Testing Protocol: Incremental Execution".
+### Rule 4: E2E tests - run incrementally
+Never run the full suite in one command; it times out. Start with one spec file, then expand.
+See `.opencode/_context/01_memory/patterns.md` -> "E2E Testing Protocol: Incremental Execution".
 
 ### Rule 5: E2E required before push for production changes
-Any commit touching Hub routes, MCP tools, browser extensions, ArtifactStore, or PatchEngine  
+Any commit touching Hub routes, MCP tools, browser extensions, ArtifactStore, or PatchEngine
 requires the full E2E suite to pass before `git push`.
 
 ### Rule 6: Webpack bundle rebuild required after browser extension changes
-After TypeScript changes to a browser extension, rebuild the webpack bundle:  
-`cd browser-app && npx webpack --config webpack.config.js --mode development`  
+After TypeScript changes to a browser extension, rebuild the webpack bundle:
+`yarn --cwd browser-app webpack --config webpack.config.js --mode development`
 Then hard-refresh the browser (Cmd+Shift+R).
 
 ### Rule 7: React imports in Theia extensions
 Always use `import * as React from '@theia/core/shared/react'`, not bare `'react'`.
 
 ### Rule 8: Circular DI pattern
-Avoid `@inject()` cycles. Use setter injection + `queueMicrotask` wiring.  
-See `01_memory/patterns.md` → "Circular DI Dependencies".
+Avoid `@inject()` cycles. Use setter injection + `queueMicrotask` wiring.
+See `.opencode/_context/01_memory/patterns.md` -> "Circular DI Dependencies".
+
+### Rule 9: Command snippets must not use `cd`
+Assume the shell working directory is always `/Users/Shared/dev/theia-openspace`.
+Do not provide command snippets that start with `cd ...` (especially not `cd ~`), because
+it can move the user to the wrong directory and break build/test workflows.
 
 ---
 
@@ -123,7 +128,7 @@ When a skill applies, invoke it before taking any action. See `using-superpowers
 ## Memory Update Protocol
 
 At the end of every session:
-1. Update `01_memory/active_context.md` with current focus and recent decisions
-2. Add new patterns/gotchas to `01_memory/patterns.md`
-3. Update `01_memory/progress.md` with completed milestones
+1. Update `.opencode/_context/01_memory/active_context.md` with current focus and recent decisions
+2. Add new patterns/gotchas to `.opencode/_context/01_memory/patterns.md`
+3. Update `.opencode/_context/01_memory/progress.md` with completed milestones
 4. Keep each memory file under 200 lines (archive overflow to `docs/archive/`)

@@ -183,6 +183,12 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     private streamingMessages = new Map<string, { text: string }>();
 
     /**
+     * Deduplicate identical back-to-back delta events that can occur during
+     * transient RPC callback reconnects. Keyed by message+part+field+delta.
+     */
+    private recentDeltaEvents = new Map<string, number>();
+
+    /**
      * Tracks the last command dispatched to CommandRegistry.
      * Used by E2E test hooks to verify command dispatch.
      */
@@ -379,13 +385,18 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             }
         }
 
-        // Only upsert tool/non-text parts from message.partial events.
-        // Text and reasoning parts are managed exclusively by message.part.delta → applyPartDelta,
-        // which appends deltas incrementally. If we also upsert them here (with the full accumulated
-        // text snapshot from the SDK), the delta appended afterward causes duplication:
-        //   e.g. partial carries "hello world", then delta appends "world" → "hello worldworld".
+        // Upsert tool/non-text parts, plus EMPTY text/reasoning stubs.
+        // We keep empty stubs so part IDs and canonical types (e.g. reasoning) exist
+        // before deltas arrive. We still ignore non-empty text/reasoning snapshots to
+        // avoid append duplication when message.part.delta for the same token follows.
         const allParts = event.data.parts || [];
-        const toolParts = allParts.filter((p: any) => p.type !== 'text' && p.type !== 'reasoning');
+        const toolParts = allParts.filter((p: any) => {
+            if (p.type !== 'text' && p.type !== 'reasoning') {
+                return true;
+            }
+            const text = typeof p.text === 'string' ? p.text : '';
+            return text.length === 0;
+        });
         if (toolParts.length > 0) {
             this.sessionService.updateStreamingMessageParts(event.messageId, toolParts);
         }
@@ -471,7 +482,24 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             this.sessionService.replaceMessage(event.messageId, finalMessage);
         }
 
+        // Asynchronously fetch the authoritative final message from backend to recover
+        // canonical part types/content and correct any duplicated transient stream state.
+        void this.refreshCompletedMessageFromBackend(event.messageId);
+
         this.logger.debug(`[SyncService] Message completed: ${event.messageId}`);
+    }
+
+    private async refreshCompletedMessageFromBackend(messageId: string): Promise<void> {
+        try {
+            const authoritative = await this.sessionService.fetchMessageFromBackend(messageId);
+            if (!authoritative || !authoritative.parts || authoritative.parts.length === 0) {
+                return;
+            }
+            this.sessionService.replaceMessage(messageId, authoritative);
+            this.logger.debug(`[SyncService] Refreshed completed message from backend: ${messageId}`);
+        } catch (error) {
+            this.logger.debug(`[SyncService] Failed to refresh completed message ${messageId}: ${error}`);
+        }
     }
 
     /**
@@ -484,6 +512,25 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             if (this.queueIfNotReady('onMessagePartDelta', event)) { return; }
             this.logger.debug(`[SyncService] Part delta: msg=${event.messageID}, part=${event.partID}, field=${event.field}, len=${event.delta.length}`);
 
+            // Skip identical back-to-back duplicate deltas (same message/part/field/delta)
+            // arriving within a short window.
+            const dedupeKey = `${event.messageID}|${event.partID}|${event.field}|${event.delta}`;
+            const now = Date.now();
+            const lastSeen = this.recentDeltaEvents.get(dedupeKey);
+            if (lastSeen !== undefined && now - lastSeen < 750) {
+                this.logger.debug(`[SyncService] Skipping duplicate delta event: ${dedupeKey}`);
+                return;
+            }
+            this.recentDeltaEvents.set(dedupeKey, now);
+            if (this.recentDeltaEvents.size > 500) {
+                // Cheap cleanup to prevent unbounded growth
+                for (const [k, ts] of this.recentDeltaEvents) {
+                    if (now - ts > 5_000) {
+                        this.recentDeltaEvents.delete(k);
+                    }
+                }
+            }
+
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionID) {
                 return;
@@ -491,6 +538,15 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
             // Ensure streaming tracker exists (message.part.delta may arrive before message.created)
             if (!this.streamingMessages.has(event.messageID)) {
+                // If this message already exists and is completed, this delta is a replayed
+                // SSE event from a reconnect for a historical message — drop it to prevent
+                // appending on top of already-final content (which causes N× duplication).
+                const existingMsg = this.sessionService.messages.find(m => m.id === event.messageID);
+                if (existingMsg && (existingMsg.time as any)?.completed) {
+                    this.logger.debug(`[SyncService] Dropping replayed delta for completed message: ${event.messageID}`);
+                    return;
+                }
+
                 this.streamingMessages.set(event.messageID, { text: '' });
                 // Create a stub message so applyPartDelta has something to target
                 this.sessionService.appendMessage({
@@ -660,6 +716,31 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         this.executeAndReport(command).catch(err => {
             this.logger.error('[SyncService] Unexpected error in executeAndReport:', err);
         });
+    }
+
+    /**
+     * Handle SSE reconnection.
+     *
+     * When the SSE connection drops and re-establishes, the server replays all
+     * `message.part.delta` events from the beginning. Without clearing the
+     * accumulated text first, deltas append on top of existing content, causing
+     * N× duplication. This method clears text/reasoning on every message that is
+     * currently being streamed so replayed deltas rebuild cleanly.
+     */
+    onSSEReconnect(): void {
+        if (this.streamingMessages.size === 0) {
+            return;
+        }
+
+        this.logger.info(`[SyncService] SSE reconnected — clearing streaming text for ${this.streamingMessages.size} message(s)`);
+        for (const messageId of this.streamingMessages.keys()) {
+            this.sessionService.clearStreamingPartText(messageId);
+        }
+
+        // Also reset accumulated text in the streaming tracker so it rebuilds from scratch
+        for (const [, stream] of this.streamingMessages) {
+            stream.text = '';
+        }
     }
 
     private async executeAndReport(command: AgentCommand): Promise<void> {

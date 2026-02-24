@@ -20,6 +20,7 @@ import { Message, MessagePart, OpenCodeService, MessageWithParts, PermissionNoti
 import type { SessionService } from 'openspace-core/lib/browser/session-service';
 import { renderMarkdown } from './markdown-renderer';
 import { computeSimpleDiff } from './diff-utils';
+import { pickPhrase, statusToCategory } from './streaming-vocab';
 
 /**
  * Props for the MessageBubble component.
@@ -783,9 +784,30 @@ export interface TurnGroupProps {
 export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, streamingStatus, children }) => {
     // `showExpanded` controls whether the body is visible.
     // Starts true so content is visible while streaming, and stays true until
-    // streaming is definitively over (isStreaming goes false after being true).
+    // streaming is definitively over (isStreaming transitions from true → false).
     const [showExpanded, setShowExpanded] = React.useState(isStreaming);
     const wasStreamingRef = React.useRef(isStreaming);
+
+    // ── Phrase rotation ───────────────────────────────────────────────────────
+    // Pick a random phrase index when the category changes; hold it for the
+    // entire phase (no rotation within a phase).
+    const category = statusToCategory(streamingStatus || '');
+    const [phraseIndex, setPhraseIndex] = React.useState(() => Math.floor(Math.random() * 10));
+    const prevCategoryRef = React.useRef(category);
+
+    // Reset to a fresh random phrase when the category changes
+    React.useEffect(() => {
+        if (prevCategoryRef.current !== category) {
+            prevCategoryRef.current = category;
+            setPhraseIndex(Math.floor(Math.random() * 10));
+        }
+    }, [category]);
+
+    // No rotation within a phase — phrase is picked once when the category
+    // changes and held until the next category change.
+
+    const displayPhrase = pickPhrase(category, phraseIndex);
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Live elapsed timer during streaming
     const streamStartRef = React.useRef<number>(Date.now());
@@ -793,11 +815,9 @@ export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs,
 
     React.useEffect(() => {
         if (isStreaming) {
-            // Streaming started or is still active — ensure expanded
             wasStreamingRef.current = true;
             setShowExpanded(true);
         } else if (wasStreamingRef.current) {
-            // Streaming just ended (was true, now false) — collapse
             wasStreamingRef.current = false;
             setShowExpanded(false);
         }
@@ -814,30 +834,29 @@ export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs,
         return () => clearInterval(interval);
     }, [isStreaming]);
 
-    // While streaming: always show expanded with trigger bar
+    // While streaming: body first, activity bar pinned at the bottom
     if (isStreaming) {
         return (
             <div className="turn-group turn-group-streaming">
-                <div className="turn-group-trigger-bar">
-                    <svg className="turn-group-chevron-indicator" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        width="10" height="10" aria-hidden="true">
-                        <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                    <span className="turn-group-status">{streamingStatus || 'Thinking'}</span>
-                    {elapsed > 0 && (
-                        <span className="turn-group-duration">· {formatElapsed(elapsed)}</span>
-                    )}
-                </div>
+                {/* Step content — sidebar accent + body */}
                 <div className="turn-group-streaming-content">
                     <div className="turn-group-sidebar" />
                     <div className="turn-group-body">{children}</div>
+                </div>
+                {/* Activity bar — always at the bottom while streaming */}
+                <div className="turn-group-activity-bar" aria-live="polite" aria-atomic="true">
+                    {/* Icon slot — reserved for animated emoji/gif; leave empty until asset is ready */}
+                    <span className="turn-group-activity-icon" aria-hidden="true" />
+                    <span className="turn-group-activity-phrase">{displayPhrase}</span>
+                    {elapsed > 0 && (
+                        <span className="turn-group-duration">· {formatElapsed(elapsed)}</span>
+                    )}
                 </div>
             </div>
         );
     }
 
-    // After completion: collapsed header with toggle
+    // After completion: collapsed toggle at top
     return (
         <div className={`turn-group ${showExpanded ? 'turn-group-open' : 'turn-group-closed'}`}>
             <button
@@ -987,7 +1006,15 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
     onOpenFile,
     isIntermediateStep = false,
 }) => {
-    const parts = message.parts || [];
+    const rawParts = message.parts || [];
+    // Filter reasoning from completed *final bubbles* only.
+    // For intermediate-step rendering (inside Show steps), keep reasoning so it remains
+    // visible under the steps disclosure after completion.
+    const hideReasoning = !isStreaming && !isIntermediateStep;
+    const parts = React.useMemo(
+        () => hideReasoning ? rawParts.filter(p => p.type !== 'reasoning') : rawParts,
+        [rawParts, hideReasoning]
+    );
     const timestamp = message.time?.created ? formatTimestamp(message.time.created) : '';
 
     // ── Elapsed timer using server timestamps ─────────────────────────

@@ -81,31 +81,31 @@ npx playwright test app-load.spec.ts mcp-tools.spec.ts chat-message-flow.spec.ts
 - Test file changes only
 - `.opencode/` context updates
 
-## Build & Deploy Gotchas (Discovered 2026-02-19)
+## Build & Deploy Gotchas (Updated 2026-02-23)
 
-### CRITICAL: The Server Runs From a Worktree, Not the Main Repo
+### CRITICAL: Verify Server Location Before Every Build
 
-**The Theia backend (port 3000) runs from `.worktrees/whiteboard-direct-mount/`, NOT from the repo root.**
+The Theia backend may run from the repo root OR from a worktree — it changes between sessions.
 
-Verify with: `ps aux | grep main.js`
-
-Expected output shows:
-```
-node .../theia-openspace/.worktrees/whiteboard-direct-mount/browser-app/lib/backend/main.js --port 3000
-```
-
-**Consequence**: Rebuilding in the repo root (`browser-app/build`, `extensions/*/build`) has ZERO effect on the running app. The user will see no change after a hard-reload.
-
-**Rule for every agent**: Before touching ANY build step, run `ps aux | grep main.js` to find which directory the server is serving from. Build there.
-
-**Correct build sequence (targeting the worktree)**:
+**Always run first:**
 ```bash
-yarn --cwd .worktrees/whiteboard-direct-mount/extensions/<ext-name> build
-yarn --cwd .worktrees/whiteboard-direct-mount/browser-app build
-# Then user does Cmd+Shift+R in browser
+ps aux | grep main.js | grep -v grep
 ```
 
-**How to apply a source fix to the worktree**: The fix must be applied to both the main repo (for git history) and the worktree (for the running server). Check if they differ with `diff extensions/foo/src/... .worktrees/whiteboard-direct-mount/extensions/foo/src/...`.
+- If path contains `.worktrees/<name>/` → build there, not in repo root
+- If path is `theia-openspace/browser-app/...` → build in repo root (normal case as of 2026-02-23)
+
+**Repo-root build commands:**
+```bash
+yarn --cwd extensions/<ext-name> build
+yarn --cwd browser-app webpack --config webpack.config.js --mode development
+```
+
+**Worktree build commands:**
+```bash
+yarn --cwd .worktrees/<name>/extensions/<ext-name> build
+yarn --cwd .worktrees/<name>/browser-app webpack --config webpack.config.js --mode development
+```
 
 ### Webpack Bundles Are Split Across Chunks
 

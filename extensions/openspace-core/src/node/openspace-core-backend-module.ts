@@ -8,13 +8,27 @@ import { OpenSpaceHub } from './hub';
 const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || 'http://localhost:7890';
 
 /**
- * Lifecycle contribution to dispose OpenCodeProxy on server shutdown.
+ * Lifecycle contribution to manage OpenCodeProxy startup and shutdown.
  * T2-6: Ensures SSE connections and timers are cleaned up on backend stop.
+ * Fix: On start, reconnects openspace-hub in case OpenCode started before Theia
+ *      and marked the MCP server as failed due to ECONNREFUSED.
  */
 @injectable()
 class OpenCodeProxyLifecycle implements BackendApplicationContribution {
     @inject(OpenCodeProxy)
     private readonly proxy!: OpenCodeProxy;
+
+    onStart(): void {
+        // OpenCode may have started before Theia and failed to connect to
+        // openspace-hub (ECONNREFUSED). Trigger a reconnect after a short
+        // delay to allow Theia's own HTTP server to be fully ready.
+        setTimeout(() => {
+            console.info('[OpenCodeProxyLifecycle] Triggering openspace-hub reconnect...');
+            this.proxy.connectMcpServer('openspace-hub').catch(err => {
+                console.warn('[OpenCodeProxyLifecycle] openspace-hub reconnect failed:', err);
+            });
+        }, 3000);
+    }
 
     onStop(): void {
         console.debug('[OpenCodeProxyLifecycle] Disposing OpenCodeProxy...');

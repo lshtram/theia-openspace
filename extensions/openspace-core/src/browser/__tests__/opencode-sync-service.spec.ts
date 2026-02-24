@@ -253,4 +253,214 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
         expect(parts).to.have.lengthOf(1);
         expect(parts[0].text).to.equal('hello world');
     });
+
+    it('preserves reasoning part type when partial provides empty reasoning stub before deltas', () => {
+        const sessionId = 'streaming-session-reasoning';
+        const messageId = 'msg-reasoning';
+        const reasoningPartId = 'part-reasoning';
+
+        const syncSvc = makeService();
+        const sessionSvc = makeRealSessionService(sessionId);
+        (sessionSvc as any)._messages = [{
+            id: messageId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [],
+            time: { created: Date.now() },
+        }];
+        syncSvc.setSessionService(sessionSvc);
+
+        // Backend sends reasoning stub in message.part.updated with empty text
+        syncSvc.onMessageEvent({
+            type: 'partial',
+            sessionId,
+            projectId: '',
+            messageId,
+            data: {
+                info: { id: messageId, sessionID: sessionId, role: 'assistant', time: { created: Date.now() } } as any,
+                parts: [{ id: reasoningPartId, sessionID: sessionId, messageID: messageId, type: 'reasoning', text: '' }]
+            }
+        } as any);
+
+        // Then deltas arrive on field=text for that reasoning part ID
+        syncSvc.onMessagePartDelta({
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: reasoningPartId,
+            field: 'text',
+            delta: 'The user is greeting.'
+        });
+
+        const msg = sessionSvc.messages.find(m => m.id === messageId) as any;
+        expect(msg).to.exist;
+        expect(msg.parts).to.have.lengthOf(1);
+        expect(msg.parts[0].type).to.equal('reasoning');
+        expect(msg.parts[0].text).to.equal('The user is greeting.');
+    });
+
+    it('deduplicates identical back-to-back message.part.delta events', () => {
+        const sessionId = 'streaming-session-dedupe';
+        const messageId = 'msg-dedupe';
+        const partId = 'part-dedupe';
+
+        const syncSvc = makeService();
+        const sessionSvc = makeRealSessionService(sessionId);
+        (sessionSvc as any)._messages = [{
+            id: messageId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [],
+            time: { created: Date.now() },
+        }];
+        syncSvc.setSessionService(sessionSvc);
+
+        const evt = {
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: partId,
+            field: 'text',
+            delta: 'Hello chunk '
+        };
+
+        syncSvc.onMessagePartDelta(evt as any);
+        syncSvc.onMessagePartDelta(evt as any);
+
+        const msg = sessionSvc.messages.find(m => m.id === messageId) as any;
+        expect(msg).to.exist;
+        expect(msg.parts).to.have.lengthOf(1);
+        expect(msg.parts[0].text).to.equal('Hello chunk ');
+    });
+
+    it('replaces streamed fallback parts with authoritative completed parts when completed event has empty parts', async () => {
+        const sessionId = 'streaming-session-2';
+        const messageId = 'msg-streaming-2';
+        const partId = 'part-r';
+
+        const syncSvc = makeService();
+        const sessionSvc = makeRealSessionService(sessionId);
+
+        // Ensure active project/session exist for backend message fetch
+        (sessionSvc as any)._activeProject = { id: 'global' };
+        (sessionSvc as any)._activeSession = { id: sessionId };
+
+        // Mock backend getMessage to return canonical parts (reasoning + final text)
+        const mockGetMessage = async () => ({
+            info: {
+                id: messageId,
+                sessionID: sessionId,
+                role: 'assistant',
+                time: { created: Date.now(), completed: Date.now() }
+            },
+            parts: [
+                { id: 'reasoning-1', sessionID: sessionId, messageID: messageId, type: 'reasoning', text: 'The user is greeting me.' },
+                { id: 'text-1', sessionID: sessionId, messageID: messageId, type: 'text', text: 'Hello! How can I help you today?' }
+            ]
+        });
+        (sessionSvc as any).openCodeService.getMessage = mockGetMessage;
+
+        // Seed with a streaming stub containing duplicated text-only content
+        (sessionSvc as any)._messages = [{
+            id: messageId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [{ id: partId, sessionID: sessionId, messageID: messageId, type: 'text', text: 'The userThe user is greeting me.' }],
+            time: { created: Date.now() },
+        }];
+
+        syncSvc.setSessionService(sessionSvc);
+
+        // Mark as actively streaming so completed handler executes normal completion path
+        (syncSvc as any).streamingMessages.set(messageId, { text: 'The userThe user is greeting me.' });
+
+        // Completed event arrives with empty parts (common SSE behavior)
+        syncSvc.onMessageEvent({
+            type: 'completed',
+            sessionId,
+            projectId: 'global',
+            messageId,
+            data: {
+                info: {
+                    id: messageId,
+                    sessionID: sessionId,
+                    role: 'assistant',
+                    time: { created: Date.now(), completed: Date.now() }
+                } as any,
+                parts: []
+            }
+        } as any);
+
+        // Allow async backend fetch/replace to resolve
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const msg = sessionSvc.messages.find(m => m.id === messageId) as any;
+        expect(msg).to.exist;
+        expect(msg.parts).to.have.lengthOf(2);
+        expect(msg.parts[0].type).to.equal('reasoning');
+        expect(msg.parts[0].text).to.equal('The user is greeting me.');
+        expect(msg.parts[1].type).to.equal('text');
+        expect(msg.parts[1].text).to.equal('Hello! How can I help you today?');
+    });
+
+    it('refreshes from backend even when completed event includes parts (to correct duplicated stream content)', async () => {
+        const sessionId = 'streaming-session-3';
+        const messageId = 'msg-streaming-3';
+
+        const syncSvc = makeService();
+        const sessionSvc = makeRealSessionService(sessionId);
+
+        (sessionSvc as any)._activeProject = { id: 'global' };
+        (sessionSvc as any)._activeSession = { id: sessionId };
+        (sessionSvc as any)._messages = [{
+            id: messageId,
+            sessionID: sessionId,
+            role: 'assistant',
+            parts: [],
+            time: { created: Date.now() },
+        }];
+        (sessionSvc as any).openCodeService.getMessage = async () => ({
+            info: {
+                id: messageId,
+                sessionID: sessionId,
+                role: 'assistant',
+                time: { created: Date.now(), completed: Date.now() }
+            },
+            parts: [
+                { id: 'r1', sessionID: sessionId, messageID: messageId, type: 'reasoning', text: 'Thinking once.' },
+                { id: 't1', sessionID: sessionId, messageID: messageId, type: 'text', text: 'Hello once.' }
+            ]
+        });
+
+        syncSvc.setSessionService(sessionSvc);
+        (syncSvc as any).streamingMessages.set(messageId, { text: 'dup' });
+
+        // Completed event contains duplicated parts from transient stream state
+        syncSvc.onMessageEvent({
+            type: 'completed',
+            sessionId,
+            projectId: 'global',
+            messageId,
+            data: {
+                info: {
+                    id: messageId,
+                    sessionID: sessionId,
+                    role: 'assistant',
+                    time: { created: Date.now(), completed: Date.now() }
+                } as any,
+                parts: [
+                    { id: 'x1', sessionID: sessionId, messageID: messageId, type: 'text', text: 'Thinking once.Thinking once.' },
+                    { id: 'x2', sessionID: sessionId, messageID: messageId, type: 'text', text: 'Hello once.Hello once.' }
+                ]
+            }
+        } as any);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const msg = sessionSvc.messages.find(m => m.id === messageId) as any;
+        expect(msg).to.exist;
+        expect(msg.parts).to.have.lengthOf(2);
+        expect(msg.parts[0].type).to.equal('reasoning');
+        expect(msg.parts[0].text).to.equal('Thinking once.');
+        expect(msg.parts[1].type).to.equal('text');
+        expect(msg.parts[1].text).to.equal('Hello once.');
+    });
 });

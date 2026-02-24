@@ -274,6 +274,8 @@ export interface OpenCodeClient {
     onPermissionEvent(event: PermissionNotification): void;
     onQuestionEvent(event: QuestionNotification): void;
     onAgentCommand(command: AgentCommand): void;
+    /** Fired when the SSE connection is re-established after a drop. Allows clearing accumulated streaming state. */
+    onSSEReconnect(): void;
 }
 
 /**

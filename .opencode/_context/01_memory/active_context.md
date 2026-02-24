@@ -1,14 +1,70 @@
 # Active Context
 
 **Project:** Theia Openspace
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-23
 
 ## Current Focus
-- **Status:** PHASE T3 COMPLETE ✅ — MCP Agent Control System live; `%%OS{...}%%` stream interceptor retired
-- **Previous:** E2E SUITE FULLY PASSING ✅ — 38 pass, 1 skip (intentional memory-leak), 0 fail
-- **Next:** Phase T4 — PatchEngine (versioned artifact mutations) OR Phase T5 — ArtifactStore
+- **Status:** PHASE 5 POLISH — chat UX improvements in progress
+- **Previous:** Phase T3 complete, E2E suite passing, all hardening done
+- **Next:** GIF animation assets for activity bar icon slot (user will create), then Phase 5 continues
 
-## Phase T3: MCP Agent Control System — COMPLETE ✅ (2026-02-18)
+## Phase 5: Chat UX Polish (2026-02-23) — IN PROGRESS 🔄
+
+### Session work completed (2026-02-23)
+
+**Problem 1: SSE replay duplication — FIXED ✅**
+- Root cause: on SSE reconnect, `message.part.delta` events replay from the start. Old code re-added already-completed messages to `streamingMessages` and appended deltas on top of final content → N× duplication.
+- Fix: guard in `onMessagePartDelta` in `opencode-sync-service.ts` — drops delta if message already exists and has `time.completed` set.
+- Commit: `4853261`
+
+**Problem 2: Streaming status category keys — REFACTORED ✅**
+- `computeStreamingStatus` in `session-service.ts` now emits machine keys (`'thinking'`, `'bash'`, `'search'`, etc.) instead of human-readable strings.
+- `toolNameToStatus` renamed `toolNameToCategory`, regex patterns expanded to cover more tool name variants.
+- Commit: `4853261`
+
+**Problem 3: Activity bar UX — COMPLETE ✅**
+- `streaming-vocab.ts` (new file): full 21-entry phrase pools for all 11 categories from curated word list. `CHAOS_VOCAB` (30 entries) fires at 1% probability. `CHAOS_PROBABILITY = 0.01` constant.
+- `message-bubble.tsx`: phrase held stable for entire phase (no rotation interval — picked once on category change). Removed DIAG console.log calls. Unused `PHRASE_ROTATION_MS` import removed.
+- `chat-widget.css`: activity phrase `font-size: 13px`; streaming body text dimmed to `--theia-descriptionForeground / 0.8` to separate intermediate steps from final response.
+- Commit: `f48ff7a`
+
+### Remaining / Deferred
+
+**GIF animation slot — WIRED, AWAITING ASSETS**
+- `turn-group-activity-icon` span is already in the DOM, expands to 16×16 when non-empty.
+- Expects an `<img>` tag inside it.
+- User will create 16×16 animated GIF files in Aseprite/Piskel (one per category).
+- Drop files in: `extensions/openspace-chat/src/browser/style/animations/`
+- Naming: `thinking.gif`, `reasoning.gif`, `bash.gif`, `read.gif`, `search.gif`, `edit.gif`, `webfetch.gif`, `task.gif`, `todo.gif`, `mcp.gif`
+- When files exist: add a map in `streaming-vocab.ts` (or new `activity-animations.ts`) and set `src` on the `<img>` in `TurnGroup`.
+
+**Jumpiness — believed resolved by duplication fix**
+- Was listed as a secondary issue. Likely eliminated when the N× duplication was fixed.
+- No further action unless user reports it.
+
+### Key files
+```
+extensions/openspace-chat/src/browser/
+  streaming-vocab.ts          ← vocabulary, CHAOS_VOCAB, pickPhrase(), CHAOS_PROBABILITY
+  message-bubble.tsx          ← TurnGroup component, phrase pick on category change
+  style/chat-widget.css       ← activity bar CSS, shimmer, step dimming
+  style/animations/           ← (empty) drop GIF files here when ready
+
+extensions/openspace-core/src/browser/
+  opencode-sync-service.ts    ← SSE replay guard (~line 540)
+  session-service.ts          ← computeStreamingStatus, toolNameToCategory (~line 1418)
+```
+
+### Server location (2026-02-23)
+Running from repo root (NOT a worktree):
+`/Users/Shared/dev/theia-openspace/browser-app/lib/backend/main.js --port 3000`
+
+### Build commands
+```bash
+yarn --cwd extensions/openspace-chat build
+yarn --cwd browser-app webpack --config webpack.config.js --mode development
+# Then Cmd+Shift+R in browser
+```
 
 **Goal:** Replace `%%OS{...}%%` stream interceptor with MCP tools as the sole agent→IDE command path.
 

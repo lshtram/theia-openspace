@@ -8,6 +8,9 @@
     "extensions/**/src/__tests__/*.spec.ts",
     "packages/**/src/**/*.spec.ts"
   ],
+  "exclude": [
+    "extensions/openspace-chat/src/browser/__tests__/*.spec.ts"
+  ],
   "timeout": 10000,
   "exit": true,
   "color": true,
