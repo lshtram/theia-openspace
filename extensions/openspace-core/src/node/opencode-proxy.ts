@@ -370,6 +370,30 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/unrevert`, {});
     }
 
+    async forkSession(_projectId: string, sessionId: string, messageId?: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/fork
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/fork`, messageId ? { messageID: messageId } : {});
+    }
+
+    async getDiff(_projectId: string, sessionId: string): Promise<string> {
+        // OpenCode API: GET /session/:id/diff — returns text, not JSON
+        const url = this.buildUrl(`/session/${encodeURIComponent(sessionId)}/diff`);
+        const { statusCode, body } = await this.rawRequest(url, 'GET', { 'Accept': 'text/plain' });
+        if (statusCode < 200 || statusCode >= 300) { return ''; }
+        return body;
+    }
+
+    async getTodos(_projectId: string, sessionId: string): Promise<Array<{ id: string; description: string; status: string }>> {
+        // OpenCode API: GET /session/:id/todo
+        try {
+            return this.get<Array<{ id: string; description: string; status: string }>>(
+                `/session/${encodeURIComponent(sessionId)}/todo`
+            );
+        } catch {
+            return [];
+        }
+    }
+
     async grantPermission(_projectId: string, sessionId: string, permissionId: string): Promise<Session> {
         // OpenCode API: POST /session/:id/permissions/:permissionID
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(permissionId)}`, {});

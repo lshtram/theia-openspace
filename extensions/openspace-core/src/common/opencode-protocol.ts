@@ -209,11 +209,17 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     deleteSession(projectId: string, sessionId: string): Promise<void>;
     initSession(projectId: string, sessionId: string): Promise<Session>;
     abortSession(projectId: string, sessionId: string): Promise<Session>;
-    shareSession(projectId: string, sessionId: string): Promise<Session>;
+     shareSession(projectId: string, sessionId: string): Promise<Session>;
     unshareSession(projectId: string, sessionId: string): Promise<Session>;
     compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session>;
     revertSession(projectId: string, sessionId: string): Promise<Session>;
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
+    /** Fork a session, optionally at a specific message. Returns the new forked session. */
+    forkSession(projectId: string, sessionId: string, messageId?: string): Promise<Session>;
+    /** Fetch the unified diff of all files changed in this session. */
+    getDiff(projectId: string, sessionId: string): Promise<string>;
+    /** Fetch the current live todo list for a session. */
+    getTodos(projectId: string, sessionId: string): Promise<Array<{ id: string; description: string; status: string }>>;
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session>;
 
     // Message methods

@@ -386,7 +386,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [sessionBusy, setSessionBusy] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
-    const [sessionError, setSessionError] = React.useState<string | undefined>(sessionService.lastError);
+     const [sessionError, setSessionError] = React.useState<string | undefined>(sessionService.lastError);
+    const [retryStatus, setRetryStatus] = React.useState<{ attempt: number; message: string; next: number } | undefined>(undefined);
     const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
     const [pendingPermissions, setPendingPermissions] = React.useState<PermissionNotification[]>([]);
     const [queuedCount, setQueuedCount] = React.useState(0);
@@ -548,8 +549,14 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         // Subscribe to session status changes (server-authoritative busy/idle/retry)
         const currentStatus = sessionService.sessionStatus;
         setSessionBusy(currentStatus ? currentStatus.type !== 'idle' : false);
-        const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string }) => {
+        const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string; attempt?: number; message?: string; next?: number }) => {
             setSessionBusy(status.type !== 'idle');
+            // Track retry state for display
+            if (status.type === 'retry' && status.attempt !== undefined && status.message !== undefined && status.next !== undefined) {
+                setRetryStatus({ attempt: status.attempt, message: status.message, next: status.next });
+            } else {
+                setRetryStatus(undefined);
+            }
             // When the server reports idle, clear any deferred streaming UI state
             // that was held open during the turn (see onIsStreamingChanged guard above).
             if (status.type === 'idle') {
@@ -930,6 +937,17 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                                 >
                                     ✕
                                 </button>
+                            </div>
+                        )}
+
+                        {retryStatus && (
+                            <div className="session-retry" data-testid="session-retry">
+                                <span className="retry-icon">↻</span>
+                                <span className="retry-message">{retryStatus.message}</span>
+                                <span className="retry-countdown">
+                                    (retry in {Math.max(0, Math.round((retryStatus.next - Date.now()) / 1000))}s,
+                                    attempt {retryStatus.attempt})
+                                </span>
                             </div>
                         )}
 
