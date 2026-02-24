@@ -24,6 +24,7 @@ import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service
 import { URI } from '@theia/core/lib/common/uri';
 import * as monaco from '@theia/monaco-editor-core';
 import { Position, EditorWidget } from '@theia/editor/lib/browser';
+import { OpenerService, open as openUri } from '@theia/core/lib/browser/opener-service';
 import { OpenCodeService } from '../common/opencode-protocol';
 import { validatePath as sharedValidatePath } from './path-validator';
 
@@ -264,6 +265,9 @@ export class EditorCommandContribution implements CommandContribution {
     @inject(EditorManager)
     private readonly editorManager!: EditorManager;
 
+    @inject(OpenerService)
+    private readonly openerService!: OpenerService;
+
     @inject(FileService)
     private readonly fileService!: FileService;
 
@@ -389,6 +393,14 @@ export class EditorCommandContribution implements CommandContribution {
 
     /**
      * Open an editor at a specific file path, line, and column.
+     *
+     * Viewer-first behaviour: when no line/column is specified (pure file open),
+     * we route through the OpenerService so the ViewerToggleOpenHandler can
+     * intercept and open the file in preview mode first.  Double-clicking the
+     * tab label will then toggle to the text editor via ViewerToggleContribution.
+     *
+     * When a line/column is explicitly requested (navigation jump), we bypass the
+     * toggle and open directly in the text editor at that position.
      */
     private async openEditor(args: EditorOpenArgs): Promise<{ success: boolean; editorId?: string }> {
         try {
@@ -398,35 +410,29 @@ export class EditorCommandContribution implements CommandContribution {
                 return { success: false };
             }
 
-            // Create URI for the file and open the editor
-            const options: EditorOpenerOptions = {
-                mode: 'activate',
-            };
-            
+            const uri = URI.fromFilePath(validatedPath);
+
+            // If a specific line is requested, open directly as text editor at that position.
             if (args.line !== undefined) {
-                options.selection = {
-                    start: {
-                        line: args.line - 1,
-                        character: args.column !== undefined ? args.column - 1 : 0
-                    }
+                const options: EditorOpenerOptions = {
+                    mode: 'activate',
+                    selection: {
+                        start: {
+                            line: args.line - 1,
+                            character: args.column !== undefined ? args.column - 1 : 0
+                        }
+                    },
+                    revealOption: 'centerIfOutsideViewport',
                 };
-                options.revealOption = 'centerIfOutsideViewport';
+                const editorWidget = await this.editorManager.open(uri, options);
+                return { success: true, editorId: editorWidget.id };
             }
 
-            // Open the editor
-            const editorWidget = await this.editorManager.open(URI.fromFilePath(validatedPath), options);
-
-            // Get editor ID
-            const editorId = editorWidget.id;
-
-            if (args.highlight) {
-                const targetLine = args.line && args.line > 0 ? args.line : 1;
-                await this.highlightCode({
-                    path: args.path,
-                    ranges: [{ startLine: targetLine, endLine: targetLine }],
-                });
-            }
-
+            // No line specified: use OpenerService for viewer-first behaviour.
+            // ViewerToggleOpenHandler (priority 150) will intercept and route to
+            // the preview/viewer handler when toggle state is 'preview' (default).
+            const widget = await openUri(this.openerService, uri, { mode: 'activate' });
+            const editorId = widget ? (widget as any).id as string | undefined : undefined;
             return { success: true, editorId };
         } catch (error) {
             this.logger.error('[EditorCommand] Error opening editor:', error);

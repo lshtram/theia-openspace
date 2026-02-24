@@ -1,12 +1,34 @@
 # Active Context
 
 **Project:** Theia Openspace
-**Last Updated:** 2026-02-23
+**Last Updated:** 2026-02-24
 
 ## Current Focus
-- **Status:** PHASE 5 POLISH — chat UX improvements in progress
-- **Previous:** Phase T3 complete, E2E suite passing, all hardening done
+- **Status:** PHASE 5 POLISH — MCP race condition fix shipped; GIF animation assets still pending
+- **Previous:** Phase T3 complete, E2E suite passing, all hardening done, Chat UX polish (Phase 5 session 1 done)
 - **Next:** GIF animation assets for activity bar icon slot (user will create), then Phase 5 continues
+
+## MCP Race Condition Fix (2026-02-24) ✅ COMPLETE
+
+**Problem:** OpenCode starts before Theia. When it tries to connect to `openspace-hub` at `http://localhost:3000/mcp`, Theia isn't up yet → ECONNREFUSED → OpenCode marks `openspace-hub` as `failed` and never retries. Agents start sessions with no `openspace.*` tools.
+
+**Fix: two files changed, built, and verified.**
+
+### 1. `extensions/openspace-core/src/node/opencode-proxy.ts` (line 275)
+New `connectMcpServer(name: string): Promise<void>` method — calls OpenCode's `POST /mcp/:name/connect` REST API. **Idempotent:** calling when already connected returns `true` with no side effects.
+
+### 2. `extensions/openspace-core/src/node/openspace-core-backend-module.ts`
+Added `onStart()` to `OpenCodeProxyLifecycle`. Fires 3 seconds after Theia backend starts, calls `this.proxy.connectMcpServer('openspace-hub')`. The 3s delay lets Theia's own HTTP routes come up before the reconnect attempt.
+
+**Verification (live, 2026-02-24):**
+```
+[OpenCodeProxyLifecycle] Triggering openspace-hub reconnect...    ← 3s after start
+[OpenCodeProxy] MCP server 'openspace-hub' reconnected            ← success
+GET http://localhost:7890/mcp → "openspace-hub": { "status": "connected" }
+POST /mcp/openspace-hub/connect when already connected → 200 true (no disruption)
+```
+
+**Not committed yet** — changes are live in the running Theia instance but not committed to git.
 
 ## Phase 5: Chat UX Polish (2026-02-23) — IN PROGRESS 🔄
 

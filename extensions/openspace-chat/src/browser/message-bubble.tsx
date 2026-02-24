@@ -723,13 +723,13 @@ function renderToolPart(
     return <ToolBlock key={part.id || `tool-${index}`} part={part} index={index} pendingPermissions={pendingPermissions} onReplyPermission={onReplyPermission} onOpenFile={onOpenFile} />;
 }
 
-/** Reasoning block — renders reasoning text inline, no sub-header or nested toggle. */
+/** Reasoning block — renders reasoning text inline with markdown, no sub-header or nested toggle. */
 const ReasoningBlock: React.FC<{ part: any }> = ({ part }) => {
     const text: string = part.text || part.reasoning || '';
     if (!text) return null;
     return (
-        <div className="part-reasoning-inline">
-            {text}
+        <div className="part-reasoning-inline part-text">
+            {renderMarkdown(text)}
         </div>
     );
 };
@@ -794,6 +794,9 @@ export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs,
     const category = statusToCategory(streamingStatus || '');
     const [phraseIndex, setPhraseIndex] = React.useState(() => Math.floor(Math.random() * 10));
     const prevCategoryRef = React.useRef(category);
+    // Shimmer colour theme — picked once when TurnGroup mounts, held for the
+    // entire turn. 0–8 are mellow IDE-palette themes; 9 is vivid rainbow.
+    const shimmerThemeRef = React.useRef(`oc-theme-${Math.floor(Math.random() * 10)}`);
 
     // Reset to a fresh random phrase when the category changes
     React.useEffect(() => {
@@ -847,7 +850,7 @@ export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs,
                 <div className="turn-group-activity-bar" aria-live="polite" aria-atomic="true">
                     {/* Icon slot — reserved for animated emoji/gif; leave empty until asset is ready */}
                     <span className="turn-group-activity-icon" aria-hidden="true" />
-                    <span className="turn-group-activity-phrase">{displayPhrase}</span>
+                    <span className={`turn-group-activity-phrase ${shimmerThemeRef.current}`}>{displayPhrase}</span>
                     {elapsed > 0 && (
                         <span className="turn-group-duration">· {formatElapsed(elapsed)}</span>
                     )}

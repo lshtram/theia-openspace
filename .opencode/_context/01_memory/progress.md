@@ -2,6 +2,20 @@
 
 ## Current Milestones
 
+### MCP Race Condition Fix (2026-02-24) ✅ COMPLETE (committed `6cb4130`)
+
+| Item | Status |
+|---|---|
+| Root cause identified (OpenCode starts before Theia, fails ECONNREFUSED, never retries) | ✅ |
+| `POST /mcp/:name/connect` OpenCode API discovered and verified idempotent | ✅ |
+| `connectMcpServer()` added to `OpenCodeProxy` (line 275) | ✅ |
+| `onStart()` added to `OpenCodeProxyLifecycle` (3s delayed reconnect) | ✅ |
+| TypeScript build: 0 errors | ✅ |
+| Webpack bundle rebuilt | ✅ |
+| Theia restarted, reconnect confirmed in logs | ✅ |
+| `openspace-hub: connected` confirmed via `GET http://localhost:7890/mcp` | ✅ |
+| **Git commit** | ✅ `6cb4130` |
+
 ### Phase 5: Chat UX Polish (2026-02-23) 🔄 IN PROGRESS
 
 | Item | Status | Commit |
@@ -13,6 +27,7 @@
 | Activity phrase font-size bump (13px) | ✅ | `f48ff7a` |
 | Intermediate step body text dimmed (descriptionForeground/0.8) | ✅ | `f48ff7a` |
 | DIAG console.log calls removed | ✅ | `f48ff7a` |
+| 10 shimmer color themes (oc-theme-0 through oc-theme-9) | ✅ | pending |
 | GIF animation slot — icon span wired, awaiting user assets | ⬜ | — |
 
 **Pushed to origin/master.** Both commits on `master`, ahead of the previous `e970817` state.

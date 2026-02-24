@@ -114,6 +114,12 @@ function ensureMermaidInitialized(): void {
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
+// Disable fuzzy linkification: prevents bare filenames like "README.md" or
+// "AGENTS.md" from being treated as URLs (md / sh / py are valid TLDs and
+// those domains redirect to unrelated sites). Explicit http:// and https://
+// URLs still auto-link; explicit markdown [text](url) links are unaffected.
+md.linkify.set({ fuzzyLink: false });
+
 // Plugin: emoji shortcodes (:smile: → 😄)
 md.use(markdownItEmoji.full);
 
@@ -345,17 +351,25 @@ function linkifyFilePaths(html: string): string {
     // Windows: [A-Z]:[\\/]...
     const FILE_PATH_RE = /(?<!["\\'=])((?:\/[^\s/<>"']+){2,}|(?:[A-Za-z]:[/\\][^\s<>"']+[/\\][^\s<>"']+))/g;
 
-    // Split on HTML tags so we never touch attribute values or tag contents.
-    // Odd-indexed parts are tags; even-indexed parts are text between tags.
+    // Split on ALL tags (both opening and closing).
+    // Track whether we're inside an <a>...</a> so we never corrupt already-linkified
+    // URLs (e.g. the /path/to/file portion of https://host/path/to/file).
     const parts = html.split(/(<[^>]*>)/);
-    for (let i = 0; i < parts.length; i += 2) {
-        // Even index = text content between tags
-        parts[i] = parts[i].replace(FILE_PATH_RE, (path) => {
-            const encoded = path.replace(/&amp;/g, '&').split('').map(c =>
-                encodeURIComponent(c).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%5C/g, '\\')
-            ).join('');
-            return `<a href="file://${encoded}" class="md-file-link">${path}</a>`;
-        });
+    let insideAnchor = 0;
+    for (let i = 0; i < parts.length; i++) {
+        if (i % 2 === 1) {
+            // Tag segment — track anchor nesting depth
+            if (/^<a[\s>]/i.test(parts[i])) { insideAnchor++; }
+            else if (/^<\/a>/i.test(parts[i])) { insideAnchor = Math.max(0, insideAnchor - 1); }
+        } else if (insideAnchor === 0) {
+            // Text node outside any anchor — safe to linkify file paths
+            parts[i] = parts[i].replace(FILE_PATH_RE, (path) => {
+                const encoded = path.replace(/&amp;/g, '&').split('').map(c =>
+                    encodeURIComponent(c).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%5C/g, '\\')
+                ).join('');
+                return `<a href="file://${encoded}" class="md-file-link">${path}</a>`;
+            });
+        }
     }
     return parts.join('');
 }

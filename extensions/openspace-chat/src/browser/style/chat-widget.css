@@ -1982,8 +1982,8 @@
 
 /* ── Activity bar — shown at the bottom of TurnGroup while streaming ───────── */
 @keyframes oc-shimmer {
-    0%   { background-position: -200% center; }
-    100% { background-position:  200% center; }
+    0%   { background-position: -250% center; }
+    100% { background-position:  250% center; }
 }
 
 @keyframes oc-phrase-in {
@@ -2000,20 +2000,6 @@
     border-radius: 6px;
     font-size: 11px;
     font-weight: 500;
-    /* Shimmer background */
-    background: linear-gradient(
-        90deg,
-        var(--theia-editor-background, #1e1e1e) 0%,
-        var(--theia-focusBorder, #007acc) 40%,
-        var(--theia-editor-background, #1e1e1e) 60%,
-        var(--theia-editor-background, #1e1e1e) 100%
-    );
-    background-size: 200% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    animation: oc-shimmer 2.4s linear infinite;
-    /* Fallback colour for engines that don't support background-clip: text */
     color: var(--theia-descriptionForeground, #858585);
 }
 
@@ -2041,10 +2027,57 @@
     object-fit: contain;
 }
 
-/* Phrase text — slightly larger than the surrounding bar meta-text */
+/* Phrase text — base layout; shimmer color supplied by .oc-theme-N */
 .openspace-chat-widget .turn-group-activity-phrase {
     font-size: 13px;
-    animation: oc-phrase-in 0.35s ease both;
+    font-weight: 600;
+    animation: oc-phrase-in 0.35s ease both, oc-shimmer 5s linear infinite;
+    background-size: 250% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+/* ── 10 shimmer colour themes ─────────────────────────────────────────────── */
+/* Theme 0 — Slate blue (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-0 {
+    background-image: linear-gradient(90deg, #5a7a94 0%, #5a7a94 20%, #7a94ad 50%, #5a7a94 80%, #5a7a94 100%);
+}
+/* Theme 1 — Steel gray (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-1 {
+    background-image: linear-gradient(90deg, #6a7a8a 0%, #6a7a8a 20%, #8a9aa8 50%, #6a7a8a 80%, #6a7a8a 100%);
+}
+/* Theme 2 — Cool blue-gray (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-2 {
+    background-image: linear-gradient(90deg, #5a6a7a 0%, #5a6a7a 20%, #7a8a9a 50%, #5a6a7a 80%, #5a6a7a 100%);
+}
+/* Theme 3 — Muted slate (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-3 {
+    background-image: linear-gradient(90deg, #4a5a6a 0%, #4a5a6a 20%, #6a7a8a 50%, #4a5a6a 80%, #4a5a6a 100%);
+}
+/* Theme 4 — Dark slate (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-4 {
+    background-image: linear-gradient(90deg, #3a4a5a 0%, #3a4a5a 20%, #5a6a7a 50%, #3a4a5a 80%, #3a4a5a 100%);
+}
+/* Theme 5 — Charcoal blue (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-5 {
+    background-image: linear-gradient(90deg, #4a5a6a 0%, #4a5a6a 20%, #6a7a8a 50%, #4a5a6a 80%, #4a5a6a 100%);
+}
+/* Theme 6 — Blue-gray fade (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-6 {
+    background-image: linear-gradient(90deg, #5a7088 0%, #5a7088 20%, #7a90a8 50%, #5a7088 80%, #5a7088 100%);
+}
+/* Theme 7 — Deep gray-blue (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-7 {
+    background-image: linear-gradient(90deg, #4a5a6e 0%, #4a5a6e 20%, #6a7a8e 50%, #4a5a6e 80%, #4a5a6e 100%);
+}
+/* Theme 8 — Midnight slate (mellow) */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-8 {
+    background-image: linear-gradient(90deg, #3a4a5a 0%, #3a4a5a 20%, #5a6a7a 50%, #3a4a5a 80%, #3a4a5a 100%);
+}
+/* Theme 9 — Vivid rainbow (special): gold → cyan → violet → pink → gold */
+.openspace-chat-widget .turn-group-activity-phrase.oc-theme-9 {
+    background-image: linear-gradient(90deg, #f7c948 0%, #f7c948 10%, #40e0d0 30%, #a78bfa 50%, #f472b6 70%, #f7c948 90%, #f7c948 100%);
 }
 
 /* Streaming body container — sidebar + body side by side */
@@ -2066,8 +2099,16 @@
 .openspace-chat-widget .turn-group-streaming .turn-group-body {
     flex: 1;
     min-width: 0;
-    color: var(--theia-descriptionForeground, #858585);
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-body .part-tool {
     opacity: 0.8;
+}
+
+.openspace-chat-widget .turn-group-streaming .turn-group-body .part-text {
+    color: var(--theia-foreground, #ccc);
+    font-size: 12px;
+    opacity: 0.85;
 }
 
 .openspace-chat-widget .turn-group-header {
