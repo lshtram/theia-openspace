@@ -40,7 +40,7 @@ See `.opencode/_context/01_memory/progress.md` for the detailed phase-by-phase c
 | Phase completion status | `docs/architecture/WORKPLAN.md` |
 | Requirements tracker | `docs/requirements/REQ-OPENSPACE.md` |
 | Feature requirements | `docs/requirements/REQ-AGENT-IDE-CONTROL.md` |
-| Known bugs | `KNOWN_BUGS.md` |
+| Known bugs | GitHub Issues: https://github.com/lshtram/theia-openspace/issues |
 | Technical debt | `docs/technical-debt/` |
 | Coding standards | `CODING_STANDARDS.md` |
 | E2E test patterns | `docs/technical-debt/E2E-INFRASTRUCTURE-GAP.md` |
@@ -95,6 +95,12 @@ Assume the shell working directory is always `/Users/Shared/dev/theia-openspace`
 Do not provide command snippets that start with `cd ...` (especially not `cd ~`), because
 it can move the user to the wrong directory and break build/test workflows.
 
+### Rule 10: Use GitHub Issues for bug tracking
+All bugs and deferred issues must be tracked in GitHub Issues.
+- Use the `report-github-issue` skill when a bug is found but not immediately fixed
+- Label issues with `bug` and relevant labels
+- View issues at: https://github.com/lshtram/theia-openspace/issues
+
 ---
 
 ## Superpowers Skills
@@ -107,7 +113,7 @@ This project uses OpenCode superpowers skills at two levels:
 
 **Project-level skills** (apply only to this project):
 - Location: `.opencode/skills/`
-- Current skills: `presentation-builder`, `draw-diagram`
+- Current skills: `presentation-builder`, `draw-diagram`, `report-github-issue`
 - These extend or override user-level skills for OpenSpace-specific workflows
 
 When a skill applies, invoke it before taking any action. See `using-superpowers` skill for the full protocol.
