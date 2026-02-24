@@ -89,9 +89,16 @@ export interface SessionService extends Disposable {
     createSession(title?: string): Promise<Session>;
     sendMessage(parts: MessagePartInput[], model?: { providerID: string; modelID: string }): Promise<void>;
     abort(): Promise<void>;
-    getSessions(): Promise<Session[]>;
+     getSessions(): Promise<Session[]>;
+    searchSessions(query: string): Promise<Session[]>;
+    loadMoreSessions(): Promise<void>;
+    readonly hasMoreSessions: boolean;
     getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
+    forkSession(messageId?: string): Promise<void>;
+    revertSession(): Promise<void>;
+    unrevertSession(): Promise<void>;
+    compactSession(): Promise<void>;
     autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
 
     // State update methods (for SyncService integration)
@@ -174,6 +181,8 @@ export class SessionServiceImpl implements SessionService {
     private readonly RPC_FALLBACK_DELAY_MS = 5000;
     private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
     private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
+    private _sessionCursor: string | undefined = undefined;
+    private _hasMoreSessions = false;
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -967,7 +976,10 @@ export class SessionServiceImpl implements SessionService {
         }
         
         try {
-            const sessions = await this.openCodeService.getSessions(this._activeProject.id);
+            const PAGE_SIZE = 20;
+            const sessions = await this.openCodeService.getSessions(this._activeProject.id, { limit: PAGE_SIZE });
+            this._hasMoreSessions = sessions.length === PAGE_SIZE;
+            this._sessionCursor = sessions[sessions.length - 1]?.id;
             this.logger.debug(`[SessionService] Found ${sessions.length} sessions`);
             return sessions;
         } catch (error) {
@@ -977,6 +989,63 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             return [];
         }
+    }
+
+    get hasMoreSessions(): boolean {
+        return this._hasMoreSessions;
+    }
+
+    async searchSessions(query: string): Promise<Session[]> {
+        if (!this._activeProject) { return []; }
+        try {
+            return await this.openCodeService.getSessions(this._activeProject.id, { search: query, limit: 50 });
+        } catch {
+            return [];
+        }
+    }
+
+    async loadMoreSessions(): Promise<void> {
+        if (!this._hasMoreSessions || !this._activeProject || !this._sessionCursor) { return; }
+        try {
+            const PAGE_SIZE = 20;
+            const more = await this.openCodeService.getSessions(this._activeProject.id, {
+                limit: PAGE_SIZE,
+                start: this._sessionCursor
+            });
+            this._hasMoreSessions = more.length === PAGE_SIZE;
+            this._sessionCursor = more[more.length - 1]?.id ?? this._sessionCursor;
+            this.logger.debug(`[SessionService] Loaded ${more.length} more sessions`);
+        } catch (error) {
+            this.logger.warn(`[SessionService] loadMoreSessions error: ${error}`);
+        }
+    }
+
+    async forkSession(messageId?: string): Promise<void> {
+        if (!this._activeSession || !this._activeProject) { return; }
+        this.logger.info(`[SessionService] Operation: forkSession(${this._activeSession.id})`);
+        const forked = await this.openCodeService.forkSession(this._activeProject.id, this._activeSession.id, messageId);
+        await this.setActiveSession(forked.id);
+    }
+
+    async revertSession(): Promise<void> {
+        if (!this._activeSession || !this._activeProject) { return; }
+        this.logger.info(`[SessionService] Operation: revertSession(${this._activeSession.id})`);
+        const updated = await this.openCodeService.revertSession(this._activeProject.id, this._activeSession.id);
+        this.notifySessionChanged(updated);
+    }
+
+    async unrevertSession(): Promise<void> {
+        if (!this._activeSession || !this._activeProject) { return; }
+        this.logger.info(`[SessionService] Operation: unrevertSession(${this._activeSession.id})`);
+        const updated = await this.openCodeService.unrevertSession(this._activeProject.id, this._activeSession.id);
+        this.notifySessionChanged(updated);
+    }
+
+    async compactSession(): Promise<void> {
+        if (!this._activeSession || !this._activeProject) { return; }
+        this.logger.info(`[SessionService] Operation: compactSession(${this._activeSession.id})`);
+        await this.openCodeService.compactSession(this._activeProject.id, this._activeSession.id);
+        // session.compacted SSE will refresh the message list
     }
 
     /**

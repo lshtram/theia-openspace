@@ -40,18 +40,48 @@ interface SessionsViewProps {
 const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageService }) => {
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [isLoading, setIsLoading] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [showArchived, setShowArchived] = React.useState(false);
+    const [hasMore, setHasMore] = React.useState(false);
+    const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const load = React.useCallback(async () => {
         setIsLoading(true);
         try {
             const s = await sessionService.getSessions();
             setSessions(s);
+            setHasMore(sessionService.hasMoreSessions ?? false);
         } catch (e) {
             messageService.error(`Failed to load sessions: ${e}`);
         } finally {
             setIsLoading(false);
         }
     }, [sessionService, messageService]);
+
+    const handleSearch = React.useCallback((query: string) => {
+        if (searchTimerRef.current) { clearTimeout(searchTimerRef.current); }
+        searchTimerRef.current = setTimeout(async () => {
+            setIsLoading(true);
+            try {
+                if (query.trim()) {
+                    const results = await sessionService.searchSessions(query.trim());
+                    setSessions(results);
+                    setHasMore(false);
+                } else {
+                    await load();
+                }
+            } catch (e) {
+                messageService.error(`Search failed: ${e}`);
+            } finally {
+                setIsLoading(false);
+            }
+        }, 250);
+    }, [sessionService, messageService, load]);
+
+    const handleLoadMore = async () => {
+        await sessionService.loadMoreSessions();
+        await load();
+    };
 
     React.useEffect(() => {
         load();
@@ -97,6 +127,17 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                 <span className="sessions-widget-title">SESSIONS</span>
                 <button
                     type="button"
+                    className="sessions-icon-btn show-archived-toggle"
+                    data-testid="show-archived-toggle"
+                    onClick={() => setShowArchived(v => !v)}
+                    title={showArchived ? 'Hide archived' : 'Show archived'}
+                    aria-label={showArchived ? 'Hide archived sessions' : 'Show archived sessions'}
+                    aria-pressed={showArchived}
+                >
+                    {showArchived ? '●' : '○'}
+                </button>
+                <button
+                    type="button"
                     className="sessions-widget-new-btn sessions-icon-btn"
                     onClick={handleNew}
                     title="New session"
@@ -106,6 +147,20 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
                 </button>
+            </div>
+            <div className="sessions-widget-search">
+                <input
+                    type="text"
+                    className="sessions-search-input"
+                    data-testid="session-search"
+                    placeholder="Search sessions…"
+                    value={searchQuery}
+                    onChange={e => {
+                        setSearchQuery(e.target.value);
+                        handleSearch(e.target.value);
+                    }}
+                    aria-label="Search sessions"
+                />
             </div>
             {isLoading && (
                 <div className="sessions-widget-loading">
@@ -118,7 +173,10 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                 <div className="sessions-widget-empty">No sessions yet</div>
             )}
             <div className="sessions-widget-list">
-                {sessions.map(session => (
+                {sessions
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .filter(s => showArchived ? true : !(s.time as any)?.archived)
+                    .map(session => (
                     <div
                         key={session.id}
                         className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}`}
@@ -148,6 +206,16 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     </div>
                 ))}
             </div>
+            {hasMore && !searchQuery && (
+                <button
+                    type="button"
+                    className="load-more-sessions"
+                    data-testid="load-more-sessions"
+                    onClick={handleLoadMore}
+                >
+                    Load more sessions
+                </button>
+            )}
         </div>
     );
 };

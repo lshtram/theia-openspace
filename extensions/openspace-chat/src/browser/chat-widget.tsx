@@ -160,7 +160,7 @@ export interface ShellOutput {
 interface ChatHeaderBarProps {
     showSessionList: boolean;
     sessions: Session[];
-    activeSession: Session | undefined;
+     activeSession: Session | undefined;
     sessionService: SessionService;
     isLoadingSessions: boolean;
     sessionLoadError: string | undefined;
@@ -170,6 +170,9 @@ interface ChatHeaderBarProps {
     onSessionSwitch: (sessionId: string) => void;
     onNewSession: () => void;
     onDeleteSession: () => void;
+    onForkSession: () => void;
+    onRevertSession: () => void;
+    onCompactSession: () => void;
     onToggleDropdown: () => void;
     enabledModels: string[];
     onManageModels: () => void;
@@ -188,6 +191,9 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onSessionSwitch,
     onNewSession,
     onDeleteSession,
+    onForkSession,
+    onRevertSession,
+    onCompactSession,
     onToggleDropdown,
     enabledModels,
     onManageModels
@@ -332,6 +338,39 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                 </button>
                 {showMenu && (
                     <div className="chat-header-menu" role="menu">
+                        {activeSession && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item fork-session-button"
+                                data-testid="fork-session-button"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onForkSession(); }}
+                            >
+                                Fork session
+                            </button>
+                        )}
+                        {activeSession && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item revert-session-button"
+                                data-testid="revert-session-button"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onRevertSession(); }}
+                            >
+                                {(activeSession as unknown as { revert?: unknown }).revert ? 'Unrevert session' : 'Revert session'}
+                            </button>
+                        )}
+                        {activeSession && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item compact-session-button"
+                                data-testid="compact-session-button"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onCompactSession(); }}
+                            >
+                                Compact session
+                            </button>
+                        )}
                         {activeSession && (
                             <button
                                 type="button"
@@ -680,6 +719,36 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         }
     }, [sessionService, loadSessions, messageService]);
 
+    const handleForkSession = React.useCallback(async () => {
+        try {
+            await sessionService.forkSession();
+        } catch (error) {
+            messageService.error(`Failed to fork session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleRevertSession = React.useCallback(async () => {
+        try {
+            const active = sessionService.activeSession;
+            if (!active) { return; }
+            if ((active as unknown as { revert?: unknown }).revert) {
+                await sessionService.unrevertSession();
+            } else {
+                await sessionService.revertSession();
+            }
+        } catch (error) {
+            messageService.error(`Failed to revert session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleCompactSession = React.useCallback(async () => {
+        try {
+            await sessionService.compactSession();
+        } catch (error) {
+            messageService.error(`Failed to compact session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
     // Handle permission reply (inline permission buttons)
     const handleReplyPermission = React.useCallback(async (requestId: string, reply: 'once' | 'always' | 'reject') => {
         try {
@@ -879,6 +948,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     onSessionSwitch={handleSessionSwitch}
                     onNewSession={handleNewSession}
                     onDeleteSession={handleDeleteSession}
+                    onForkSession={handleForkSession}
+                    onRevertSession={handleRevertSession}
+                    onCompactSession={handleCompactSession}
                     onToggleDropdown={handleToggleDropdown}
                     enabledModels={enabledModels}
                     onManageModels={handleManageModels}

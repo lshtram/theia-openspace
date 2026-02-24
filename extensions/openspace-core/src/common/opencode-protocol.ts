@@ -201,7 +201,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     connectToProject(directory: string): Promise<void>;
 
     // Session methods
-     getSessions(projectId: string): Promise<Session[]>;
+     getSessions(projectId: string, options?: { search?: string; limit?: number; start?: string }): Promise<Session[]>;
     getSession(projectId: string, sessionId: string): Promise<Session>;
     /** Bulk-fetch current status for all sessions. Hydrates status map on reconnect. */
     getSessionStatuses(projectId: string): Promise<Array<{ sessionId: string; status: SDKTypes.SessionStatus }>>;

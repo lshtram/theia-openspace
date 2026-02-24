@@ -298,9 +298,13 @@ export class OpenCodeProxy implements OpenCodeService {
     // Session Methods
     // =========================================================================
 
-    async getSessions(_projectId: string): Promise<Session[]> {
+    async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: string }): Promise<Session[]> {
         // OpenCode API: GET /session - list all sessions
-        return this.get<Session[]>(`/session`);
+        const query: Record<string, string | undefined> = {};
+        if (options?.search) { query['search'] = options.search; }
+        if (options?.limit !== undefined) { query['limit'] = String(options.limit); }
+        if (options?.start) { query['start'] = options.start; }
+        return this.get<Session[]>('/session', query);
     }
 
     async getSession(_projectId: string, sessionId: string): Promise<Session> {
