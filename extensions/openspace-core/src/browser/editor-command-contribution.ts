@@ -419,6 +419,14 @@ export class EditorCommandContribution implements CommandContribution {
             // Get editor ID
             const editorId = editorWidget.id;
 
+            if (args.highlight) {
+                const targetLine = args.line && args.line > 0 ? args.line : 1;
+                await this.highlightCode({
+                    path: args.path,
+                    ranges: [{ startLine: targetLine, endLine: targetLine }],
+                });
+            }
+
             return { success: true, editorId };
         } catch (error) {
             this.logger.error('[EditorCommand] Error opening editor:', error);

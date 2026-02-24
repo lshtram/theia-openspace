@@ -1,45 +1,45 @@
 // src/fsm/session-fsm.spec.ts
 import { describe, it } from 'mocha';
-import * as assert from 'assert';
+import { expect } from 'chai';
 import { SessionFsm } from './session-fsm';
 import { VoiceFsmError } from './types';
 
 describe('SessionFsm', () => {
   it('starts inactive', () => {
-    assert.strictEqual(new SessionFsm().state, 'inactive');
+    expect(new SessionFsm().state).to.equal('inactive');
   });
   it('inactive → active on enable()', () => {
     const fsm = new SessionFsm();
     fsm.enable();
-    assert.strictEqual(fsm.state, 'active');
+    expect(fsm.state).to.equal('active');
   });
   it('enable() is idempotent when already active', () => {
     const fsm = new SessionFsm();
     fsm.enable();
-    assert.doesNotThrow(() => fsm.enable()); // no throw on double-enable
-    assert.strictEqual(fsm.state, 'active');
+    expect(() => fsm.enable()).to.not.throw(); // no throw on double-enable
+    expect(fsm.state).to.equal('active');
   });
   it('active → suspended on pushToTalkStart()', () => {
     const fsm = new SessionFsm();
     fsm.enable();
     fsm.pushToTalkStart();
-    assert.strictEqual(fsm.state, 'suspended');
+    expect(fsm.state).to.equal('suspended');
   });
   it('suspended → active on pushToTalkEnd()', () => {
     const fsm = new SessionFsm();
     fsm.enable();
     fsm.pushToTalkStart();
     fsm.pushToTalkEnd();
-    assert.strictEqual(fsm.state, 'active');
+    expect(fsm.state).to.equal('active');
   });
   it('throws VoiceFsmError on invalid transition', () => {
     const fsm = new SessionFsm();
-    assert.throws(() => fsm.pushToTalkStart(), VoiceFsmError);
+    expect(() => fsm.pushToTalkStart()).to.throw(VoiceFsmError);
   });
   it('updatePolicy merges partial fields', () => {
     const fsm = new SessionFsm();
     fsm.updatePolicy({ voice: 'bm_george' });
-    assert.strictEqual(fsm.policy.voice, 'bm_george');
-    assert.strictEqual(fsm.policy.speed, 1.0); // unchanged default
+    expect(fsm.policy.voice).to.equal('bm_george');
+    expect(fsm.policy.speed).to.equal(1.0); // unchanged default
   });
 });

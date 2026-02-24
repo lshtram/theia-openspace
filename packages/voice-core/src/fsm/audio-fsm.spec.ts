@@ -1,30 +1,30 @@
 // src/fsm/audio-fsm.spec.ts
 import { describe, it } from 'mocha';
-import * as assert from 'assert';
+import { expect } from 'chai';
 import { AudioFsm } from './audio-fsm';
 import { VoiceFsmError } from './types';
 
 describe('AudioFsm', () => {
-  it('starts idle', () => assert.strictEqual(new AudioFsm().state, 'idle'));
+  it('starts idle', () => expect(new AudioFsm().state).to.equal('idle'));
   it('idle → listening → processing → idle', () => {
     const fsm = new AudioFsm();
     fsm.startCapture();
-    assert.strictEqual(fsm.state, 'listening');
+    expect(fsm.state).to.equal('listening');
     fsm.stopCapture();
-    assert.strictEqual(fsm.state, 'processing');
+    expect(fsm.state).to.equal('processing');
     fsm.transcriptReady();
-    assert.strictEqual(fsm.state, 'idle');
+    expect(fsm.state).to.equal('idle');
   });
   it('processing → error → idle via reset()', () => {
     const fsm = new AudioFsm();
     fsm.startCapture();
     fsm.stopCapture();
     fsm.error();
-    assert.strictEqual(fsm.state, 'error');
+    expect(fsm.state).to.equal('error');
     fsm.reset();
-    assert.strictEqual(fsm.state, 'idle');
+    expect(fsm.state).to.equal('idle');
   });
   it('throws VoiceFsmError on invalid transition', () => {
-    assert.throws(() => new AudioFsm().stopCapture(), VoiceFsmError);
+    expect(() => new AudioFsm().stopCapture()).to.throw(VoiceFsmError);
   });
 });

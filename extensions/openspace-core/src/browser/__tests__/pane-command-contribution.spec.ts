@@ -76,7 +76,7 @@ class MockPaneService implements PaneService {
     getAgentPanes(): any[] { return []; }
 }
 
-describe('PaneCommandContribution', () => {
+describe('PaneCommandContribution (REQ-PANE-001..008)', () => {
     let container: Container;
     let commandRegistry: CommandRegistry;
     let paneService: MockPaneService;

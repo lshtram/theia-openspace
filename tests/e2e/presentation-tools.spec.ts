@@ -25,6 +25,7 @@ import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
 import { mcpCall, parseSseResponse, MCP_URL } from './helpers/mcp';
+import { BASE_URL, waitForTheiaReady } from './helpers/theia';
 
 /** Assert that an MCP response is well-formed (has result.content array). */
 function assertWellFormed(response: any, toolName: string): void {
@@ -60,7 +61,7 @@ function assertSuccessOrBridgeDisconnected(response: any, toolName: string): voi
 // root restriction doesn't block file creation.  We point the path tools at
 // the actual workspace root to stay within the allowed root.
 // ---------------------------------------------------------------------------
-const WORKSPACE_ROOT = '/Users/Shared/dev/theia-openspace';
+const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..');
 const TEST_DECK_PATH = path.join(WORKSPACE_ROOT, '_e2e-test-presentation.deck.md');
 
 test.describe('Presentation MCP Tools', () => {
@@ -74,8 +75,8 @@ test.describe('Presentation MCP Tools', () => {
     // executeViaBridge (all presentation tools, including create/read/list/update_slide).
     test.beforeAll(async ({ browser }) => {
         theiaBridgePage = await browser.newPage();
-        await theiaBridgePage.goto('http://localhost:3000');
-        await theiaBridgePage.waitForSelector('#theia-app-shell', { timeout: 30000 });
+        await theiaBridgePage.goto(BASE_URL);
+        await waitForTheiaReady(theiaBridgePage);
         // theiaBridgePage is intentionally kept open (not closed here).
         // afterAll closes it so the bridge disconnects cleanly at suite end.
     });

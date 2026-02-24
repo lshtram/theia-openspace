@@ -66,8 +66,61 @@ export interface PaneInfo {
     title: string;
     tabs: TabInfo[];
     activeTab?: string;
+    x?: number;      // percentage
+    y?: number;      // percentage
     width?: number;  // percentage
     height?: number; // percentage
+}
+
+interface PersistedPaneStructure {
+    paneId: string;
+    area: 'main' | 'left' | 'right' | 'bottom';
+    title: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    activeTab?: string;
+}
+
+interface PersistedLayoutStructure {
+    panes: PersistedPaneStructure[];
+    activePane?: string;
+    persistedAt: string;
+}
+
+interface PersistedPaneContent {
+    paneId: string;
+    activeTab?: string;
+    tabs: TabInfo[];
+}
+
+interface PersistedLayoutContent {
+    panes: PersistedPaneContent[];
+    persistedAt: string;
+}
+
+interface RestorePersistedLayoutOptions {
+    restoreContent?: boolean;
+}
+
+interface ReorderTabArgs {
+    paneId: string;
+    tabId: string;
+    targetIndex: number;
+}
+
+interface MoveTabArgs {
+    sourcePaneId: string;
+    targetPaneId: string;
+    tabId: string;
+    targetIndex?: number;
+}
+
+interface NamedLayoutEntry {
+    structure: PersistedLayoutStructure;
+    content: PersistedLayoutContent;
+    savedAt: string;
 }
 
 /**
@@ -162,6 +215,9 @@ export interface PaneService extends Disposable {
  */
 @injectable()
 export class PaneServiceImpl implements PaneService {
+    private static readonly LAYOUT_STRUCTURE_KEY = 'openspace.pane.layout.structure';
+    private static readonly LAYOUT_CONTENT_KEY = 'openspace.pane.layout.content';
+    private static readonly NAMED_LAYOUTS_KEY = 'openspace.pane.namedLayouts';
 
     @inject(ApplicationShell)
     private readonly shell!: ApplicationShell;
@@ -249,6 +305,20 @@ export class PaneServiceImpl implements PaneService {
                     uri = URI.fromFilePath(path.join(workspaceRoot, args.contentId));
                 }
 
+                const uriString = uri.toString();
+                const canonicalEditorId = `code-editor-opener:${uriString}:1`;
+                const legacyEditorId = `code-editor-opener:${uriString}`;
+                const existingEditor = this.shell.getWidgetById(canonicalEditorId)
+                    ?? this.shell.getWidgetById(legacyEditorId);
+
+                if (existingEditor) {
+                    await this.shell.activateWidget(existingEditor.id);
+                    await this.shell.revealWidget(existingEditor.id);
+                    this.trackAgentPane(existingEditor.id, false);
+                    this.emitLayoutChange();
+                    return { success: true, paneId: existingEditor.id };
+                }
+
                 // Resolve optional source pane for targeted splitting
                 const refWidget = args.sourcePaneId
                     ? this.shell.getWidgetById(args.sourcePaneId) ?? undefined
@@ -330,6 +400,16 @@ export class PaneServiceImpl implements PaneService {
             if (!widget) {
                 this.logger.warn(`[PaneService] Pane not found: ${args.paneId}`);
                 return { success: false };
+            }
+
+            if (this.isWidgetDirty(widget)) {
+                const confirmed = typeof window?.confirm === 'function'
+                    ? window.confirm('This tab has unsaved changes. Close without saving?')
+                    : true;
+                if (!confirmed) {
+                    this.logger.info(`[PaneService] Close cancelled for dirty pane: ${args.paneId}`);
+                    return { success: false };
+                }
             }
 
             await this.shell.closeWidget(widget.id);
@@ -453,6 +533,155 @@ export class PaneServiceImpl implements PaneService {
         return Array.from(this.agentPanes.values());
     }
 
+    async restorePersistedLayout(options: RestorePersistedLayoutOptions = {}): Promise<{ success: boolean; restoredStructure: boolean; restoredContent: boolean }> {
+        const restoreContent = options.restoreContent === true;
+
+        try {
+            const structureRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_STRUCTURE_KEY);
+            if (!structureRaw) {
+                return { success: true, restoredStructure: false, restoredContent: false };
+            }
+
+            const structure = JSON.parse(structureRaw) as PersistedLayoutStructure;
+            await this.applyPersistedLayoutStructure(structure);
+
+            if (!restoreContent) {
+                return { success: true, restoredStructure: true, restoredContent: false };
+            }
+
+            const contentRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_CONTENT_KEY);
+            if (!contentRaw) {
+                this.logger.warn('[PaneService] No persisted pane content found; preserving restored layout with placeholders');
+                return { success: true, restoredStructure: true, restoredContent: false };
+            }
+
+            const content = JSON.parse(contentRaw) as PersistedLayoutContent;
+            await this.restorePersistedContent(content);
+            return { success: true, restoredStructure: true, restoredContent: true };
+        } catch (error) {
+            this.logger.error('[PaneService] Failed to restore persisted pane layout:', error);
+            return { success: false, restoredStructure: false, restoredContent: false };
+        }
+    }
+
+    async saveNamedLayout(name: string): Promise<{ success: boolean }> {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            return { success: false };
+        }
+
+        await this.emitLayoutChange();
+
+        let structureRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_STRUCTURE_KEY);
+        let contentRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_CONTENT_KEY);
+
+        if (!structureRaw || !contentRaw) {
+            const panes = await this.listPanes();
+            const now = new Date().toISOString();
+            const snapshot: PaneStateSnapshot = {
+                panes,
+                activePane: this.shell.activeWidget?.id,
+                timestamp: now,
+            };
+            this.persistLayoutSnapshot(snapshot);
+            structureRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_STRUCTURE_KEY);
+            contentRaw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_CONTENT_KEY);
+        }
+
+        if (!structureRaw || !contentRaw) {
+            return { success: false };
+        }
+
+        try {
+            const layouts = this.loadNamedLayouts();
+            layouts[trimmed] = {
+                structure: JSON.parse(structureRaw) as PersistedLayoutStructure,
+                content: JSON.parse(contentRaw) as PersistedLayoutContent,
+                savedAt: new Date().toISOString(),
+            };
+            window.localStorage.setItem(PaneServiceImpl.NAMED_LAYOUTS_KEY, JSON.stringify(layouts));
+            return { success: true };
+        } catch (error) {
+            this.logger.error(`[PaneService] Failed to save named layout '${trimmed}':`, error);
+            return { success: false };
+        }
+    }
+
+    listNamedLayouts(): string[] {
+        return Object.keys(this.loadNamedLayouts()).sort();
+    }
+
+    async restoreNamedLayout(name: string, options: RestorePersistedLayoutOptions = {}): Promise<{ success: boolean; restoredStructure?: boolean; restoredContent?: boolean }> {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            return { success: false };
+        }
+
+        const layouts = this.loadNamedLayouts();
+        const selected = layouts[trimmed];
+        if (!selected) {
+            return { success: false };
+        }
+
+        window.localStorage.setItem(PaneServiceImpl.LAYOUT_STRUCTURE_KEY, JSON.stringify(selected.structure));
+        window.localStorage.setItem(PaneServiceImpl.LAYOUT_CONTENT_KEY, JSON.stringify(selected.content));
+        return this.restorePersistedLayout(options);
+    }
+
+    async reorderTab(args: ReorderTabArgs): Promise<{ success: boolean }> {
+        const content = this.readPersistedLayoutContent();
+        if (!content) {
+            return { success: false };
+        }
+
+        const pane = content.panes.find(entry => entry.paneId === args.paneId);
+        if (!pane) {
+            return { success: false };
+        }
+
+        const fromIndex = pane.tabs.findIndex(tab => tab.id === args.tabId);
+        if (fromIndex < 0) {
+            return { success: false };
+        }
+
+        const boundedIndex = Math.max(0, Math.min(args.targetIndex, pane.tabs.length - 1));
+        const [tab] = pane.tabs.splice(fromIndex, 1);
+        pane.tabs.splice(boundedIndex, 0, tab);
+        this.writePersistedLayoutContent(content);
+        return { success: true };
+    }
+
+    async moveTab(args: MoveTabArgs): Promise<{ success: boolean }> {
+        const content = this.readPersistedLayoutContent();
+        if (!content) {
+            return { success: false };
+        }
+
+        const source = content.panes.find(entry => entry.paneId === args.sourcePaneId);
+        const target = content.panes.find(entry => entry.paneId === args.targetPaneId);
+        if (!source || !target) {
+            return { success: false };
+        }
+
+        const fromIndex = source.tabs.findIndex(tab => tab.id === args.tabId);
+        if (fromIndex < 0) {
+            return { success: false };
+        }
+
+        const [tab] = source.tabs.splice(fromIndex, 1);
+        const targetIndex = args.targetIndex ?? target.tabs.length;
+        const boundedIndex = Math.max(0, Math.min(targetIndex, target.tabs.length));
+        target.tabs.splice(boundedIndex, 0, tab);
+
+        if (source.activeTab === args.tabId) {
+            source.activeTab = source.tabs[0]?.id;
+        }
+        target.activeTab = tab.id;
+
+        this.writePersistedLayoutContent(content);
+        return { success: true };
+    }
+
     /**
      * Dispose the service.
      * T2-8: Clean up all event subscriptions
@@ -527,12 +756,36 @@ export class PaneServiceImpl implements PaneService {
         const activeWidget = this.shell.activeWidget;
         const isActive = activeWidget?.id === widget.id;
 
+        const geometry = this.extractGeometry(widget);
+
         return {
             id: widget.id,
             area,
             title,
             tabs,
             activeTab: isActive ? tabs[0]?.id : undefined,
+            ...geometry,
+        };
+    }
+
+    private extractGeometry(widget: Widget): Partial<PaneInfo> {
+        const node = (widget as unknown as { node?: { getBoundingClientRect?: () => DOMRect } }).node;
+        const rect = node?.getBoundingClientRect?.();
+        if (!rect) {
+            return {};
+        }
+
+        const viewportWidth = window?.innerWidth || 0;
+        const viewportHeight = window?.innerHeight || 0;
+        if (viewportWidth <= 0 || viewportHeight <= 0) {
+            return {};
+        }
+
+        return {
+            x: (rect.x / viewportWidth) * 100,
+            y: (rect.y / viewportHeight) * 100,
+            width: (rect.width / viewportWidth) * 100,
+            height: (rect.height / viewportHeight) * 100,
         };
     }
 
@@ -558,6 +811,11 @@ export class PaneServiceImpl implements PaneService {
         return 'other';
     }
 
+    private isWidgetDirty(widget: Widget): boolean {
+        const candidate = widget as Widget & { isDirty?: boolean; saveable?: { dirty?: boolean } };
+        return candidate.isDirty === true || candidate.saveable?.dirty === true;
+    }
+
     /**
      * Emit a layout change event.
      */
@@ -571,6 +829,105 @@ export class PaneServiceImpl implements PaneService {
             timestamp: new Date().toISOString(),
         };
 
+        this.persistLayoutSnapshot(snapshot);
+
         this._onPaneLayoutChanged.fire(snapshot);
+    }
+
+    private persistLayoutSnapshot(snapshot: PaneStateSnapshot): void {
+        try {
+            const structure: PersistedLayoutStructure = {
+                panes: snapshot.panes.map(pane => ({
+                    paneId: pane.id,
+                    area: pane.area,
+                    title: pane.title,
+                    x: pane.x,
+                    y: pane.y,
+                    width: pane.width,
+                    height: pane.height,
+                    activeTab: pane.activeTab,
+                })),
+                activePane: snapshot.activePane,
+                persistedAt: snapshot.timestamp,
+            };
+
+            const content: PersistedLayoutContent = {
+                panes: snapshot.panes.map(pane => ({
+                    paneId: pane.id,
+                    activeTab: pane.activeTab,
+                    tabs: pane.tabs,
+                })),
+                persistedAt: snapshot.timestamp,
+            };
+
+            window.localStorage.setItem(PaneServiceImpl.LAYOUT_STRUCTURE_KEY, JSON.stringify(structure));
+            window.localStorage.setItem(PaneServiceImpl.LAYOUT_CONTENT_KEY, JSON.stringify(content));
+        } catch (error) {
+            this.logger.warn('[PaneService] Failed to persist pane layout snapshot:', error);
+        }
+    }
+
+    private async applyPersistedLayoutStructure(structure: PersistedLayoutStructure): Promise<void> {
+        if (!structure.activePane) {
+            return;
+        }
+
+        const activeWidget = this.shell.getWidgetById(structure.activePane);
+        if (!activeWidget) {
+            this.logger.warn(`[PaneService] Restored active pane '${structure.activePane}' not found; preserving current layout`);
+            return;
+        }
+
+        await this.shell.activateWidget(activeWidget.id);
+        await this.shell.revealWidget(activeWidget.id);
+    }
+
+    private async restorePersistedContent(content: PersistedLayoutContent): Promise<void> {
+        for (const pane of content.panes) {
+            for (const tab of pane.tabs) {
+                if (tab.type !== 'editor' || !tab.uri) {
+                    continue;
+                }
+
+                try {
+                    await this.openContent({ type: 'editor', contentId: tab.uri });
+                } catch (error) {
+                    this.logger.warn(`[PaneService] Unable to restore tab '${tab.title}' (${tab.uri}); preserving pane placeholder`, error);
+                }
+            }
+        }
+    }
+
+    private loadNamedLayouts(): Record<string, NamedLayoutEntry> {
+        const raw = window.localStorage.getItem(PaneServiceImpl.NAMED_LAYOUTS_KEY);
+        if (!raw) {
+            return {};
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as Record<string, NamedLayoutEntry>;
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+
+    private readPersistedLayoutContent(): PersistedLayoutContent | undefined {
+        const raw = window.localStorage.getItem(PaneServiceImpl.LAYOUT_CONTENT_KEY);
+        if (!raw) {
+            return undefined;
+        }
+        try {
+            return JSON.parse(raw) as PersistedLayoutContent;
+        } catch {
+            return undefined;
+        }
+    }
+
+    private writePersistedLayoutContent(content: PersistedLayoutContent): void {
+        window.localStorage.setItem(PaneServiceImpl.LAYOUT_CONTENT_KEY, JSON.stringify({
+            ...content,
+            persistedAt: new Date().toISOString(),
+        }));
     }
 }

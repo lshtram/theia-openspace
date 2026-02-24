@@ -19,6 +19,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { mcpCall } from './helpers/mcp';
+import { BASE_URL, waitForTheiaReady } from './helpers/theia';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ function parseResult(response: any): any {
 }
 
 /** Workspace root — whiteboards must use absolute paths. */
-const WORKSPACE_ROOT = '/Users/Shared/dev/theia-openspace';
+const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Track all whiteboard files created during the run so afterAll can delete them. */
 const createdWhiteboardFiles: string[] = [];
@@ -445,8 +446,8 @@ test.describe('Whiteboard MCP — diagram types', () => {
             });
 
             // 0. Navigate to app so the bridge is connected
-            await page.goto('/');
-            await page.waitForLoadState('networkidle');
+            await page.goto(BASE_URL);
+            await waitForTheiaReady(page);
 
             // 1. Create a fresh whiteboard file
             const wbPath = await createWhiteboard(`test-${diagramType}`);
@@ -514,8 +515,8 @@ test.describe('Whiteboard MCP — themes', () => {
     for (const [themeName, { nodeColor, edgeColor }] of Object.entries(THEME_CONFIGS)) {
         test(`theme: ${themeName}`, async ({ page }) => {
             // 0. Navigate to app so the bridge is connected
-            await page.goto('/');
-            await page.waitForLoadState('networkidle');
+            await page.goto(BASE_URL);
+            await waitForTheiaReady(page);
 
             const wbPath = await createWhiteboard(`test-theme-${themeName}`);
 

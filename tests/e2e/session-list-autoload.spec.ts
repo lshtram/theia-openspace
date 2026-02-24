@@ -10,42 +10,9 @@
  * Requirements: docs/requirements/REQ-SESSION-LIST-AUTOLOAD.md
  */
 
-import { test, expect, Page } from '@playwright/test';
-
-/**
- * Helper: Wait for Theia to fully load
- */
-async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
-    // Theia may show a "Do you trust the authors?" dialog on first open.
-    // Dismiss it by clicking "Yes, I trust the authors" so UI interactions proceed.
-    try {
-        const trustDialog = page.locator('.workspace-trust-dialog');
-        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
-        if (isVisible) {
-            await page.locator('.workspace-trust-dialog .theia-button.main').click();
-            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
-        }
-    } catch {
-        // Dialog not present or already dismissed — safe to continue
-    }
-}
-
-async function waitForTheiaLoad(page: Page) {
-  console.log('Waiting for Theia to load...');
-  
-  // Wait for network idle (JavaScript loaded)
-  await page.waitForLoadState('networkidle');
-  console.log('✓ Network idle - JavaScript loaded');
-  
-  // Wait for Theia app shell to be present
-  await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-  console.log('✓ Found Theia element: #theia-app-shell');
-  
-  // Wait for Theia to be attached using proper selector waiting
-  await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
-  console.log('✓ Theia initialization wait complete');
-  await dismissWorkspaceTrustDialog(page);
-}
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { BASE_URL, openChatWidget, waitForTheiaReady } from './helpers/theia';
 
 /**
  * Helper: Setup mock backend with sessions
@@ -95,32 +62,6 @@ async function setupBackendWithSessions(page: Page, sessionCount: number = 3) {
   });
 }
 
-/**
- * Helper: Open Chat Widget
- * (Matches pattern from existing session-management.spec.ts)
- */
-async function openChatWidget(page: Page) {
-  // Look for chat widget in sidebar or tab bar
-  const chatTab = page.locator('.theia-tab-icon-label:has-text("Chat")').first();
-  const chatSidebarIcon = page.locator('[title="Chat"]').first();
-  
-  // Try clicking existing tab first
-  if (await chatTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-    console.log('✓ Chat tab found, clicking...');
-    await chatTab.click();
-  } else if (await chatSidebarIcon.isVisible({ timeout: 2000 }).catch(() => false)) {
-    console.log('✓ Chat sidebar icon found, clicking...');
-    await chatSidebarIcon.click();
-  } else {
-    // Widget might already be open
-    console.log('ℹ Chat widget may already be open');
-  }
-  
-  // Wait for chat widget to appear
-  await page.waitForSelector('.openspace-chat-widget', { timeout: 5000 });
-  console.log('✓ Chat widget opened');
-}
-
 // ============================================================================
 // TESTS 1-3: REMOVED - E2E INFRASTRUCTURE GAP
 // ============================================================================
@@ -164,8 +105,8 @@ test.skip('Test 4: Empty state shows helpful message when no sessions exist', as
   await setupBackendWithSessions(page, 0);
   
   // Action: Navigate to Theia
-  await page.goto('/');
-  await waitForTheiaLoad(page);
+  await page.goto(BASE_URL);
+  await waitForTheiaReady(page);
   
   // Action: Open Chat Widget
   await openChatWidget(page);
@@ -226,8 +167,8 @@ test('Test 6: Chat widget renders without JS errors on open', async ({ page }) =
   page.on('pageerror', err => jsErrors.push(err.message));
 
   // Navigate to Theia
-  await page.goto('/');
-  await waitForTheiaLoad(page);
+  await page.goto(BASE_URL);
+  await waitForTheiaReady(page);
 
   // Open chat widget immediately (before session data may have loaded)
   await openChatWidget(page);
@@ -263,8 +204,8 @@ test('Test 7: Session list renders after project initializes (race condition reg
   console.log('\n=== Test 7: Race condition regression ===');
 
   // Navigate and wait for FULL Theia initialization
-  await page.goto('/');
-  await waitForTheiaLoad(page);
+  await page.goto(BASE_URL);
+  await waitForTheiaReady(page);
 
   // Extra settle time to allow project/session auto-loading to complete
   // This is the regression test for the race condition in session-service.ts

@@ -12,57 +12,11 @@
  */
 
 import { test, expect, Page } from '@playwright/test';
-
-const BASE_URL = 'http://localhost:3000';
+import { BASE_URL, openChatWidget, waitForTheiaReady } from './helpers/theia';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Helper: Wait for Theia shell to be fully initialized.
- * Mirrors the gold-standard pattern from permission-dialog.spec.ts.
- */
-async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
-    // Theia may show a "Do you trust the authors?" dialog on first open.
-    // Dismiss it by clicking "Yes, I trust the authors" so UI interactions proceed.
-    try {
-        const trustDialog = page.locator('.workspace-trust-dialog');
-        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
-        if (isVisible) {
-            await page.locator('.workspace-trust-dialog .theia-button.main').click();
-            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
-        }
-    } catch {
-        // Dialog not present or already dismissed — safe to continue
-    }
-}
-
-async function waitForTheiaReady(page: Page): Promise<void> {
-    await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
-    await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
-    await dismissWorkspaceTrustDialog(page);
-}
-
-/**
- * Helper: Open the chat widget.
- */
-async function openChatWidget(page: Page): Promise<void> {
-    // Check visibility (not just DOM presence) — the widget may be hidden in a non-active panel
-    const alreadyVisible = await page.locator('.openspace-chat-widget').isVisible().catch(() => false);
-    if (!alreadyVisible) {
-        const chatTab = page.locator('.theia-tab-icon-label:has-text("Chat")').first();
-        const chatSidebarIcon = page.locator('[title="Chat"]').first();
-
-        if (await chatTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await chatTab.click();
-        } else if (await chatSidebarIcon.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await chatSidebarIcon.click();
-        }
-    }
-    await page.waitForSelector('.openspace-chat-widget', { state: 'visible', timeout: 5000 });
-}
 
 /**
  * Helper: Assert that window.__openspace_test__ is present with the expected hooks.

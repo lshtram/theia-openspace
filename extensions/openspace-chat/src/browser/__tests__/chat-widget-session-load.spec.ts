@@ -26,20 +26,11 @@
 
 import { expect } from 'chai';
 import * as sinon from 'sinon';
-import * as React from 'react';
-import { createRoot } from 'react-dom/client';
+import * as React from '@theia/core/shared/react';
+import { createRoot } from '@theia/core/shared/react-dom/client';
 import type { Root } from 'react-dom/client';
-import { act } from 'react';
-import { createRequire } from 'node:module';
-
-// Load compiled ChatComponent — avoids tsx/decorator issues in ts-node
-// createRequire(import.meta.url) works in both ESM (runtime) and CJS (ts-node) contexts.
-// ts-ignore: import.meta.url is valid at runtime (mocha loads this as ESM), but TS
-// rejects it under module:commonjs. The cast suppresses the compile error.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore TS1343 — file runs as ESM at test time despite module:commonjs in tsconfig
-const _require = createRequire(import.meta.url);
-const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+import { act } from '@theia/core/shared/react';
+const { ChatComponent } = require('openspace-chat/lib/browser/chat-widget') as {
     ChatComponent: React.FC<any>
 };
 

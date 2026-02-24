@@ -7,19 +7,8 @@
  * Contract: TASK-E2E-REWRITE – Deliverable 1
  */
 
-import { test, expect, Page } from '@playwright/test';
-
-const BASE_URL = 'http://localhost:3000';
-
-/**
- * Helper: Wait for Theia shell to be fully initialized.
- * Mirrors the gold-standard pattern from permission-dialog.spec.ts.
- */
-async function waitForTheiaReady(page: Page): Promise<void> {
-    await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
-    await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await page.locator('.theia-ApplicationShell, #theia-app-shell').first().waitFor({ state: 'attached', timeout: 5000 });
-}
+import { test, expect } from '@playwright/test';
+import { BASE_URL, waitForTheiaReady } from './helpers/theia';
 
 test.describe('App Load Smoke Tests', () => {
 

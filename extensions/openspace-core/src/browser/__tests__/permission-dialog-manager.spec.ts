@@ -15,10 +15,12 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { expect } from 'chai';
+import { expect } from '../../test-utils/assertions';
 import * as sinon from 'sinon';
 import { PermissionDialogManager } from '../permission-dialog-manager';
 import { PermissionNotification, OpenCodeService } from '../../common/opencode-protocol';
+import { buildPermissionNotification } from '../../test-utils/fixture-builders';
+import { createFakeClock, FakeClockHandle } from '../../test-utils/fake-clock';
 
 /**
  * Unit tests for PermissionDialogManager.
@@ -34,21 +36,10 @@ import { PermissionNotification, OpenCodeService } from '../../common/opencode-p
 describe('PermissionDialogManager', () => {
     let manager: PermissionDialogManager;
     let mockOpenCodeService: sinon.SinonStubbedInstance<OpenCodeService>;
-    let clock: sinon.SinonFakeTimers;
+    let fakeClock: FakeClockHandle;
 
-    const createMockPermissionEvent = (overrides?: Partial<PermissionNotification>): PermissionNotification => ({
-        type: 'requested',
-        sessionId: 'session-1',
-        projectId: 'proj-1',
-        permissionId: 'perm-123',
-        permission: {
-            id: 'perm-123',
-            type: 'file_write',
-            message: 'Agent oracle_a3f7 wants to write to /workspace/test.ts',
-            status: 'pending'
-        },
-        ...overrides
-    });
+    const createMockPermissionEvent = (overrides?: Partial<PermissionNotification>): PermissionNotification =>
+        buildPermissionNotification(overrides);
 
     beforeEach(() => {
         // Create mock OpenCodeService
@@ -57,7 +48,7 @@ describe('PermissionDialogManager', () => {
         } as any;
 
         // Use Sinon fake timers for timeout tests
-        clock = sinon.useFakeTimers();
+        fakeClock = createFakeClock();
 
         // Create manager instance
         manager = new PermissionDialogManager(mockOpenCodeService);
@@ -65,7 +56,7 @@ describe('PermissionDialogManager', () => {
 
     afterEach(() => {
         manager.dispose();
-        clock.restore();
+        fakeClock.restore();
         sinon.restore();
     });
 
@@ -274,7 +265,7 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event2);
 
             // Advance time by 60 seconds (trigger timeout)
-            await clock.tickAsync(60000);
+            await fakeClock.tick(60000);
 
             expect(manager.currentRequest?.permissionId).to.equal('perm-2');
             expect(manager.queueLength).to.equal(0);
@@ -289,7 +280,7 @@ describe('PermissionDialogManager', () => {
             expect(manager.isOpen).to.be.true;
 
             // Advance time by 60 seconds
-            await clock.tickAsync(60000);
+            await fakeClock.tick(60000);
 
             expect(mockOpenCodeService.grantPermission.called).to.be.false;
             expect(manager.isOpen).to.be.false;
@@ -303,7 +294,7 @@ describe('PermissionDialogManager', () => {
             manager.onStateChange(stateChangeListener);
 
             // Advance time by 60 seconds
-            await clock.tickAsync(60000);
+            await fakeClock.tick(60000);
 
             expect(stateChangeListener.calledOnce).to.be.true;
         });
@@ -313,14 +304,14 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event);
 
             // Advance time by 30 seconds (halfway)
-            await clock.tickAsync(30000);
+            await fakeClock.tick(30000);
 
             // User clicks Grant
             await manager.grant();
             expect(mockOpenCodeService.grantPermission.calledOnce).to.be.true;
 
             // Advance time by another 40 seconds (total 70, past timeout threshold)
-            await clock.tickAsync(40000);
+            await fakeClock.tick(40000);
 
             // Verify permission was granted only once (not auto-denied)
             expect(mockOpenCodeService.grantPermission.calledOnce).to.be.true;
@@ -335,15 +326,15 @@ describe('PermissionDialogManager', () => {
             manager.handlePermissionEvent(event2);
 
             // Grant first request after 30 seconds
-            await clock.tickAsync(30000);
+            await fakeClock.tick(30000);
             await manager.grant();
             expect(manager.currentRequest?.permissionId).to.equal('perm-2');
 
             // Second request should have its own 60-second timeout
-            await clock.tickAsync(30000); // Total 60 since first request, but only 30 for second
+            await fakeClock.tick(30000); // Total 60 since first request, but only 30 for second
             expect(manager.isOpen).to.be.true; // Still open
 
-            await clock.tickAsync(30000); // Now 60 seconds for second request
+            await fakeClock.tick(30000); // Now 60 seconds for second request
             expect(manager.isOpen).to.be.false; // Timed out
         });
     });
@@ -401,7 +392,7 @@ describe('PermissionDialogManager', () => {
             manager.dispose();
 
             // Advance time past timeout
-            clock.tick(70000);
+            fakeClock.clock.tick(70000);
 
             // Should not auto-deny after disposal
             expect(mockOpenCodeService.grantPermission.called).to.be.false;

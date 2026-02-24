@@ -23,7 +23,7 @@ describe('TtsProviderSelector', () => {
     const Module = require('module');
     const originalResolveFilename = Module._resolveFilename;
     Module._resolveFilename = (request: string, ...args: unknown[]) => {
-      if (request === 'kokoro-js/dist/kokoro.cjs') {
+      if (request === 'kokoro-js') {
         const err: NodeJS.ErrnoException = new Error(`Cannot find module 'kokoro-js'`);
         err.code = 'MODULE_NOT_FOUND';
         throw err;

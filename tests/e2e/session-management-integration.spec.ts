@@ -22,8 +22,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, expect, request } from '@playwright/test';
-
-const BASE_URL = 'http://localhost:3000';
+import { BASE_URL } from './helpers/theia';
 
 /**
  * SCENARIO 1: System Startup - Server Responds

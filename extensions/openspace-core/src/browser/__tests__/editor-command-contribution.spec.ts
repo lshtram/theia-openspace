@@ -33,6 +33,7 @@ import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { OpenCodeService } from '../../common/opencode-protocol';
+import * as sinon from 'sinon';
 
 // Minimal mock services for testing path validation logic
 class MockWorkspaceService {
@@ -303,6 +304,32 @@ describe('EditorCommandContribution', () => {
             const highlights = contribution.getTrackedHighlights();
             expect(highlights).to.be.instanceOf(Map);
             expect(highlights.size).to.equal(0);
+        });
+    });
+
+    describe('open command highlight lifecycle', () => {
+        it('triggers line highlight when open args request highlight (REQ-EDT-021)', async () => {
+            const openStub = sinon.stub().resolves({ id: 'editor-1' });
+            const validatePathStub = sinon.stub().resolves('/workspace/test-project/src/index.ts');
+            const highlightCodeStub = sinon.stub().resolves({ success: true, highlightId: 'hl-1' });
+
+            (contribution as any).editorManager = { open: openStub };
+            (contribution as any).validatePath = validatePathStub;
+            (contribution as any).highlightCode = highlightCodeStub;
+
+            const result = await (contribution as any).openEditor({
+                path: 'src/index.ts',
+                line: 7,
+                highlight: true,
+            });
+
+            expect(result.success).to.equal(true);
+            expect(result.editorId).to.equal('editor-1');
+            expect(highlightCodeStub.calledOnce).to.equal(true);
+            expect(highlightCodeStub.firstCall.args[0]).to.deep.equal({
+                path: 'src/index.ts',
+                ranges: [{ startLine: 7, endLine: 7 }],
+            });
         });
     });
 

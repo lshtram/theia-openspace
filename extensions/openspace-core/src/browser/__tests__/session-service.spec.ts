@@ -9,48 +9,21 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { expect } from 'chai';
+import { expect } from '../../test-utils/assertions';
 import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionServiceImpl } from '../session-service';
 import { OpenCodeService, Project, Session } from '../../common/opencode-protocol';
+import { buildProject, buildSession } from '../../test-utils/fixture-builders';
 
 describe('SessionService', () => {
     let sessionService: SessionServiceImpl;
     let mockOpenCodeService: sinon.SinonStubbedInstance<OpenCodeService>;
 
-    const mockProject: Project = {
-        id: 'proj-1',
-        worktree: '/test/project',
-        time: {
-            created: Date.now()
-        }
-    };
-
-    const mockSession: Session = {
-        id: 'session-1',
-        projectID: 'proj-1',
-        title: 'Test Session',
-        time: {
-            created: Date.now(),
-            updated: Date.now()
-        },
-        directory: '/test',
-        version: '1.0.0'
-    };
-
-    const mockSession2: Session = {
-        id: 'session-2',
-        projectID: 'proj-1',
-        title: 'Test Session 2',
-        time: {
-            created: Date.now(),
-            updated: Date.now()
-        },
-        directory: '/test',
-        version: '1.0.0'
-    };
+    const mockProject: Project = buildProject();
+    const mockSession: Session = buildSession({ id: 'session-1' });
+    const mockSession2: Session = buildSession({ id: 'session-2', title: 'Test Session 2' });
 
     beforeEach(() => {
         // Create mock OpenCodeService

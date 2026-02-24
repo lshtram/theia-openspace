@@ -8,42 +8,9 @@
  *   - Requires an active session; verifies prompt input, typing, and message send.
  */
 
-import { test, expect, Page } from '@playwright/test';
-
-const BASE_URL = 'http://localhost:3000';
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
-    try {
-        const trustDialog = page.locator('.workspace-trust-dialog');
-        const isVisible = await trustDialog.isVisible({ timeout: 3000 }).catch(() => false);
-        if (isVisible) {
-            await page.locator('.workspace-trust-dialog .theia-button.main').click();
-            await trustDialog.waitFor({ state: 'hidden', timeout: 5000 });
-        }
-    } catch { /* not present */ }
-}
-
-async function waitForTheiaReady(page: Page): Promise<void> {
-    await page.waitForSelector('.theia-preload', { state: 'hidden', timeout: 30000 });
-    await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await dismissWorkspaceTrustDialog(page);
-}
-
-async function openChatWidget(page: Page): Promise<void> {
-    const alreadyVisible = await page.locator('.openspace-chat-widget').isVisible().catch(() => false);
-    if (!alreadyVisible) {
-        const chatTab = page.locator('.theia-tab-icon-label:has-text("Chat")').first();
-        const chatSidebarIcon = page.locator('[title="Chat"]').first();
-        if (await chatTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await chatTab.click();
-        } else if (await chatSidebarIcon.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await chatSidebarIcon.click();
-        }
-    }
-    await page.waitForSelector('.openspace-chat-widget', { state: 'visible', timeout: 5000 });
-}
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { BASE_URL, isOpenCodeAvailable, openChatWidget, waitForTheiaReady } from './helpers/theia';
 
 async function ensureActiveSession(page: Page): Promise<void> {
     const noSession = await page.locator('.chat-no-session').count();
@@ -51,15 +18,6 @@ async function ensureActiveSession(page: Page): Promise<void> {
         const newBtn = page.locator('.new-session-button').first();
         await newBtn.click();
         await page.waitForSelector('.message-timeline', { timeout: 10000 });
-    }
-}
-
-async function isOpenCodeAvailable(): Promise<boolean> {
-    try {
-        const resp = await fetch('http://localhost:7890/v1/health').catch(() => null);
-        return resp !== null && resp.ok;
-    } catch {
-        return false;
     }
 }
 

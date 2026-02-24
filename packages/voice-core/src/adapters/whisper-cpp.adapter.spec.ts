@@ -1,6 +1,6 @@
 // src/adapters/whisper-cpp.adapter.spec.ts
 import { describe, it } from 'mocha';
-import * as assert from 'assert';
+import { expect } from 'chai';
 import * as fs from 'fs';
 import { EventEmitter } from 'events';
 import { WhisperCppAdapter, type SpawnFn } from './whisper-cpp.adapter';
@@ -14,20 +14,20 @@ describe('WhisperCppAdapter', () => {
         return makeFakeProc(0) as any;
       };
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
-      assert.strictEqual(await adapter.isAvailable(), true);
-      assert.ok(capturedArgs.includes('--help'));
+      expect(await adapter.isAvailable()).to.equal(true);
+      expect(capturedArgs.includes('--help')).to.equal(true);
     });
 
     it('returns false when binary not found (ENOENT)', async () => {
       const mockSpawn: SpawnFn = () => makeErrorProc('ENOENT') as any;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
-      assert.strictEqual(await adapter.isAvailable(), false);
+      expect(await adapter.isAvailable()).to.equal(false);
     });
 
     it('returns false when binary exits non-zero', async () => {
       const mockSpawn: SpawnFn = () => makeFakeProc(1) as any;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
-      assert.strictEqual(await adapter.isAvailable(), false);
+      expect(await adapter.isAvailable()).to.equal(false);
     });
   });
 
@@ -44,7 +44,7 @@ describe('WhisperCppAdapter', () => {
       };
       const adapter = new WhisperCppAdapter('whisper', '/models', 'ggml-base.en.bin', mockSpawn);
       const result = await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' });
-      assert.strictEqual(result.text, 'hello world');
+      expect(result.text).to.equal('hello world');
     });
 
     it('uses -otxt -of <prefix> -f <wavfile> flags', async () => {
@@ -59,23 +59,25 @@ describe('WhisperCppAdapter', () => {
       };
       const adapter = new WhisperCppAdapter('whisper', '/models', 'ggml-base.en.bin', mockSpawn);
       await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en' });
-      assert.ok(capturedArgs.includes('-otxt'), 'should have -otxt flag');
-      assert.ok(capturedArgs.includes('-of'), 'should have -of flag');
-      assert.ok(capturedArgs.includes('-f'), 'should have -f for input audio');
+      expect(capturedArgs.includes('-otxt'), 'should have -otxt flag').to.equal(true);
+      expect(capturedArgs.includes('-of'), 'should have -of flag').to.equal(true);
+      expect(capturedArgs.includes('-f'), 'should have -f for input audio').to.equal(true);
       // Verify stdout is NOT piped (we read a file instead)
       const stdioArg = 'pipe';
       // -f should appear and the input WAV path should follow it
       const fIndex = capturedArgs.indexOf('-f');
-      assert.ok(fIndex !== -1 && capturedArgs[fIndex + 1]?.endsWith('.wav'), '-f should be followed by wav file');
+      expect(fIndex !== -1 && capturedArgs[fIndex + 1]?.endsWith('.wav'), '-f should be followed by wav file').to.equal(true);
     });
 
     it('rejects when whisper exits with non-zero code', async () => {
       const mockSpawn: SpawnFn = () => makeFakeProc(1, 'model not found') as any;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
-      await assert.rejects(
-        () => adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' }),
-        /exited 1/
-      );
+      try {
+        await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' });
+        expect.fail('Expected transcribe to reject for non-zero exit code');
+      } catch (error) {
+        expect(String(error)).to.match(/exited 1/);
+      }
     });
 
     it('kills process and rejects with "cancelled" when cancellation token fires', async () => {
@@ -107,8 +109,13 @@ describe('WhisperCppAdapter', () => {
       // Fire cancellation
       onCancelFn!();
 
-      await assert.rejects(p, /cancelled/);
-      assert.strictEqual(killed, true, 'proc.kill() should have been called');
+      try {
+        await p;
+        expect.fail('Expected transcribe to reject when cancelled');
+      } catch (error) {
+        expect(String(error)).to.match(/cancelled/);
+      }
+      expect(killed, 'proc.kill() should have been called').to.equal(true);
     });
   });
 });

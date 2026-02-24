@@ -1,6 +1,6 @@
 // src/adapters/kokoro.adapter.spec.ts
 import { describe, it } from 'mocha';
-import * as assert from 'assert';
+import { expect } from 'chai';
 import { KokoroAdapter } from './kokoro.adapter';
 
 // Expose the Float32→Int16 conversion logic for unit testing
@@ -19,40 +19,42 @@ describe('KokoroAdapter', () => {
     it('converts 1.0 to 32767 (clamped)', () => {
       // Math.round(1.0 * 32768) = 32768, clamped to 32767
       const result = convertFloat32([1.0]);
-      assert.strictEqual(result[0], 32767);
+      expect(result[0]).to.equal(32767);
     });
     it('converts -1.0 to -32768', () => {
       const result = convertFloat32([-1.0]);
-      assert.strictEqual(result[0], -32768);
+      expect(result[0]).to.equal(-32768);
     });
     it('converts 0.0 to 0', () => {
       const result = convertFloat32([0.0]);
-      assert.strictEqual(result[0], 0);
+      expect(result[0]).to.equal(0);
     });
     it('converts 0.5 to 16384 (Math.round(0.5 * 32768))', () => {
       const result = convertFloat32([0.5]);
-      assert.strictEqual(result[0], 16384);
+      expect(result[0]).to.equal(16384);
     });
     it('clamps values above 1.0', () => {
       const result = convertFloat32([1.5]);
-      assert.strictEqual(result[0], 32767);
+      expect(result[0]).to.equal(32767);
     });
     it('clamps values below -1.0', () => {
       const result = convertFloat32([-1.5]);
-      assert.strictEqual(result[0], -32768);
+      expect(result[0]).to.equal(-32768);
     });
   });
 
   describe('dispose()', () => {
     it('can be called without a loaded model (no error)', async () => {
       const adapter = new KokoroAdapter();
-      await assert.doesNotReject(() => adapter.dispose());
+      await adapter.dispose();
+      expect(true).to.equal(true);
     });
 
     it('resets state on dispose — second dispose also succeeds', async () => {
       const adapter = new KokoroAdapter();
       await adapter.dispose();
-      await assert.doesNotReject(() => adapter.dispose());
+      await adapter.dispose();
+      expect(true).to.equal(true);
     });
   });
 
@@ -60,7 +62,7 @@ describe('KokoroAdapter', () => {
     it('returns a boolean', async () => {
       const adapter = new KokoroAdapter();
       const result = await adapter.isAvailable();
-      assert.strictEqual(typeof result, 'boolean');
+      expect(typeof result).to.equal('boolean');
     });
 
     it('does not throw — only returns true or false', async () => {
@@ -73,8 +75,8 @@ describe('KokoroAdapter', () => {
       } catch {
         threw = true;
       }
-      assert.strictEqual(threw, false, 'isAvailable() must not throw — must catch and return boolean');
-      assert.strictEqual(typeof result, 'boolean');
+      expect(threw, 'isAvailable() must not throw — must catch and return boolean').to.equal(false);
+      expect(typeof result).to.equal('boolean');
     });
 
     it('probes the package root "kokoro-js" (not a deep subpath) to respect the exports map', async () => {
@@ -85,9 +87,9 @@ describe('KokoroAdapter', () => {
       // true (not false) when probing with the correct path.
       const adapter = new KokoroAdapter();
       const result = await adapter.isAvailable();
-      assert.strictEqual(result, true,
+      expect(result,
         'isAvailable() must return true when kokoro-js is installed — ' +
-        'if it returns false, the require path is wrong (using subpath that fails exports map check)');
+        'if it returns false, the require path is wrong (using subpath that fails exports map check)').to.equal(true);
     });
   });
 
@@ -114,9 +116,9 @@ describe('KokoroAdapter', () => {
         adapter.synthesize({ text: 'b', language: 'en', voice: 'af_sarah', speed: 1 }),
       ]);
 
-      assert.ok(r1.audio.length > 0, 'first call should produce audio');
-      assert.ok(r2.audio.length > 0, 'second call should produce audio');
-      assert.strictEqual(modelLoadCallCount, 2, 'both calls settled');
+      expect(r1.audio.length > 0, 'first call should produce audio').to.equal(true);
+      expect(r2.audio.length > 0, 'second call should produce audio').to.equal(true);
+      expect(modelLoadCallCount, 'both calls settled').to.equal(2);
     });
   });
 });

@@ -1,26 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { BASE_URL, openChatWidget, waitForTheiaReady } from './helpers/theia';
 
-const THEIA_URL = 'http://localhost:3000/#/Users/Shared/dev/core_dev';
-
-async function openChatWidget(page: Page) {
-    await page.goto(THEIA_URL);
-    // Wait for Theia shell
-    await page.waitForSelector('#theia-app-shell', { timeout: 30000 });
-    await page.waitForSelector('.theia-app-main, .theia-left-side-panel', { state: 'attached', timeout: 10000 });
-    // Click the chat icon in the left activity bar
-    const chatTab = page.locator('#shell-tab-openspace-chat-widget');
-    await chatTab.click();
-    // Wait for the chat widget to be visible
-    await page.waitForSelector('.openspace-chat-widget', { timeout: 10000 });
+async function openChatAtReady(page: import('@playwright/test').Page): Promise<void> {
+    await page.goto(BASE_URL);
+    await waitForTheiaReady(page);
+    await openChatWidget(page);
 }
 
 /**
  * Opens the chat widget AND creates a new session so MessageTimeline renders.
  * Bug 3/3b require an active session for the scroll container to be in the DOM.
  */
-async function openChatWithSession(page: Page) {
-    await openChatWidget(page);
+async function openChatWithSession(page: import('@playwright/test').Page): Promise<void> {
+    await openChatAtReady(page);
     // Auto-project selection fires console logs; we can't intercept them here.
     // Wait for the session dropdown to be rendered as a signal that initialization completed.
     await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
@@ -35,7 +28,7 @@ test('Bug 1: autoSelectProjectByWorkspace registers workspace as project', async
     const consoleLogs: string[] = [];
     page.on('console', msg => consoleLogs.push(msg.text()));
 
-    await openChatWidget(page);
+    await openChatAtReady(page);
 
     // Give it a moment to auto-select project
     await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
@@ -60,7 +53,7 @@ test('Bug 2: SSE events handled without crash', async ({ page }) => {
         }
     });
 
-    await openChatWidget(page);
+    await openChatAtReady(page);
     // Wait for the session dropdown to confirm widget is fully initialized
     await page.waitForSelector('.session-dropdown-button', { timeout: 10000 });
 
@@ -72,7 +65,7 @@ test('Bug 2: SSE events handled without crash', async ({ page }) => {
 test('Bug 2b: plain-text %%OS open command is parsed', async ({ page }) => {
     // Directly test the StreamInterceptor logic by injecting into the page
     // We can test the command handler by simulating an agent command
-    await openChatWidget(page);
+    await openChatAtReady(page);
     
     // Inject a test: dispatch an agentCommand event with openspace.editor.open
     const result = await page.evaluate(async () => {

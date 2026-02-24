@@ -9,10 +9,10 @@ export default defineConfig({
   
   /* Global setup — ensures OpenCode server (:7890) is running.
    * Theia (:3000) is handled by webServer below. */
-  globalSetup: require.resolve('./scripts/global-setup-opencode'),
+  globalSetup: require.resolve('./tests/e2e/global-setup'),
   
   /* Global teardown — stops any OpenCode server process started by globalSetup. */
-  globalTeardown: require.resolve('./scripts/global-teardown-opencode'),
+  globalTeardown: require.resolve('./tests/e2e/global-teardown'),
   
   /* Maximum time one test can run for */
   timeout: 60 * 1000,
@@ -26,8 +26,8 @@ export default defineConfig({
   /* Retry on CI; also 1 retry locally to handle transient bridge timing issues */
   retries: process.env.CI ? 2 : 1,
   
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
+  /* Reliability-first: run one worker in all environments. */
+  workers: 1,
   
   /* Reporter to use */
   reporter: 'html',
