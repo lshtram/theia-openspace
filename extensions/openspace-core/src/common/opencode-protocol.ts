@@ -315,7 +315,8 @@ export type SessionEventType =
     | 'compacted'
     | 'reverted'
     | 'unreverted'
-    | 'status_changed';
+    | 'status_changed'
+    | 'error_occurred';
 
 /**
  * Message event notification.

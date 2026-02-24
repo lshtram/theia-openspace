@@ -721,7 +721,7 @@ export class OpenCodeProxy implements OpenCodeService {
 
             // Route event by type prefix
             if (eventType.startsWith('session.')) {
-                this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError);
+                this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionCompacted);
             } else if (eventType.startsWith('message.')) {
                 this.forwardMessageEvent(innerEvent as SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessagePartDelta | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved);
             } else if (eventType.startsWith('file.')) {
@@ -741,7 +741,7 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Forward session event to client.
      */
-    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionStatus): void {
+    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionCompacted | SDKTypes.EventSessionStatus): void {
         if (!this._client) {
             return;
         }
@@ -767,19 +767,31 @@ export class OpenCodeProxy implements OpenCodeService {
                 case 'session.created': type = 'created'; break;
                 case 'session.updated': type = 'updated'; break;
                 case 'session.deleted': type = 'deleted'; break;
+                case 'session.error': type = 'error_occurred'; break;
+                case 'session.compacted': type = 'compacted'; break;
                 default:
-                    this.logger.debug(`[OpenCodeProxy] Unhandled session event type: ${event.type}`);
+                    this.logger.debug(`[OpenCodeProxy] Unhandled session event type: ${(event as { type: string }).type}`);
                     return;
             }
 
             // Extract session info from properties
             const sessionInfo = 'info' in event.properties ? event.properties.info : undefined;
+            // Some events (error, compacted) only have sessionID, not full info
+            const sessionId = sessionInfo?.id || ('sessionID' in event.properties ? (event.properties as { sessionID?: string }).sessionID : '') || '';
+            // For session.error, extract the error message to pass as data
+            let errorData: Session | undefined = sessionInfo as Session | undefined;
+            if (type === 'error_occurred') {
+                const errorEvent = event as SDKTypes.EventSessionError;
+                const errObj = errorEvent.properties.error;
+                const errMsg = errObj && 'message' in errObj ? (errObj as { message: string }).message : String(errObj ?? 'Unknown error');
+                errorData = { error: errMsg } as unknown as Session;
+            }
 
             const notification: SessionNotification = {
                 type,
-                sessionId: sessionInfo?.id || '',
+                sessionId,
                 projectId: sessionInfo?.projectID || '',
-                data: sessionInfo as Session | undefined
+                data: errorData
             };
 
             this._client.onSessionEvent(notification);

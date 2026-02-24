@@ -386,6 +386,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [sessionBusy, setSessionBusy] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
+    const [sessionError, setSessionError] = React.useState<string | undefined>(sessionService.lastError);
     const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
     const [pendingPermissions, setPendingPermissions] = React.useState<PermissionNotification[]>([]);
     const [queuedCount, setQueuedCount] = React.useState(0);
@@ -579,6 +580,12 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             setPendingPermissions([...permissions]);
         });
 
+        // Subscribe to session errors from SSE (session.error events)
+        setSessionError(sessionService.lastError);
+        const errorChangedDisposable = sessionService.onErrorChanged(err => {
+            setSessionError(err);
+        });
+
         // Store disposables for cleanup
         disposablesRef.current = [
             messagesDisposable,
@@ -588,7 +595,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             sessionChangedDisposable,
             projectChangedDisposable,
             questionChangedDisposable,
-            permissionChangedDisposable
+            permissionChangedDisposable,
+            errorChangedDisposable
         ];
 
         return () => {
@@ -910,6 +918,21 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             />
                         )}
                         
+                        {/* Session error from SSE session.error event */}
+                        {sessionError && (
+                            <div className="session-error" data-testid="session-error">
+                                <span className="session-error-icon">⚠</span>
+                                <span className="session-error-message">{sessionError}</span>
+                                <button
+                                    className="session-error-dismiss"
+                                    aria-label="Dismiss error"
+                                    onClick={() => setSessionError(undefined)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}

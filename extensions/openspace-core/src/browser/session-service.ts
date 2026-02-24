@@ -103,6 +103,7 @@ export interface SessionService extends Disposable {
     fetchMessageFromBackend(messageId: string): Promise<Message | undefined>;
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
+    notifySessionError(sessionId: string, errorMessage: string): void;
     /** Update session status from server-authoritative SSE event. */
     updateSessionStatus(status: SDKTypes.SessionStatus): void;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
@@ -1302,6 +1303,17 @@ export class SessionServiceImpl implements SessionService {
         window.localStorage.removeItem('openspace.activeSessionId');
         this.onActiveSessionChangedEmitter.fire(undefined);
         this.onMessagesChangedEmitter.fire([]);
+    }
+
+    /**
+     * Called by SyncService when a session.error SSE event is received.
+     * Sets the error state so the UI can display it.
+     */
+    notifySessionError(sessionId: string, errorMessage: string): void {
+        if (this._activeSession?.id !== sessionId) { return; }
+        this._lastError = errorMessage;
+        this.onErrorChangedEmitter.fire(errorMessage);
+        this.logger.warn(`[SessionService] Session error: ${errorMessage}`);
     }
 
     /**

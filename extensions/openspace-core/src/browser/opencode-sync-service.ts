@@ -273,6 +273,17 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     }
                     break;
 
+                case 'error_occurred':
+                    // Forward session error to session-service so UI can display it
+                    if (event.data) {
+                        const errorData = event.data as unknown as { error?: string };
+                        this.sessionService.notifySessionError(
+                            event.sessionId,
+                            errorData.error ?? 'Unknown session error'
+                        );
+                    }
+                    break;
+
                 case 'status_changed':
                     if (event.sessionStatus) {
                         this.sessionService.updateSessionStatus(event.sessionStatus);
