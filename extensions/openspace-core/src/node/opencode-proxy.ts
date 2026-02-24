@@ -264,6 +264,24 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     // =========================================================================
+    // MCP Management
+    // =========================================================================
+
+    /**
+     * Ask OpenCode to (re)connect a named MCP server.
+     * Calls POST /mcp/:name/connect — safe to call even if already connected.
+     * Used on Theia startup to recover from the race where OpenCode starts before Theia.
+     */
+    async connectMcpServer(name: string): Promise<void> {
+        try {
+            await this.post<boolean>(`/mcp/${encodeURIComponent(name)}/connect`);
+            this.logger.info(`[OpenCodeProxy] MCP server '${name}' reconnected`);
+        } catch (err) {
+            this.logger.warn(`[OpenCodeProxy] Failed to reconnect MCP server '${name}': ${err}`);
+        }
+    }
+
+    // =========================================================================
     // Project Methods
     // =========================================================================
 
