@@ -1665,6 +1665,7 @@ export class SessionServiceImpl implements SessionService {
         this.onErrorChangedEmitter.dispose();
         this.onIsStreamingChangedEmitter.dispose();
         this.onStreamingStatusChangedEmitter.dispose();
+        this.onSessionStatusChangedEmitter.dispose();
         this.onQuestionChangedEmitter.dispose();
         this.onPermissionChangedEmitter.dispose();
 
