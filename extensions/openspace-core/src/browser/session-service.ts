@@ -104,6 +104,10 @@ export interface SessionService extends Disposable {
     notifySessionChanged(session: Session): void;
     notifySessionDeleted(sessionId: string): void;
     notifySessionError(sessionId: string, errorMessage: string): void;
+    /** Remove a message from the in-memory list when a message.removed SSE is received. */
+    notifyMessageRemoved(sessionId: string, messageId: string): void;
+    /** Remove a part from a message when a message.part.removed SSE is received. */
+    notifyPartRemoved(sessionId: string, messageId: string, partId: string): void;
     /** Update session status from server-authoritative SSE event. */
     updateSessionStatus(status: SDKTypes.SessionStatus): void;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
@@ -1314,6 +1318,31 @@ export class SessionServiceImpl implements SessionService {
         this._lastError = errorMessage;
         this.onErrorChangedEmitter.fire(errorMessage);
         this.logger.warn(`[SessionService] Session error: ${errorMessage}`);
+    }
+
+    /**
+     * Called by SyncService when a message.removed SSE event is received.
+     * Removes the message from the in-memory list.
+     */
+    notifyMessageRemoved(sessionId: string, messageId: string): void {
+        if (this._activeSession?.id !== sessionId) { return; }
+        this._messages = this._messages.filter(m => m.id !== messageId);
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+        this.logger.debug(`[SessionService] Message removed: ${messageId}`);
+    }
+
+    /**
+     * Called by SyncService when a message.part.removed SSE event is received.
+     * Removes the specific part from the message.
+     */
+    notifyPartRemoved(sessionId: string, messageId: string, partId: string): void {
+        if (this._activeSession?.id !== sessionId) { return; }
+        this._messages = this._messages.map(m => {
+            if (m.id !== messageId) { return m; }
+            return { ...m, parts: (m.parts ?? []).filter(p => p.id !== partId) };
+        });
+        this.onMessagesChangedEmitter.fire([...this._messages]);
+        this.logger.debug(`[SessionService] Part removed: ${partId} from message ${messageId}`);
     }
 
     /**

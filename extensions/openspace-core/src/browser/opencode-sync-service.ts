@@ -337,6 +337,18 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     this.handleMessageCompleted(event);
                     break;
 
+                case 'removed':
+                    this.sessionService.notifyMessageRemoved(event.sessionId, event.messageId);
+                    break;
+
+                case 'part_removed': {
+                    const removedPartId = event.data?.parts?.[0]?.id;
+                    if (removedPartId) {
+                        this.sessionService.notifyPartRemoved(event.sessionId, event.messageId, removedPartId);
+                    }
+                    break;
+                }
+
                 default:
                     this.logger.warn(`[SyncService] Unknown message event type: ${event.type}`);
             }

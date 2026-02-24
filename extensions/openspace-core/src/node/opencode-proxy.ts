@@ -28,6 +28,7 @@ import {
     Project,
     Session,
     Message,
+    MessagePart,
     MessageWithParts,
     FileStatus,
     FileContent,
@@ -925,9 +926,27 @@ export class OpenCodeProxy implements OpenCodeService {
                 this.logger.debug(`[OpenCodeProxy] Forwarded message.part.delta: part=${props.partID}, field=${props.field}, delta=${props.delta.length} chars`);
 
             } else if (event.type === 'message.removed') {
-                this.logger.debug(`[OpenCodeProxy] Message removed: ${event.properties.messageID}`);
+                const removedNotification: MessageNotification = {
+                    type: 'removed',
+                    sessionId: event.properties.sessionID,
+                    projectId: '',
+                    messageId: event.properties.messageID,
+                };
+                this._client.onMessageEvent(removedNotification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.removed: ${event.properties.messageID}`);
             } else if (event.type === 'message.part.removed') {
-                this.logger.debug(`[OpenCodeProxy] Message part removed: ${event.properties.partID}`);
+                const partRemovedNotification: MessageNotification = {
+                    type: 'part_removed',
+                    sessionId: event.properties.sessionID,
+                    projectId: '',
+                    messageId: event.properties.messageID,
+                    data: {
+                        info: { id: event.properties.messageID } as Message,
+                        parts: [{ id: event.properties.partID } as MessagePart]
+                    }
+                };
+                this._client.onMessageEvent(partRemovedNotification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.part.removed: ${event.properties.partID}`);
             }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding message event: ${error}`);

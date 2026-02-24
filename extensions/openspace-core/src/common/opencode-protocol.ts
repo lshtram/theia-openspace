@@ -338,7 +338,7 @@ export interface MessageNotification {
     readonly previousMessageId?: string;
 }
 
-export type MessageEventType = 'created' | 'partial' | 'completed';
+export type MessageEventType = 'created' | 'partial' | 'completed' | 'removed' | 'part_removed';
 
 /**
  * Message part delta notification — per-token text append.
