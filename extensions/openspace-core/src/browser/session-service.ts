@@ -673,6 +673,15 @@ export class SessionServiceImpl implements SessionService {
 
             this.logger.debug(`[SessionService] Created session: ${session.id}`);
 
+            // Call init to run the INIT command (sets up git tracking, etc.)
+            try {
+                await this.openCodeService.initSession(this._activeProject.id, session.id);
+                this.logger.debug(`[SessionService] Session initialized: ${session.id}`);
+            } catch (initError) {
+                // Init failure is non-fatal — session can still be used
+                this.logger.warn(`[SessionService] Session init failed (non-fatal): ${initError}`);
+            }
+
             // Set as active session
             await this.setActiveSession(session.id);
 
