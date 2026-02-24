@@ -33,6 +33,7 @@ import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
 import { MessageTimeline } from './message-timeline';
 import { QuestionDock } from './question-dock';
+import { TodoPanel } from './todo-panel';
 import type { MessagePart as PromptMessagePart } from './prompt-input/types';
 import type * as SDKTypes from 'openspace-core/lib/common/opencode-sdk-types';
 
@@ -1020,6 +1021,16 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                                     (retry in {Math.max(0, Math.round((retryStatus.next - Date.now()) / 1000))}s,
                                     attempt {retryStatus.attempt})
                                 </span>
+                            </div>
+                        )}
+
+                        {/* Live todo panel — shows current todo state from todo.updated SSE */}
+                        <TodoPanel todos={sessionService.todos} />
+
+                        {/* Session diff — shows changed files when diff is available */}
+                        {sessionService.sessionDiff && (
+                            <div className="session-diff" data-testid="session-diff">
+                                <pre className="session-diff-content">{sessionService.sessionDiff}</pre>
                             </div>
                         )}
 

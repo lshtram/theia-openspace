@@ -771,6 +771,8 @@ export class OpenCodeProxy implements OpenCodeService {
                 this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied);
             } else if (eventType.startsWith('question.')) {
                 this.forwardQuestionEvent(innerEvent as SDKTypes.EventQuestionAsked | SDKTypes.EventQuestionReplied | SDKTypes.EventQuestionRejected);
+            } else if (eventType.startsWith('todo.')) {
+                this.forwardTodoEvent(innerEvent as { type: string; properties: { sessionID: string; todos: unknown[] } });
             } else {
                 this.logger.debug(`[OpenCodeProxy] Unhandled SSE event type: ${eventType}`);
             }
@@ -1123,6 +1125,22 @@ export class OpenCodeProxy implements OpenCodeService {
             }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding question event: ${error}`);
+        }
+    }
+
+    protected forwardTodoEvent(event: { type: string; properties: { sessionID: string; todos: unknown[] } }): void {
+        if (!this._client) { return; }
+        try {
+            const todos = Array.isArray(event.properties?.todos)
+                ? (event.properties.todos as Array<{ id: string; description: string; status: string }>)
+                : [];
+            this._client.onTodoEvent({
+                sessionId: event.properties?.sessionID ?? '',
+                todos
+            });
+            this.logger.debug(`[OpenCodeProxy] Forwarded todo event: ${todos.length} todos`);
+        } catch (error) {
+            this.logger.error(`[OpenCodeProxy] Error forwarding todo event: ${error}`);
         }
     }
 

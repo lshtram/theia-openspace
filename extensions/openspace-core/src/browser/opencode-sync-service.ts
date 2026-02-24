@@ -22,10 +22,11 @@ import {
     OpenCodeClient,
     SessionNotification,
     MessageNotification,
-    MessagePartDeltaNotification,
-    FileNotification,
-    PermissionNotification,
-    QuestionNotification
+     MessagePartDeltaNotification,
+     FileNotification,
+     PermissionNotification,
+     QuestionNotification,
+     TodoNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -740,6 +741,16 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             }
         } catch (error) {
             this.logger.error('[SyncService] Error in onQuestionEvent:', error);
+        }
+    }
+
+    onTodoEvent(event: TodoNotification): void {
+        try {
+            if (this.queueIfNotReady('onTodoEvent', event)) { return; }
+            if (this.sessionService.activeSession?.id !== event.sessionId) { return; }
+            this.sessionService.updateTodos(event.todos);
+        } catch (error) {
+            this.logger.error('[SyncService] Error in onTodoEvent:', error);
         }
     }
 

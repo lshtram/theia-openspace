@@ -179,14 +179,27 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     .map(session => (
                     <div
                         key={session.id}
-                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}`}
+                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${(session as any).parentID ? ' session-child session-forked' : ''}`}
+                        data-parent-id={(session as any).parentID ?? undefined}
                         onClick={() => handleSwitch(session.id)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter') { handleSwitch(session.id); } }}
                         title={session.title}
+                        style={(session as any).parentID ? { paddingLeft: '24px' } : undefined}
                     >
-                        <span className="sessions-widget-item-title">{session.title}</span>
+                        <span className="sessions-widget-item-title">
+                            {session.title}
+                            {(() => {
+                                const status = sessionService.getSessionStatus(session.id);
+                                if (!status || status.type === 'idle') { return null; }
+                                return (
+                                    <span className={`session-status-badge session-status-${status.type}`}>
+                                        {status.type === 'busy' ? '●' : '↺'}
+                                    </span>
+                                );
+                            })()}
+                        </span>
                         <div className="sessions-widget-item-actions">
                             <span className="sessions-widget-item-time">
                                 {session.time?.created ? relativeTime(session.time.created) : ''}

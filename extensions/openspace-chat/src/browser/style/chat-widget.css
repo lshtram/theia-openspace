@@ -2360,3 +2360,87 @@
     color: var(--theia-descriptionForeground);
     opacity: 0.75;
 }
+
+/* F1: Load more messages button */
+.load-more-messages-container {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+}
+.load-more-messages {
+    font-size: 0.8em;
+    padding: 4px 12px;
+    border: 1px solid var(--theia-button-secondaryBorder, var(--theia-contrastBorder));
+    background: var(--theia-button-secondaryBackground, transparent);
+    color: var(--theia-button-secondaryForeground, var(--theia-foreground));
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.8;
+}
+.load-more-messages:hover { opacity: 1; }
+
+/* F2: Session diff panel */
+.session-diff {
+    margin: 4px 8px;
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-contrastBorder));
+    border-radius: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.session-diff-content {
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 0.78em;
+    font-family: var(--theia-editor-font-family, monospace);
+    white-space: pre;
+    color: var(--theia-foreground);
+}
+
+/* G1: Todo panel */
+.openspace-todo-panel {
+    margin: 4px 8px;
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-contrastBorder));
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.82em;
+}
+.todo-panel-header {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--theia-foreground);
+    opacity: 0.75;
+}
+.todo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0;
+    color: var(--theia-foreground);
+}
+.todo-status-icon {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+.todo-status-completed { opacity: 0.5; text-decoration: line-through; }
+.todo-status-in_progress { color: var(--theia-charts-blue); }
+
+/* H1: Session status badges */
+.session-status-badge {
+    font-size: 0.7em;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.session-status-busy { color: var(--theia-charts-yellow, #e8b904); }
+.session-status-retry { color: var(--theia-charts-orange, #e06c00); }
+
+/* H2: Forked session hierarchy */
+.session-child {
+    border-left: 2px solid var(--theia-editorIndentGuide-activeBackground, var(--theia-contrastBorder));
+}
+.session-forked { opacity: 0.9; }

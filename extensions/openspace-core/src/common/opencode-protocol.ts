@@ -274,7 +274,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 /**
  * OpenCode Client interface - callback methods for the frontend.
  */
-export interface OpenCodeClient {
+ export interface OpenCodeClient {
     onSessionEvent(event: SessionNotification): void;
     onMessageEvent(event: MessageNotification): void;
     onMessagePartDelta(event: MessagePartDeltaNotification): void;
@@ -284,6 +284,16 @@ export interface OpenCodeClient {
     onAgentCommand(command: AgentCommand): void;
     /** Fired when the SSE connection is re-established after a drop. Allows clearing accumulated streaming state. */
     onSSEReconnect(): void;
+    /** Fired when the todo list for the active session is updated. */
+    onTodoEvent(event: TodoNotification): void;
+}
+
+/**
+ * Todo event notification.
+ */
+export interface TodoNotification {
+    readonly sessionId: string;
+    readonly todos: Array<{ id: string; description: string; status: string }>;
 }
 
 /**

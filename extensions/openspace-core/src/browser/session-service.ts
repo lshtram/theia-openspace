@@ -93,6 +93,8 @@ export interface SessionService extends Disposable {
     searchSessions(query: string): Promise<Session[]>;
     loadMoreSessions(): Promise<void>;
     readonly hasMoreSessions: boolean;
+    loadOlderMessages(): Promise<void>;
+    readonly hasOlderMessages: boolean;
     getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
     forkSession(messageId?: string): Promise<void>;
@@ -100,6 +102,10 @@ export interface SessionService extends Disposable {
     unrevertSession(): Promise<void>;
     compactSession(): Promise<void>;
     autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
+    /** Current unified diff of files changed in the active session. */
+    readonly sessionDiff: string | undefined;
+    /** Refresh the session diff from the backend. */
+    refreshDiff(): Promise<void>;
 
     // State update methods (for SyncService integration)
     appendMessage(message: Message): void;
@@ -129,9 +135,15 @@ export interface SessionService extends Disposable {
     readonly pendingQuestions: SDKTypes.QuestionRequest[];
     readonly onQuestionChanged: Event<SDKTypes.QuestionRequest[]>;
 
+    // Todo state
+    readonly todos: Array<{ id: string; description: string; status: string }>;
+    readonly onTodosChanged: Event<Array<{ id: string; description: string; status: string }>>;
+
     // Question operations
     addPendingQuestion(question: SDKTypes.QuestionRequest): void;
     removePendingQuestion(requestId: string): void;
+    /** Update the live todo list when a todo.updated SSE event is received. */
+    updateTodos(todos: Array<{ id: string; description: string; status: string }>): void;
     answerQuestion(requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<void>;
     rejectQuestion(requestId: string): Promise<void>;
 
@@ -185,6 +197,10 @@ export class SessionServiceImpl implements SessionService {
     private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
     private _sessionCursor: string | undefined = undefined;
     private _hasMoreSessions = false;
+    private _messageLoadCursor: string | undefined = undefined;
+    private _hasOlderMessages = false;
+    private _sessionDiff: string | undefined = undefined;
+    private _todos: Array<{ id: string; description: string; status: string }> = [];
 
     // Emitters
     private readonly onActiveProjectChangedEmitter = new Emitter<Project | undefined>();
@@ -199,6 +215,7 @@ export class SessionServiceImpl implements SessionService {
     private readonly onSessionStatusChangedEmitter = new Emitter<SDKTypes.SessionStatus>();
     private readonly onQuestionChangedEmitter = new Emitter<SDKTypes.QuestionRequest[]>();
     private readonly onPermissionChangedEmitter = new Emitter<PermissionNotification[]>();
+    private readonly onTodosChangedEmitter = new Emitter<Array<{ id: string; description: string; status: string }>>();
 
     // Public event properties
     readonly onActiveProjectChanged = this.onActiveProjectChangedEmitter.event;
@@ -213,6 +230,7 @@ export class SessionServiceImpl implements SessionService {
     readonly onSessionStatusChanged = this.onSessionStatusChangedEmitter.event;
     readonly onQuestionChanged = this.onQuestionChangedEmitter.event;
     readonly onPermissionChanged = this.onPermissionChangedEmitter.event;
+    readonly onTodosChanged = this.onTodosChangedEmitter.event;
 
     // Getters for readonly properties
     get activeProject(): Project | undefined {
@@ -580,6 +598,9 @@ export class SessionServiceImpl implements SessionService {
             // Load messages for the new session
             await this.loadMessages();
             if (signal.aborted) { return; }
+
+            // Refresh the diff for the new session (fire-and-forget, non-critical)
+            this.refreshDiff().catch(e => this.logger.warn('[SessionService] refreshDiff error:', e));
 
             // Load any pending questions that were created before the SSE connection
             // (e.g., questions from a previous server session that are still unanswered)
@@ -997,6 +1018,41 @@ export class SessionServiceImpl implements SessionService {
         return this._hasMoreSessions;
     }
 
+    get hasOlderMessages(): boolean {
+        return this._hasOlderMessages;
+    }
+
+    async loadOlderMessages(): Promise<void> {
+        if (!this._hasOlderMessages || !this._activeSession || !this._activeProject) { return; }
+        try {
+            const older = await this.openCodeService.getMessages(
+                this._activeProject.id, this._activeSession.id, 400, this._messageLoadCursor
+            );
+            const olderMapped = older.map(m => ({ ...m.info, parts: m.parts ?? [] }));
+            this._messages = [...olderMapped, ...this._messages];
+            this._messageLoadCursor = older[0]?.info?.time?.created?.toString();
+            this._hasOlderMessages = older.length === 400;
+            this.onMessagesChangedEmitter.fire([...this._messages]);
+        } catch (error) {
+            this.logger.warn(`[SessionService] loadOlderMessages error: ${error}`);
+        }
+    }
+
+    get sessionDiff(): string | undefined {
+        return this._sessionDiff;
+    }
+
+    async refreshDiff(): Promise<void> {
+        if (!this._activeSession || !this._activeProject) { return; }
+        try {
+            this._sessionDiff = await this.openCodeService.getDiff(
+                this._activeProject.id, this._activeSession.id
+            );
+        } catch {
+            this._sessionDiff = undefined;
+        }
+    }
+
     async searchSessions(query: string): Promise<Session[]> {
         if (!this._activeProject) { return []; }
         try {
@@ -1127,6 +1183,9 @@ export class SessionServiceImpl implements SessionService {
                 ...m.info,
                 parts: m.parts || []
             }));
+            // Track whether there might be older messages beyond this page
+            this._hasOlderMessages = messagesWithParts.length === 400;
+            this._messageLoadCursor = messagesWithParts[0]?.info?.id;
             this.onMessagesChangedEmitter.fire([...this._messages]);
 
             this.logger.debug(`[SessionService] Loaded ${this._messages.length} messages`);
@@ -1672,6 +1731,15 @@ export class SessionServiceImpl implements SessionService {
         this.onQuestionChangedEmitter.fire([...this._pendingQuestions]);
     }
 
+    get todos(): Array<{ id: string; description: string; status: string }> {
+        return this._todos;
+    }
+
+    updateTodos(todos: Array<{ id: string; description: string; status: string }>): void {
+        this._todos = todos;
+        this.onTodosChangedEmitter.fire([...this._todos]);
+    }
+
     async answerQuestion(requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<void> {
         this.logger.info(`[SessionService] Operation: answerQuestion(${requestId})`);
         if (!this._activeProject) {
@@ -1783,6 +1851,7 @@ export class SessionServiceImpl implements SessionService {
         this.onSessionStatusChangedEmitter.dispose();
         this.onQuestionChangedEmitter.dispose();
         this.onPermissionChangedEmitter.dispose();
+        this.onTodosChangedEmitter.dispose();
 
         // Clear state
         this._activeProject = undefined;
