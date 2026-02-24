@@ -10,11 +10,6 @@
     "description": "Git history graph (vscode.git is not on Open VSX)"
   },
   {
-    "id": "esbenp.prettier-vscode",
-    "version": "latest",
-    "description": "Code formatter"
-  },
-  {
     "id": "yzhang.markdown-all-in-one",
     "version": "latest",
     "description": "Markdown editing and preview"
