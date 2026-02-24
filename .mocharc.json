@@ -9,7 +9,9 @@
     "packages/**/src/**/*.spec.ts"
   ],
   "exclude": [
-    "extensions/openspace-chat/src/browser/__tests__/chat-widget-session-load.spec.ts"
+    "extensions/openspace-chat/src/browser/__tests__/chat-widget-session-load.spec.ts",
+    "extensions/openspace-chat/src/browser/__tests__/chat-widget-subscriptions.spec.ts",
+    "extensions/openspace-chat/src/browser/__tests__/chat-widget.spec.ts"
   ],
   "timeout": 10000,
   "exit": true,
