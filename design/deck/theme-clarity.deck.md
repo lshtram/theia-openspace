@@ -24,6 +24,4 @@ transition: slide
 
 <!-- CSS appended at end -->
 
-<style>
 /* Editorial serif headings + warm paper background */
-</style>
