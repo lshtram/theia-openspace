@@ -41,12 +41,27 @@ export class VoiceCommandContribution
     this.waveformOverlay.push(data);
   }
 
+  setEmotion(emotion: import('../common/narration-types').EmotionKind | null): void {
+    this.waveformOverlay.setEmotion(emotion);
+  }
+
+  setVoiceMode(mode: 'idle' | 'waiting' | 'speaking'): void {
+    if (mode === 'idle') {
+      this.waveformOverlay.hide();
+    } else {
+      this.waveformOverlay.setMode(mode);
+      this.waveformOverlay.show();
+    }
+  }
+
   // ── FrontendApplicationContribution ──────────────────────────────────────
 
   onStart(): void {
+    console.log('[Voice] onStart - policy.enabled:', this.sessionFsm.policy.enabled, 'state:', this.sessionFsm.state);
     // Sync FSM state with policy: if policy says enabled, ensure FSM is enabled
     if (this.sessionFsm.policy.enabled && this.sessionFsm.state === 'inactive') {
       this.sessionFsm.enable();
+      console.log('[Voice] Enabled voice from policy');
     }
     this.updateStatusBar();
   }
@@ -69,6 +84,7 @@ export class VoiceCommandContribution
           this.updateStatusBar();
           try {
             await this.audioFsm.startCapture();
+            this.waveformOverlay.setMode('recording');
             this.waveformOverlay.show();
           } catch (err) {
             console.error('[VoiceInput] startCapture failed:', err);
@@ -88,7 +104,7 @@ export class VoiceCommandContribution
           }
           this.sessionFsm.pushToTalkEnd();
           this.updateStatusBar();
-            this.waveformOverlay.hide();
+          this.waveformOverlay.hide();
         }
       },
     });
@@ -148,7 +164,7 @@ export class VoiceCommandContribution
     if (this.recording) {
       this.statusBar.setElement(STATUS_BAR_ID, {
         text: '$(record) REC',
-        tooltip: 'Recording… press Ctrl+Shift+V again to stop and transcribe',
+        tooltip: 'Recording… press Ctrl+M again to stop and transcribe',
         alignment: StatusBarAlignment.RIGHT,
         priority: 200,
         color: '#e53e3e',
@@ -159,7 +175,7 @@ export class VoiceCommandContribution
 
     this.statusBar.setElement(STATUS_BAR_ID, {
       text: '$(mic) Voice ready',
-      tooltip: 'Press Ctrl+Shift+V to start recording',
+      tooltip: 'Press Ctrl+M to start recording',
       alignment: StatusBarAlignment.RIGHT,
       priority: 200,
       command: VOICE_COMMANDS.TOGGLE_VOICE.id,
