@@ -386,7 +386,8 @@ Note: Assign an owner to each step before leaving this meeting. The goal is that
   color: var(--bp-text);
 }
 
-.reveal ul li::before {
+.reveal ul li::before,
+.reveal ol:not(.steps-list) li::before {
   content: '//';
   position: absolute;
   left: 0;
@@ -676,23 +677,8 @@ Note: Assign an owner to each step before leaving this meeting. The goal is that
   text-align: center;
 }
 
-/* ── Fragments ──────────────────────────────────────────────── */
-.reveal .fragment {
-  opacity: 0;
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.reveal .fragment.visible {
-  opacity: 1;
-}
-
-.reveal .fragment.fade-up {
-  transform: translateY(20px);
-}
-
-.reveal .fragment.fade-up.visible {
-  transform: translateY(0);
-}
+/* ── Fragments — rely on reveal.js built-in fade-up, just tune timing ── */
+.reveal .fragment { transition: opacity 0.4s ease, transform 0.4s ease; }
 
 /* ── Progress bar ───────────────────────────────────────────── */
 .reveal .progress {
