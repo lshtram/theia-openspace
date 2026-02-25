@@ -171,16 +171,21 @@ Note: The weaknesses are real but manageable. Shared deploy risk is mitigated by
 
 ## Head-to-Head
 
-| Criterion | Monolith | Modular Monolith |
-|-----------|----------|-----------------|
-| **Initial setup time** | <td class="winner">Hours</td> | <td class="tie">Days (tooling)</td> |
-| **Local dev experience** | <td class="winner">One process</td> | <td class="winner">One process</td> |
-| **Independent team deploys** | <td class="loser">Blocked by coupling</td> | <td class="winner">Per-module CI gates</td> |
-| **Operational complexity** | <td class="winner">Minimal</td> | <td class="winner">Minimal</td> |
-| **Data consistency** | <td class="winner">ACID</td> | <td class="winner">ACID</td> |
-| **Granular scaling** | <td class="loser">All-or-nothing</td> | <td class="loser">All-or-nothing</td> |
-| **Module-level fault isolation** | <td class="loser">None</td> | <td class="tie">Partial (code + CI)</td> |
-| **Team experience required** | <td class="winner">Low</td> | <td class="winner">Low–Medium</td> |
+<table>
+  <thead>
+    <tr><th>Criterion</th><th>Monolith</th><th>Modular Monolith</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Initial setup time</strong></td><td class="winner">Hours</td><td class="tie">Days (tooling)</td></tr>
+    <tr><td><strong>Local dev experience</strong></td><td class="winner">One process</td><td class="winner">One process</td></tr>
+    <tr><td><strong>Independent team deploys</strong></td><td class="loser">Blocked by coupling</td><td class="winner">Per-module CI gates</td></tr>
+    <tr><td><strong>Operational complexity</strong></td><td class="winner">Minimal</td><td class="winner">Minimal</td></tr>
+    <tr><td><strong>Data consistency</strong></td><td class="winner">ACID</td><td class="winner">ACID</td></tr>
+    <tr><td><strong>Granular scaling</strong></td><td class="loser">All-or-nothing</td><td class="loser">All-or-nothing</td></tr>
+    <tr><td><strong>Module-level fault isolation</strong></td><td class="loser">None</td><td class="tie">Partial (code + CI)</td></tr>
+    <tr><td><strong>Team experience required</strong></td><td class="winner">Low</td><td class="winner">Low–Medium</td></tr>
+  </tbody>
+</table>
 
 Note: The standout pattern: Modular Monolith wins everywhere Monolith wins, and also fixes the coupling problem — without introducing distributed systems complexity. Granular scaling is the one shared gap.
 
