@@ -11,7 +11,7 @@ slideNumber: "c/t"
   SLIDE 1 — TITLE SLIDE
   ============================================================ -->
 
-<!-- .slide: data-background-color="#faf8f5" -->
+<!-- .slide: data-background-image="design/assets/images/sse-signal-hero.jpg" data-background-opacity="0.22" data-background-color="#faf8f5" -->
 
 <div class="centered" style="padding-top: 0.5em;">
 
@@ -260,7 +260,21 @@ Note: The key insight is that SSE and WebSockets share the persistent connection
 ---
 
 <!-- ============================================================
-  SLIDE 9 — MENTAL MODEL
+  SLIDE 9A — SSE FLOW DIAGRAM
+  ============================================================ -->
+
+<!-- .slide: data-background-color="#faf8f5" -->
+
+## SSE Connection Flow
+
+<img src="design/assets/diagrams/sse-flow-diagram.svg" style="width: 92%; border-radius: 14px; box-shadow: 0 12px 30px rgba(44, 40, 32, 0.15);">
+
+Note: The GET opens a single channel; the server pushes events as text. Keep the diagram right after the comparison to lock in the mental model.
+
+---
+
+<!-- ============================================================
+  SLIDE 10 — MENTAL MODEL
   ============================================================ -->
 
 <!-- .slide: data-background-color="#faf8f5" -->
@@ -284,7 +298,7 @@ Note: The auto-reconnect is the detail that makes SSE production-ready. The brow
 ---
 
 <!-- ============================================================
-  SLIDE 10 — WHAT YOU NOW UNDERSTAND
+  SLIDE 11 — WHAT YOU NOW UNDERSTAND
   ============================================================ -->
 
 <!-- .slide: data-background-color="#faf8f5" -->
@@ -304,6 +318,33 @@ Note: The auto-reconnect is the detail that makes SSE production-ready. The brow
 </div>
 
 Note: The three tags repeat the title slide — a deliberate callback. The promise made on slide 1 has been kept.
+
+<!-- ============================================================
+  SLIDE 12 — LATENCY VS OVERHEAD CHART
+  ============================================================ -->
+
+<!-- .slide: data-background-color="#faf8f5" -->
+
+## Latency vs Overhead
+
+<div style="position: relative; height: 320px; margin: 1em 0 0.4em; border-left: 2px solid var(--clr-rule); border-bottom: 2px solid var(--clr-rule);">
+  <div style="position: absolute; left: -40px; top: 50%; transform: rotate(-90deg); font-size: 0.7em; color: var(--clr-muted);">Overhead →</div>
+  <div style="position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); font-size: 0.7em; color: var(--clr-muted);">Latency →</div>
+  <div style="position: absolute; left: 18%; bottom: 20%; text-align: center;">
+    <div style="width: 14px; height: 14px; background: #b5651d; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">Polling</p>
+  </div>
+  <div style="position: absolute; left: 55%; bottom: 38%; text-align: center;">
+    <div style="width: 14px; height: 14px; background: #4a8244; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">SSE</p>
+  </div>
+  <div style="position: absolute; left: 82%; bottom: 70%; text-align: center;">
+    <div style="width: 14px; height: 14px; background: #4a64aa; border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">WebSockets</p>
+  </div>
+</div>
+
+<p style="font-size: 0.7em; color: var(--clr-muted); margin-top: 0.4em;">SSE lands in the low-overhead, mid-latency sweet spot for server→client updates.</p>
 
 <!-- ============================================================
   CLARITY EDITORIAL THEME
