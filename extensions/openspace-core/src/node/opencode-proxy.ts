@@ -1000,10 +1000,6 @@ export class OpenCodeProxy implements OpenCodeService {
                 };
 
                 this._client.onMessageEvent(notification);
-                // DIAG BUG-7: log part type and first 120 chars of content to understand what arrives
-                const partAny = part as any;
-                const partContent = partAny.text ?? partAny.input ?? partAny.output ?? JSON.stringify(partAny).slice(0, 120);
-                this.logger.info(`[OpenCodeProxy] DIAG part.updated: type=${partAny.type}, content=${String(partContent).slice(0, 120)}`);
                 this.logger.debug(`[OpenCodeProxy] Forwarded message.part.updated: ${part.messageID}, delta=${delta ? delta.length : 0} chars`);
 
             } else if (event.type === 'message.part.delta') {
@@ -1026,12 +1022,6 @@ export class OpenCodeProxy implements OpenCodeService {
                     field: props.field,
                     delta: props.delta
                 });
-
-                // Temporary diagnostic: log full delta when it looks like JSON (to diagnose BUG-7)
-                const deltaPreview = props.delta.trimStart().startsWith('[') || props.delta.trimStart().startsWith('{')
-                    ? `[JSON] ${props.delta.slice(0, 120)}`
-                    : `${props.delta.length} chars`;
-                this.logger.info(`[OpenCodeProxy] message.part.delta: part=${props.partID}, field=${props.field}, delta=${deltaPreview}`);
 
             } else if (event.type === 'message.removed') {
                 const removedNotification: MessageNotification = {

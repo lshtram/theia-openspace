@@ -104,10 +104,7 @@ export interface SessionService extends Disposable {
     unrevertSession(): Promise<void>;
     compactSession(): Promise<void>;
     autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
-    /** Current unified diff of files changed in the active session. */
-    readonly sessionDiff: string | undefined;
-    /** Refresh the session diff from the backend. */
-    refreshDiff(): Promise<void>;
+
 
     // State update methods (for SyncService integration)
     appendMessage(message: Message): void;
@@ -208,7 +205,6 @@ export class SessionServiceImpl implements SessionService {
     private _hasMoreSessions = false;
     private _messageLoadCursor: string | undefined = undefined;
     private _hasOlderMessages = false;
-    private _sessionDiff: string | undefined = undefined;
     private _todos: Array<{ id: string; description: string; status: string }> = [];
 
     // Emitters
@@ -621,9 +617,6 @@ export class SessionServiceImpl implements SessionService {
             // Load messages for the new session
             await this.loadMessages();
             if (signal.aborted) { return; }
-
-            // Refresh the diff for the new session (fire-and-forget, non-critical)
-            this.refreshDiff().catch(e => this.logger.warn('[SessionService] refreshDiff error:', e));
 
             // Load any pending questions that were created before the SSE connection
             // (e.g., questions from a previous server session that are still unanswered)
@@ -1059,24 +1052,6 @@ export class SessionServiceImpl implements SessionService {
             this.onMessagesChangedEmitter.fire([...this._messages]);
         } catch (error) {
             this.logger.warn(`[SessionService] loadOlderMessages error: ${error}`);
-        }
-    }
-
-    get sessionDiff(): string | undefined {
-        return this._sessionDiff;
-    }
-
-    async refreshDiff(): Promise<void> {
-        if (!this._activeSession || !this._activeProject) { return; }
-        try {
-            const diff = await this.openCodeService.getDiff(
-                this._activeProject.id, this._activeSession.id
-            );
-            // Treat empty JSON array/object as "no diff"
-            const trimmed = diff?.trim();
-            this._sessionDiff = (trimmed && trimmed !== '[]' && trimmed !== '{}') ? diff : undefined;
-        } catch {
-            this._sessionDiff = undefined;
         }
     }
 

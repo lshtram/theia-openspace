@@ -69,6 +69,15 @@ const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|termi
 // Matches task/subagent tool names
 const TASK_TOOL_NAMES = /^(task|Task)$/;
 
+// Pre-compiled regexes for getToolInfo() — avoids re-creation per render
+const READ_TOOL_NAMES = /^(read|Read)$/;
+const SEARCH_TOOL_NAMES = /^(grep|Grep|glob|Glob|rg|ripgrep|search|find|list|list_files|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/i;
+const EDIT_WRITE_TOOL_NAMES = /^(edit|Edit|write|Write)$/;
+const WEBFETCH_TOOL_NAMES = /^(webfetch|WebFetch|web_fetch)$/i;
+const TODOWRITE_TOOL_NAMES = /^(todowrite|TodoWrite|todo_write)$/i;
+const EDIT_TOOL_NAMES = /^(edit|Edit)$/;
+const WRITE_TOOL_NAMES = /^(write|Write)$/;
+
 /** Returns true if the string looks like an absolute file path (no whitespace — excludes shell commands). */
 const isFilePath = (s: string): boolean =>
     (s.startsWith('/') || /^[A-Za-z]:\\/.test(s)) && !/\s/.test(s);
@@ -110,22 +119,36 @@ function renderPart(
     }
 }
 
-/** Render text part with markdown rendering. */
-function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
+/**
+ * Memoized text part component.
+ *
+ * During streaming the parent re-renders every second (elapsed-timer tick) even
+ * when the text hasn't changed.  `renderMarkdown` is expensive (markdown-it
+ * parse → DOMPurify sanitize → regex linkification), so we cache its output
+ * with `React.useMemo` keyed on the actual text content.  This avoids the
+ * CPU spike (BUG: high Chrome renderer CPU during streaming).
+ */
+const TextPart = React.memo(function TextPart({ part, index, onOpenFile }: {
+    part: any; index: number; onOpenFile?: (filePath: string) => void;
+}) {
     const text: string = part.text || '';
-    if (!text) return null;
+
     // Suppress pure JSON artifacts (empty array/object leaked from tool output streaming)
-    if (text.trim() === '[]' || text.trim() === '{}') return null;
+    if (!text || text.trim() === '[]' || text.trim() === '{}') return null;
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const rendered = React.useMemo(() => renderMarkdown(text, onOpenFile), [text]);
+
     return (
         <div key={`text-${index}`} className="part-text">
-            {renderMarkdown(text, onOpenFile)}
+            {rendered}
         </div>
     );
-}
+}, (prev, next) => prev.part.text === next.part.text && prev.index === next.index);
 
-/** Heuristic: returns true if the string looks like a JSON object/array (not prose). */
-function isLikelyJSON(s: string): boolean {
-    try { JSON.parse(s); return true; } catch { return false; }
+/** Helper to render a TextPart from the renderPart dispatcher. */
+function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
+    return <TextPart key={`text-${index}`} part={part} index={index} onOpenFile={onOpenFile} />;
 }
 
 /** Icon React nodes for tool display (avoids dangerouslySetInnerHTML). */
@@ -154,29 +177,29 @@ function getToolInfo(part: any): { icon: React.ReactNode; name: string; subtitle
         displayName = 'Shell';
         const desc = typeof input === 'object' && input !== null ? (input as any).description : undefined;
         subtitle = desc || (typeof input === 'string' ? input : (typeof input === 'object' && input !== null ? (input as any).command || '' : ''));
-    } else if (/^(read|Read)$/.test(toolName)) {
+    } else if (READ_TOOL_NAMES.test(toolName)) {
         iconKey = 'glasses';
         displayName = 'Read';
         subtitle = typeof input === 'object' && input !== null ? (input as any).filePath || (input as any).path || '' : '';
-    } else if (/^(grep|Grep|glob|Glob|rg|ripgrep|search|find|list|list_files|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/i.test(toolName)) {
+    } else if (SEARCH_TOOL_NAMES.test(toolName)) {
         iconKey = 'search';
         displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1).replace(/_/g, ' ');
         subtitle = typeof input === 'object' && input !== null ? (input as any).pattern || (input as any).query || '' : '';
-    } else if (/^(edit|Edit|write|Write)$/.test(toolName)) {
+    } else if (EDIT_WRITE_TOOL_NAMES.test(toolName)) {
         iconKey = 'code';
         displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
         subtitle = typeof input === 'object' && input !== null ? (input as any).filePath || (input as any).path || '' : '';
-    } else if (/^(task|Task)$/.test(toolName)) {
+    } else if (TASK_TOOL_NAMES.test(toolName)) {
         iconKey = 'task';
         const agentType: string = typeof input === 'object' && input !== null ? ((input as any).subagent_type || '') : '';
         const desc: string = typeof input === 'object' && input !== null ? ((input as any).description || '') : '';
         displayName = agentType ? `@${agentType}` : 'Task';
         subtitle = desc;
-    } else if (/^(webfetch|WebFetch|web_fetch)$/i.test(toolName)) {
+    } else if (WEBFETCH_TOOL_NAMES.test(toolName)) {
         iconKey = 'window';
         displayName = 'Web Fetch';
         subtitle = typeof input === 'object' && input !== null ? (input as any).url || '' : '';
-    } else if (/^(todowrite|TodoWrite|todo_write)$/i.test(toolName)) {
+    } else if (TODOWRITE_TOOL_NAMES.test(toolName)) {
         iconKey = 'task';
         displayName = 'Todo';
     }
@@ -212,40 +235,44 @@ const ToolBlock: React.FC<{
         ? state.output : (part.output ?? undefined);
 
     // Detect edit/write tools
-    const isEdit = /^(edit|Edit)$/.test(part.tool || '');
-    const isWrite = /^(write|Write)$/.test(part.tool || '');
+    const isEdit = EDIT_TOOL_NAMES.test(part.tool || '');
+    const isWrite = WRITE_TOOL_NAMES.test(part.tool || '');
     const isEditOrWrite = isEdit || isWrite;
 
     // For edit/write: extract file info and compute diff
     let editFileName = '';
     let editDirectory = '';
     let editFilePath = '';
-    let diffResult: { lines: Array<{ type: 'add' | 'del' | 'ctx'; text: string }>; additions: number; deletions: number } | null = null;
 
     if (isEditOrWrite && typeof input === 'object' && input !== null) {
         editFilePath = (input as any).filePath || (input as any).path || '';
         const lastSlash = editFilePath.lastIndexOf('/');
         editFileName = lastSlash >= 0 ? editFilePath.slice(lastSlash + 1) : editFilePath;
         editDirectory = lastSlash >= 0 ? editFilePath.slice(0, lastSlash) : '';
+    }
 
+    // Memoize diff computation — computeSimpleDiff uses O(m*n) LCS, expensive during streaming re-renders
+    const diffResult = React.useMemo(() => {
+        if (!isEditOrWrite || typeof input !== 'object' || input === null) return null;
         if (isEdit) {
             const oldStr = (input as any).oldString || '';
             const newStr = (input as any).newString || '';
             if (oldStr || newStr) {
-                diffResult = computeSimpleDiff(oldStr, newStr);
+                return computeSimpleDiff(oldStr, newStr);
             }
         } else if (isWrite) {
             const content = (input as any).content || '';
             if (content) {
                 const contentLines = content.split('\n');
-                diffResult = {
+                return {
                     lines: contentLines.map((l: string) => ({ type: 'add' as const, text: l })),
                     additions: contentLines.length,
                     deletions: 0
                 };
             }
         }
-    }
+        return null;
+    }, [isEditOrWrite, isEdit, isWrite, input]);
 
     const hasBody = !!(input || output || diffResult);
 
@@ -339,7 +366,7 @@ const ToolBlock: React.FC<{
                 <div className={isEditOrWrite && diffResult ? 'part-tool-body part-tool-diff-body' : 'part-tool-body'}>
                     {isEditOrWrite && diffResult ? (
                         <div className="part-tool-diff">
-                            {diffResult.lines.map((line, idx) => (
+                            {diffResult.lines.map((line: { type: 'add' | 'del' | 'ctx'; text: string }, idx: number) => (
                                 <div key={idx} className={`diff-line diff-line-${line.type}`}>
                                     <span className="diff-line-indicator">
                                         {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
@@ -739,15 +766,17 @@ function renderToolPart(
 }
 
 /** Reasoning block — renders reasoning text inline with markdown, no sub-header or nested toggle. */
-const ReasoningBlock: React.FC<{ part: any }> = ({ part }) => {
+const ReasoningBlock: React.FC<{ part: any }> = React.memo(({ part }) => {
     const text: string = part.text || part.reasoning || '';
     if (!text) return null;
+    // Memoize expensive markdown rendering — only re-parse when text changes
+    const rendered = React.useMemo(() => renderMarkdown(text), [text]);
     return (
         <div className="part-reasoning-inline part-text">
-            {renderMarkdown(text)}
+            {rendered}
         </div>
     );
-};
+});
 
 function renderReasoningPart(part: any, index: number): React.ReactNode {
     return <ReasoningBlock key={`reasoning-${index}`} part={part} />;
@@ -1166,11 +1195,15 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
 
     // When rendered as an intermediate step (inside an outer TurnGroup from the timeline),
     // render all parts flat — no article wrapper, no header, no inner TurnGroup.
+    // Memoize groupParts to avoid recomputation during streaming re-renders.
+    const intermediateGrouped = React.useMemo(
+        () => isIntermediateStep ? groupParts(parts) : [],
+        [isIntermediateStep, parts]
+    );
     if (isIntermediateStep) {
-        const allGrouped = groupParts(parts);
         return (
             <div className="message-bubble-intermediate">
-                {allGrouped.map((group, gi) => {
+                {intermediateGrouped.map((group, gi) => {
                     if (group.type === 'context-group') {
                         return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
                     }
