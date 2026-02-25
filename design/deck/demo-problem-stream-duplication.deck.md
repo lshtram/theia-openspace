@@ -7,7 +7,7 @@ progress: true
 slideNumber: "c/t"
 ---
 
-<!-- .slide: data-background-gradient="linear-gradient(135deg, #1a0a0a 0%, #3b0000 60%, #0f0f0f 100%)" -->
+<!-- .slide: data-background-image="design/assets/images/incident-ops-hero.jpg" data-background-opacity="0.22" data-background-gradient="linear-gradient(135deg, #1a0a0a 0%, #3b0000 60%, #0f0f0f 100%)" -->
 
 <div class="inc-pulse-indicator">
   <div class="inc-pulse-dot"></div>
@@ -84,6 +84,16 @@ Read each bullet aloud. The key detail is "no errors in the console." This is th
 
 Note:
 The enterprise demo impact is worth dwelling on — a single incident in an 8-minute window hit the worst possible moment. This is why production monitoring and fast rollback matters more than a perfect first deploy. The technical impact was bounded, but the business cost was disproportionate.
+
+---
+
+<!-- .slide: data-background-gradient="linear-gradient(135deg, #0f0f0f 0%, #1e0a0a 100%)" -->
+
+## Duplicate Listener Fan-out
+
+<img src="design/assets/diagrams/sse-duplication-fanout.svg" style="width: 90%; border-radius: 12px; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);">
+
+Note: The diagram makes the duplication mechanism obvious: two listeners, two append paths, same stream.
 
 ---
 
@@ -271,6 +281,27 @@ Note:
 The contrast with the problem slide is intentional — same metric labels, green numbers instead of red. The fix was trivially small. The lesson is not about code complexity; it's about lifecycle discipline. Two missing lines caused an 8-minute outage that hit a prospective enterprise customer during a demo. That's the cost of skipping cleanup functions.
 
 ---
+
+<!-- .slide: data-background-gradient="linear-gradient(135deg, #0f0f0f 0%, #1e293b 100%)" -->
+
+## Incident Timeline
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8em; margin-top: 1em; font-size: 0.78em;">
+  <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 0.8em;">
+    <strong>14:22</strong><br>First report
+  </div>
+  <div style="background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.35); border-radius: 8px; padding: 0.8em;">
+    <strong>14:25</strong><br>Incident declared
+  </div>
+  <div style="background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.35); border-radius: 8px; padding: 0.8em;">
+    <strong>14:28</strong><br>Root cause found
+  </div>
+  <div style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 8px; padding: 0.8em;">
+    <strong>14:30</strong><br>Rollback shipped
+  </div>
+</div>
+
+<p style="font-size: 0.72em; color: #94a3b8; margin-top: 0.7em;">8 minutes from first report to rollback, but the demo impact hit immediately.</p>
 
 <!-- .slide: data-background-gradient="linear-gradient(135deg, #0f0f0f 0%, #1e293b 100%)" -->
 
