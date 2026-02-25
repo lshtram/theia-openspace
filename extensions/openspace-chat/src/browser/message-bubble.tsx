@@ -129,15 +129,14 @@ function renderPart(
  * CPU spike (BUG: high Chrome renderer CPU during streaming).
  */
 const TextPart = React.memo(function TextPart({ part, index, onOpenFile }: {
-    part: any; index: number; onOpenFile?: (filePath: string) => void;
+    part: { text?: string }; index: number; onOpenFile?: (filePath: string) => void;
 }) {
     const text: string = part.text || '';
 
     // Suppress pure JSON artifacts (empty array/object leaked from tool output streaming)
     if (!text || text.trim() === '[]' || text.trim() === '{}') return null;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const rendered = React.useMemo(() => renderMarkdown(text, onOpenFile), [text]);
+    const rendered = React.useMemo(() => renderMarkdown(text, onOpenFile), [text, onOpenFile]);
 
     return (
         <div key={`text-${index}`} className="part-text">

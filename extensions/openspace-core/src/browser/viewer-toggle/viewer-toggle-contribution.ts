@@ -44,7 +44,7 @@ export class ViewerToggleContribution implements FrontendApplicationContribution
 
         // Skip widgets that manage their own internal toggle (e.g. MarkdownViewerWidget).
         // Duck-type check: if the widget has a toggleMode method, it handles itself.
-        if (typeof (widget as any).toggleMode === 'function') {
+        if (typeof (widget as { toggleMode?: () => void }).toggleMode === 'function') {
             return;
         }
 
@@ -67,6 +67,6 @@ export class ViewerToggleContribution implements FrontendApplicationContribution
         );
 
         // Dispose the listener when the widget is detached.
-        (widget as any).toDisposeOnDetach?.push(disposable);
+        (widget as { toDisposeOnDetach?: Disposable[] }).toDisposeOnDetach?.push(disposable);
     }
 }

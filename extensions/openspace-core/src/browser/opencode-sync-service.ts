@@ -22,11 +22,13 @@ import {
     OpenCodeClient,
     SessionNotification,
     MessageNotification,
-     MessagePartDeltaNotification,
-     FileNotification,
-     PermissionNotification,
-     QuestionNotification,
-     TodoNotification
+    MessagePartDeltaNotification,
+    MessagePart,
+    Message,
+    FileNotification,
+    PermissionNotification,
+    QuestionNotification,
+    TodoNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -433,7 +435,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // matches parts by ID and replaces them in-place, so each message.part.updated carrying a new
         // state will overwrite the previous part record. No bug here.
         const allParts = event.data.parts || [];
-        const toolParts = allParts.filter((p: any) => {
+        const toolParts = allParts.filter((p: MessagePart) => {
             if (p.type !== 'text' && p.type !== 'reasoning') {
                 return true;
             }
@@ -585,7 +587,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 // SSE event from a reconnect for a historical message — drop it to prevent
                 // appending on top of already-final content (which causes N× duplication).
                 const existingMsg = this.sessionService.messages.find(m => m.id === event.messageID);
-                if (existingMsg && (existingMsg.time as any)?.completed) {
+                if (existingMsg && (existingMsg.time as { completed?: number })?.completed) {
                     this.logger.debug(`[SyncService] Dropping replayed delta for completed message: ${event.messageID}`);
                     return;
                 }
@@ -597,7 +599,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     sessionID: event.sessionID,
                     role: 'assistant',
                     time: { created: Date.now() }
-                } as any);
+                } as Message);
             }
 
             // Apply the delta directly to the part in session service

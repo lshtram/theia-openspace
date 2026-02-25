@@ -315,7 +315,7 @@ export class SessionServiceImpl implements SessionService {
             }
             // In browser bundles, Node fs may be unavailable/polyfilled.
             // MCP config is optional, so gracefully skip when fs APIs are missing.
-            if (typeof (fs as any).existsSync !== 'function' || typeof (fs as any).readFileSync !== 'function') {
+            if (typeof (fs as { existsSync?: unknown }).existsSync !== 'function' || typeof (fs as { readFileSync?: unknown }).readFileSync !== 'function') {
                 this.logger.debug('[SessionService] Skipping MCP config read: fs APIs unavailable in browser runtime');
                 return undefined;
             }
@@ -1240,7 +1240,7 @@ export class SessionServiceImpl implements SessionService {
             // Always restore on session switch (don't gate on !this._activeModel) so that
             // switching between sessions that used different models updates the selector.
             for (let i = this._messages.length - 1; i >= 0; i--) {
-                const msg = this._messages[i] as any;
+                const msg = this._messages[i] as Message & { providerID?: string; modelID?: string };
                 if (msg.role === 'assistant' && msg.providerID && msg.modelID) {
                     const restored = `${msg.providerID}/${msg.modelID}`;
                     this.setActiveModel(restored);
@@ -1630,10 +1630,10 @@ export class SessionServiceImpl implements SessionService {
         const parts = [...(message.parts || [])];
 
         // Find existing part by ID
-        const partIndex = parts.findIndex(p => (p as any).id === partId);
+        const partIndex = parts.findIndex(p => (p as { id?: string }).id === partId);
         if (partIndex >= 0) {
             // Append delta to existing part's field
-            const part = { ...parts[partIndex] } as any;
+            const part = { ...parts[partIndex] } as MessagePart;
             part[field] = (part[field] || '') + delta;
             parts[partIndex] = part;
         } else {
@@ -1645,7 +1645,7 @@ export class SessionServiceImpl implements SessionService {
             const inferredType =
                 field === 'reasoning'                    ? 'reasoning' :
                 field === 'input' || field === 'output'  ? 'tool'      : 'text';
-            const newPart: any = {
+            const newPart: MessagePart = {
                 id: partId,
                 sessionID: message.sessionID,
                 messageID: messageId,
@@ -1676,7 +1676,7 @@ export class SessionServiceImpl implements SessionService {
         }
 
         const message = this._messages[index];
-        const parts = (message.parts || []).map((p: any) => {
+        const parts = (message.parts || []).map((p: MessagePart) => {
             const copy = { ...p };
             if (copy.text !== undefined) {
                 copy.text = '';

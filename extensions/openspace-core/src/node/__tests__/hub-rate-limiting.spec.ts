@@ -74,7 +74,7 @@ describe('RateLimiter (Issue 7)', () => {
         limiter.cleanup();
 
         // Internal map should be empty after cleanup
-        expect((limiter as any).counters.size, 'stale entries should be removed').to.equal(0);
+        expect((limiter as RateLimiter & { counters: Map<string, { count: number; windowStart: number }> }).counters.size, 'stale entries should be removed').to.equal(0);
     });
 
     it('cleanup() preserves entries that are still within the 60-second window', () => {
@@ -84,7 +84,7 @@ describe('RateLimiter (Issue 7)', () => {
         clock.tick(30_000); // only 30s — not yet stale
         limiter.cleanup();
 
-        expect((limiter as any).counters.size, 'recent entry should be preserved').to.equal(1);
+        expect((limiter as RateLimiter & { counters: Map<string, { count: number; windowStart: number }> }).counters.size, 'recent entry should be preserved').to.equal(1);
     });
 
     it('uses a sensible default limit when none is provided', () => {

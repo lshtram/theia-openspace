@@ -23,6 +23,11 @@ import { MessageService } from '@theia/core/lib/common/message-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { Session } from 'openspace-core/lib/common/opencode-protocol';
 
+interface ExtendedSession extends Session {
+    parentID?: string;
+    time: Session['time'] & { archived?: number };
+}
+
 /** Formats a timestamp as a relative time string (e.g. "2h ago"). */
 function relativeTime(ms: number): string {
     const diff = Date.now() - ms;
@@ -175,20 +180,21 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
             )}
             <div className="sessions-widget-list">
                 {sessions
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    .filter(s => showArchived ? true : !(s.time as any)?.archived)
-                    .map(session => (
+                    .filter(s => showArchived ? true : !((s as ExtendedSession).time?.archived))
+                    .map(session => {
+                        const extSession = session as ExtendedSession;
+                        return (
                     <div
                         key={session.id}
-                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${(session as any).parentID ? ' session-child session-forked' : ''}`}
+                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${extSession.parentID ? ' session-child session-forked' : ''}`}
                         data-session-id={session.id}
-                        data-parent-id={(session as any).parentID ?? undefined}
+                        data-parent-id={extSession.parentID ?? undefined}
                         onClick={() => handleSwitch(session.id)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter') { handleSwitch(session.id); } }}
                         title={session.title}
-                        style={(session as any).parentID ? { paddingLeft: '24px' } : undefined}
+                        style={extSession.parentID ? { paddingLeft: '24px' } : undefined}
                     >
                         <span className="sessions-widget-item-title">
                             {session.title}
@@ -219,7 +225,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                             </button>
                         </div>
                     </div>
-                ))}
+                );})}
             </div>
             {hasMore && !searchQuery && (
                 <button

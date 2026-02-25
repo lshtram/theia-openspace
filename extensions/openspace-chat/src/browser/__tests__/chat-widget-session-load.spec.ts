@@ -30,6 +30,7 @@ import * as React from '@theia/core/shared/react';
 import { createRoot } from '@theia/core/shared/react-dom/client';
 import type { Root } from 'react-dom/client';
 import { act } from '@theia/core/shared/react';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ChatComponent } = require('openspace-chat/lib/browser/chat-widget') as {
     ChatComponent: React.FC<any>
 };

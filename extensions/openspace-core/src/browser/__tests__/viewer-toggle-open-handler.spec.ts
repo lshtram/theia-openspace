@@ -30,8 +30,8 @@ function makeHandler(
     handlers: StubHandler[],
 ): ViewerToggleOpenHandler {
     const h = new ViewerToggleOpenHandler();
-    (h as any).toggleService = makeToggleService(canToggleResult, toggleState);
-    (h as any).handlersProvider = makeHandlersProvider(handlers);
+    (h as ViewerToggleOpenHandler & { toggleService: ViewerToggleService; handlersProvider: { getContributions: () => StubHandler[] } }).toggleService = makeToggleService(canToggleResult, toggleState);
+    (h as ViewerToggleOpenHandler & { toggleService: ViewerToggleService; handlersProvider: { getContributions: () => StubHandler[] } }).handlersProvider = makeHandlersProvider(handlers);
     return h;
 }
 

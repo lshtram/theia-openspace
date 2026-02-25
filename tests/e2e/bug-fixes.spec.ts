@@ -20,8 +20,6 @@
  */
 
 import { test, expect, request, type Page } from '@playwright/test';
-import * as fs from 'fs';
-import * as path from 'path';
 import {
     BASE_URL,
     isOpenCodeAvailable,
@@ -34,15 +32,6 @@ const OPENCODE_URL = 'http://localhost:7890';
 // The demo project directory must match what global-setup creates,
 // so sessions created via the API show up in Theia's sessions widget.
 const DEMO_PROJECT_DIR = '/tmp/openspace-e2e-demo-project';
-
-function readProjectId(): string | null {
-    try {
-        const idFile = path.join(__dirname, '.e2e-project-id');
-        return fs.readFileSync(idFile, 'utf8').trim() || null;
-    } catch {
-        return null;
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,24 +67,6 @@ async function createSession(directory = DEMO_PROJECT_DIR): Promise<string> {
     expect(res.ok(), `createSession failed: ${res.status()}`).toBeTruthy();
     const body = await res.json();
     return body.id as string;
-}
-
-async function createSessionWithMessages(directory = '/tmp'): Promise<{ sessionId: string; messageId: string }> {
-    const ctx = await request.newContext();
-    const sessionId = await createSession(directory);
-
-    // Post a message that will trigger a tool call (Read) by referencing a file path
-    const msgRes = await ctx.post(`${OPENCODE_URL}/session/${sessionId}/message`, {
-        data: {
-            parts: [
-                { type: 'text', text: 'Read /etc/hosts and summarize it.' },
-                { type: 'file', filename: '/etc/hosts', mediaType: 'text/plain' },
-            ],
-        },
-        headers: { 'x-opencode-directory': directory },
-    });
-    const msgBody = await msgRes.json().catch(() => ({ id: 'unknown' }));
-    return { sessionId, messageId: msgBody.id as string };
 }
 
 // ===========================================================================
@@ -506,14 +477,14 @@ test.describe('BUG-4: Model is restored when switching to a session that used a 
 
         // Read the model selector's current text for session A
         const modelSelector = page.locator('.model-selector-pill').first();
-        const modelA = await modelSelector.textContent({ timeout: 5000 }).catch(() => 'unknown');
+        const _modelA = await modelSelector.textContent({ timeout: 5000 }).catch(() => 'unknown');
 
         // Create session B (which may have a different model if OpenCode assigns one)
         if (await newSessionBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
             await newSessionBtn.click();
             await page.waitForTimeout(1500);
         }
-        const modelB = await modelSelector.textContent({ timeout: 3000 }).catch(() => 'unknown');
+        const _modelB = await modelSelector.textContent({ timeout: 3000 }).catch(() => 'unknown');
 
         // Switch back to session A by clicking it in the sessions list
         // (We need at least 2 sessions visible — if only 1 created, skip)

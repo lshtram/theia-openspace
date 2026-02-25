@@ -39,21 +39,6 @@ async function createSession(directory: string = '/tmp'): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: ensure an active session exists in the chat widget UI
-// (click "New session" button, which calls SessionService.createSession())
-// ---------------------------------------------------------------------------
-async function ensureActiveSession(page: Page): Promise<void> {
-    const available = await isOpenCodeAvailable();
-    if (!available) { return; }
-    const newSessionBtn = page.locator('[aria-label="New session"], .new-session-button');
-    if (await newSessionBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await newSessionBtn.click();
-        // Wait briefly for session to be created and set as active
-        await page.waitForTimeout(1500);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Helper: open the Sessions sidebar widget (left panel)
 // ---------------------------------------------------------------------------
 async function openSessionsWidget(page: Page): Promise<void> {
@@ -657,7 +642,6 @@ test.describe('Gap: Forked session hierarchy', () => {
         // Implementation location: extensions/openspace-chat/src/browser/sessions-widget.tsx
 
         // Verify that session items have a data attribute that can represent hierarchy
-        const sessionItems = page.locator('.session-list-item[data-parent-id]');
         // This assertion is structural — even if no forked sessions exist, the attribute
         // should be in the DOM for sessions that have a parentID.
         // The test FAILS until parentID is wired into the DOM.

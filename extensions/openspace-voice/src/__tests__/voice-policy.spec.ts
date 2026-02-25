@@ -19,7 +19,7 @@ describe('VoicePolicy', () => {
 
   it('throws on invalid narrationMode', () => {
     assert.throws(
-      () => resolveVoicePolicy({ narrationMode: 'bad' as any }),
+      () => resolveVoicePolicy({ narrationMode: 'bad' as 'narrate-off' | 'narrate-everything' | 'narrate-summary' }),
       /narrationMode/
     );
   });

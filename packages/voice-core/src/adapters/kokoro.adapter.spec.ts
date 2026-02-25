@@ -106,7 +106,7 @@ describe('KokoroAdapter', () => {
           sampling_rate: 24000,
         }),
       };
-      (adapter as any).getModel = async () => {
+      (adapter as KokoroAdapter & { getModel: () => Promise<unknown> }).getModel = async () => {
         modelLoadCallCount++;
         return fakeModel;
       };

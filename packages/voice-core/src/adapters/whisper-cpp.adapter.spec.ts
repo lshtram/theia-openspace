@@ -4,6 +4,7 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import { EventEmitter } from 'events';
 import { WhisperCppAdapter, type SpawnFn } from './whisper-cpp.adapter';
+import { ChildProcess } from 'child_process';
 
 describe('WhisperCppAdapter', () => {
   describe('isAvailable()', () => {
@@ -11,7 +12,7 @@ describe('WhisperCppAdapter', () => {
       let capturedArgs: string[] = [];
       const mockSpawn: SpawnFn = (_cmd, args) => {
         capturedArgs = args;
-        return makeFakeProc(0) as any;
+        return makeFakeProc(0) as unknown as ReturnType<SpawnFn>;
       };
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
       expect(await adapter.isAvailable()).to.equal(true);
@@ -19,13 +20,13 @@ describe('WhisperCppAdapter', () => {
     });
 
     it('returns false when binary not found (ENOENT)', async () => {
-      const mockSpawn: SpawnFn = () => makeErrorProc('ENOENT') as any;
+      const mockSpawn: SpawnFn = () => makeErrorProc('ENOENT') as unknown as ReturnType<SpawnFn>;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
       expect(await adapter.isAvailable()).to.equal(false);
     });
 
     it('returns false when binary exits non-zero', async () => {
-      const mockSpawn: SpawnFn = () => makeFakeProc(1) as any;
+      const mockSpawn: SpawnFn = () => makeFakeProc(1) as unknown as ReturnType<SpawnFn>;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
       expect(await adapter.isAvailable()).to.equal(false);
     });
@@ -40,7 +41,7 @@ describe('WhisperCppAdapter', () => {
           const prefix = args[ofIndex + 1];
           fs.writeFileSync(prefix + '.txt', 'hello world\n');
         }
-        return makeFakeProc(0) as any;
+        return makeFakeProc(0) as unknown as ReturnType<SpawnFn>;
       };
       const adapter = new WhisperCppAdapter('whisper', '/models', 'ggml-base.en.bin', mockSpawn);
       const result = await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' });
@@ -55,7 +56,7 @@ describe('WhisperCppAdapter', () => {
         if (ofIndex !== -1) {
           fs.writeFileSync(args[ofIndex + 1] + '.txt', 'test\n');
         }
-        return makeFakeProc(0) as any;
+        return makeFakeProc(0) as unknown as ReturnType<SpawnFn>;
       };
       const adapter = new WhisperCppAdapter('whisper', '/models', 'ggml-base.en.bin', mockSpawn);
       await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en' });
@@ -63,14 +64,13 @@ describe('WhisperCppAdapter', () => {
       expect(capturedArgs.includes('-of'), 'should have -of flag').to.equal(true);
       expect(capturedArgs.includes('-f'), 'should have -f for input audio').to.equal(true);
       // Verify stdout is NOT piped (we read a file instead)
-      const stdioArg = 'pipe';
       // -f should appear and the input WAV path should follow it
       const fIndex = capturedArgs.indexOf('-f');
       expect(fIndex !== -1 && capturedArgs[fIndex + 1]?.endsWith('.wav'), '-f should be followed by wav file').to.equal(true);
     });
 
     it('rejects when whisper exits with non-zero code', async () => {
-      const mockSpawn: SpawnFn = () => makeFakeProc(1, 'model not found') as any;
+      const mockSpawn: SpawnFn = () => makeFakeProc(1, 'model not found') as unknown as ReturnType<SpawnFn>;
       const adapter = new WhisperCppAdapter('whisper', '/usr/local/share/whisper', 'ggml-base.en.bin', mockSpawn);
       try {
         await adapter.transcribe({ audio: new Uint8Array(100), sampleRate: 16000, language: 'en-US' });
@@ -85,7 +85,7 @@ describe('WhisperCppAdapter', () => {
       let onCancelFn: (() => void) | null = null;
 
       const mockSpawn: SpawnFn = () => {
-        const proc = new EventEmitter() as any;
+        const proc = new EventEmitter() as unknown as ChildProcess;
         proc.stdout = new EventEmitter();
         proc.stderr = new EventEmitter();
         proc.kill = () => { killed = true; };
@@ -124,7 +124,7 @@ describe('WhisperCppAdapter', () => {
 
 /** Fake process that exits with a given code (optionally emitting stderr text) */
 function makeFakeProc(code: number, stderrText = '') {
-  const proc = new EventEmitter() as any;
+  const proc = new EventEmitter() as unknown as ChildProcess;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   proc.kill = () => {};
@@ -137,7 +137,7 @@ function makeFakeProc(code: number, stderrText = '') {
 
 /** Fake process that emits an error event (e.g. ENOENT) */
 function makeErrorProc(code: string) {
-  const proc = new EventEmitter() as any;
+  const proc = new EventEmitter() as unknown as ChildProcess;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   proc.kill = () => {};

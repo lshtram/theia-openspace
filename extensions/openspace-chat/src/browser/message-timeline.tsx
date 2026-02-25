@@ -325,7 +325,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     const shellsByPlanIndex = React.useMemo(() => {
         const map: Record<number, ShellOutput[]> = {};
         for (const shell of shellOutputs) {
-            const afterIdx = (shell as any).afterMessageIndex;
+            const afterIdx = shell.afterMessageIndex;
             if (typeof afterIdx === 'number' && afterIdx >= 0) {
                 // Find the renderPlan item that covers this message index
                 const planIdx = planMaxIndices.findIndex(maxIdx => maxIdx >= afterIdx);
@@ -424,7 +424,8 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             const totalDurationSecs = indices.reduce((sum, idx) => {
                                 const m = messages[idx];
                                 const c = m.time?.created;
-                                const d = (m.time as any)?.completed;
+                                const assistantMsg = m as Message & { time: { created?: number; completed?: number } };
+                                const d = assistantMsg.time?.completed;
                                 if (!c || !d) return sum;
                                 const cMs = typeof c === 'number' ? c : new Date(c).getTime();
                                 const dMs = typeof d === 'number' ? d : new Date(d).getTime();
@@ -437,7 +438,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             const lastMessageParts = lastMessage?.parts || [];
                             let responsePartIndex = -1;
                             for (let pi = lastMessageParts.length - 1; pi >= 0; pi--) {
-                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as any).text) {
+                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as MessagePart & { text: string }).text) {
                                     responsePartIndex = pi;
                                     break;
                                 }
