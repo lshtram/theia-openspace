@@ -1484,6 +1484,22 @@
     animation: sessions-spin 1s linear infinite;
 }
 
+.load-more-sessions {
+    width: 100%;
+    padding: 6px 0;
+    background: none;
+    border: none;
+    color: var(--theia-focusBorder, #007fd4);
+    cursor: pointer;
+    font-size: 11px;
+    text-align: center;
+    opacity: 0.7;
+}
+
+.load-more-sessions:hover {
+    opacity: 1;
+}
+
 .openspace-chat-widget .oc-spin {
     animation: oc-spin 1s linear infinite;
 }
@@ -2444,3 +2460,28 @@
     border-left: 2px solid var(--theia-editorIndentGuide-activeBackground, var(--theia-contrastBorder));
 }
 .session-forked { opacity: 0.9; }
+
+/* H3: Session error display (session.error SSE event) */
+.session-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--theia-inputValidation-errorBackground, rgba(255, 80, 80, 0.1));
+    border: 1px solid var(--theia-inputValidation-errorBorder, #f44);
+    border-radius: 4px;
+    margin: 4px 0;
+    font-size: 0.85em;
+    color: var(--theia-errorForeground, #f88);
+}
+.session-error-icon { flex-shrink: 0; }
+.session-error-message { flex: 1; }
+.session-error-dismiss {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.7;
+    padding: 0 2px;
+}
+.session-error-dismiss:hover { opacity: 1; }

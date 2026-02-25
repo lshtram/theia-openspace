@@ -339,55 +339,48 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                 </button>
                 {showMenu && (
                     <div className="chat-header-menu" role="menu">
-                        {activeSession && (
-                            <button
-                                type="button"
-                                className="chat-header-menu-item fork-session-button"
-                                data-testid="fork-session-button"
-                                role="menuitem"
-                                onClick={() => { setShowMenu(false); onForkSession(); }}
-                            >
-                                Fork session
-                            </button>
-                        )}
-                        {activeSession && (
-                            <button
-                                type="button"
-                                className="chat-header-menu-item revert-session-button"
-                                data-testid="revert-session-button"
-                                role="menuitem"
-                                onClick={() => { setShowMenu(false); onRevertSession(); }}
-                            >
-                                {(activeSession as unknown as { revert?: unknown }).revert ? 'Unrevert session' : 'Revert session'}
-                            </button>
-                        )}
-                        {activeSession && (
-                            <button
-                                type="button"
-                                className="chat-header-menu-item compact-session-button"
-                                data-testid="compact-session-button"
-                                role="menuitem"
-                                onClick={() => { setShowMenu(false); onCompactSession(); }}
-                            >
-                                Compact session
-                            </button>
-                        )}
-                        {activeSession && (
-                            <button
-                                type="button"
-                                className="chat-header-menu-item"
-                                role="menuitem"
-                                onClick={() => { setShowMenu(false); onDeleteSession(); }}
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                                </svg>
-                                Delete session
-                            </button>
-                        )}
-                        {!activeSession && (
-                            <div className="chat-header-menu-empty">No actions</div>
-                        )}
+                        <button
+                            type="button"
+                            className="chat-header-menu-item fork-session-button"
+                            data-testid="fork-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onForkSession(); }}
+                        >
+                            Fork session
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item revert-session-button"
+                            data-testid="revert-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onRevertSession(); }}
+                        >
+                            {(activeSession as unknown as { revert?: unknown } | undefined)?.revert ? 'Unrevert session' : 'Revert session'}
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item compact-session-button"
+                            data-testid="compact-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onCompactSession(); }}
+                        >
+                            Compact session
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onDeleteSession(); }}
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                            Delete session
+                        </button>
                     </div>
                 )}
             </div>
