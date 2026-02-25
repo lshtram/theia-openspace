@@ -11,7 +11,7 @@ import { NarrationFsm } from './narration-fsm';
 import { VoiceWaveformOverlay } from './voice-waveform-overlay';
 import { VoiceTextProcessor } from './voice-text-processor';
 import type { VoicePolicy } from '../common/voice-policy';
-import { NARRATION_MODES, SUPPORTED_LANGUAGES } from '../common/voice-policy';
+import { NARRATION_MODES, SUPPORTED_LANGUAGES, SUPPORTED_VOICES } from '../common/voice-policy';
 
 export const VOICE_COMMANDS = {
   TOGGLE_VOICE:    { id: 'openspace.voice.toggle',         label: 'Voice: Toggle Voice Input' },
@@ -203,7 +203,7 @@ export class VoiceCommandContribution
           ...(!current.autoDetectLanguage ? { detail: '✓ current' } : {}),
         },
       ],
-      { title: 'Voice Policy — Language' }
+      { title: 'Voice Policy (1/5) — Language' }
     );
     if (autoDetectChoice === undefined) { return; }
 
@@ -238,7 +238,7 @@ export class VoiceCommandContribution
           ...(!current.enabled ? { detail: '✓ current' } : {}),
         },
       ],
-      { title: 'Voice Policy (2/4) — Enable voice?' }
+      { title: 'Voice Policy (2/5) — Enable voice?' }
     );
     if (enabledChoice === undefined) { return; }
 
@@ -264,7 +264,7 @@ export class VoiceCommandContribution
           ...(current.narrationMode === 'narrate-summary' ? { detail: '✓ current' } : {}),
         },
       ],
-      { title: 'Voice Policy (3/4) — Narration mode' }
+      { title: 'Voice Policy (3/5) — Narration mode' }
     );
     if (modeChoice === undefined) { return; }
 
@@ -280,15 +280,27 @@ export class VoiceCommandContribution
         ...item,
         ...(item.value === current.speed ? { detail: '✓ current' } : {}),
       })),
-      { title: 'Voice Policy (4/4) — Playback speed' }
+      { title: 'Voice Policy (4/5) — Playback speed' }
     );
     if (speedChoice === undefined) { return; }
+
+    // Step 4: voice
+    const voiceChoice = await this.quickPickService.show<QuickPickValue<string>>(
+      SUPPORTED_VOICES.map(voiceId => ({
+        label: voiceId,
+        value: voiceId,
+        ...(voiceId === current.voice ? { detail: '✓ current' } : {}),
+      })),
+      { title: 'Voice Policy (5/5) — Voice selection', placeholder: 'Select a voice...' }
+    );
+    if (voiceChoice === undefined) { return; }
 
     // Apply all choices
     this.sessionFsm.updatePolicy({
       enabled:            enabledChoice.value,
       narrationMode:      modeChoice.value as typeof NARRATION_MODES[number],
       speed:              speedChoice.value,
+      voice:              voiceChoice.value,
       language:           selectedLanguage,
       autoDetectLanguage: autoDetectChoice.value,
     });

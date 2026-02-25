@@ -46,11 +46,23 @@ Output ONLY a NarrationScript JSON:
 Keep it brief - 15 words or fewer.`,
 };
 
+export const SUPPORTED_VOICES = [
+  'af_sarah',
+  'am_adam',
+  'af_bella',
+  'af_nicole',
+  'am_michael',
+  'bf_emma',
+  'bm_george',
+] as const;
+
+export type SupportedVoiceId = typeof SUPPORTED_VOICES[number];
+
 export interface VoicePolicy {
   enabled: boolean;
   narrationMode: import('@openspace-ai/voice-core').NarrationMode;
   speed: number;
-  voice: string;
+  voice: SupportedVoiceId | string;
   language: string;
   autoDetectLanguage: boolean;
   narrationPrompts: NarrationPrompts;
@@ -117,6 +129,14 @@ export function resolveVoicePolicy(overrides: Partial<VoicePolicy> = {}): VoiceP
 
   if (!policy.language || policy.language.trim().length === 0) {
     throw new Error('language must be a non-empty BCP-47 string');
+  }
+
+  if (!policy.voice || policy.voice.trim().length === 0) {
+    throw new Error('voice cannot be empty');
+  }
+
+  if (!SUPPORTED_VOICES.includes(policy.voice as SupportedVoiceId)) {
+    throw new Error(`voice must be one of: ${SUPPORTED_VOICES.join(', ')}`);
   }
 
   return policy;
