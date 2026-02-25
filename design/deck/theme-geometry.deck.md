@@ -34,9 +34,9 @@ THEME v1.0 &nbsp;◆&nbsp; OPENSPACE DESIGN SYSTEM &nbsp;◆&nbsp; 2026
 <div style="display: flex; gap: 3em; align-items: flex-start; margin-top: 0.5em;">
 <div style="flex: 1.3;">
 
-<h1 style="font-size: 2.2em; margin-bottom: 0.1em;">Heading 1 — Display</h1>
-<h2 style="font-size: 1.5em; margin-bottom: 0.1em;">Heading 2 — Section Title</h2>
-<h3 style="font-size: 1.1em; margin-bottom: 0.6em;">Heading 3 — Subsection</h3>
+<h1 style="font-size: 2.2em; margin-bottom: 0.1em;">Heading 1 — Display <span style="font-size: 0.35em; font-weight: 400; color: #0f766e; letter-spacing: 0; vertical-align: middle;">CSS: 3.2em (shown at 2.2em for fit)</span></h1>
+<h2 style="font-size: 1.5em; margin-bottom: 0.1em;">Heading 2 — Section Title <span style="font-size: 0.45em; font-weight: 400; color: #0f766e; letter-spacing: 0; vertical-align: middle;">CSS: 2em (shown at 1.5em for fit)</span></h2>
+<h3 style="font-size: 1.1em; margin-bottom: 0.6em;">Heading 3 — Subsection <span style="font-size: 0.6em; font-weight: 400; color: #0f766e; letter-spacing: 0; vertical-align: middle;">CSS: 1.3em (shown at 1.1em for fit)</span></h3>
 
 <p class="geo-lead">Lead paragraph — 1.25em, rendered in deep teal for emphasis and high readability on warm backgrounds.</p>
 
@@ -144,7 +144,7 @@ interface GeometryTheme {
   };
   fonts: {
     heading: "'Outfit', 'DM Sans', 'Inter', sans-serif";
-    body:    "'Inter', system-ui, sans-serif";
+    body:    "'Inter', system-ui, -apple-system, sans-serif";
   };
 }
 
@@ -166,6 +166,8 @@ function applyGeoTheme(theme: GeometryTheme): void {
 | `--geo-amber` | `#f59e0b` | Secondary accent |
 | `--geo-teal` | `#0f766e` | Code / links |
 | `--geo-rose` | `#e11d48` | Highlight |
+
+<p style="font-size: 0.7em; color: #6b6b7b; margin-top: 0.5em; font-style: italic;">*Primary tokens shown. See :root for complete list.</p>
 
 </div>
 </div>
