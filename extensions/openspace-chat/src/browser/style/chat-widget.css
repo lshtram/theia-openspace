@@ -2395,22 +2395,7 @@
 }
 .load-more-messages:hover { opacity: 1; }
 
-/* F2: Session diff panel */
-.session-diff {
-    margin: 4px 8px;
-    border: 1px solid var(--theia-editorWidget-border, var(--theia-contrastBorder));
-    border-radius: 4px;
-    max-height: 180px;
-    overflow-y: auto;
-}
-.session-diff-content {
-    margin: 0;
-    padding: 6px 8px;
-    font-size: 0.78em;
-    font-family: var(--theia-editor-font-family, monospace);
-    white-space: pre;
-    color: var(--theia-foreground);
-}
+
 
 /* G1: Todo panel */
 .openspace-todo-panel {

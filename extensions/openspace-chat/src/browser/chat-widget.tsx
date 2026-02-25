@@ -1020,13 +1020,6 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                         {/* Live todo panel — shows current todo state from todo.updated SSE */}
                         <TodoPanel todos={sessionService.todos} />
 
-                        {/* Session diff — shows changed files when diff is available */}
-                        {sessionService.sessionDiff && (
-                            <div className="session-diff" data-testid="session-diff">
-                                <pre className="session-diff-content">{sessionService.sessionDiff}</pre>
-                            </div>
-                        )}
-
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}
