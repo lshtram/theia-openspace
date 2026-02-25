@@ -37,8 +37,7 @@ THEME v1.0 &nbsp;//&nbsp; DEVELOPER-NATIVE &nbsp;//&nbsp; CODE-FIRST AESTHETIC
 > **&gt;** "The terminal is not a constraint — it is the canonical interface. All other UIs are approximations."
 
 <div style="margin-top: 1.2em; font-size: 0.72em; color: #4a7a4a; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', monospace;">
-// CSS sizes: H1 3.0em · H2 2.0em · H3 1.3em · lead 1.25em · body 1em
-// Specimens above shown at reduced size for slide fit
+// CSS: H1 3.0em · H2 2.0em · H3 1.3em · lead 1.25em · body 1em — displayed: H1 2.2em · H2 1.6em · H3 1.2em (scaled for slide fit)
 </div>
 
 ---
@@ -293,7 +292,7 @@ function applyTerminalTheme(theme: TerminalTheme): void {
   border: none;
 }
 
-/* Syntax token colours — green family */
+/* Syntax token colours — keywords use teal for contrast */
 .reveal .token.keyword  { color: #80cbc4; }
 .reveal .token.type     { color: var(--term-bright); }
 .reveal .token.string   { color: var(--term-accent); }
