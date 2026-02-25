@@ -6,6 +6,7 @@
 const path = require('path');
 const configs = require('./gen-webpack.config.js');
 const nodeConfig = require('./gen-webpack.node.config.js');
+const CopyPlugin = require('copy-webpack-plugin');
 
 /**
  * Expose bundled modules on window.theia.moduleName namespace, e.g.
@@ -99,6 +100,28 @@ nodeConfig.config.externals = {
     ...(typeof nodeConfig.config.externals === 'object' && !Array.isArray(nodeConfig.config.externals) ? nodeConfig.config.externals : {}),
     ...kokoroExternals,
 };
+
+// Copy reveal.js CSS files as static assets so they can be loaded via
+// <link> tags without going through webpack's style-loader runtime (which
+// overflows the call stack when large CSS files are bundled together).
+const revealThemesSrc = path.resolve(__dirname, '../node_modules/reveal.js/dist/theme');
+const revealBaseCssSrc = path.resolve(__dirname, '../node_modules/reveal.js/dist/reveal.css');
+configs[0].plugins = [
+    ...(configs[0].plugins || []),
+    new CopyPlugin({
+        patterns: [
+            {
+                from: revealThemesSrc,
+                to: path.join(__dirname, 'lib/frontend/reveal-themes'),
+                // Include fonts subdirectory so @import url(./fonts/...) in theme CSS resolves.
+            },
+            {
+                from: revealBaseCssSrc,
+                to: path.join(__dirname, 'lib/frontend/reveal-themes/reveal.css'),
+            },
+        ],
+    }),
+];
 
 module.exports = [
     ...configs,

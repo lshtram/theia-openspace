@@ -28,9 +28,17 @@ import { IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecyc
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { attachTabDblClickToggle } from 'openspace-core/lib/browser/tab-dblclick-toggle';
 import Reveal from 'reveal.js';
-import RevealMarkdown from 'reveal.js/plugin/markdown/markdown.esm.js';
-import 'reveal.js/dist/reveal.css';
-import 'reveal.js/dist/theme/black.css';
+// reveal.js base CSS is loaded as a static <link> tag via injectRevealBaseCSS()
+// to avoid webpack style-loader call stack recursion with large CSS bundles.
+import { marked } from 'marked';
+
+// All available reveal.js themes - injected as <link> tags to avoid
+// webpack style-loader recursion with large combined CSS bundles.
+const REVEAL_THEMES = new Set([
+    'beige', 'black-contrast', 'black', 'blood', 'dracula', 'league',
+    'moon', 'night', 'serif', 'simple', 'sky', 'solarized',
+    'white-contrast', 'white', 'white_contrast_compact_verbatim_headers',
+]);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const DOMPurify = require('@theia/core/shared/dompurify');
 
@@ -125,6 +133,19 @@ export class PresentationWidget extends ReactWidget {
     protected monacoModelRef: IReference<MonacoEditorModel> | undefined;
     protected mountingEditor: boolean = false;
     protected editorDisposables = new DisposableCollection();
+    private static readonly loadedThemes = new Set<string>();
+    private static revealBaseCssInjected = false;
+
+    /** Inject reveal.js base CSS via <link> tag once (avoids style-loader stack overflow). */
+    private static injectRevealBaseCSS(): void {
+        if (PresentationWidget.revealBaseCssInjected) { return; }
+        PresentationWidget.revealBaseCssInjected = true;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/reveal-themes/reveal.css';
+        link.dataset.revealBase = 'true';
+        document.head.appendChild(link);
+    }
 
     // T2-22: Store the URI for findByUri comparison
     public uri: string = '';
@@ -150,6 +171,10 @@ export class PresentationWidget extends ReactWidget {
         this.title.iconClass = 'fa fa-play-circle';
         this.addClass('openspace-presentation-widget');
         this.containerRef = React.createRef();
+        // Inject reveal.js base CSS as a <link> tag once per page load.
+        // This avoids the webpack style-loader stack overflow caused by the
+        // large reveal.css being processed by the CSS module runtime.
+        PresentationWidget.injectRevealBaseCSS();
     }
 
     @postConstruct()
@@ -162,6 +187,7 @@ export class PresentationWidget extends ReactWidget {
      */
     setContent(content: string): void {
         this.deckContent = content;
+        console.log(`[PresentationWidget] setContent called: contentLen=${content.length}, containerRef=${!!this.containerRef?.current}`);
         // Guard: only drive DOM updates when the container is already attached.
         // If called before React has rendered (containerRef.current === null),
         // onAfterAttach() will fire later and pick up deckContent at that point.
@@ -174,17 +200,156 @@ export class PresentationWidget extends ReactWidget {
     }
 
     /**
+     * Extract all <style>...</style> blocks from slide content strings.
+     * Returns the combined CSS text and the cleaned slide contents (styles removed).
+     * This must be called BEFORE DOMPurify sanitization because DOMPurify strips <style> tags.
+     */
+    protected static extractSlideStyles(slides: SlideData[]): { css: string; cleanedSlides: SlideData[] } {
+        const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+        let css = '';
+        const cleanedSlides = slides.map(slide => {
+            const rawContent = slide.content ?? '';
+            const cleanContent = rawContent.replace(styleRe, (_match, cssText: string) => {
+                css += cssText + '\n';
+                return '';
+            });
+            return { ...slide, content: cleanContent };
+        });
+        return { css, cleanedSlides };
+    }
+
+    /**
+     * Scope all CSS rules in extracted deck styles to a specific container element.
+     * Prefixes every rule selector with `#scopeId` so styles only apply inside that element.
+     * This prevents CSS from one presentation widget leaking into another.
+     *
+     * Algorithm:
+     * 1. Strip block comments (/* ... *‌/) to avoid misidentifying comment text as selectors
+     * 2. Walk the CSS token-by-token tracking brace depth
+     * 3. At depth 0, accumulate selector/at-rule text until '{'
+     * 4. At depth 1+ (inside a block), pass through content verbatim
+     * 5. Prefix selectors: :root → #scopeId, html/body → #scopeId, others → #scopeId <sel>
+     * 6. @-rule blocks (media, keyframes, supports) pass through unprefixed at depth 0
+     */
+    protected static scopeCss(css: string, scopeId: string): string {
+        // Step 1: Strip block comments to prevent comment text being parsed as selectors.
+        // Replace each comment with whitespace of equal length to preserve character positions.
+        const stripped = css.replace(/\/\*[\s\S]*?\*\//g, match => ' '.repeat(match.length))
+            .replace(/@charset[^;]*;/gi, '')
+            .replace(/@import[^;]*;/gi, '');
+
+        let result = '';
+        let depth = 0;
+        let buffer = '';  // accumulates selector text at depth 0, rule body at depth > 0
+        let i = 0;
+
+        while (i < stripped.length) {
+            const ch = stripped[i];
+
+            if (ch === '{') {
+                if (depth === 0) {
+                    // buffer holds the selector list or @-rule header
+                    const token = buffer.trim();
+                    buffer = '';
+                    if (token.startsWith('@')) {
+                        // @-rule block — emit as-is; inner selectors will be scoped when depth > 0
+                        result += token + ' {';
+                    } else if (token) {
+                        // Regular selector — prefix each comma-separated part
+                        const scoped = token
+                            .split(',')
+                            .map(sel => {
+                                const s = sel.trim();
+                                if (!s) { return ''; }
+                                if (s === ':root') { return `#${scopeId}`; }
+                                if (/^(html|body)\b/.test(s)) {
+                                    const rest = s.replace(/^(html|body)\b/, '').trim();
+                                    return rest ? `#${scopeId} ${rest}` : `#${scopeId}`;
+                                }
+                                return `#${scopeId} ${s}`;
+                            })
+                            .filter(Boolean)
+                            .join(', ');
+                        result += scoped + ' {';
+                    } else {
+                        result += '{';
+                    }
+                } else {
+                    // Nested brace (inside a rule body or @-rule block)
+                    result += buffer + '{';
+                    buffer = '';
+                }
+                depth++;
+                i++;
+                continue;
+            }
+
+            if (ch === '}') {
+                result += buffer + '}';
+                buffer = '';
+                depth = Math.max(0, depth - 1);
+                i++;
+                continue;
+            }
+
+            buffer += ch;
+            i++;
+        }
+
+        // Flush any remaining buffer (e.g. trailing whitespace)
+        result += buffer;
+        return result;
+    }
+
+    /**
+     * Inject extracted CSS from deck <style> blocks into the presentation container.
+     * All CSS rules are scoped to the widget's unique container ID to prevent
+     * styles from one open presentation leaking into another.
+     * Uses a stable element id so repeated calls replace rather than append.
+     */
+    protected injectDeckStyles(container: HTMLElement, css: string): void {
+        const STYLE_ATTR = 'data-deck-styles';
+        // Remove previous injection to avoid duplicates on setContent() calls
+        const existing = container.querySelector(`[${STYLE_ATTR}]`);
+        if (existing) { existing.remove(); }
+        if (!css.trim()) { return; }
+
+        // Ensure the container has a stable unique id for CSS scoping
+        if (!container.id) {
+            container.id = `deck-scope-${Math.random().toString(36).slice(2, 9)}`;
+        }
+        const scopeId = container.id;
+        const scopedCss = PresentationWidget.scopeCss(css, scopeId);
+
+        const styleEl = document.createElement('style');
+        styleEl.setAttribute(STYLE_ATTR, 'true');
+        styleEl.textContent = scopedCss;
+        // Insert before .reveal so styles load before slide content renders
+        const revealEl = container.querySelector('.reveal');
+        if (revealEl) {
+            container.insertBefore(styleEl, revealEl);
+        } else {
+            container.appendChild(styleEl);
+        }
+    }
+
+    /**
      * Write slide sections directly into the .slides DOM element (imperative, bypasses React).
+     * Markdown is pre-rendered to HTML via marked.js — no data-markdown attribute is used,
+     * which avoids the RevealMarkdown infinite-recursion / stack-overflow issue.
      * Must be called after the container is attached to the DOM.
      */
     protected writeSlidesDom(): void {
         const container = this.containerRef?.current;
-        if (!container) { return; }
+        if (!container) { console.warn('[PresentationWidget] writeSlidesDom: no container'); return; }
         const slidesEl = container.querySelector('.slides');
-        if (!slidesEl) { return; }
+        if (!slidesEl) { console.warn('[PresentationWidget] writeSlidesDom: no .slides element'); return; }
 
         const deck = PresentationWidget.parseDeckContent(this.deckContent);
+        console.log(`[PresentationWidget] writeSlidesDom: ${deck.slides.length} slides, deckContentLen=${this.deckContent.length}`);
         if (deck.slides.length === 0) {
+            // Clear any previously injected deck styles
+            this.injectDeckStyles(container, '');
             slidesEl.innerHTML = `
                 <section>
                     <h1>No Slides</h1>
@@ -200,22 +365,34 @@ Content here
 More content</pre>
                 </section>`;
         } else {
-            slidesEl.innerHTML = deck.slides.map(slide => {
+            // Step 1: Extract <style> blocks from ALL slides before any sanitization.
+            // DOMPurify strips <style> tags, so we must pull them out first.
+            const { css, cleanedSlides } = PresentationWidget.extractSlideStyles(deck.slides);
+
+            // Step 2: Inject combined CSS into the container (outside .reveal)
+            this.injectDeckStyles(container, css);
+
+            // Step 3: Render remaining slide content (no <style> tags remain)
+            slidesEl.innerHTML = cleanedSlides.map(slide => {
                 // Extract <!-- .slide: --> directives BEFORE sanitization, since DOMPurify
                 // strips HTML comments by default. The directives are applied as attributes
                 // on the <section> element (e.g. data-background-image="...").
                 const rawContent = slide.content ?? '';
                 const { directives, cleanContent } = PresentationWidget.extractSlideDirectives(rawContent);
-                // Task 4: Sanitize slide content to prevent XSS via crafted .deck.md files
-                const sanitized = DOMPurify.sanitize(cleanContent, {
+                // Pre-render markdown → HTML synchronously via marked.parse()
+                // This avoids the RevealMarkdown plugin's data-markdown processing loop
+                // which causes a stack overflow (infinite recursion in writeSlidesDom).
+                const renderedHtml = marked.parse(cleanContent, { async: false }) as string;
+                // Task 4: Sanitize rendered HTML to prevent XSS via crafted .deck.md files
+                const sanitized = DOMPurify.sanitize(renderedHtml, {
                     ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
                         'tr','th','td','span','div','sup','sub'],
                     ALLOWED_ATTR: ['href','src','alt','class','id','style']
                 });
-                const escapedContent = sanitized.replace(/<\/script>/g, '<\\/script>');
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
-                return `<section data-markdown=""${notesAttr}${directives}><script type="text/template">${escapedContent}</script></section>`;
+                // No data-markdown attribute — reveal.js treats this as a plain HTML section
+                return `<section${notesAttr}${directives}>${sanitized}</section>`;
             }).join('');
         }
     }
@@ -438,16 +615,27 @@ More content</pre>
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
+        console.log(`[PresentationWidget] onAfterAttach: mode=${this.mode}, deckContentLen=${this.deckContent.length}, uri=${this.uri}`);
         if (this.mode === 'presentation') {
             // Defer slide writing until React has committed its first render.
             // onAfterAttach fires synchronously during Lumino's DOM insertion,
             // before React's useLayoutEffect/componentDidMount runs. rAF lets
             // the browser do a layout pass so containerRef.current is non-null.
             requestAnimationFrame(() => {
-                this.writeSlidesDom();
-                this.initializeReveal().catch(err =>
-                    console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
-                );
+                console.log(`[PresentationWidget] rAF in onAfterAttach: containerRef=${!!this.containerRef?.current}, deckContentLen=${this.deckContent.length}`);
+                if (!this.deckContent && this.uri) {
+                    // Widget was restored from saved layout without setContent() being called
+                    // (e.g. page reload). Re-read the file from URI to re-hydrate content.
+                    console.log(`[PresentationWidget] Re-hydrating from URI: ${this.uri}`);
+                    this.rehydrateFromUri().catch(err =>
+                        console.error('[PresentationWidget] Failed to re-hydrate from URI:', err)
+                    );
+                } else {
+                    this.writeSlidesDom();
+                    this.initializeReveal().catch(err =>
+                        console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
+                    );
+                }
             });
         }
         const disposable = attachTabDblClickToggle(
@@ -456,6 +644,28 @@ More content</pre>
             () => this.toggleMode(),
         );
         this.toDisposeOnDetach.push(disposable);
+    }
+
+    /**
+     * Re-hydrate deck content from file URI after a page reload.
+     * Called when the widget is restored from saved layout (deckContent is empty but uri is set).
+     */
+    protected async rehydrateFromUri(): Promise<void> {
+        if (!this.uri) { return; }
+        try {
+            const uriObj = this.uri.startsWith('file://') ? new URI(this.uri) : URI.fromFilePath(this.uri);
+            const content = await this.fileService.read(uriObj);
+            this.deckContent = content.value;
+            // Update tab title from filename
+            const base = uriObj.path.base;
+            this.title.label = base.endsWith('.deck.md') ? base.slice(0, -'.deck.md'.length) : base;
+            this.title.caption = this.title.label;
+            this.writeSlidesDom();
+            await this.initializeReveal();
+            console.log(`[PresentationWidget] Re-hydrated ${this.deckContent.length} chars from ${this.uri}`);
+        } catch (err) {
+            console.error('[PresentationWidget] rehydrateFromUri failed:', err);
+        }
     }
 
     protected onResize(msg: Widget.ResizeMessage): void {
@@ -487,11 +697,37 @@ More content</pre>
         super.onBeforeDetach(msg);
     }
 
+    protected loadTheme(themeName: string): void {
+        const theme = themeName || 'black';
+        
+        // Check if already loaded (global across all widget instances)
+        if (PresentationWidget.loadedThemes.has(theme)) { return; }
+
+        // Validate theme name
+        if (!REVEAL_THEMES.has(theme)) {
+            console.warn(`[PresentationWidget] Unknown theme "${theme}", falling back to black`);
+            this.loadTheme('black');
+            return;
+        }
+
+        PresentationWidget.loadedThemes.add(theme);
+
+        // Inject a <link> tag pointing to the statically-copied theme CSS file.
+        // This avoids webpack's style-loader runtime recursion caused by 15
+        // large CSS files bundled into a single chunk.
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = `/reveal-themes/${theme}.css`;
+        link.dataset.revealTheme = theme;
+        document.head.appendChild(link);
+    }
+
     protected async initializeReveal(): Promise<void> {
         const container = this.containerRef?.current;
-        if (!container) { return; }
+        if (!container) { console.warn('[PresentationWidget] initializeReveal: no container'); return; }
         const deckElement = container.querySelector('.reveal');
-        if (!deckElement) { return; }
+        if (!deckElement) { console.warn('[PresentationWidget] initializeReveal: no .reveal element'); return; }
+        console.log(`[PresentationWidget] initializeReveal starting, deckElement children=${deckElement.children.length}`);
 
         if (this.revealDeck) {
             this.revealDeck.destroy();
@@ -500,6 +736,9 @@ More content</pre>
 
         const deck = PresentationWidget.parseDeckContent(this.deckContent);
         const options = deck.options;
+
+        // Load theme dynamically based on frontmatter
+        this.loadTheme(options.theme ?? 'black');
 
         this.revealDeck = new Reveal(deckElement as HTMLElement, {
             hash: false,
@@ -512,7 +751,7 @@ More content</pre>
             center: true,
             transition: options.transition ?? 'slide',
             backgroundTransition: 'fade',
-            plugins: [RevealMarkdown],
+            plugins: [],
         });
 
         await this.revealDeck.initialize();
@@ -554,6 +793,24 @@ More content</pre>
                 }}
             />
         );
+    }
+
+    /**
+     * Persist URI and mode across page reloads via Theia's ShellLayoutRestorer.
+     * The restorer stores this alongside the widget's construction options.
+     */
+    storeState(): object {
+        return { uri: this.uri };
+    }
+
+    /**
+     * Restore URI from persisted state. Content is re-hydrated in onAfterAttach()
+     * via rehydrateFromUri() when deckContent is empty but uri is set.
+     */
+    restoreState(oldState: object & { uri?: string }): void {
+        if (oldState?.uri) {
+            this.uri = oldState.uri;
+        }
     }
 
 }
