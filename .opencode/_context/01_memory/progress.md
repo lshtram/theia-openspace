@@ -2,7 +2,84 @@
 
 ## Current Milestones
 
-### MCP Race Condition Fix (2026-02-24) ✅ COMPLETE (committed `6cb4130`)
+### BUG-7 + CPU Streaming Fix (2026-02-25) ✅ COMPLETE
+
+**BUG-7:** Raw JSON session diff (714KB+) rendered above chat prompt. Fix: `refreshDiff()` now parses JSON array into human-readable diff summary.
+
+**CPU fix:** 5 memoizations in `message-bubble.tsx` to reduce Chrome renderer CPU during streaming:
+1. `TextPart` — `React.memo` + `useMemo(renderMarkdown)`
+2. `ReasoningBlock` — `React.memo` + `useMemo(renderMarkdown)`
+3. `computeSimpleDiff()` — `useMemo` (O(m*n) LCS)
+4. `groupParts()` — `useMemo` for `isIntermediateStep` path
+5. 6 inline regexes hoisted to module-scope constants
+
+Also: removed previous agent's DIAG logs from `opencode-proxy.ts`.
+
+**Files:** `session-service.ts`, `message-bubble.tsx`, `opencode-proxy.ts`
+**Build:** ✅ All 3 packages (core, chat, webpack) — 0 errors
+**Status:** Awaiting commit
+
+### Code Review Fixes Merge (2026-02-25) ✅ COMPLETE
+
+12 fixes from `CODE-REVIEW-2026-02-24.md` implemented, tested, and merged into master.
+
+| Fix | Issue | Summary |
+|---|---|---|
+| path-utils.ts extract | #10 | Shared `resolveSafePath` for hub-mcp + hub |
+| OPENCODE_SERVER_URL validation | #20 | Validates format at startup |
+| IMcpServer / registerVoiceTools types | #5 | Replaced `any` with proper types |
+| Session restore failure notification | #9 | MessageService.warn on restore fail |
+| Fake timer in session-service.spec | #15 | Replaced setTimeout with sinon fake timers |
+| _projectId convention doc | #18 | JSDoc explaining unused param |
+| Import grouping in hub-mcp.ts | #16 | Node builtins → third-party → local order |
+| TOOL constants for MCP names | #17 | `tool-names.ts` — no more magic strings |
+| JSDoc on OpenCodeProxy rawRequest | #12 | Documented method signatures |
+| ISO-timestamp I/O logging | #6 | Per CODING_STANDARDS §3 |
+| CORS origins from actual Theia port | #8 | Derived, not hardcoded |
+| Token-bucket rate limiting | #7 | 100 req/min per origin on Hub endpoints |
+
+- **Merge commit:** `9b8b3ee`
+- **Unit tests post-merge:** 822/822 passing
+- **E2E tests (pre-merge on worktree):** 130/131 passing (1 pre-existing known gap)
+- **Worktree removed, branch deleted**
+
+
+
+| Spec | Tests | Result |
+|---|---|---|
+| `app-load.spec.ts` | 5/5 | ✅ |
+| `chat-message-flow.spec.ts` | 6/6 | ✅ |
+| `session-management.spec.ts` | 5/5 | ✅ |
+| `session-management-integration.spec.ts` | 7/7 | ✅ |
+| `session-list-autoload.spec.ts` | 2/2 pass, 2 skip | ✅ |
+| `agent-control.spec.ts` | 5/5 | ✅ |
+| `permission-dialog.spec.ts` | 8/8 | ✅ |
+| `mcp-tools.spec.ts` | 5/5 | ✅ |
+| `presentation-tools.spec.ts` | 13/13 | ✅ |
+| `whiteboard-diagrams.spec.ts` | 25/25 | ✅ |
+| `verify-bugs.spec.ts` | 5/5 | ✅ |
+| **TOTAL** | **86 passed, 2 skipped, 0 failed** | ✅ |
+
+- ✅ Pre-push unit tests: 812/812 passing
+- ✅ Pushed to `origin/master` (`7f54214..2e65e02`) — 9 commits
+- ✅ GitHub CI confirmed green
+
+**What was pushed (9 commits):**
+1. `2e65e02` fix: restore highlight-on-open behaviour and add OpenerService to test container
+2. `cd2706d` Merge branch 'master' into feature/test-suite-hardening-unit-first
+3. `0c12762` docs: update agent memory and AGENTS.md with latest session context
+4. `e55ce4a` chore: remove prettier-vscode from builtin plugins
+5. `7d6f2ac` feat: viewer-first file open via OpenerService in EditorCommandContribution
+6. `66ae6ad` feat: randomized shimmer themes and markdown rendering in ReasoningBlock
+7. `266a80a` fix: disable fuzzy linkification to prevent bare filenames from becoming URLs
+8. `5e04dc7` Merge branch 'master' into feature/test-suite-hardening-unit-first
+9. `9883d84` test: harden unit and E2E suite with test-utils, stability improvements, and coverage
+
+**Untracked files (not committed):**
+- `demo.deck.md` — scratch presentation file
+- `docs/reviews/CODE-REVIEW-2026-02-24.md` — code review artifact
+
+**Status:** Phase 5 UX polish complete. Next: GIF animation assets from user, or Phase 6.
 
 | Item | Status |
 |---|---|

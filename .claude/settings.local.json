@@ -10,7 +10,16 @@
       "Bash(do ls -lh \"$f\")",
       "Bash(git -C /Users/Shared/dev/theia-openspace/.worktrees/feature-voice status --short -- node_modules)",
       "Bash(claude plugin:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(ls:*)",
+      "Bash(tail -c 8000 ~/.claude/projects/-Users-Shared-dev-theia-openspace/668e9f6d-71b9-41bd-8c09-633b9f026825.jsonl | python3 -c \"\nimport sys, json\nlines = sys.stdin.read\\(\\).strip\\(\\).split\\('\\\\n'\\)\nfor line in lines:\n    try:\n        obj = json.loads\\(line\\)\n        role = obj.get\\('role',''\\)\n        t = obj.get\\('type',''\\)\n        if role == 'user':\n            content = obj.get\\('content',''\\)\n            if isinstance\\(content, list\\):\n                for c in content:\n                    if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text':\n                        print\\(f'USER: {c[\\\\\"text\\\\\"][:300]}'\\)\n            elif isinstance\\(content, str\\):\n                print\\(f'USER: {content[:300]}'\\)\n        elif role == 'assistant':\n            content = obj.get\\('content',''\\)\n            if isinstance\\(content, list\\):\n                for c in content:\n                    if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text':\n                        print\\(f'ASSISTANT: {c[\\\\\"text\\\\\"][:300]}'\\)\n    except: pass\n\" 2>/dev/null)",
+      "Bash(python3:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(kill 2281:*)",
+      "Bash(sudo cp:*)",
+      "Bash(lsof:*)",
+      "Bash(sudo lsof:*)"
     ]
   }
 }

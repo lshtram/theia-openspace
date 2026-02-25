@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSpace Mascot Animation Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: white;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            text-align: center;
+            background: linear-gradient(90deg, #00d4ff, #f5b041);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 40px;
+            font-size: 1rem;
+        }
+        
+        .preview-container {
+            display: flex;
+            gap: 60px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        
+        .preview-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .preview-box h2 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .mascot-wrapper {
+            filter: drop-shadow(0 10px 30px rgba(0, 212, 255, 0.2));
+            transition: transform 0.3s ease;
+        }
+        
+        .mascot-wrapper:hover {
+            transform: scale(1.05);
+        }
+        
+        .size-label {
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .chat-context {
+            background: #252526;
+            border-radius: 12px;
+            padding: 20px;
+            width: 300px;
+            margin-top: 20px;
+        }
+        
+        .chat-context-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .chat-context-mascot {
+            width: 40px;
+            height: 40px;
+        }
+        
+        .chat-context-text {
+            flex: 1;
+        }
+        
+        .chat-context-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #ccc;
+        }
+        
+        .chat-context-status {
+            font-size: 0.75rem;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: #00d4ff;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .features-list {
+            margin-top: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 800px;
+        }
+        
+        .features-list h3 {
+            margin-bottom: 15px;
+            color: #f5b041;
+        }
+        
+        .features-list ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .features-list li {
+            padding: 8px 0;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+        
+        .features-list li::before {
+            content: "✓ ";
+            color: #00d4ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦆 OpenSpace Mascot Animation</h1>
+    <p class="subtitle">Idle animation with blinking, tail wagging, and finger tapping</p>
+    
+    <div class="preview-container">
+        <div class="preview-box">
+            <h2>Full Size (120px)</h2>
+            <div class="mascot-wrapper">
+                <svg width="120" height="120" viewBox="0 0 200 200" style="overflow: visible;">
+                    <defs>
+                        <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#F5B041"/>
+                            <stop offset="100%" stop-color="#E67E22"/>
+                        </linearGradient>
+                        <linearGradient id="bodyHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#F8C471"/>
+                            <stop offset="50%" stop-color="#F5B041"/>
+                        </linearGradient>
+                        <linearGradient id="billGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#5D6D7E"/>
+                            <stop offset="100%" stop-color="#2C3E50"/>
+                        </linearGradient>
+                        <linearGradient id="headsetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#BDC3C7"/>
+                            <stop offset="100%" stop-color="#7F8C8D"/>
+                        </linearGradient>
+                        <linearGradient id="visorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#00D4FF"/>
+                            <stop offset="50%" stop-color="#0099CC"/>
+                            <stop offset="100%" stop-color="#006699"/>
+                        </linearGradient>
+                        <linearGradient id="jacketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#34495E"/>
+                            <stop offset="100%" stop-color="#2C3E50"/>
+                        </linearGradient>
+                        <linearGradient id="tabletScreen" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00E5FF"/>
+                            <stop offset="100%" stop-color="#00B8D4"/>
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- Tail wagging -->
+                    <g>
+                        <ellipse cx="160" cy="140" rx="25" ry="35" fill="#2C3E50" style="transform-origin: 145px 130px;">
+                            <animateTransform attributeName="transform" type="rotate" values="-5 145 130; 5 145 130; -5 145 130" dur="2s" repeatCount="indefinite"/>
+                        </ellipse>
+                        <ellipse cx="160" cy="125" rx="20" ry="8" fill="#34495E" opacity="0.5" style="transform-origin: 145px 130px;">
+                            <animateTransform attributeName="transform" type="rotate" values="-5 145 130; 5 145 130; -5 145 130" dur="2s" repeatCount="indefinite"/>
+                        </ellipse>
+                        <ellipse cx="162" cy="140" rx="18" ry="7" fill="#34495E" opacity="0.5" style="transform-origin: 145px 130px;">
+                            <animateTransform attributeName="transform" type="rotate" values="-5 145 130; 5 145 130; -5 145 130" dur="2s" repeatCount="indefinite"/>
+                        </ellipse>
+                    </g>
+                    
+                    <!-- Body -->
+                    <ellipse cx="100" cy="130" rx="45" ry="40" fill="url(#bodyGrad)"/>
+                    <ellipse cx="100" cy="125" rx="35" ry="30" fill="url(#bodyHighlight)" opacity="0.6"/>
+                    
+                    <!-- Jacket -->
+                    <path d="M65 115 Q60 145 70 160 L95 165 L105 165 L130 160 Q140 145 135 115 Q120 125 100 125 Q80 125 65 115" fill="url(#jacketGrad)"/>
+                    <path d="M75 115 L100 130 L125 115 L120 110 L100 120 L80 110 Z" fill="#2C3E50"/>
+                    
+                    <!-- Tablet with glowing code lines -->
+                    <g>
+                        <rect x="55" y="135" width="50" height="35" rx="3" fill="#1A252F"/>
+                        <rect x="58" y="138" width="44" height="29" rx="2" fill="url(#tabletScreen)"/>
+                        <rect x="62" y="142" width="20" height="2" rx="1" fill="rgba(255,255,255,0.7)">
+                            <animate attributeName="opacity" values="0.7;1;0.7" dur="1.5s" repeatCount="indefinite"/>
+                        </rect>
+                        <rect x="62" y="147" width="30" height="2" rx="1" fill="rgba(255,255,255,0.5)">
+                            <animate attributeName="opacity" values="0.5;0.8;0.5" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+                        </rect>
+                        <rect x="62" y="152" width="25" height="2" rx="1" fill="rgba(255,255,255,0.5)">
+                            <animate attributeName="opacity" values="0.5;0.8;0.5" dur="1.5s" repeatCount="indefinite" begin="0.4s"/>
+                        </rect>
+                    </g>
+                    
+                    <!-- Right arm tapping -->
+                    <ellipse cx="145" cy="130" rx="12" ry="18" fill="#E67E22">
+                        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -3; 0 0" dur="0.8s" repeatCount="indefinite"/>
+                    </ellipse>
+                    <ellipse cx="148" cy="140" rx="6" ry="8" fill="#D35400">
+                        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -3; 0 0" dur="0.8s" repeatCount="indefinite"/>
+                    </ellipse>
+                    
+                    <!-- Left arm -->
+                    <ellipse cx="55" cy="135" rx="12" ry="18" fill="#E67E22"/>
+                    <ellipse cx="52" cy="145" rx="8" ry="10" fill="#D35400"/>
+                    
+                    <!-- Head -->
+                    <ellipse cx="100" cy="75" rx="48" ry="42" fill="url(#bodyGrad)"/>
+                    <ellipse cx="100" cy="70" rx="38" ry="32" fill="url(#bodyHighlight)" opacity="0.5"/>
+                    
+                    <!-- Headset -->
+                    <path d="M52 75 Q52 35 100 35 Q148 35 148 75" fill="none" stroke="url(#headsetGrad)" stroke-width="10" stroke-linecap="round"/>
+                    <rect x="42" y="60" width="16" height="30" rx="6" fill="url(#headsetGrad)" stroke="#5D6D7E" stroke-width="2"/>
+                    <rect x="142" y="60" width="16" height="30" rx="6" fill="url(#headsetGrad)" stroke="#5D6D7E" stroke-width="2"/>
+                    <circle cx="50" cy="75" r="5" fill="#7F8C8D"/>
+                    <circle cx="150" cy="75" r="5" fill="#7F8C8D"/>
+                    
+                    <!-- Visor -->
+                    <path d="M65 70 L135 70 L135 88 Q135 92 130 92 L100 92 L70 92 Q65 92 65 88 Z" fill="url(#visorGrad)" stroke="#00A8E8" stroke-width="2"/>
+                    <path d="M62 68 L138 68 L138 90 Q138 95 132 95 L100 95 L68 95 Q62 95 62 90 Z" fill="none" stroke="#2C3E50" stroke-width="3"/>
+                    <rect x="98" y="68" width="4" height="12" fill="#2C3E50"/>
+                    
+                    <!-- Visor shine -->
+                    <path d="M70 72 L85 72 L80 82 L68 82 Z" fill="rgba(255,255,255,0.4)">
+                        <animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite"/>
+                    </path>
+                    
+                    <!-- Blinking eyes -->
+                    <ellipse cx="85" cy="80" rx="8" ry="6" fill="#2C3E50">
+                        <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </ellipse>
+                    <ellipse cx="115" cy="80" rx="8" ry="6" fill="#2C3E50">
+                        <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </ellipse>
+                    <circle cx="87" cy="78" r="2" fill="white" opacity="0.8">
+                        <animate attributeName="opacity" values="0.8;0;0.8" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="117" cy="78" r="2" fill="white" opacity="0.8">
+                        <animate attributeName="opacity" values="0.8;0;0.8" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </circle>
+                    
+                    <!-- Bill -->
+                    <ellipse cx="100" cy="105" rx="22" ry="14" fill="url(#billGrad)"/>
+                    <ellipse cx="100" cy="103" rx="18" ry="8" fill="#5D6D7E" opacity="0.5"/>
+                    <ellipse cx="94" cy="103" rx="3" ry="2" fill="#1A252F"/>
+                    <ellipse cx="106" cy="103" rx="3" ry="2" fill="#1A252F"/>
+                    
+                    <!-- Thinking dots -->
+                    <circle cx="70" cy="165" r="3" fill="#00D4FF">
+                        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" repeatCount="indefinite"/>
+                        <animate attributeName="r" values="2;4;2" dur="1.2s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="80" cy="168" r="3" fill="#00D4FF">
+                        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" repeatCount="indefinite" begin="0.4s"/>
+                        <animate attributeName="r" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.4s"/>
+                    </circle>
+                    <circle cx="90" cy="165" r="3" fill="#00D4FF">
+                        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" repeatCount="indefinite" begin="0.8s"/>
+                        <animate attributeName="r" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.8s"/>
+                    </circle>
+                </svg>
+            </div>
+            <p class="size-label">120 x 120 pixels</p>
+        </div>
+        
+        <div class="preview-box">
+            <h2>Compact Size (80px)</h2>
+            <div class="mascot-wrapper">
+                <svg width="80" height="80" viewBox="0 0 200 200">
+                    <defs>
+                        <linearGradient id="bodyGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#F5B041"/>
+                            <stop offset="100%" stop-color="#E67E22"/>
+                        </linearGradient>
+                        <linearGradient id="billGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#5D6D7E"/>
+                            <stop offset="100%" stop-color="#2C3E50"/>
+                        </linearGradient>
+                        <linearGradient id="headsetGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#BDC3C7"/>
+                            <stop offset="100%" stop-color="#7F8C8D"/>
+                        </linearGradient>
+                        <linearGradient id="visorGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#00D4FF"/>
+                            <stop offset="100%" stop-color="#006699"/>
+                        </linearGradient>
+                        <linearGradient id="jacketGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#34495E"/>
+                            <stop offset="100%" stop-color="#2C3E50"/>
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- Tail -->
+                    <ellipse cx="160" cy="140" rx="25" ry="35" fill="#2C3E50" style="transform-origin: 145px 130px;">
+                        <animateTransform attributeName="transform" type="rotate" values="-5 145 130; 5 145 130; -5 145 130" dur="2s" repeatCount="indefinite"/>
+                    </ellipse>
+                    
+                    <!-- Body -->
+                    <ellipse cx="100" cy="130" rx="45" ry="40" fill="url(#bodyGrad2)"/>
+                    <path d="M65 115 Q60 145 70 160 L95 165 L105 165 L130 160 Q140 145 135 115 Q120 125 100 125 Q80 125 65 115" fill="url(#jacketGrad2)"/>
+                    <rect x="55" y="135" width="50" height="35" rx="3" fill="#1A252F"/>
+                    <rect x="58" y="138" width="44" height="29" rx="2" fill="#00E5FF"/>
+                    
+                    <!-- Head -->
+                    <ellipse cx="100" cy="75" rx="48" ry="42" fill="url(#bodyGrad2)"/>
+                    <path d="M52 75 Q52 35 100 35 Q148 35 148 75" fill="none" stroke="url(#headsetGrad2)" stroke-width="10" stroke-linecap="round"/>
+                    <rect x="42" y="60" width="16" height="30" rx="6" fill="url(#headsetGrad2)"/>
+                    <rect x="142" y="60" width="16" height="30" rx="6" fill="url(#headsetGrad2)"/>
+                    <path d="M65 70 L135 70 L135 88 Q135 92 130 92 L100 92 L70 92 Q65 92 65 88 Z" fill="url(#visorGrad2)" stroke="#00A8E8" stroke-width="2"/>
+                    <path d="M62 68 L138 68 L138 90 Q138 95 132 95 L100 95 L68 95 Q62 95 62 90 Z" fill="none" stroke="#2C3E50" stroke-width="3"/>
+                    
+                    <!-- Blinking eyes -->
+                    <ellipse cx="85" cy="80" rx="8" ry="6" fill="#2C3E50">
+                        <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </ellipse>
+                    <ellipse cx="115" cy="80" rx="8" ry="6" fill="#2C3E50">
+                        <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                    </ellipse>
+                    
+                    <!-- Bill -->
+                    <ellipse cx="100" cy="105" rx="22" ry="14" fill="url(#billGrad2)"/>
+                    <ellipse cx="94" cy="103" rx="3" ry="2" fill="#1A252F"/>
+                    <ellipse cx="106" cy="103" rx="3" ry="2" fill="#1A252F"/>
+                </svg>
+            </div>
+            <p class="size-label">80 x 80 pixels</p>
+        </div>
+        
+        <div class="preview-box">
+            <h2>In Context</h2>
+            <div class="chat-context">
+                <div class="chat-context-header">
+                    <div class="chat-context-mascot">
+                        <svg width="40" height="40" viewBox="0 0 200 200">
+                            <defs>
+                                <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#F5B041"/>
+                                    <stop offset="100%" stop-color="#E67E22"/>
+                                </linearGradient>
+                                <linearGradient id="vis3" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#00D4FF"/>
+                                    <stop offset="100%" stop-color="#006699"/>
+                                </linearGradient>
+                            </defs>
+                            <ellipse cx="160" cy="140" rx="25" ry="35" fill="#2C3E50" style="transform-origin: 145px 130px;">
+                                <animateTransform attributeName="transform" type="rotate" values="-5 145 130; 5 145 130; -5 145 130" dur="2s" repeatCount="indefinite"/>
+                            </ellipse>
+                            <ellipse cx="100" cy="130" rx="45" ry="40" fill="url(#bg3)"/>
+                            <ellipse cx="100" cy="75" rx="48" ry="42" fill="url(#bg3)"/>
+                            <path d="M52 75 Q52 35 100 35 Q148 35 148 75" fill="none" stroke="#BDC3C7" stroke-width="10" stroke-linecap="round"/>
+                            <rect x="42" y="60" width="16" height="30" rx="6" fill="#BDC3C7"/>
+                            <rect x="142" y="60" width="16" height="30" rx="6" fill="#BDC3C7"/>
+                            <path d="M65 70 L135 70 L135 88 Q135 92 130 92 L100 92 L70 92 Q65 92 65 88 Z" fill="url(#vis3)" stroke="#00A8E8" stroke-width="2"/>
+                            <path d="M62 68 L138 68 L138 90 Q138 95 132 95 L100 95 L68 95 Q62 95 62 90 Z" fill="none" stroke="#2C3E50" stroke-width="3"/>
+                            <ellipse cx="85" cy="80" rx="8" ry="6" fill="#2C3E50">
+                                <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                            </ellipse>
+                            <ellipse cx="115" cy="80" rx="8" ry="6" fill="#2C3E50">
+                                <animate attributeName="ry" values="6;0.5;6" keyTimes="0;0.05;0.1" dur="4s" repeatCount="indefinite"/>
+                            </ellipse>
+                            <ellipse cx="100" cy="105" rx="22" ry="14" fill="#5D6D7E"/>
+                        </svg>
+                    </div>
+                    <div class="chat-context-text">
+                        <div class="chat-context-title">OpenSpace Agent</div>
+                        <div class="chat-context-status">
+                            <span class="status-dot"></span>
+                            Thinking...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="features-list">
+        <h3>Animation Features</h3>
+        <ul>
+            <li>Tail wagging (2s loop)</li>
+            <li>Finger tapping (0.8s loop)</li>
+            <li>Eye blinking (4s loop)</li>
+            <li>Tablet code glow</li>
+            <li>Visor shine reflection</li>
+            <li>Thinking dots</li>
+            <li>Smooth SVG animations</li>
+            <li>No external dependencies</li>
+            <li>Scalable vector format</li>
+            <li>Lightweight (~10KB)</li>
+        </ul>
+    </div>
+</body>
+</html>

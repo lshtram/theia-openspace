@@ -1,3 +1,4 @@
+<!-- # reviewed -->
 # Agent Onboarding
 
 **Read this first at every new session.** It gives you the project context, current state, where to find things, and the directives that govern agent behaviour in this project.
@@ -40,6 +41,9 @@ See `.opencode/_context/01_memory/progress.md` for the detailed phase-by-phase c
 | Phase completion status | `docs/architecture/WORKPLAN.md` |
 | Requirements tracker | `docs/requirements/REQ-OPENSPACE.md` |
 | Feature requirements | `docs/requirements/REQ-AGENT-IDE-CONTROL.md` |
+| Session analysis (features) | `docs/reviews/SESSION-ANALYSIS-FEATURES-2026-02-25.md` |
+| Session analysis (bugs) | `docs/reviews/SESSION-ANALYSIS-BUGS-2026-02-25.md` |
+| Session analysis (agent patterns) | `docs/reviews/SESSION-ANALYSIS-AGENT-PATTERNS-2026-02-25.md` |
 | Known bugs | GitHub Issues: https://github.com/lshtram/theia-openspace/issues |
 | Technical debt | `docs/technical-debt/` |
 | Coding standards | `CODING_STANDARDS.md` |
@@ -95,11 +99,12 @@ Assume the shell working directory is always `/Users/Shared/dev/theia-openspace`
 Do not provide command snippets that start with `cd ...` (especially not `cd ~`), because
 it can move the user to the wrong directory and break build/test workflows.
 
-### Rule 10: Use GitHub Issues for bug tracking
-All bugs and deferred issues must be tracked in GitHub Issues.
-- Use the `report-github-issue` skill when a bug is found but not immediately fixed
-- Label issues with `bug` and relevant labels
-- View issues at: https://github.com/lshtram/theia-openspace/issues
+### Rule 10: Use GitHub Issues for task and bug tracking
+All tasks, bugs, and deferred issues must be tracked in GitHub Issues.
+- Tasks are managed via GitHub Issues (not in-memory todo lists)
+- Use the `report-github-issue` skill when a bug is found or a new task is identified
+- Label issues as `bug` or `enhancement` with relevant priority labels
+- View all issues at: https://github.com/lshtram/theia-openspace/issues
 
 ---
 
