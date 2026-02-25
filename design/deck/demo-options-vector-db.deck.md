@@ -656,7 +656,7 @@ Close with action. Step 1 and 2 are doable this sprint. Step 3 should happen bef
   background: linear-gradient(135deg, var(--geo-orange), var(--geo-amber));
   color: #fff;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: var(--geo-font-head);
