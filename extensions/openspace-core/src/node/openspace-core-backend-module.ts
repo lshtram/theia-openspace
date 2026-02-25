@@ -8,6 +8,33 @@ import { OpenSpaceHub } from './hub';
 const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || 'http://localhost:7890';
 
 /**
+ * Validate that a URL string is well-formed. Called at server startup so that
+ * a malformed OPENCODE_SERVER_URL produces a clear error immediately rather than
+ * cryptic "Invalid URL" errors on every API call.
+ *
+ * @throws if the string is not a valid URL.
+ */
+export function validateOpenCodeServerUrl(url: string): void {
+    let parsed: URL;
+    try {
+        parsed = new URL(url);
+    } catch {
+        throw new Error(
+            `OPENCODE_SERVER_URL is an invalid URL: "${url}". ` +
+            `Expected a well-formed http or https URL (e.g. http://localhost:7890).`
+        );
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error(
+            `OPENCODE_SERVER_URL is an invalid URL: "${url}". ` +
+            `Expected a well-formed http or https URL (e.g. http://localhost:7890).`
+        );
+    }
+}
+
+validateOpenCodeServerUrl(DEFAULT_OPENCODE_URL);
+
+/**
  * Lifecycle contribution to manage OpenCodeProxy startup and shutdown.
  * T2-6: Ensures SSE connections and timers are cleaned up on backend stop.
  * Fix: On start, reconnects openspace-hub in case OpenCode started before Theia

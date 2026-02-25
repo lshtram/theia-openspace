@@ -201,21 +201,30 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     connectToProject(directory: string): Promise<void>;
 
     // Session methods
-    getSessions(projectId: string): Promise<Session[]>;
+     getSessions(projectId: string, options?: { search?: string; limit?: number; start?: number }): Promise<Session[]>;
     getSession(projectId: string, sessionId: string): Promise<Session>;
+    /** Bulk-fetch current status for all sessions. Hydrates status map on reconnect. */
+    getSessionStatuses(projectId: string): Promise<Array<{ sessionId: string; status: SDKTypes.SessionStatus }>>;
     createSession(projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session>;
-    deleteSession(projectId: string, sessionId: string): Promise<void>;
+     deleteSession(projectId: string, sessionId: string): Promise<void>;
+    archiveSession(projectId: string, sessionId: string): Promise<Session>;
     initSession(projectId: string, sessionId: string): Promise<Session>;
     abortSession(projectId: string, sessionId: string): Promise<Session>;
-    shareSession(projectId: string, sessionId: string): Promise<Session>;
+     shareSession(projectId: string, sessionId: string): Promise<Session>;
     unshareSession(projectId: string, sessionId: string): Promise<Session>;
     compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session>;
     revertSession(projectId: string, sessionId: string): Promise<Session>;
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
+    /** Fork a session, optionally at a specific message. Returns the new forked session. */
+    forkSession(projectId: string, sessionId: string, messageId?: string): Promise<Session>;
+    /** Fetch the unified diff of all files changed in this session. */
+    getDiff(projectId: string, sessionId: string): Promise<string>;
+    /** Fetch the current live todo list for a session. */
+    getTodos(projectId: string, sessionId: string): Promise<Array<{ id: string; description: string; status: string }>>;
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session>;
 
     // Message methods
-    getMessages(projectId: string, sessionId: string): Promise<MessageWithParts[]>;
+    getMessages(projectId: string, sessionId: string, limit?: number, before?: string): Promise<MessageWithParts[]>;
     getMessage(projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts>;
     createMessage(projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts>;
 
@@ -266,7 +275,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 /**
  * OpenCode Client interface - callback methods for the frontend.
  */
-export interface OpenCodeClient {
+ export interface OpenCodeClient {
     onSessionEvent(event: SessionNotification): void;
     onMessageEvent(event: MessageNotification): void;
     onMessagePartDelta(event: MessagePartDeltaNotification): void;
@@ -276,6 +285,16 @@ export interface OpenCodeClient {
     onAgentCommand(command: AgentCommand): void;
     /** Fired when the SSE connection is re-established after a drop. Allows clearing accumulated streaming state. */
     onSSEReconnect(): void;
+    /** Fired when the todo list for the active session is updated. */
+    onTodoEvent(event: TodoNotification): void;
+}
+
+/**
+ * Todo event notification.
+ */
+export interface TodoNotification {
+    readonly sessionId: string;
+    readonly todos: Array<{ id: string; description: string; status: string }>;
 }
 
 /**
@@ -315,7 +334,8 @@ export type SessionEventType =
     | 'compacted'
     | 'reverted'
     | 'unreverted'
-    | 'status_changed';
+    | 'status_changed'
+    | 'error_occurred';
 
 /**
  * Message event notification.
@@ -337,7 +357,7 @@ export interface MessageNotification {
     readonly previousMessageId?: string;
 }
 
-export type MessageEventType = 'created' | 'partial' | 'completed';
+export type MessageEventType = 'created' | 'partial' | 'completed' | 'removed' | 'part_removed';
 
 /**
  * Message part delta notification — per-token text append.

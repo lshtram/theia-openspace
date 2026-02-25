@@ -32,6 +32,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ArtifactStore } from './artifact-store';
+import { resolveSafePath as resolveSafePathUtil } from './path-utils';
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -346,42 +347,16 @@ export class PatchEngine {
      * Uses fs.realpathSync to resolve symlinks before the containment check.
      */
     private resolveSafePath(filePath: string): string {
-        // Resolve relative to workspaceRoot
-        const resolved = path.resolve(this.workspaceRoot, filePath);
-
-        // Resolve symlinks in workspace root
-        let realRoot: string;
         try {
-            realRoot = fs.realpathSync(this.workspaceRoot);
-        } catch {
-            realRoot = this.workspaceRoot;
-        }
-
-        // Resolve symlinks in the candidate path; fall back to parent resolution for
-        // non-existent targets (e.g. a new file being created).
-        let realResolved: string;
-        try {
-            realResolved = fs.realpathSync(resolved);
-        } catch {
-            try {
-                realResolved = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
-            } catch {
-                realResolved = resolved;
-            }
-        }
-
-        const root = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
-
-        if (!realResolved.startsWith(root) && realResolved !== realRoot) {
+            return resolveSafePathUtil(this.workspaceRoot, filePath);
+        } catch (err) {
             throw new PatchValidationError(
                 'PATH_TRAVERSAL',
                 'filePath',
-                `Path traversal detected: ${filePath} resolves outside workspace root`,
+                (err as Error).message,
                 'Provide a relative path within the workspace (no ../ segments)'
             );
         }
-
-        return realResolved;
     }
 
     /**

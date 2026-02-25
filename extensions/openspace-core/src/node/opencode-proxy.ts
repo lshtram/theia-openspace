@@ -28,6 +28,7 @@ import {
     Project,
     Session,
     Message,
+    MessagePart,
     MessageWithParts,
     FileStatus,
     FileContent,
@@ -158,8 +159,19 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
-     * Make a raw HTTP/HTTPS request and return the response body as a string.
-     * Applies a timeout unless timeoutMs <= 0 (no timeout).
+     * Make a raw HTTP/HTTPS request and return the status code and body as a string.
+     *
+     * Used by all higher-level request helpers. Also called directly for non-JSON
+     * responses (e.g. plain-text endpoints) and endpoints where status-code inspection
+     * is needed before body parsing.
+     *
+     * @param url       - Fully-qualified URL to request
+     * @param method    - HTTP method (GET, POST, DELETE, etc.)
+     * @param headers   - Request headers to send
+     * @param body      - Optional request body string (e.g. JSON-serialised payload)
+     * @param timeoutMs - Request timeout in milliseconds; ≤0 means no timeout (default 30 000)
+     * @returns         Object with `statusCode` and `body` (UTF-8 string)
+     * @throws          On connection errors, DNS failures, or timeout
      */
     protected rawRequest(
         url: string,
@@ -208,7 +220,19 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
-     * Make an HTTP request and return the parsed JSON response.
+     * Make an HTTP request to the OpenCode server and return the parsed JSON response.
+     *
+     * Sets `Accept: application/json` and `Content-Type: application/json` by default.
+     * Throws on non-2xx status codes with a message that includes the status code and
+     * raw response body, making failures easy to diagnose in logs.
+     *
+     * @param options.url       - Fully-qualified URL (constructed by callers via `buildUrl`)
+     * @param options.type      - HTTP method string (e.g. `'GET'`, `'POST'`)
+     * @param options.data      - Optional JSON-serialised request body
+     * @param options.headers   - Additional headers to merge (override defaults)
+     * @param options.timeoutMs - Per-request timeout (defaults to `rawRequest` default of 30 000 ms)
+     * @returns Parsed JSON response typed as T
+     * @throws  On non-2xx responses or network errors
      */
     protected async requestJson<T>(options: { url: string; type: string; data?: string; headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
         const headers: Record<string, string> = {
@@ -217,7 +241,17 @@ export class OpenCodeProxy implements OpenCodeService {
             ...options.headers
         };
 
-        const { statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs);
+        const ts = () => new Date().toISOString();
+        console.log(`[${ts()}] FETCH_START: ${options.type} ${options.url}`);
+        let statusCode: number;
+        let body: string;
+        try {
+            ({ statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs));
+        } catch (err) {
+            console.error(`[${ts()}] FETCH_FAIL: ${options.type} ${options.url}`, err);
+            throw err;
+        }
+        console.log(`[${ts()}] FETCH_SUCCESS: ${options.type} ${options.url} (${statusCode})`);
 
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${body}`);
@@ -263,6 +297,19 @@ export class OpenCodeProxy implements OpenCodeService {
         }
     }
 
+    /**
+     * Make a PATCH request with body.
+     */
+    protected async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+        const url = this.buildUrl(endpoint);
+        this.logger.debug(`[OpenCodeProxy] PATCH ${url}`);
+        return this.requestJson<T>({
+            url,
+            type: 'PATCH',
+            data: body ? JSON.stringify(body) : undefined
+        });
+    }
+
     // =========================================================================
     // MCP Management
     // =========================================================================
@@ -295,16 +342,35 @@ export class OpenCodeProxy implements OpenCodeService {
 
     // =========================================================================
     // Session Methods
+    //
+    // Note: _projectId parameters are present for interface consistency with
+    // OpenCodeService. The OpenCode API is project-agnostic (sessions are
+    // global, not scoped per project), so the parameter is intentionally
+    // unused. The underscore prefix is the TypeScript convention for this.
     // =========================================================================
 
-    async getSessions(_projectId: string): Promise<Session[]> {
+    async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: number }): Promise<Session[]> {
         // OpenCode API: GET /session - list all sessions
-        return this.get<Session[]>(`/session`);
+        const query: Record<string, string | undefined> = {};
+        if (options?.search) { query['search'] = options.search; }
+        if (options?.limit !== undefined) { query['limit'] = String(options.limit); }
+        if (options?.start !== undefined) { query['start'] = String(options.start); }
+        return this.get<Session[]>('/session', query);
     }
 
     async getSession(_projectId: string, sessionId: string): Promise<Session> {
         // OpenCode API: GET /session/:id
         return this.get<Session>(`/session/${encodeURIComponent(sessionId)}`);
+    }
+
+    async getSessionStatuses(_projectId: string): Promise<Array<{ sessionId: string; status: SDKTypes.SessionStatus }>> {
+        // OpenCode API: GET /session/status - returns Record<string, SessionStatus>
+        try {
+            const data = await this.get<Record<string, SDKTypes.SessionStatus>>(`/session/status`);
+            return Object.entries(data).map(([sessionId, status]) => ({ sessionId, status }));
+        } catch {
+            return [];
+        }
     }
 
     async createSession(_projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session> {
@@ -315,6 +381,13 @@ export class OpenCodeProxy implements OpenCodeService {
     async deleteSession(_projectId: string, sessionId: string): Promise<void> {
         // OpenCode API: DELETE /session/:id
         return this.delete(`/session/${encodeURIComponent(sessionId)}`);
+    }
+
+    async archiveSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: PATCH /session/:id with { time: { archived: <timestamp> } }
+        return this.patch<Session>(`/session/${encodeURIComponent(sessionId)}`, {
+            time: { archived: Date.now() }
+        });
     }
 
     async initSession(_projectId: string, sessionId: string): Promise<Session> {
@@ -359,6 +432,30 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/unrevert`, {});
     }
 
+    async forkSession(_projectId: string, sessionId: string, messageId?: string): Promise<Session> {
+        // OpenCode API: POST /session/:id/fork
+        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/fork`, messageId ? { messageID: messageId } : {});
+    }
+
+    async getDiff(_projectId: string, sessionId: string): Promise<string> {
+        // OpenCode API: GET /session/:id/diff — returns text, not JSON
+        const url = this.buildUrl(`/session/${encodeURIComponent(sessionId)}/diff`);
+        const { statusCode, body } = await this.rawRequest(url, 'GET', { 'Accept': 'text/plain' });
+        if (statusCode < 200 || statusCode >= 300) { return ''; }
+        return body;
+    }
+
+    async getTodos(_projectId: string, sessionId: string): Promise<Array<{ id: string; description: string; status: string }>> {
+        // OpenCode API: GET /session/:id/todo
+        try {
+            return this.get<Array<{ id: string; description: string; status: string }>>(
+                `/session/${encodeURIComponent(sessionId)}/todo`
+            );
+        } catch {
+            return [];
+        }
+    }
+
     async grantPermission(_projectId: string, sessionId: string, permissionId: string): Promise<Session> {
         // OpenCode API: POST /session/:id/permissions/:permissionID
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(permissionId)}`, {});
@@ -373,9 +470,11 @@ export class OpenCodeProxy implements OpenCodeService {
     // Message Methods
     // =========================================================================
 
-    async getMessages(_projectId: string, sessionId: string): Promise<MessageWithParts[]> {
+    async getMessages(_projectId: string, sessionId: string, limit = 400, before?: string): Promise<MessageWithParts[]> {
         // OpenCode API: GET /session/:id/message
-        return this.get<MessageWithParts[]>(`/session/${encodeURIComponent(sessionId)}/message`);
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (before) { params.set('before', before); }
+        return this.get<MessageWithParts[]>(`/session/${encodeURIComponent(sessionId)}/message?${params}`);
     }
 
     async getMessage(_projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts> {
@@ -721,7 +820,7 @@ export class OpenCodeProxy implements OpenCodeService {
 
             // Route event by type prefix
             if (eventType.startsWith('session.')) {
-                this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError);
+                this.forwardSessionEvent(innerEvent as SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionCompacted);
             } else if (eventType.startsWith('message.')) {
                 this.forwardMessageEvent(innerEvent as SDKTypes.EventMessageUpdated | SDKTypes.EventMessagePartUpdated | SDKTypes.EventMessagePartDelta | SDKTypes.EventMessageRemoved | SDKTypes.EventMessagePartRemoved);
             } else if (eventType.startsWith('file.')) {
@@ -730,6 +829,8 @@ export class OpenCodeProxy implements OpenCodeService {
                 this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied);
             } else if (eventType.startsWith('question.')) {
                 this.forwardQuestionEvent(innerEvent as SDKTypes.EventQuestionAsked | SDKTypes.EventQuestionReplied | SDKTypes.EventQuestionRejected);
+            } else if (eventType.startsWith('todo.')) {
+                this.forwardTodoEvent(innerEvent as { type: string; properties: { sessionID: string; todos: unknown[] } });
             } else {
                 this.logger.debug(`[OpenCodeProxy] Unhandled SSE event type: ${eventType}`);
             }
@@ -741,7 +842,7 @@ export class OpenCodeProxy implements OpenCodeService {
     /**
      * Forward session event to client.
      */
-    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionStatus): void {
+    protected forwardSessionEvent(event: SDKTypes.EventSessionCreated | SDKTypes.EventSessionUpdated | SDKTypes.EventSessionDeleted | SDKTypes.EventSessionError | SDKTypes.EventSessionCompacted | SDKTypes.EventSessionStatus): void {
         if (!this._client) {
             return;
         }
@@ -767,19 +868,31 @@ export class OpenCodeProxy implements OpenCodeService {
                 case 'session.created': type = 'created'; break;
                 case 'session.updated': type = 'updated'; break;
                 case 'session.deleted': type = 'deleted'; break;
+                case 'session.error': type = 'error_occurred'; break;
+                case 'session.compacted': type = 'compacted'; break;
                 default:
-                    this.logger.debug(`[OpenCodeProxy] Unhandled session event type: ${event.type}`);
+                    this.logger.debug(`[OpenCodeProxy] Unhandled session event type: ${(event as { type: string }).type}`);
                     return;
             }
 
             // Extract session info from properties
             const sessionInfo = 'info' in event.properties ? event.properties.info : undefined;
+            // Some events (error, compacted) only have sessionID, not full info
+            const sessionId = sessionInfo?.id || ('sessionID' in event.properties ? (event.properties as { sessionID?: string }).sessionID : '') || '';
+            // For session.error, extract the error message to pass as data
+            let errorData: Session | undefined = sessionInfo as Session | undefined;
+            if (type === 'error_occurred') {
+                const errorEvent = event as SDKTypes.EventSessionError;
+                const errObj = errorEvent.properties.error;
+                const errMsg = errObj && 'message' in errObj ? (errObj as { message: string }).message : String(errObj ?? 'Unknown error');
+                errorData = { error: errMsg } as unknown as Session;
+            }
 
             const notification: SessionNotification = {
                 type,
-                sessionId: sessionInfo?.id || '',
+                sessionId,
                 projectId: sessionInfo?.projectID || '',
-                data: sessionInfo as Session | undefined
+                data: errorData
             };
 
             this._client.onSessionEvent(notification);
@@ -910,12 +1023,28 @@ export class OpenCodeProxy implements OpenCodeService {
                     delta: props.delta
                 });
 
-                this.logger.debug(`[OpenCodeProxy] Forwarded message.part.delta: part=${props.partID}, field=${props.field}, delta=${props.delta.length} chars`);
-
             } else if (event.type === 'message.removed') {
-                this.logger.debug(`[OpenCodeProxy] Message removed: ${event.properties.messageID}`);
+                const removedNotification: MessageNotification = {
+                    type: 'removed',
+                    sessionId: event.properties.sessionID,
+                    projectId: '',
+                    messageId: event.properties.messageID,
+                };
+                this._client.onMessageEvent(removedNotification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.removed: ${event.properties.messageID}`);
             } else if (event.type === 'message.part.removed') {
-                this.logger.debug(`[OpenCodeProxy] Message part removed: ${event.properties.partID}`);
+                const partRemovedNotification: MessageNotification = {
+                    type: 'part_removed',
+                    sessionId: event.properties.sessionID,
+                    projectId: '',
+                    messageId: event.properties.messageID,
+                    data: {
+                        info: { id: event.properties.messageID } as Message,
+                        parts: [{ id: event.properties.partID } as MessagePart]
+                    }
+                };
+                this._client.onMessageEvent(partRemovedNotification);
+                this.logger.debug(`[OpenCodeProxy] Forwarded message.part.removed: ${event.properties.partID}`);
             }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding message event: ${error}`);
@@ -1052,6 +1181,22 @@ export class OpenCodeProxy implements OpenCodeService {
             }
         } catch (error) {
             this.logger.error(`[OpenCodeProxy] Error forwarding question event: ${error}`);
+        }
+    }
+
+    protected forwardTodoEvent(event: { type: string; properties: { sessionID: string; todos: unknown[] } }): void {
+        if (!this._client) { return; }
+        try {
+            const todos = Array.isArray(event.properties?.todos)
+                ? (event.properties.todos as Array<{ id: string; description: string; status: string }>)
+                : [];
+            this._client.onTodoEvent({
+                sessionId: event.properties?.sessionID ?? '',
+                todos
+            });
+            this.logger.debug(`[OpenCodeProxy] Forwarded todo event: ${todos.length} todos`);
+        } catch (error) {
+            this.logger.error(`[OpenCodeProxy] Error forwarding todo event: ${error}`);
         }
     }
 

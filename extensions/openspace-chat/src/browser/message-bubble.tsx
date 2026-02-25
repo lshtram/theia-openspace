@@ -69,6 +69,15 @@ const BASH_TOOL_NAMES = /^(bash|bash_\d+|execute|run_command|run|shell|cmd|termi
 // Matches task/subagent tool names
 const TASK_TOOL_NAMES = /^(task|Task)$/;
 
+// Pre-compiled regexes for getToolInfo() — avoids re-creation per render
+const READ_TOOL_NAMES = /^(read|Read)$/;
+const SEARCH_TOOL_NAMES = /^(grep|Grep|glob|Glob|rg|ripgrep|search|find|list|list_files|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/i;
+const EDIT_WRITE_TOOL_NAMES = /^(edit|Edit|write|Write)$/;
+const WEBFETCH_TOOL_NAMES = /^(webfetch|WebFetch|web_fetch)$/i;
+const TODOWRITE_TOOL_NAMES = /^(todowrite|TodoWrite|todo_write)$/i;
+const EDIT_TOOL_NAMES = /^(edit|Edit)$/;
+const WRITE_TOOL_NAMES = /^(write|Write)$/;
+
 /** Returns true if the string looks like an absolute file path (no whitespace — excludes shell commands). */
 const isFilePath = (s: string): boolean =>
     (s.startsWith('/') || /^[A-Za-z]:\\/.test(s)) && !/\s/.test(s);
@@ -97,20 +106,49 @@ function renderPart(
             return null;
         case 'file':
             return renderFilePart(part, index);
+        case 'agent':
+            return renderAgentPart(part, index);
+        case 'compaction':
+            return renderCompactionPart(part, index);
+        case 'patch':
+            return renderPatchPart(part, index);
+        case 'snapshot':
+            return renderSnapshotPart(part, index);
         default:
             return renderFallbackPart(part, index);
     }
 }
 
-/** Render text part with markdown rendering. */
-function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
+/**
+ * Memoized text part component.
+ *
+ * During streaming the parent re-renders every second (elapsed-timer tick) even
+ * when the text hasn't changed.  `renderMarkdown` is expensive (markdown-it
+ * parse → DOMPurify sanitize → regex linkification), so we cache its output
+ * with `React.useMemo` keyed on the actual text content.  This avoids the
+ * CPU spike (BUG: high Chrome renderer CPU during streaming).
+ */
+const TextPart = React.memo(function TextPart({ part, index, onOpenFile }: {
+    part: any; index: number; onOpenFile?: (filePath: string) => void;
+}) {
     const text: string = part.text || '';
-    if (!text) return null;
+
+    // Suppress pure JSON artifacts (empty array/object leaked from tool output streaming)
+    if (!text || text.trim() === '[]' || text.trim() === '{}') return null;
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const rendered = React.useMemo(() => renderMarkdown(text, onOpenFile), [text]);
+
     return (
         <div key={`text-${index}`} className="part-text">
-            {renderMarkdown(text, onOpenFile)}
+            {rendered}
         </div>
     );
+}, (prev, next) => prev.part.text === next.part.text && prev.index === next.index);
+
+/** Helper to render a TextPart from the renderPart dispatcher. */
+function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
+    return <TextPart key={`text-${index}`} part={part} index={index} onOpenFile={onOpenFile} />;
 }
 
 /** Icon React nodes for tool display (avoids dangerouslySetInnerHTML). */
@@ -139,29 +177,29 @@ function getToolInfo(part: any): { icon: React.ReactNode; name: string; subtitle
         displayName = 'Shell';
         const desc = typeof input === 'object' && input !== null ? (input as any).description : undefined;
         subtitle = desc || (typeof input === 'string' ? input : (typeof input === 'object' && input !== null ? (input as any).command || '' : ''));
-    } else if (/^(read|Read)$/.test(toolName)) {
+    } else if (READ_TOOL_NAMES.test(toolName)) {
         iconKey = 'glasses';
         displayName = 'Read';
         subtitle = typeof input === 'object' && input !== null ? (input as any).filePath || (input as any).path || '' : '';
-    } else if (/^(grep|Grep|glob|Glob|rg|ripgrep|search|find|list|list_files|ripgrep_search|ripgrep_advanced-search|ripgrep_count-matches|ripgrep_list-files)$/i.test(toolName)) {
+    } else if (SEARCH_TOOL_NAMES.test(toolName)) {
         iconKey = 'search';
         displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1).replace(/_/g, ' ');
         subtitle = typeof input === 'object' && input !== null ? (input as any).pattern || (input as any).query || '' : '';
-    } else if (/^(edit|Edit|write|Write)$/.test(toolName)) {
+    } else if (EDIT_WRITE_TOOL_NAMES.test(toolName)) {
         iconKey = 'code';
         displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
         subtitle = typeof input === 'object' && input !== null ? (input as any).filePath || (input as any).path || '' : '';
-    } else if (/^(task|Task)$/.test(toolName)) {
+    } else if (TASK_TOOL_NAMES.test(toolName)) {
         iconKey = 'task';
         const agentType: string = typeof input === 'object' && input !== null ? ((input as any).subagent_type || '') : '';
         const desc: string = typeof input === 'object' && input !== null ? ((input as any).description || '') : '';
         displayName = agentType ? `@${agentType}` : 'Task';
         subtitle = desc;
-    } else if (/^(webfetch|WebFetch|web_fetch)$/i.test(toolName)) {
+    } else if (WEBFETCH_TOOL_NAMES.test(toolName)) {
         iconKey = 'window';
         displayName = 'Web Fetch';
         subtitle = typeof input === 'object' && input !== null ? (input as any).url || '' : '';
-    } else if (/^(todowrite|TodoWrite|todo_write)$/i.test(toolName)) {
+    } else if (TODOWRITE_TOOL_NAMES.test(toolName)) {
         iconKey = 'task';
         displayName = 'Todo';
     }
@@ -197,40 +235,44 @@ const ToolBlock: React.FC<{
         ? state.output : (part.output ?? undefined);
 
     // Detect edit/write tools
-    const isEdit = /^(edit|Edit)$/.test(part.tool || '');
-    const isWrite = /^(write|Write)$/.test(part.tool || '');
+    const isEdit = EDIT_TOOL_NAMES.test(part.tool || '');
+    const isWrite = WRITE_TOOL_NAMES.test(part.tool || '');
     const isEditOrWrite = isEdit || isWrite;
 
     // For edit/write: extract file info and compute diff
     let editFileName = '';
     let editDirectory = '';
     let editFilePath = '';
-    let diffResult: { lines: Array<{ type: 'add' | 'del' | 'ctx'; text: string }>; additions: number; deletions: number } | null = null;
 
     if (isEditOrWrite && typeof input === 'object' && input !== null) {
         editFilePath = (input as any).filePath || (input as any).path || '';
         const lastSlash = editFilePath.lastIndexOf('/');
         editFileName = lastSlash >= 0 ? editFilePath.slice(lastSlash + 1) : editFilePath;
         editDirectory = lastSlash >= 0 ? editFilePath.slice(0, lastSlash) : '';
+    }
 
+    // Memoize diff computation — computeSimpleDiff uses O(m*n) LCS, expensive during streaming re-renders
+    const diffResult = React.useMemo(() => {
+        if (!isEditOrWrite || typeof input !== 'object' || input === null) return null;
         if (isEdit) {
             const oldStr = (input as any).oldString || '';
             const newStr = (input as any).newString || '';
             if (oldStr || newStr) {
-                diffResult = computeSimpleDiff(oldStr, newStr);
+                return computeSimpleDiff(oldStr, newStr);
             }
         } else if (isWrite) {
             const content = (input as any).content || '';
             if (content) {
                 const contentLines = content.split('\n');
-                diffResult = {
+                return {
                     lines: contentLines.map((l: string) => ({ type: 'add' as const, text: l })),
                     additions: contentLines.length,
                     deletions: 0
                 };
             }
         }
-    }
+        return null;
+    }, [isEditOrWrite, isEdit, isWrite, input]);
 
     const hasBody = !!(input || output || diffResult);
 
@@ -324,7 +366,7 @@ const ToolBlock: React.FC<{
                 <div className={isEditOrWrite && diffResult ? 'part-tool-body part-tool-diff-body' : 'part-tool-body'}>
                     {isEditOrWrite && diffResult ? (
                         <div className="part-tool-diff">
-                            {diffResult.lines.map((line, idx) => (
+                            {diffResult.lines.map((line: { type: 'add' | 'del' | 'ctx'; text: string }, idx: number) => (
                                 <div key={idx} className={`diff-line diff-line-${line.type}`}>
                                     <span className="diff-line-indicator">
                                         {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
@@ -724,15 +766,17 @@ function renderToolPart(
 }
 
 /** Reasoning block — renders reasoning text inline with markdown, no sub-header or nested toggle. */
-const ReasoningBlock: React.FC<{ part: any }> = ({ part }) => {
+const ReasoningBlock: React.FC<{ part: any }> = React.memo(({ part }) => {
     const text: string = part.text || part.reasoning || '';
     if (!text) return null;
+    // Memoize expensive markdown rendering — only re-parse when text changes
+    const rendered = React.useMemo(() => renderMarkdown(text), [text]);
     return (
         <div className="part-reasoning-inline part-text">
-            {renderMarkdown(text)}
+            {rendered}
         </div>
     );
-};
+});
 
 function renderReasoningPart(part: any, index: number): React.ReactNode {
     return <ReasoningBlock key={`reasoning-${index}`} part={part} />;
@@ -748,6 +792,61 @@ function renderFilePart(part: any, index: number): React.ReactNode {
                 <polyline points="14 2 14 8 20 8"/>
             </svg>
             <span>{filePath}</span>
+        </div>
+    );
+}
+
+/** Render agent part — shows sub-agent invocation with name. */
+function renderAgentPart(part: any, index: number): React.ReactNode {
+    const name: string = part.name ?? 'sub-agent';
+    return (
+        <div key={`agent-${index}`} className="part-agent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                <rect width="10" height="10" x="7" y="7" rx="1"/>
+                <path d="M9 2h6"/><path d="M12 2v5"/>
+                <path d="M9 22h6"/><path d="M12 22v-5"/>
+                <path d="M2 9v6"/><path d="M2 12h5"/>
+                <path d="M22 9v6"/><path d="M22 12h-5"/>
+            </svg>
+            <span className="part-agent-name">{name}</span>
+        </div>
+    );
+}
+
+/** Render compaction part — visual divider indicating context was compacted. */
+function renderCompactionPart(part: any, index: number): React.ReactNode {
+    const isAuto: boolean = part.auto === true;
+    return (
+        <div key={`compaction-${index}`} className="compaction-marker">
+            <div className="compaction-line" />
+            <span className="compaction-label">{isAuto ? 'Context auto-compacted' : 'Context compacted'}</span>
+            <div className="compaction-line" />
+        </div>
+    );
+}
+
+/** Render patch part — shows list of changed files. */
+function renderPatchPart(part: any, index: number): React.ReactNode {
+    const files: string[] = Array.isArray(part.files) ? part.files : [];
+    return (
+        <div key={`patch-${index}`} className="part-patch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+            <span className="part-patch-label">{files.length > 0 ? files.join(', ') : 'file changed'}</span>
+        </div>
+    );
+}
+
+/** Render snapshot part — shows a snapshot marker. */
+function renderSnapshotPart(part: any, index: number): React.ReactNode {
+    const snapshotId: string = typeof part.snapshot === 'string' ? part.snapshot.slice(0, 7) : '';
+    return (
+        <div key={`snapshot-${index}`} className="part-snapshot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
+            </svg>
+            <span className="part-snapshot-label">Snapshot{snapshotId ? ` (${snapshotId})` : ''}</span>
         </div>
     );
 }
@@ -1096,11 +1195,15 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
 
     // When rendered as an intermediate step (inside an outer TurnGroup from the timeline),
     // render all parts flat — no article wrapper, no header, no inner TurnGroup.
+    // Memoize groupParts to avoid recomputation during streaming re-renders.
+    const intermediateGrouped = React.useMemo(
+        () => isIntermediateStep ? groupParts(parts) : [],
+        [isIntermediateStep, parts]
+    );
     if (isIntermediateStep) {
-        const allGrouped = groupParts(parts);
         return (
             <div className="message-bubble-intermediate">
-                {allGrouped.map((group, gi) => {
+                {intermediateGrouped.map((group, gi) => {
                     if (group.type === 'context-group') {
                         return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
                     }

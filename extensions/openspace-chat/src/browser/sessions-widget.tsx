@@ -40,18 +40,49 @@ interface SessionsViewProps {
 const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageService }) => {
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [isLoading, setIsLoading] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [showArchived, setShowArchived] = React.useState(false);
+    const [hasMore, setHasMore] = React.useState(false);
+    const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const load = React.useCallback(async () => {
         setIsLoading(true);
         try {
             const s = await sessionService.getSessions();
             setSessions(s);
+            setHasMore(sessionService.hasMoreSessions ?? false);
         } catch (e) {
             messageService.error(`Failed to load sessions: ${e}`);
         } finally {
             setIsLoading(false);
         }
     }, [sessionService, messageService]);
+
+    const handleSearch = React.useCallback((query: string) => {
+        if (searchTimerRef.current) { clearTimeout(searchTimerRef.current); }
+        searchTimerRef.current = setTimeout(async () => {
+            setIsLoading(true);
+            try {
+                if (query.trim()) {
+                    const results = await sessionService.searchSessions(query.trim());
+                    setSessions(results);
+                    setHasMore(false);
+                } else {
+                    await load();
+                }
+            } catch (e) {
+                messageService.error(`Search failed: ${e}`);
+            } finally {
+                setIsLoading(false);
+            }
+        }, 250);
+    }, [sessionService, messageService, load]);
+
+    const handleLoadMore = async () => {
+        const more = await sessionService.loadMoreSessions();
+        setSessions(prev => [...prev, ...more]);
+        setHasMore(sessionService.hasMoreSessions ?? false);
+    };
 
     React.useEffect(() => {
         load();
@@ -77,15 +108,15 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
         }
     };
 
-    const handleDelete = async (session: Session, e: React.MouseEvent) => {
+    const handleArchive = async (session: Session, e: React.MouseEvent) => {
         e.stopPropagation();
-        const action = await messageService.warn(`Delete "${session.title}"?`, 'Delete', 'Cancel');
-        if (action !== 'Delete') { return; }
+        const action = await messageService.warn(`Archive "${session.title}"?`, 'Archive', 'Cancel');
+        if (action !== 'Archive') { return; }
         try {
-            await sessionService.deleteSession(session.id);
+            await sessionService.archiveSession(session.id);
             await load();
         } catch (err) {
-            messageService.error(`Failed to delete session: ${err}`);
+            messageService.error(`Failed to archive session: ${err}`);
         }
     };
 
@@ -95,6 +126,17 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
         <div className="sessions-widget">
             <div className="sessions-widget-toolbar">
                 <span className="sessions-widget-title">SESSIONS</span>
+                <button
+                    type="button"
+                    className="sessions-icon-btn show-archived-toggle"
+                    data-testid="show-archived-toggle"
+                    onClick={() => setShowArchived(v => !v)}
+                    title={showArchived ? 'Hide archived' : 'Show archived'}
+                    aria-label={showArchived ? 'Hide archived sessions' : 'Show archived sessions'}
+                    aria-pressed={showArchived}
+                >
+                    {showArchived ? '●' : '○'}
+                </button>
                 <button
                     type="button"
                     className="sessions-widget-new-btn sessions-icon-btn"
@@ -107,6 +149,20 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     </svg>
                 </button>
             </div>
+            <div className="sessions-widget-search">
+                <input
+                    type="text"
+                    className="sessions-search-input"
+                    data-testid="session-search"
+                    placeholder="Search sessions…"
+                    value={searchQuery}
+                    onChange={e => {
+                        setSearchQuery(e.target.value);
+                        handleSearch(e.target.value);
+                    }}
+                    aria-label="Search sessions"
+                />
+            </div>
             {isLoading && (
                 <div className="sessions-widget-loading">
                     <svg className="sessions-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
@@ -118,27 +174,44 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                 <div className="sessions-widget-empty">No sessions yet</div>
             )}
             <div className="sessions-widget-list">
-                {sessions.map(session => (
+                {sessions
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .filter(s => showArchived ? true : !(s.time as any)?.archived)
+                    .map(session => (
                     <div
                         key={session.id}
-                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}`}
+                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${(session as any).parentID ? ' session-child session-forked' : ''}`}
+                        data-session-id={session.id}
+                        data-parent-id={(session as any).parentID ?? undefined}
                         onClick={() => handleSwitch(session.id)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter') { handleSwitch(session.id); } }}
                         title={session.title}
+                        style={(session as any).parentID ? { paddingLeft: '24px' } : undefined}
                     >
-                        <span className="sessions-widget-item-title">{session.title}</span>
+                        <span className="sessions-widget-item-title">
+                            {session.title}
+                            {(() => {
+                                const status = sessionService.getSessionStatus(session.id);
+                                if (!status || status.type === 'idle') { return null; }
+                                return (
+                                    <span className={`session-status-badge session-status-${status.type}`}>
+                                        {status.type === 'busy' ? '●' : '↺'}
+                                    </span>
+                                );
+                            })()}
+                        </span>
                         <div className="sessions-widget-item-actions">
                             <span className="sessions-widget-item-time">
                                 {session.time?.created ? relativeTime(session.time.created) : ''}
                             </span>
                             <button
                                 type="button"
-                                className="sessions-widget-delete sessions-icon-btn"
-                                onClick={(e) => handleDelete(session, e)}
-                                title="Delete session"
-                                aria-label="Delete session"
+                                className="sessions-widget-archive sessions-icon-btn"
+                                onClick={(e) => handleArchive(session, e)}
+                                title="Archive session"
+                                aria-label="Archive session"
                             >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
                                     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
@@ -148,6 +221,16 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     </div>
                 ))}
             </div>
+            {hasMore && !searchQuery && (
+                <button
+                    type="button"
+                    className="load-more-sessions"
+                    data-testid="load-more-sessions"
+                    onClick={handleLoadMore}
+                >
+                    Load more sessions
+                </button>
+            )}
         </div>
     );
 };

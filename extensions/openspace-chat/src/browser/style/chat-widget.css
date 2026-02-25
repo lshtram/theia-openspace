@@ -1416,7 +1416,7 @@
     background: var(--oc-bg-hover);
 }
 
-.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-delete {
+.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-archive {
     opacity: 1;
 }
 
@@ -1445,7 +1445,7 @@
     color: var(--oc-text-dim);
 }
 
-.openspace-sessions-widget .sessions-widget-delete {
+.openspace-sessions-widget .sessions-widget-archive {
     opacity: 0;
     transition: opacity 0.1s;
 }
@@ -1482,6 +1482,22 @@
 
 .openspace-sessions-widget .sessions-spin {
     animation: sessions-spin 1s linear infinite;
+}
+
+.load-more-sessions {
+    width: 100%;
+    padding: 6px 0;
+    background: none;
+    border: none;
+    color: var(--theia-focusBorder, #007fd4);
+    cursor: pointer;
+    font-size: 11px;
+    text-align: center;
+    opacity: 0.7;
+}
+
+.load-more-sessions:hover {
+    opacity: 1;
 }
 
 .openspace-chat-widget .oc-spin {
@@ -2307,3 +2323,150 @@
 .openspace-chat-widget .md-body .katex {
     font-size: 1.1em;
 }
+
+/* ── Agent / compaction / patch / snapshot parts ───────────────────────── */
+
+.message-bubble .part-agent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    opacity: 0.85;
+    font-size: 0.88em;
+    color: var(--theia-descriptionForeground);
+}
+.message-bubble .part-agent-name {
+    font-family: var(--theia-editor-font-family, monospace);
+}
+
+.message-bubble .compaction-marker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    color: var(--theia-descriptionForeground);
+    font-size: 0.85em;
+}
+.message-bubble .compaction-line {
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.3;
+}
+
+.message-bubble .part-patch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.88em;
+    color: var(--theia-descriptionForeground);
+}
+.message-bubble .part-patch-label {
+    font-family: var(--theia-editor-font-family, monospace);
+    opacity: 0.85;
+}
+
+.message-bubble .part-snapshot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.85em;
+    color: var(--theia-descriptionForeground);
+    opacity: 0.75;
+}
+
+/* F1: Load more messages button */
+.load-more-messages-container {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+}
+.load-more-messages {
+    font-size: 0.8em;
+    padding: 4px 12px;
+    border: 1px solid var(--theia-button-secondaryBorder, var(--theia-contrastBorder));
+    background: var(--theia-button-secondaryBackground, transparent);
+    color: var(--theia-button-secondaryForeground, var(--theia-foreground));
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.8;
+}
+.load-more-messages:hover { opacity: 1; }
+
+
+
+/* G1: Todo panel */
+.openspace-todo-panel {
+    margin: 4px 8px;
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-contrastBorder));
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.82em;
+}
+.todo-panel-header {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--theia-foreground);
+    opacity: 0.75;
+}
+.todo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0;
+    color: var(--theia-foreground);
+}
+.todo-status-icon {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+.todo-status-completed { opacity: 0.5; text-decoration: line-through; }
+.todo-status-in_progress { color: var(--theia-charts-blue); }
+
+/* H1: Session status badges */
+.session-status-badge {
+    font-size: 0.7em;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.session-status-busy { color: var(--theia-charts-yellow, #e8b904); }
+.session-status-retry { color: var(--theia-charts-orange, #e06c00); }
+
+/* H2: Forked session hierarchy */
+.session-child {
+    border-left: 2px solid var(--theia-editorIndentGuide-activeBackground, var(--theia-contrastBorder));
+}
+.session-forked { opacity: 0.9; }
+
+/* H3: Session error display (session.error SSE event) */
+.session-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--theia-inputValidation-errorBackground, rgba(255, 80, 80, 0.1));
+    border: 1px solid var(--theia-inputValidation-errorBorder, #f44);
+    border-radius: 4px;
+    margin: 4px 0;
+    font-size: 0.85em;
+    color: var(--theia-errorForeground, #f88);
+}
+.session-error-icon { flex-shrink: 0; }
+.session-error-message { flex: 1; }
+.session-error-dismiss {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.7;
+    padding: 0 2px;
+}
+.session-error-dismiss:hover { opacity: 1; }

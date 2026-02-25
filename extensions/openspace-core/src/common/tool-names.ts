@@ -1,0 +1,56 @@
+/** Canonical tool name constants used in MCP tool registration and bridge dispatch. */
+export const TOOL = {
+    PANE_OPEN:                          'openspace.pane.open',
+    PANE_CLOSE:                         'openspace.pane.close',
+    PANE_FOCUS:                         'openspace.pane.focus',
+    PANE_LIST:                          'openspace.pane.list',
+
+    EDITOR_OPEN:                        'openspace.editor.open',
+    EDITOR_READ_FILE:                   'openspace.editor.read_file',
+    EDITOR_CLOSE:                       'openspace.editor.close',
+    EDITOR_SCROLL_TO:                   'openspace.editor.scroll_to',
+    EDITOR_HIGHLIGHT:                   'openspace.editor.highlight',
+    EDITOR_CLEAR_HIGHLIGHT:             'openspace.editor.clear_highlight',
+
+    TERMINAL_CREATE:                    'openspace.terminal.create',
+    TERMINAL_SEND:                      'openspace.terminal.send',
+    TERMINAL_READ_OUTPUT:               'openspace.terminal.read_output',
+    TERMINAL_LIST:                      'openspace.terminal.list',
+    TERMINAL_CLOSE:                     'openspace.terminal.close',
+
+    FILE_READ:                          'openspace.file.read',
+    FILE_WRITE:                         'openspace.file.write',
+    FILE_LIST:                          'openspace.file.list',
+    FILE_SEARCH:                        'openspace.file.search',
+    FILE_PATCH:                         'openspace.file.patch',
+
+    ARTIFACT_GET_VERSION:               'openspace.artifact.getVersion',
+    ARTIFACT_PATCH:                     'openspace.artifact.patch',
+
+    PRESENTATION_LIST:                  'openspace.presentation.list',
+    PRESENTATION_READ:                  'openspace.presentation.read',
+    PRESENTATION_CREATE:                'openspace.presentation.create',
+    PRESENTATION_UPDATE_SLIDE:          'openspace.presentation.update_slide',
+    PRESENTATION_OPEN:                  'openspace.presentation.open',
+    PRESENTATION_NAVIGATE:              'openspace.presentation.navigate',
+    PRESENTATION_PLAY:                  'openspace.presentation.play',
+    PRESENTATION_PAUSE:                 'openspace.presentation.pause',
+    PRESENTATION_STOP:                  'openspace.presentation.stop',
+    PRESENTATION_TOGGLE_FULLSCREEN:     'openspace.presentation.toggleFullscreen',
+
+    WHITEBOARD_LIST:                    'openspace.whiteboard.list',
+    WHITEBOARD_READ:                    'openspace.whiteboard.read',
+    WHITEBOARD_CREATE:                  'openspace.whiteboard.create',
+    WHITEBOARD_ADD_SHAPE:               'openspace.whiteboard.add_shape',
+    WHITEBOARD_UPDATE_SHAPE:            'openspace.whiteboard.update_shape',
+    WHITEBOARD_DELETE_SHAPE:            'openspace.whiteboard.delete_shape',
+    WHITEBOARD_OPEN:                    'openspace.whiteboard.open',
+    WHITEBOARD_CAMERA_SET:              'openspace.whiteboard.camera.set',
+    WHITEBOARD_CAMERA_FIT:              'openspace.whiteboard.camera.fit',
+    WHITEBOARD_CAMERA_GET:              'openspace.whiteboard.camera.get',
+    WHITEBOARD_BATCH_ADD_SHAPES:        'openspace.whiteboard.batch_add_shapes',
+    WHITEBOARD_REPLACE:                 'openspace.whiteboard.replace',
+    WHITEBOARD_FIND_SHAPES:             'openspace.whiteboard.find_shapes',
+
+    VOICE_SET_POLICY:                   'voice.set_policy',
+} as const;

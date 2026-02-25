@@ -22,10 +22,11 @@ import {
     OpenCodeClient,
     SessionNotification,
     MessageNotification,
-    MessagePartDeltaNotification,
-    FileNotification,
-    PermissionNotification,
-    QuestionNotification
+     MessagePartDeltaNotification,
+     FileNotification,
+     PermissionNotification,
+     QuestionNotification,
+     TodoNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -265,7 +266,21 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
                 case 'shared':
                 case 'unshared':
+                    if (event.data) {
+                        this.sessionService.notifySessionChanged(event.data);
+                    }
+                    break;
+
                 case 'compacted':
+                    if (event.data) {
+                        this.sessionService.notifySessionChanged(event.data);
+                    }
+                    // Compaction replaces the entire message history with a summary —
+                    // reload messages so the UI reflects the new compacted content.
+                    this.sessionService.reloadMessages().catch(e =>
+                        this.logger.warn('[SyncService] Failed to reload messages after compaction:', e)
+                    );
+                    break;
                 case 'reverted':
                 case 'unreverted':
                     if (event.data) {
@@ -273,9 +288,20 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     }
                     break;
 
+                case 'error_occurred':
+                    // Forward session error to session-service so UI can display it
+                    if (event.data) {
+                        const errorData = event.data as unknown as { error?: string };
+                        this.sessionService.notifySessionError(
+                            event.sessionId,
+                            errorData.error ?? 'Unknown session error'
+                        );
+                    }
+                    break;
+
                 case 'status_changed':
                     if (event.sessionStatus) {
-                        this.sessionService.updateSessionStatus(event.sessionStatus);
+                        this.sessionService.updateSessionStatus(event.sessionStatus, event.sessionId);
                     }
                     break;
 
@@ -325,6 +351,18 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 case 'completed':
                     this.handleMessageCompleted(event);
                     break;
+
+                case 'removed':
+                    this.sessionService.notifyMessageRemoved(event.sessionId, event.messageId);
+                    break;
+
+                case 'part_removed': {
+                    const removedPartId = event.data?.parts?.[0]?.id;
+                    if (removedPartId) {
+                        this.sessionService.notifyPartRemoved(event.sessionId, event.messageId, removedPartId);
+                    }
+                    break;
+                }
 
                 default:
                     this.logger.warn(`[SyncService] Unknown message event type: ${event.type}`);
@@ -389,6 +427,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // We keep empty stubs so part IDs and canonical types (e.g. reasoning) exist
         // before deltas arrive. We still ignore non-empty text/reasoning snapshots to
         // avoid append duplication when message.part.delta for the same token follows.
+        //
+        // NOTE (A4 investigation 2026-02-24): Tool call state transitions (pending → running →
+        // completed → error) are handled correctly. updateStreamingMessageParts() in session-service
+        // matches parts by ID and replaces them in-place, so each message.part.updated carrying a new
+        // state will overwrite the previous part record. No bug here.
         const allParts = event.data.parts || [];
         const toolParts = allParts.filter((p: any) => {
             if (p.type !== 'text' && p.type !== 'reasoning') {
@@ -698,6 +741,16 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             }
         } catch (error) {
             this.logger.error('[SyncService] Error in onQuestionEvent:', error);
+        }
+    }
+
+    onTodoEvent(event: TodoNotification): void {
+        try {
+            if (this.queueIfNotReady('onTodoEvent', event)) { return; }
+            if (this.sessionService.activeSession?.id !== event.sessionId) { return; }
+            this.sessionService.updateTodos(event.todos);
+        } catch (error) {
+            this.logger.error('[SyncService] Error in onTodoEvent:', error);
         }
     }
 

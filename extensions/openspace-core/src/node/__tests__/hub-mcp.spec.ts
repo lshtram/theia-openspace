@@ -32,6 +32,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { OpenSpaceMcpServer, CommandBridgeResult, BridgeCallback } from '../hub-mcp';
+import { resolveSafePath } from '../path-utils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -218,11 +219,9 @@ describe('OpenSpaceMcpServer — executeViaBridge() with bridge connected', () =
 
 describe('OpenSpaceMcpServer — resolveSafePath()', () => {
     let workspaceDir: string;
-    let server: OpenSpaceMcpServer;
 
     beforeEach(() => {
         workspaceDir = makeTempDir();
-        server = new OpenSpaceMcpServer(workspaceDir);
     });
 
     afterEach(() => {
@@ -230,28 +229,28 @@ describe('OpenSpaceMcpServer — resolveSafePath()', () => {
     });
 
     it('resolves a relative path within workspace root', () => {
-        const resolved = priv(server).resolveSafePath('src/index.ts');
+        const resolved = resolveSafePath(workspaceDir, 'src/index.ts');
         expect(resolved).to.equal(path.join(workspaceDir, 'src/index.ts'));
     });
 
     it('resolves "." to workspace root', () => {
-        const resolved = priv(server).resolveSafePath('.');
+        const resolved = resolveSafePath(workspaceDir, '.');
         expect(resolved).to.equal(workspaceDir);
     });
 
     it('throws on ../ traversal that escapes workspace root', () => {
-        expect(() => priv(server).resolveSafePath('../../../etc/passwd'))
+        expect(() => resolveSafePath(workspaceDir, '../../../etc/passwd'))
             .to.throw(/Path traversal detected/);
     });
 
     it('throws on absolute path outside workspace', () => {
-        expect(() => priv(server).resolveSafePath('/etc/passwd'))
+        expect(() => resolveSafePath(workspaceDir, '/etc/passwd'))
             .to.throw(/Path traversal detected/);
     });
 
     it('allows absolute path inside workspace root', () => {
         const insidePath = path.join(workspaceDir, 'subdir', 'file.txt');
-        const resolved = priv(server).resolveSafePath(insidePath);
+        const resolved = resolveSafePath(workspaceDir, insidePath);
         expect(resolved).to.equal(insidePath);
     });
 });
@@ -282,14 +281,14 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
 
             // Access the registered tool handler directly via the mcpServer internals
             // We call resolveSafePath + readFileSync directly to mirror what the tool does
-            const resolved = priv(server).resolveSafePath('hello.txt');
+            const resolved = resolveSafePath(workspaceDir, 'hello.txt');
             const content = fs.readFileSync(resolved, 'utf-8');
             expect(content).to.equal('Hello World!');
         });
 
         it('returns isError:true for a non-existent file via tool-like logic', async () => {
             try {
-                const resolved = priv(server).resolveSafePath('nonexistent.txt');
+                const resolved = resolveSafePath(workspaceDir, 'nonexistent.txt');
                 fs.readFileSync(resolved, 'utf-8');
                 expect.fail('Should have thrown');
             } catch (err: any) {
@@ -298,7 +297,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
         });
 
         it('rejects path traversal via file.read', () => {
-            expect(() => priv(server).resolveSafePath('../../../etc/passwd'))
+            expect(() => resolveSafePath(workspaceDir, '../../../etc/passwd'))
                 .to.throw(/Path traversal detected/);
         });
     });
@@ -308,7 +307,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
     describe('openspace.file.write', () => {
         it('writes content to a file (creating directories as needed)', () => {
             const relPath = 'subdir/deep/file.ts';
-            const resolved = priv(server).resolveSafePath(relPath);
+            const resolved = resolveSafePath(workspaceDir, relPath);
             const dir = path.dirname(resolved);
             fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(resolved, 'export {};', 'utf-8');
@@ -317,7 +316,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
         });
 
         it('rejects writing outside workspace root', () => {
-            expect(() => priv(server).resolveSafePath('../outside/file.ts'))
+            expect(() => resolveSafePath(workspaceDir, '../outside/file.ts'))
                 .to.throw(/Path traversal detected/);
         });
     });
@@ -434,10 +433,15 @@ describe('Hub — OPENSPACE_HUB_ORIGINS env var (T3-8)', () => {
 
 describe('OpenSpaceMcpServer — presentation tool registrations', () => {
     let hubMcpSrc: string;
+    let toolNamesSrc: string;
 
     before(() => {
         hubMcpSrc = fs.readFileSync(
             path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+        toolNamesSrc = fs.readFileSync(
+            path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
         );
     });
@@ -457,19 +461,19 @@ describe('OpenSpaceMcpServer — presentation tool registrations', () => {
 
     for (const toolName of PRESENTATION_TOOLS) {
         it(`registers tool "${toolName}"`, () => {
-            expect(hubMcpSrc, `hub-mcp.ts must register "${toolName}"`).to.include(`'${toolName}'`);
+            // Tool name must be defined in tool-names.ts (single source of truth)
+            expect(toolNamesSrc, `tool-names.ts must define "${toolName}"`).to.include(`'${toolName}'`);
+            // hub-mcp.ts must reference the TOOL constant (not the raw string)
+            expect(hubMcpSrc, `hub-mcp.ts must import TOOL constants`).to.include('TOOL.');
         });
     }
 
     it('routes all presentation tools through executeViaBridge', () => {
-        // Each presentation tool must delegate to the browser via executeViaBridge
-        // (they cannot be implemented at the node layer since Theia/reveal.js is browser-side)
-        for (const toolName of PRESENTATION_TOOLS) {
-            expect(
-                hubMcpSrc,
-                `"${toolName}" must call executeViaBridge`
-            ).to.include(`executeViaBridge('${toolName}'`);
-        }
+        // Each presentation tool must delegate to the browser via executeViaBridge using TOOL constants
+        expect(
+            hubMcpSrc,
+            `hub-mcp.ts must call executeViaBridge for presentation tools`
+        ).to.include('executeViaBridge(TOOL.');
     });
 
     it('executeViaBridge returns isError:true for presentation tools when bridge is not connected', async () => {
@@ -492,10 +496,15 @@ describe('OpenSpaceMcpServer — presentation tool registrations', () => {
 
 describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
     let hubMcpSrc: string;
+    let toolNamesSrc: string;
 
     before(() => {
         hubMcpSrc = fs.readFileSync(
             path.join(__dirname, '../hub-mcp.ts'),
+            'utf-8'
+        );
+        toolNamesSrc = fs.readFileSync(
+            path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
         );
     });
@@ -515,17 +524,18 @@ describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
 
     for (const toolName of WHITEBOARD_TOOLS) {
         it(`registers tool "${toolName}"`, () => {
-            expect(hubMcpSrc, `hub-mcp.ts must register "${toolName}"`).to.include(`'${toolName}'`);
+            // Tool name must be defined in tool-names.ts (single source of truth)
+            expect(toolNamesSrc, `tool-names.ts must define "${toolName}"`).to.include(`'${toolName}'`);
+            // hub-mcp.ts must reference the TOOL constant (not the raw string)
+            expect(hubMcpSrc, `hub-mcp.ts must import TOOL constants`).to.include('TOOL.');
         });
     }
 
     it('routes all whiteboard tools through executeViaBridge', () => {
-        for (const toolName of WHITEBOARD_TOOLS) {
-            expect(
-                hubMcpSrc,
-                `"${toolName}" must call executeViaBridge`
-            ).to.include(`executeViaBridge('${toolName}'`);
-        }
+        expect(
+            hubMcpSrc,
+            `hub-mcp.ts must call executeViaBridge for whiteboard tools`
+        ).to.include('executeViaBridge(TOOL.');
     });
 });
 
@@ -548,11 +558,18 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
     });
 
     it('openspace.artifact.patch is registered in hub-mcp.ts source', () => {
+        const toolNamesSrc = fs.readFileSync(
+            path.join(__dirname, '../../common/tool-names.ts'),
+            'utf-8'
+        );
         const hubMcpSrc = fs.readFileSync(
             path.join(__dirname, '../hub-mcp.ts'),
             'utf-8'
         );
-        expect(hubMcpSrc).to.include("'openspace.artifact.patch'");
+        // String value defined in tool-names.ts
+        expect(toolNamesSrc).to.include("'openspace.artifact.patch'");
+        // hub-mcp.ts uses the TOOL constant
+        expect(hubMcpSrc).to.include('TOOL.ARTIFACT_PATCH');
     });
 
     it('successful replace_content patch returns JSON { version, bytes, path }', async () => {
@@ -635,11 +652,18 @@ describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
     });
 
     it('openspace.artifact.getVersion is registered in hub-mcp.ts source', () => {
+        const toolNamesSrc = fs.readFileSync(
+            path.join(__dirname, '../../common/tool-names.ts'),
+            'utf-8'
+        );
         const hubMcpSrc = fs.readFileSync(
             path.join(__dirname, '../hub-mcp.ts'),
             'utf-8'
         );
-        expect(hubMcpSrc).to.include("'openspace.artifact.getVersion'");
+        // String value defined in tool-names.ts
+        expect(toolNamesSrc).to.include("'openspace.artifact.getVersion'");
+        // hub-mcp.ts uses the TOOL constant
+        expect(hubMcpSrc).to.include('TOOL.ARTIFACT_GET_VERSION');
     });
 
     it('openspace.artifact.getVersion returns version 0 for unknown file', async () => {

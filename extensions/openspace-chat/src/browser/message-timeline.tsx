@@ -351,6 +351,18 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                 aria-label="Message timeline"
             >
                 <div className="message-timeline-content">
+                    {sessionService?.hasOlderMessages && (
+                        <div className="load-more-messages-container">
+                            <button
+                                className="load-more-messages"
+                                data-testid="load-more-messages"
+                                aria-label="Load more messages"
+                                onClick={() => sessionService.loadOlderMessages()}
+                            >
+                                Load older messages
+                            </button>
+                        </div>
+                    )}
                     {messages.length === 0 ? (
                         <div className="message-timeline-empty">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32" style={{ opacity: 0.3 }}>

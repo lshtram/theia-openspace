@@ -22,6 +22,41 @@ import { MutableHubState, AgentCommand, PaneStateSnapshot, CommandDefinition } f
 import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
 
 /**
+ * Simple sliding-window rate limiter.
+ * Allows up to `maxPerSecond` requests per IP address per 1-second window.
+ * Exported for unit testing.
+ */
+export class RateLimiter {
+    private readonly counters = new Map<string, { count: number; windowStart: number }>();
+
+    constructor(private readonly maxPerSecond: number = 200) {}
+
+    isAllowed(ip: string): boolean {
+        const now = Date.now();
+        const entry = this.counters.get(ip);
+        if (!entry || now - entry.windowStart >= 1000) {
+            this.counters.set(ip, { count: 1, windowStart: now });
+            return true;
+        }
+        if (entry.count >= this.maxPerSecond) {
+            return false;
+        }
+        entry.count++;
+        return true;
+    }
+
+    /** Remove entries not seen in the last 60 seconds. Call periodically to bound memory use. */
+    cleanup(): void {
+        const cutoff = Date.now() - 60_000;
+        for (const [ip, entry] of this.counters) {
+            if (entry.windowStart < cutoff) {
+                this.counters.delete(ip);
+            }
+        }
+    }
+}
+
+/**
  * OpenSpace Hub - HTTP server bridging Theia frontend with the opencode MCP agent.
  *
  * T3 Architecture:
@@ -35,6 +70,10 @@ import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
 export class OpenSpaceHub implements BackendApplicationContribution {
     @inject(ILogger) protected readonly logger!: ILogger;
 
+    // Rate limiter — protect Hub endpoints from request floods
+    private readonly rateLimiter = new RateLimiter(200);
+    private cleanupTimer?: NodeJS.Timeout;
+
     // Internal mutable state
     private state: MutableHubState = {
         manifest: null,
@@ -47,19 +86,10 @@ export class OpenSpaceHub implements BackendApplicationContribution {
      * Allowed origins for CORS and origin validation.
      */
     private readonly allowedOrigins: string[] = (() => {
+        const theiaPort = process.env['PORT'] || '3000';
         const defaults = [
-            'http://localhost:3000',
-            'http://localhost:3001',
-            'http://localhost:3002',
-            'http://localhost:3003',
-            'http://localhost:3004',
-            'http://localhost:3005',
-            'http://127.0.0.1:3000',
-            'http://127.0.0.1:3001',
-            'http://127.0.0.1:3002',
-            'http://127.0.0.1:3003',
-            'http://127.0.0.1:3004',
-            'http://127.0.0.1:3005',
+            `http://localhost:${theiaPort}`,
+            `http://127.0.0.1:${theiaPort}`,
         ];
         const envOrigins = process.env['OPENSPACE_HUB_ORIGINS'];
         if (!envOrigins) {
@@ -135,6 +165,21 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd();
         this.mcpServer = new OpenSpaceMcpServer(workspaceRoot);
 
+        // Rate-limit all Hub routes — must be first middleware to protect all endpoints
+        app.use('/openspace', (req: Request, res: Response, next: () => void) => {
+            const ip = req.ip || req.socket.remoteAddress || 'unknown';
+            if (!this.rateLimiter.isAllowed(ip)) {
+                res.status(429).json({ error: 'Too Many Requests' });
+                return;
+            }
+            next();
+        });
+
+        // Periodic cleanup of stale rate-limiter entries (every 60 seconds)
+        this.cleanupTimer = setInterval(() => this.rateLimiter.cleanup(), 60_000);
+        // Ensure the interval does not prevent process exit
+        if (this.cleanupTimer.unref) { this.cleanupTimer.unref(); }
+
         // Mount MCP at /mcp (POST, GET, DELETE) — no origin restriction (MCP clients connect directly)
         this.mcpServer.mount(app);
 
@@ -165,6 +210,9 @@ export class OpenSpaceHub implements BackendApplicationContribution {
      * Cleanup on backend shutdown.
      */
     onStop(): void {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+        }
         this.logger.info('[Hub] OpenSpace Hub stopped');
     }
 

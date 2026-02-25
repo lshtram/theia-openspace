@@ -33,6 +33,7 @@ import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
 import { MessageTimeline } from './message-timeline';
 import { QuestionDock } from './question-dock';
+import { TodoPanel } from './todo-panel';
 import type { MessagePart as PromptMessagePart } from './prompt-input/types';
 import type * as SDKTypes from 'openspace-core/lib/common/opencode-sdk-types';
 
@@ -160,7 +161,7 @@ export interface ShellOutput {
 interface ChatHeaderBarProps {
     showSessionList: boolean;
     sessions: Session[];
-    activeSession: Session | undefined;
+     activeSession: Session | undefined;
     sessionService: SessionService;
     isLoadingSessions: boolean;
     sessionLoadError: string | undefined;
@@ -170,6 +171,9 @@ interface ChatHeaderBarProps {
     onSessionSwitch: (sessionId: string) => void;
     onNewSession: () => void;
     onDeleteSession: () => void;
+    onForkSession: () => void;
+    onRevertSession: () => void;
+    onCompactSession: () => void;
     onToggleDropdown: () => void;
     enabledModels: string[];
     onManageModels: () => void;
@@ -188,6 +192,9 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onSessionSwitch,
     onNewSession,
     onDeleteSession,
+    onForkSession,
+    onRevertSession,
+    onCompactSession,
     onToggleDropdown,
     enabledModels,
     onManageModels
@@ -332,22 +339,48 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                 </button>
                 {showMenu && (
                     <div className="chat-header-menu" role="menu">
-                        {activeSession && (
-                            <button
-                                type="button"
-                                className="chat-header-menu-item"
-                                role="menuitem"
-                                onClick={() => { setShowMenu(false); onDeleteSession(); }}
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                                </svg>
-                                Delete session
-                            </button>
-                        )}
-                        {!activeSession && (
-                            <div className="chat-header-menu-empty">No actions</div>
-                        )}
+                        <button
+                            type="button"
+                            className="chat-header-menu-item fork-session-button"
+                            data-testid="fork-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onForkSession(); }}
+                        >
+                            Fork session
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item revert-session-button"
+                            data-testid="revert-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onRevertSession(); }}
+                        >
+                            {(activeSession as unknown as { revert?: unknown } | undefined)?.revert ? 'Unrevert session' : 'Revert session'}
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item compact-session-button"
+                            data-testid="compact-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onCompactSession(); }}
+                        >
+                            Compact session
+                        </button>
+                        <button
+                            type="button"
+                            className="chat-header-menu-item"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); onDeleteSession(); }}
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                            Delete session
+                        </button>
                     </div>
                 )}
             </div>
@@ -386,6 +419,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [sessionBusy, setSessionBusy] = React.useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
     const [sessionLoadError, setSessionLoadError] = React.useState<string | undefined>();
+     const [sessionError, setSessionError] = React.useState<string | undefined>(sessionService.lastError);
+    const [retryStatus, setRetryStatus] = React.useState<{ attempt: number; message: string; next: number } | undefined>(undefined);
     const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
     const [pendingPermissions, setPendingPermissions] = React.useState<PermissionNotification[]>([]);
     const [queuedCount, setQueuedCount] = React.useState(0);
@@ -547,8 +582,14 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         // Subscribe to session status changes (server-authoritative busy/idle/retry)
         const currentStatus = sessionService.sessionStatus;
         setSessionBusy(currentStatus ? currentStatus.type !== 'idle' : false);
-        const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string }) => {
+        const sessionStatusDisposable = sessionService.onSessionStatusChanged?.((status: { type: string; attempt?: number; message?: string; next?: number }) => {
             setSessionBusy(status.type !== 'idle');
+            // Track retry state for display
+            if (status.type === 'retry' && status.attempt !== undefined && status.message !== undefined && status.next !== undefined) {
+                setRetryStatus({ attempt: status.attempt, message: status.message, next: status.next });
+            } else {
+                setRetryStatus(undefined);
+            }
             // When the server reports idle, clear any deferred streaming UI state
             // that was held open during the turn (see onIsStreamingChanged guard above).
             if (status.type === 'idle') {
@@ -579,6 +620,12 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             setPendingPermissions([...permissions]);
         });
 
+        // Subscribe to session errors from SSE (session.error events)
+        setSessionError(sessionService.lastError);
+        const errorChangedDisposable = sessionService.onErrorChanged(err => {
+            setSessionError(err);
+        });
+
         // Store disposables for cleanup
         disposablesRef.current = [
             messagesDisposable,
@@ -588,7 +635,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             sessionChangedDisposable,
             projectChangedDisposable,
             questionChangedDisposable,
-            permissionChangedDisposable
+            permissionChangedDisposable,
+            errorChangedDisposable
         ];
 
         return () => {
@@ -664,6 +712,36 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             messageService.error(`Failed to delete session: ${error}`);
         }
     }, [sessionService, loadSessions, messageService]);
+
+    const handleForkSession = React.useCallback(async () => {
+        try {
+            await sessionService.forkSession();
+        } catch (error) {
+            messageService.error(`Failed to fork session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleRevertSession = React.useCallback(async () => {
+        try {
+            const active = sessionService.activeSession;
+            if (!active) { return; }
+            if ((active as unknown as { revert?: unknown }).revert) {
+                await sessionService.unrevertSession();
+            } else {
+                await sessionService.revertSession();
+            }
+        } catch (error) {
+            messageService.error(`Failed to revert session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleCompactSession = React.useCallback(async () => {
+        try {
+            await sessionService.compactSession();
+        } catch (error) {
+            messageService.error(`Failed to compact session: ${error}`);
+        }
+    }, [sessionService, messageService]);
 
     // Handle permission reply (inline permission buttons)
     const handleReplyPermission = React.useCallback(async (requestId: string, reply: 'once' | 'always' | 'reject') => {
@@ -874,6 +952,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     onSessionSwitch={handleSessionSwitch}
                     onNewSession={handleNewSession}
                     onDeleteSession={handleDeleteSession}
+                    onForkSession={handleForkSession}
+                    onRevertSession={handleRevertSession}
+                    onCompactSession={handleCompactSession}
                     onToggleDropdown={handleToggleDropdown}
                     enabledModels={enabledModels}
                     onManageModels={handleManageModels}
@@ -920,6 +1001,35 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             />
                         )}
                         
+                        {/* Session error from SSE session.error event */}
+                        {sessionError && (
+                            <div className="session-error" data-testid="session-error">
+                                <span className="session-error-icon">⚠</span>
+                                <span className="session-error-message">{sessionError}</span>
+                                <button
+                                    className="session-error-dismiss"
+                                    aria-label="Dismiss error"
+                                    onClick={() => setSessionError(undefined)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
+                        {retryStatus && (
+                            <div className="session-retry" data-testid="session-retry">
+                                <span className="retry-icon">↻</span>
+                                <span className="retry-message">{retryStatus.message}</span>
+                                <span className="retry-countdown">
+                                    (retry in {Math.max(0, Math.round((retryStatus.next - Date.now()) / 1000))}s,
+                                    attempt {retryStatus.attempt})
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Live todo panel — shows current todo state from todo.updated SSE */}
+                        <TodoPanel todos={sessionService.todos} />
+
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
                             onSend={handleSend}

@@ -65,6 +65,18 @@ export default new ContainerModule((bind) => {
     const narrationFsm = new NarrationFsm({
       narrateEndpoint: '/openspace/voice/narrate',
       utteranceBaseUrl: '/openspace/voice/utterances',
+      onEmotionChange: (emotion) => {
+        try {
+          const contrib = container.get(VoiceCommandContribution);
+          contrib.setEmotion(emotion);
+        } catch { /* contribution not yet ready */ }
+      },
+      onModeChange: (mode) => {
+        try {
+          const contrib = container.get(VoiceCommandContribution);
+          contrib.setVoiceMode(mode);
+        } catch { /* contribution not yet ready */ }
+      },
     });
 
     // Subscribe to agent message streaming completion for narration
@@ -79,9 +91,16 @@ export default new ContainerModule((bind) => {
 
     let lastNarratedMessageId: string | null = null;
     coreSessionService.onMessageStreaming((update) => {
+      console.log('[Voice] Message streaming update - isDone:', update.isDone, 'sessionFsm.state:', sessionFsm.state, 'narrationMode:', sessionFsm.policy.narrationMode);
       if (!update.isDone) return;
-      if (sessionFsm.state === 'inactive') return;
-      if (sessionFsm.policy.narrationMode === 'narrate-off') return;
+      if (sessionFsm.state === 'inactive') {
+        console.log('[Voice] Skipping narration - voice inactive');
+        return;
+      }
+      if (sessionFsm.policy.narrationMode === 'narrate-off') {
+        console.log('[Voice] Skipping narration - mode is narrate-off');
+        return;
+      }
 
       // Deduplicate: guard against any residual duplicate isDone:true fires for the same message
       if (update.messageId && update.messageId === lastNarratedMessageId) return;
@@ -97,8 +116,10 @@ export default new ContainerModule((bind) => {
         .join('')
         .trim();
 
+      console.log('[Voice] Found assistant message, text length:', text?.length);
       if (text) {
         lastNarratedMessageId = update.messageId;
+        console.log('[Voice] Enqueueing narration, mode:', sessionFsm.policy.narrationMode, 'text preview:', text.substring(0, 50));
         narrationFsm.enqueue({
           text,
           mode: sessionFsm.policy.narrationMode,

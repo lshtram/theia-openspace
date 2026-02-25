@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 
-export const BASE_URL = 'http://localhost:3000';
+export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
 export async function dismissWorkspaceTrustDialog(page: Page): Promise<void> {
     try {

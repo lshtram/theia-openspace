@@ -4,6 +4,7 @@ import {
   type NarrationState,
 } from '../common/voice-fsm';
 import type { NarrationMode } from '../common/voice-policy';
+import type { EmotionKind } from '../common/narration-types';
 
 export interface NarrationRequest {
   text: string;
@@ -17,6 +18,8 @@ export interface NarrationFsmOptions {
   utteranceBaseUrl: string;
   onPlaybackComplete?: () => void;
   onError?: (err: Error) => void;
+  onEmotionChange?: (emotion: EmotionKind | null) => void;
+  onModeChange?: (mode: 'idle' | 'waiting' | 'speaking') => void;
 }
 
 export class NarrationFsm {
@@ -56,21 +59,29 @@ export class NarrationFsm {
     this.audioCtx?.close();
     this.audioCtx = null;
     this._state = 'idle';
+    this.options.onModeChange?.('idle');
   }
 
   // M-6: Iterative drain loop replaces recursive processQueue() to avoid stack growth
   private async drainLoop(first: NarrationRequest): Promise<void> {
     let current: NarrationRequest | undefined = first;
+    console.log('[Voice] drainLoop started, mode:', current?.mode);
     while (current) {
       this._state = validateNarrationTransition({ from: this._state, trigger: 'startProcessing' });
+      this.options.onModeChange?.('waiting');
+      console.log('[Voice] Waiting for TTS...');
       try {
         await this.fetchAndPlay(current);
         this._state = validateNarrationTransition({ from: this._state, trigger: 'complete' });
         this.options.onPlaybackComplete?.();
+        this.options.onModeChange?.('idle');
+        console.log('[Voice] Narration complete');
       } catch (err) {
         // M-7: Use validateNarrationTransition (not direct assignment) for error transitions
         this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
         this.options.onError?.(err as Error);
+        this.options.onModeChange?.('idle');
+        console.error('[Voice] Narration error:', err);
         return;
       }
       current = this.queue.shift();
@@ -82,6 +93,7 @@ export class NarrationFsm {
   }
 
   private async fetchAndPlay(request: NarrationRequest): Promise<void> {
+    console.log('[Voice] fetchAndPlay - text:', request.text.substring(0, 100));
     const response = await fetch(this.options.narrateEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,16 +102,21 @@ export class NarrationFsm {
 
     if (!response.ok) throw new Error(`Narrate endpoint returned ${response.status}`);
     const result = await response.json() as {
-      segments: Array<{ type: string; audioBase64?: string; utteranceId?: string }>;
+      segments: Array<{ type: string; audioBase64?: string; utteranceId?: string; emotion?: { kind: string } }>;
     };
 
     this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
+    this.options.onModeChange?.('speaking');
 
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
     }
 
     for (const segment of result.segments) {
+      if (segment.emotion?.kind) {
+        this.options.onEmotionChange?.(segment.emotion.kind as EmotionKind);
+      }
+      
       if (segment.type === 'speech' && segment.audioBase64) {
         const bytes = Uint8Array.from(atob(segment.audioBase64), (c) => c.charCodeAt(0));
         await this.playAudioBuffer(bytes);
@@ -107,6 +124,8 @@ export class NarrationFsm {
         await this.playUtterance(segment.utteranceId);
       }
     }
+    
+    this.options.onEmotionChange?.(null);
   }
 
   private async playAudioBuffer(pcmBytes: Uint8Array): Promise<void> {
@@ -133,8 +152,15 @@ export class NarrationFsm {
     const url = `${this.options.utteranceBaseUrl}/${utteranceId}`;
     try {
       const response = await fetch(url);
-      if (!response.ok) return;
+      if (!response.ok) {
+        this.playFallbackTone(utteranceId);
+        return;
+      }
       const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) {
+        this.playFallbackTone(utteranceId);
+        return;
+      }
       if (!this.audioCtx) return;
       const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
       const source = this.audioCtx.createBufferSource();
@@ -145,7 +171,31 @@ export class NarrationFsm {
         source.start();
       });
     } catch {
-      // ignore utterance playback errors
+      this.playFallbackTone(utteranceId);
     }
+  }
+
+  private playFallbackTone(utteranceId: string): void {
+    if (!this.audioCtx) return;
+    const osc = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+    
+    const freqMap: Record<string, number> = {
+      'hmm': 220,
+      'wow': 440,
+      'uh-oh': 330,
+      'nice': 392,
+      'interesting': 277,
+    };
+    
+    osc.frequency.value = freqMap[utteranceId] || 300;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.15);
+    
+    osc.connect(gain);
+    gain.connect(this.audioCtx.destination);
+    osc.start();
+    osc.stop(this.audioCtx.currentTime + 0.15);
   }
 }
