@@ -1,6 +1,6 @@
 ---
 title: The Wonders of Space Exploration
-theme: openspace-modern
+theme: night
 transition: slide
 ---
 
