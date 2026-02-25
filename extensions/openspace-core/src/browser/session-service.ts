@@ -200,6 +200,10 @@ export class SessionServiceImpl implements SessionService {
     private readonly RPC_FALLBACK_DELAY_MS = 5000;
     private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
     private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
+    // _sessionLoadLimit: grows by PAGE_SIZE each time "Load More" is clicked.
+    // The OpenCode API does not support offset pagination (start= is ignored),
+    // so we re-fetch with a larger limit and deduplicate by id client-side.
+    private _sessionLoadLimit: number = 20;
     private _sessionCursor: number = 0;
     private _hasMoreSessions = false;
     private _messageLoadCursor: string | undefined = undefined;
@@ -1019,6 +1023,7 @@ export class SessionServiceImpl implements SessionService {
         
         try {
             const PAGE_SIZE = 20;
+            this._sessionLoadLimit = PAGE_SIZE;  // reset limit on fresh load
             const sessions = await this.openCodeService.getSessions(this._activeProject.id, { limit: PAGE_SIZE });
             this._hasMoreSessions = sessions.length === PAGE_SIZE;
             this._sessionCursor = sessions.length;
@@ -1088,14 +1093,18 @@ export class SessionServiceImpl implements SessionService {
         if (!this._hasMoreSessions || !this._activeProject) { return []; }
         try {
             const PAGE_SIZE = 20;
-            const more = await this.openCodeService.getSessions(this._activeProject.id, {
-                limit: PAGE_SIZE,
-                start: this._sessionCursor
+            // The OpenCode API ignores the `start` offset param — it always returns
+            // from the newest session.  Work around this by fetching a larger batch
+            // (currentLimit + PAGE_SIZE) and returning only the NEW tail slice.
+            this._sessionLoadLimit += PAGE_SIZE;
+            const all = await this.openCodeService.getSessions(this._activeProject.id, {
+                limit: this._sessionLoadLimit
             });
-            this._hasMoreSessions = more.length === PAGE_SIZE;
-            this._sessionCursor += more.length;
-            this.logger.debug(`[SessionService] Loaded ${more.length} more sessions`);
-            return more;
+            this._hasMoreSessions = all.length === this._sessionLoadLimit;
+            const newItems = all.slice(this._sessionCursor);
+            this._sessionCursor = all.length;
+            this.logger.debug(`[SessionService] Loaded ${newItems.length} more sessions (total fetched: ${all.length})`);
+            return newItems;
         } catch (error) {
             this.logger.warn(`[SessionService] loadMoreSessions error: ${error}`);
             return [];

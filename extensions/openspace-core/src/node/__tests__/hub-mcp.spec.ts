@@ -219,11 +219,9 @@ describe('OpenSpaceMcpServer — executeViaBridge() with bridge connected', () =
 
 describe('OpenSpaceMcpServer — resolveSafePath()', () => {
     let workspaceDir: string;
-    let server: OpenSpaceMcpServer;
 
     beforeEach(() => {
         workspaceDir = makeTempDir();
-        server = new OpenSpaceMcpServer(workspaceDir);
     });
 
     afterEach(() => {
@@ -472,12 +470,10 @@ describe('OpenSpaceMcpServer — presentation tool registrations', () => {
 
     it('routes all presentation tools through executeViaBridge', () => {
         // Each presentation tool must delegate to the browser via executeViaBridge using TOOL constants
-        for (const toolName of PRESENTATION_TOOLS) {
-            expect(
-                hubMcpSrc,
-                `hub-mcp.ts must call executeViaBridge for presentation tools`
-            ).to.include('executeViaBridge(TOOL.');
-        }
+        expect(
+            hubMcpSrc,
+            `hub-mcp.ts must call executeViaBridge for presentation tools`
+        ).to.include('executeViaBridge(TOOL.');
     });
 
     it('executeViaBridge returns isError:true for presentation tools when bridge is not connected', async () => {
@@ -536,12 +532,10 @@ describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
     }
 
     it('routes all whiteboard tools through executeViaBridge', () => {
-        for (const toolName of WHITEBOARD_TOOLS) {
-            expect(
-                hubMcpSrc,
-                `hub-mcp.ts must call executeViaBridge for whiteboard tools`
-            ).to.include('executeViaBridge(TOOL.');
-        }
+        expect(
+            hubMcpSrc,
+            `hub-mcp.ts must call executeViaBridge for whiteboard tools`
+        ).to.include('executeViaBridge(TOOL.');
     });
 });
 

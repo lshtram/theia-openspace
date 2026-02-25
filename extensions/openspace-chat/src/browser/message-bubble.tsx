@@ -114,13 +114,22 @@ function renderPart(
 function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
     const text: string = part.text || '';
     if (!text) return null;
-    // Suppress pure JSON artifacts (empty array/object leaked from tool output streaming)
-    if (text.trim() === '[]' || text.trim() === '{}') return null;
+    const trimmed = text.trim();
+    // Suppress pure JSON artifacts (empty array/object or tool I/O leaked as text part during streaming)
+    if (trimmed === '[]' || trimmed === '{}') return null;
+    // Suppress JSON arrays/objects that are tool input/output fragments (e.g. patch ops, file lists)
+    // These appear when a tool-part stub was mis-typed as 'text' during streaming.
+    if ((trimmed.startsWith('[{') || trimmed.startsWith('{')) && isLikelyJSON(trimmed)) return null;
     return (
         <div key={`text-${index}`} className="part-text">
             {renderMarkdown(text, onOpenFile)}
         </div>
     );
+}
+
+/** Heuristic: returns true if the string looks like a JSON object/array (not prose). */
+function isLikelyJSON(s: string): boolean {
+    try { JSON.parse(s); return true; } catch { return false; }
 }
 
 /** Icon React nodes for tool display (avoids dangerouslySetInnerHTML). */
