@@ -32,8 +32,12 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 
 /** Minimal structural type for McpServer (loaded via require). */
 interface IMcpServer {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tool(name: string, description: string, schema: unknown, handler: (args: any) => Promise<unknown>): void;
+    tool<T extends Record<string, unknown>>(
+        name: string,
+        description: string,
+        schema: unknown,
+        handler: (args: T) => Promise<unknown>
+    ): void;
     connect(transport: unknown): Promise<void>;
 }
 
@@ -907,7 +911,7 @@ export class OpenSpaceMcpServer {
 
     // ─── Voice Tools (1) ─────────────────────────────────────────────────────
 
-    private registerVoiceTools(server: any): void {
+    private registerVoiceTools(server: IMcpServer): void {
         server.tool(
             'voice.set_policy',
             'Update the voice modality policy. Use this to enable/disable voice, change narration mode, speed, or voice ID.',
@@ -922,7 +926,7 @@ export class OpenSpaceMcpServer {
                     summary: z.string().optional().describe('Override the "narrate-summary" LLM preprocessing prompt'),
                 }).optional().describe('Override narration preprocessing prompts'),
             },
-            async (args: any) => this.executeViaBridge('openspace.voice.set_policy', args)
+            async (args: Record<string, unknown>) => this.executeViaBridge('openspace.voice.set_policy', args)
         );
     }
 }
