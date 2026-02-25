@@ -1,48 +1,55 @@
 ---
-title: OpenSpace Neon
+title: Neon Arcade
 theme: black
-transition: slide
+transition: zoom
 ---
 
 <style>
-/* ═══════════════════════════════════════════════════════════════
-   OPENSPACE NEON - Bold Futuristic Theme
-   Inspired by: Cyberpunk, Tech Launches, Innovation Showcases
-   Purpose: Product launches, innovation demos, tech announcements
-   ═══════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap');
 
-/* ── Color Palette ─────────────────────────────────────────────── */
 :root {
-  --neon-bg: #050508;
-  --neon-surface: #0a0a10;
-  --neon-surface-2: #12121a;
-  --neon-text: #ffffff;
-  --neon-text-muted: #6b7280;
-  --neon-cyan: #00ffff;
-  --neon-magenta: #ff00ff;
-  --neon-green: #00ff88;
-  --neon-yellow: #ffff00;
-  --neon-purple: #bf00ff;
-  --neon-gradient: linear-gradient(90deg, #00ffff 0%, #ff00ff 50%, #00ff88 100%);
+  --arcade-bg: #0d0015;
+  --arcade-surface: #1a0a2e;
+  --arcade-surface-2: #2d1b4e;
+  --arcade-cyan: #00ffff;
+  --arcade-magenta: #ff00ff;
+  --arcade-lime: #39ff14;
+  --arcade-yellow: #ffff00;
+  --arcade-pink: #ff6b9d;
+  --arcade-gradient: linear-gradient(90deg, #00ffff, #ff00ff, #39ff14);
+  --arcade-gradient-diag: linear-gradient(135deg, #00ffff 0%, #ff00ff 50%, #39ff14 100%);
 }
 
-/* ── Glow Effects ──────────────────────────────────────────────── */
-@keyframes neon-pulse {
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes flicker {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  96% { opacity: 0.9; }
+  97% { opacity: 1; }
 }
 
-@keyframes neon-flicker {
-  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
-  20%, 24%, 55% { opacity: 0.6; }
+@keyframes pulse-glow {
+  0%, 100% { text-shadow: 0 0 10px var(--arcade-cyan), 0 0 20px var(--arcade-cyan), 0 0 40px var(--arcade-cyan); }
+  50% { text-shadow: 0 0 5px var(--arcade-cyan), 0 0 10px var(--arcade-cyan), 0 0 20px var(--arcade-cyan); }
 }
 
-/* ── Base Typography ───────────────────────────────────────────── */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 .reveal {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 28px;
-  color: var(--neon-text);
-  background: var(--neon-bg);
+  font-family: 'Space Mono', monospace;
+  font-size: 26px;
+  color: #ffffff;
+  background: var(--arcade-bg);
 }
 
 .reveal .slides {
@@ -52,77 +59,93 @@ transition: slide
 .reveal .slides section {
   padding: 60px 80px;
   height: 100%;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 255, 0.03) 2px,
+      rgba(0, 255, 255, 0.03) 4px
+    ),
+    radial-gradient(ellipse at 30% 20%, rgba(255, 0, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+    var(--arcade-bg);
 }
 
-/* ── Headings ──────────────────────────────────────────────────── */
 .reveal h1 {
-  font-size: 4em;
-  font-weight: 800;
-  line-height: 1;
-  margin-bottom: 0.3em;
-  color: var(--neon-text);
-  letter-spacing: -0.03em;
-  text-shadow: 
-    0 0 10px var(--neon-cyan),
-    0 0 20px var(--neon-cyan),
-    0 0 40px var(--neon-cyan);
+  font-family: 'Press Start 2P', cursive;
+  font-size: 2.5em;
+  line-height: 1.4;
+  margin-bottom: 0.4em;
+  color: var(--arcade-cyan);
+  text-shadow: 0 0 10px var(--arcade-cyan), 0 0 20px var(--arcade-cyan), 0 0 40px var(--arcade-cyan);
+  animation: pulse-glow 2s ease-in-out infinite;
+  letter-spacing: 2px;
 }
 
 .reveal h2 {
-  font-size: 2.2em;
+  font-family: 'Space Mono', monospace;
+  font-size: 2em;
   font-weight: 700;
-  color: var(--neon-text);
+  color: var(--arcade-magenta);
   margin-bottom: 0.5em;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px var(--arcade-magenta);
 }
 
 .reveal h3 {
-  font-size: 1.4em;
-  font-weight: 600;
-  color: var(--neon-cyan);
-  margin-bottom: 0.5em;
+  font-family: 'Space Mono', monospace;
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--arcade-lime);
+  margin-bottom: 0.6em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 2px;
 }
 
 .reveal h4 {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--neon-magenta);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--arcade-yellow);
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  margin-bottom: 0.8em;
+  letter-spacing: 3px;
+  margin-bottom: 1em;
+  padding: 0.3em 0.8em;
+  background: var(--arcade-surface-2);
+  border: 1px solid var(--arcade-yellow);
+  display: inline-block;
 }
 
-/* ── Body Text ─────────────────────────────────────────────────── */
 .reveal p {
-  font-size: 1em;
-  line-height: 1.7;
-  color: var(--neon-text);
+  font-size: 0.95em;
+  line-height: 1.8;
+  color: #e0e0e0;
   margin-bottom: 1em;
-  opacity: 0.9;
 }
 
 .reveal .lead {
-  font-size: 1.3em;
-  color: var(--neon-text);
-  line-height: 1.5;
-  opacity: 0.8;
+  font-size: 1.2em;
+  color: var(--arcade-pink);
+  line-height: 1.6;
 }
 
-/* ── Links ─────────────────────────────────────────────────────── */
 .reveal a {
-  color: var(--neon-cyan);
+  color: var(--arcade-cyan);
   text-decoration: none;
-  text-shadow: 0 0 10px var(--neon-cyan);
+  border: 2px solid var(--arcade-cyan);
+  padding: 0.2em 0.5em;
   transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 }
 
 .reveal a:hover {
-  text-shadow: 0 0 20px var(--neon-cyan);
+  background: var(--arcade-cyan);
+  color: var(--arcade-bg);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
 }
 
-/* ── Lists ─────────────────────────────────────────────────────── */
 .reveal ul, .reveal ol {
   margin: 0 0 1.5em 0;
   padding-left: 0;
@@ -132,312 +155,253 @@ transition: slide
 .reveal ul li, .reveal ol li {
   position: relative;
   padding-left: 2em;
-  margin-bottom: 0.7em;
+  margin-bottom: 0.8em;
   line-height: 1.5;
-  color: var(--neon-text);
-  opacity: 0.9;
+  color: #ffffff;
 }
 
 .reveal ul li::before {
-  content: '>';
+  content: '►';
   position: absolute;
   left: 0;
-  color: var(--neon-green);
-  font-weight: bold;
-  text-shadow: 0 0 10px var(--neon-green);
-  font-family: monospace;
+  color: var(--arcade-lime);
+  font-size: 0.7em;
+  text-shadow: 0 0 5px var(--arcade-lime);
 }
 
 .reveal ol {
-  counter-reset: list-counter;
+  counter-reset: arcade-counter;
 }
 
 .reveal ol li {
-  counter-increment: list-counter;
+  counter-increment: arcade-counter;
 }
 
 .reveal ol li::before {
-  content: counter(list-counter);
+  content: '[' counter(arcade-counter, decimal) ']';
   position: absolute;
   left: 0;
-  width: 1.6em;
-  height: 1.6em;
-  background: var(--neon-surface-2);
-  border: 1px solid var(--neon-cyan);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75em;
+  font-family: 'Space Mono', monospace;
   font-weight: 700;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 10px var(--neon-cyan);
-  padding: 0;
+  color: var(--arcade-cyan);
+  font-size: 0.9em;
 }
 
-.reveal ol li::after {
-  display: none;
-}
-
-/* ── Code Blocks ───────────────────────────────────────────────── */
 .reveal code {
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-family: 'Space Mono', monospace;
   font-size: 0.85em;
-  background: var(--neon-surface);
+  background: var(--arcade-surface);
   padding: 0.2em 0.5em;
-  border-radius: 4px;
-  color: var(--neon-cyan);
-  border: 1px solid rgba(0, 255, 255, 0.3);
+  border-radius: 0;
+  color: var(--arcade-lime);
+  border: 1px solid var(--arcade-lime);
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
 }
 
 .reveal pre {
-  background: var(--neon-surface);
-  border: 1px solid rgba(0, 255, 255, 0.2);
-  border-radius: 8px;
+  background: var(--arcade-surface);
+  border: 2px solid var(--arcade-cyan);
+  border-radius: 0;
   padding: 1.5em;
   margin: 1.5em 0;
-  box-shadow: 
-    0 0 20px rgba(0, 255, 255, 0.1),
-    inset 0 0 20px rgba(0, 255, 255, 0.05);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.05);
+  position: relative;
+}
+
+.reveal pre::before {
+  content: 'TERMINAL';
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: var(--arcade-bg);
+  padding: 0 10px;
+  font-size: 0.7em;
+  color: var(--arcade-cyan);
+  letter-spacing: 2px;
 }
 
 .reveal pre code {
   background: none;
   padding: 0;
-  color: var(--neon-text);
-  font-size: 0.9em;
+  color: #ffffff;
+  font-size: 0.85em;
   border: none;
+  box-shadow: none;
 }
 
-/* Syntax highlighting */
-.reveal .token.keyword { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
-.reveal .token.string { color: #00ff88; text-shadow: 0 0 10px #00ff88; }
-.reveal .token.number { color: #ffff00; text-shadow: 0 0 10px #ffff00; }
-.reveal .token.function { color: #00ffff; text-shadow: 0 0 10px #00ffff; }
-.reveal .token.comment { color: #6b7280; font-style: italic; }
-
-/* ── Tables ────────────────────────────────────────────────────── */
 .reveal table {
   width: 100%;
   border-collapse: collapse;
   margin: 1.5em 0;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  border: 2px solid var(--arcade-magenta);
 }
 
 .reveal th {
-  background: var(--neon-surface);
-  color: var(--neon-cyan);
-  font-weight: 600;
+  background: var(--arcade-surface-2);
+  color: var(--arcade-cyan);
+  font-weight: 700;
   text-align: left;
   padding: 1em 1.2em;
   text-transform: uppercase;
-  font-size: 0.8em;
-  letter-spacing: 0.1em;
-  border-bottom: 2px solid var(--neon-cyan);
-  text-shadow: 0 0 10px var(--neon-cyan);
+  font-size: 0.75em;
+  letter-spacing: 2px;
+  border-bottom: 2px solid var(--arcade-magenta);
 }
 
 .reveal td {
-  padding: 0.9em 1.2em;
-  border-bottom: 1px solid rgba(0, 255, 255, 0.2);
-  color: var(--neon-text);
+  padding: 0.8em 1.2em;
+  border-bottom: 1px solid var(--arcade-surface-2);
+  color: #ffffff;
 }
 
-/* ── Blockquotes ───────────────────────────────────────────────── */
+.reveal tr:hover td {
+  background: var(--arcade-surface);
+}
+
 .reveal blockquote {
   margin: 1.5em 0;
   padding: 1.5em 2em;
-  background: var(--neon-surface);
-  border-left: 4px solid var(--neon-magenta);
-  border-radius: 0 8px 8px 0;
-  font-style: italic;
-  color: var(--neon-text);
-  box-shadow: 0 0 20px rgba(255, 0, 255, 0.2);
+  background: var(--arcade-surface);
+  border: 2px solid var(--arcade-pink);
+  border-radius: 0;
+  font-style: normal;
+  color: var(--arcade-pink);
+  box-shadow: 0 0 20px rgba(255, 107, 157, 0.3);
 }
 
 .reveal blockquote p {
-  margin: 0;
-  font-size: 1.2em;
+  font-size: 1.1em;
+  color: #ffffff;
 }
 
-/* ── Emphasis ──────────────────────────────────────────────────── */
 .reveal strong {
   font-weight: 700;
-  color: var(--neon-text);
+  color: var(--arcade-yellow);
 }
 
 .reveal em {
   font-style: italic;
-  color: var(--neon-magenta);
-  text-shadow: 0 0 10px var(--neon-magenta);
+  color: var(--arcade-magenta);
 }
 
-/* ── Cards ─────────────────────────────────────────────────────── */
-.card {
-  background: var(--neon-surface);
-  border: 1px solid rgba(0, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 1.8em;
+.arcade-card {
+  background: var(--arcade-surface);
+  border: 2px solid var(--arcade-cyan);
+  padding: 1.5em;
   margin: 1em 0;
-  box-shadow: 0 0 30px rgba(0, 255, 255, 0.1);
+  position: relative;
 }
 
-.card-cyan {
-  border-color: var(--neon-cyan);
-  box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+.arcade-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 30px 30px 0;
+  border-color: transparent var(--arcade-cyan) transparent transparent;
 }
 
-.card-magenta {
-  border-color: var(--neon-magenta);
-  box-shadow: 0 0 30px rgba(255, 0, 255, 0.2);
+.arcade-card-magenta {
+  border-color: var(--arcade-magenta);
 }
 
-.card-green {
-  border-color: var(--neon-green);
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+.arcade-card-magenta::after {
+  border-color: transparent var(--arcade-magenta) transparent transparent;
 }
 
-/* ── Badges ────────────────────────────────────────────────────── */
-.badge {
+.arcade-card-lime {
+  border-color: var(--arcade-lime);
+}
+
+.arcade-card-lime::after {
+  border-color: transparent var(--arcade-lime) transparent transparent;
+}
+
+.arcade-badge {
   display: inline-block;
-  padding: 0.4em 1em;
-  font-size: 0.75em;
+  padding: 0.3em 0.8em;
+  font-size: 0.7em;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-radius: 4px;
-  background: var(--neon-surface-2);
-  color: var(--neon-text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.badge-cyan {
+  letter-spacing: 1px;
+  border-radius: 0;
   background: transparent;
-  border: 1px solid var(--neon-cyan);
-  color: var(--neon-cyan);
-  text-shadow: 0 0 10px var(--neon-cyan);
-}
-
-.badge-magenta {
-  background: transparent;
-  border: 1px solid var(--neon-magenta);
-  color: var(--neon-magenta);
-  text-shadow: 0 0 10px var(--neon-magenta);
-}
-
-.badge-green {
-  background: transparent;
-  border: 1px solid var(--neon-green);
-  color: var(--neon-green);
-  text-shadow: 0 0 10px var(--neon-green);
-}
-
-/* ── Feature Grid ──────────────────────────────────────────────── */
-.feature {
-  text-align: center;
-  padding: 2em;
-}
-
-.feature-icon {
-  font-size: 3em;
+  border: 2px solid;
+  margin-right: 0.5em;
   margin-bottom: 0.5em;
-  filter: drop-shadow(0 0 20px currentColor);
 }
 
-.feature h3 {
-  font-size: 1.1em;
+.arcade-badge-cyan {
+  border-color: var(--arcade-cyan);
+  color: var(--arcade-cyan);
+}
+
+.arcade-badge-magenta {
+  border-color: var(--arcade-magenta);
+  color: var(--arcade-magenta);
+}
+
+.arcade-badge-lime {
+  border-color: var(--arcade-lime);
+  color: var(--arcade-lime);
+}
+
+.arcade-metric {
+  text-align: center;
+  padding: 1.5em;
+  background: var(--arcade-surface);
+  border: 2px solid var(--arcade-cyan);
+}
+
+.arcade-metric-value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.8em;
+  color: var(--arcade-lime);
+  text-shadow: 0 0 10px var(--arcade-lime);
+  line-height: 1;
   margin-bottom: 0.3em;
 }
 
-.feature p {
-  font-size: 0.9em;
-  color: var(--neon-text-muted);
-  margin: 0;
-}
-
-/* ── Metrics ───────────────────────────────────────────────────── */
-.metric {
-  text-align: center;
-  padding: 1.5em;
-  background: var(--neon-surface);
-  border-radius: 12px;
-  border: 1px solid rgba(0, 255, 255, 0.2);
-}
-
-.metric-value {
-  font-size: 3.5em;
-  font-weight: 800;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 30px var(--neon-cyan);
-  line-height: 1;
-  animation: neon-pulse 2s infinite;
-}
-
-.metric-label {
-  font-size: 0.85em;
-  color: var(--neon-text-muted);
-  margin-top: 0.3em;
+.arcade-metric-label {
+  font-size: 0.7em;
+  color: var(--arcade-cyan);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 2px;
 }
 
-/* ── Glowing Divider ───────────────────────────────────────────── */
-.glow-line {
-  height: 2px;
-  background: var(--neon-gradient);
-  margin: 2em 0;
-  box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-magenta);
-}
-
-/* ── CTA Button ────────────────────────────────────────────────── */
-.cta {
-  display: inline-block;
-  padding: 1em 2.5em;
-  background: transparent;
-  color: var(--neon-cyan);
-  font-weight: 700;
-  font-size: 1.1em;
-  border-radius: 8px;
-  text-decoration: none;
-  border: 2px solid var(--neon-cyan);
-  cursor: pointer;
-  text-shadow: 0 0 10px var(--neon-cyan);
-  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-  transition: all 0.3s ease;
-}
-
-.cta:hover {
-  background: var(--neon-cyan);
-  color: var(--neon-bg);
-  text-shadow: none;
-  box-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
-}
-
-/* ── Two Column Layout ─────────────────────────────────────────── */
-.columns {
-  display: flex;
+.arcade-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 3em;
 }
 
-.columns > div {
-  flex: 1;
+.arcade-columns > div {
+  padding: 1em 0;
 }
 
-/* ── Slide Number ──────────────────────────────────────────────── */
+.arcade-divider {
+  height: 4px;
+  background: var(--arcade-gradient);
+  margin: 2em 0;
+  box-shadow: 0 0 10px var(--arcade-cyan), 0 0 20px var(--arcade-magenta);
+}
+
 .reveal .slide-number {
-  background: var(--neon-surface);
-  color: var(--neon-cyan);
-  font-size: 14px;
-  padding: 8px 16px;
-  border-radius: 8px 0 0 0;
-  text-shadow: 0 0 10px var(--neon-cyan);
+  background: var(--arcade-surface);
+  color: var(--arcade-cyan);
+  font-size: 12px;
+  padding: 8px 12px;
+  font-family: 'Space Mono', monospace;
 }
 
-/* ── Fragments ─────────────────────────────────────────────────── */
 .reveal .fragment.fade-up {
   transform: translateY(20px);
   opacity: 0;
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s ease;
 }
 
 .reveal .fragment.fade-up.visible {
@@ -445,98 +409,94 @@ transition: slide
   opacity: 1;
 }
 
-/* ── Center Content ────────────────────────────────────────────── */
-.centered {
+.arcade-center {
   text-align: center;
 }
 
-.centered h1,
-.centered h2 {
+.arcade-center h1,
+.arcade-center h2 {
   text-align: center;
+}
+
+.pixel-border {
+  border: 4px solid var(--arcade-cyan);
+  box-shadow: 
+    0 0 0 4px var(--arcade-bg),
+    0 0 0 8px var(--arcade-cyan),
+    0 0 20px rgba(0, 255, 255, 0.5);
 }
 </style>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 1: Title
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1: Title -->
+<div class="arcade-center">
 
-# OPENSPACE NEON
+# NEON ARCADE
 
-<div class="glow-line"></div>
+<div class="arcade-divider"></div>
 
-<div class="lead">
-
-**Bold Futuristic Theme** for Tech Announcements
-
-</div>
+<p class="lead">> RETRO-FUTURISTIC Y2K THEME <</p>
 
 <div style="margin-top: 3em;">
-
-<span class="badge-cyan">2026 Design</span>
-<span class="badge-magenta">Cyberpunk</span>
-<span class="badge-green">Innovation</span>
+<span class="arcade-badge arcade-badge-cyan">Y2K</span>
+<span class="arcade-badge arcade-badge-magenta">CYBERPUNK</span>
+<span class="arcade-badge arcade-badge-lime">RETRO</span>
+</div>
 
 </div>
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 2: Typography
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2: Typography -->
+## SYSTEM.TYPOGRAPHY
 
-## Typography System
+<h4>> HEADING HIERARCHY</h4>
 
-<h4>NEON GLOW EFFECTS</h4>
+<h1>HEADING_1</h1>
 
-<h1>Heading 1</h1>
+<h2>HEADING_2</h2>
 
-<h2>Heading 2</h2>
+<h3>HEADING_3</h3>
 
-<h3>Heading 3</h3>
-
-<p>Bold typography with neon glow effects creates maximum visual impact for tech launches and product announcements.</p>
+<p>> Body text in Space Mono. Optimized for readability in tech presentations and product launches.</p>
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 3: Colors
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3: Colors -->
+## COLOR.PALETTE
 
-## Neon Color Spectrum
-
-<div class="columns" style="margin-top: 2em;">
+<div class="arcade-columns" style="margin-top: 2em;">
 <div>
 
-### Primary Neon Colors
+<h4>> PRIMARY COLORS</h4>
 
-<div style="display: flex; gap: 1em; flex-wrap: wrap;">
+<div style="display: flex; gap: 1em; margin-top: 1em;">
   <div style="text-align: center;">
-    <div style="width: 80px; height: 80px; background: #00ffff; border-radius: 12px; box-shadow: 0 0 30px #00ffff;"></div>
-    <p style="font-size: 0.8em; margin-top: 0.5em;">Cyan<br>#00ffff</p>
+    <div style="width: 50px; height: 50px; background: #00ffff; box-shadow: 0 0 20px #00ffff; border: 2px solid #00ffff;"></div>
+    <p style="font-size: 0.7em; margin-top: 0.5em;">CYAN</p>
   </div>
   <div style="text-align: center;">
-    <div style="width: 80px; height: 80px; background: #ff00ff; border-radius: 12px; box-shadow: 0 0 30px #ff00ff;"></div>
-    <p style="font-size: 0.8em; margin-top: 0.5em;">Magenta<br>#ff00ff</p>
+    <div style="width: 50px; height: 50px; background: #ff00ff; box-shadow: 0 0 20px #ff00ff; border: 2px solid #ff00ff;"></div>
+    <p style="font-size: 0.7em; margin-top: 0.5em;">MAGENTA</p>
   </div>
   <div style="text-align: center;">
-    <div style="width: 80px; height: 80px; background: #00ff88; border-radius: 12px; box-shadow: 0 0 30px #00ff88;"></div>
-    <p style="font-size: 0.8em; margin-top: 0.5em;">Green<br>#00ff88</p>
+    <div style="width: 50px; height: 50px; background: #39ff14; box-shadow: 0 0 20px #39ff14; border: 2px solid #39ff14;"></div>
+    <p style="font-size: 0.7em; margin-top: 0.5em;">LIME</p>
   </div>
 </div>
 
 </div>
 <div>
 
-### Accent Colors
+<h4>> ACCENT COLORS</h4>
 
-<div style="display: flex; gap: 1em; flex-wrap: wrap;">
+<div style="display: flex; gap: 1em; margin-top: 1em;">
   <div style="text-align: center;">
-    <div style="width: 80px; height: 80px; background: #ffff00; border-radius: 12px; box-shadow: 0 0 30px #ffff00;"></div>
-    <p style="font-size: 0.8em; margin-top: 0.5em;">Yellow<br>#ffff00</p>
+    <div style="width: 50px; height: 50px; background: #ffff00; box-shadow: 0 0 15px #ffff00; border: 2px solid #ffff00;"></div>
+    <p style="font-size: 0.7em; margin-top: 0.5em;">YELLOW</p>
   </div>
   <div style="text-align: center;">
-    <div style="width: 80px; height: 80px; background: #bf00ff; border-radius: 12px; box-shadow: 0 0 30px #bf00ff;"></div>
-    <p style="font-size: 0.8em; margin-top: 0.5em;">Purple<br>#bf00ff</p>
+    <div style="width: 50px; height: 50px; background: #ff6b9d; box-shadow: 0 0 15px #ff6b9d; border: 2px solid #ff6b9d;"></div>
+    <p style="font-size: 0.7em; margin-top: 0.5em;">PINK</p>
   </div>
 </div>
 
@@ -545,42 +505,13 @@ transition: slide
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 4: Features
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4: Lists -->
+## FEATURE.ROADMAP
 
-## Product Features
-
-<div class="columns" style="margin-top: 2em;">
-<div class="feature">
-  <div class="feature-icon" style="color: var(--neon-cyan);">⚡</div>
-  <h3 style="color: var(--neon-cyan);">Lightning Fast</h3>
-  <p>Sub-millisecond response times</p>
-</div>
-<div class="feature">
-  <div class="feature-icon" style="color: var(--neon-magenta);">🔮</div>
-  <h3 style="color: var(--neon-magenta);">AI-Powered</h3>
-  <p>Machine learning at the edge</p>
-</div>
-<div class="feature">
-  <div class="feature-icon" style="color: var(--neon-green);">🌐</div>
-  <h3 style="color: var(--neon-green);">Global Scale</h3>
-  <p>Deployed in 50+ regions</p>
-</div>
-</div>
-
----
-
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 5: Lists
-     ═══════════════════════════════════════════════════════════════ -->
-
-## Innovation Roadmap
-
-<div class="columns">
+<div class="arcade-columns">
 <div>
 
-<h3>Q1 2026</h3>
+<h4>Q1_2026</h4>
 
 > Launch beta program
 > Onboard first 100 users
@@ -590,46 +521,71 @@ transition: slide
 </div>
 <div>
 
-<h3>Q2-Q4 2026</h3>
+<h4>Q2-Q4_2026</h4>
 
-01. Public launch
-02. Enterprise features
-03. Global expansion
-04. Platform ecosystem
+[01] Public launch
+[02] Enterprise features
+[03] Global expansion
+[04] Platform ecosystem
 
 </div>
 </div>
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 6: Metrics
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5: Metrics -->
+## PERFORMANCE.METRICS
 
-## Performance Metrics
-
-<div class="columns" style="margin-top: 2em;">
-<div class="metric">
-  <div class="metric-value">99.9%</div>
-  <div class="metric-label">Uptime SLA</div>
+<div class="arcade-columns" style="margin-top: 2em;">
+<div class="arcade-metric">
+  <div class="arcade-metric-value">99.9%</div>
+  <div class="arcade-metric-label">UPTIME</div>
 </div>
-<div class="metric">
-  <div class="metric-value">&lt;1ms</div>
-  <div class="metric-label">Latency</div>
+<div class="arcade-metric">
+  <div class="arcade-metric-value"><1ms</div>
+  <div class="arcade-metric-label">LATENCY</div>
 </div>
-<div class="metric">
-  <div class="metric-value">10M+</div>
-  <div class="metric-label">Requests/sec</div>
+<div class="arcade-metric">
+  <div class="arcade-metric-value">10M+</div>
+  <div class="arcade-metric-label">REQUESTS/SEC</div>
 </div>
 </div>
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 7: Code
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 6: Tables -->
+## PRICING.TIERS
 
-## Developer Experience
+| PLAN | REQUESTS | FEATURES | PRICE |
+|------|----------|----------|-------|
+| STARTER | 100K/mo | Core | FREE |
+| PRO | 10M/mo | AI+Edge | $99/mo |
+| ENTERPRISE | Unlimited | Everything | CUSTOM |
+
+---
+
+<!-- SLIDE 7: Cards -->
+## NEW_FEATURES
+
+<div class="arcade-card">
+<h3 style="margin-top: 0;">> AI AGENTS</h3>
+<p style="margin-bottom: 0;">Deploy autonomous AI agents that learn and adapt to your use case.</p>
+</div>
+
+<div class="arcade-card arcade-card-magenta">
+<h3 style="margin-top: 0;">> EDGE NETWORK</h3>
+<p style="margin-bottom: 0;">50 new edge locations for ultra-low latency worldwide.</p>
+</div>
+
+<div class="arcade-card arcade-card-lime">
+<h3 style="margin-top: 0;">> REAL-TIME SYNC</h3>
+<p style="margin-bottom: 0;">Instant data synchronization across all platforms.</p>
+</div>
+
+---
+
+<!-- SLIDE 8: Code -->
+## DEV.CONFIG
 
 ```typescript
 import { NeonClient } from '@openspace/neon';
@@ -641,61 +597,35 @@ const client = new NeonClient({
 });
 
 await client.initialize();
-console.log('🚀 Ready to launch!');
+console.log('🚀 SYSTEM READY!');
 ```
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 8: Tables
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 9: Quote -->
+## MISSION.STATEMENT
 
-## Pricing Tiers
+<blockquote>
 
-| Plan | Requests | Features | Price |
-|------|----------|----------|-------|
-| Starter | 100K/mo | Core features | Free |
-| Pro | 10M/mo | AI + Edge | $99/mo |
-| Enterprise | Unlimited | Everything | Custom |
+"THE FUTURE IS NOW. CODE IT."
+
+</blockquote>
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 9: Cards
-     ═══════════════════════════════════════════════════════════════ -->
-
-## What's New
-
-<div class="card card-cyan">
-<h3 style="margin-top: 0; color: var(--neon-cyan);">New Feature: AI Agents</h3>
-<p style="margin-bottom: 0;">Deploy autonomous AI agents that learn and adapt to your specific use case.</p>
-</div>
-
-<div class="card card-magenta">
-<h3 style="margin-top: 0; color: var(--neon-magenta);">Announcement: Global Edge Network</h3>
-<p style="margin-bottom: 0;">50 new edge locations deployed for ultra-low latency worldwide.</p>
-</div>
-
----
-
-<!-- ═══════════════════════════════════════════════════════════════
-     SLIDE 10: CTA
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div class="centered">
+<!-- SLIDE 10: Closing -->
+<div class="arcade-center pixel-border" style="padding: 2em;">
 
 # THE FUTURE IS NOW
 
-<div class="glow-line"></div>
+<div class="arcade-divider"></div>
+
+<p style="color: var(--arcade-lime);">> READY TO PLAY? INSERT COIN TO CONTINUE <</p>
 
 <div style="margin-top: 2em;">
-<span class="cta">Get Started</span>
-</div>
-
-<div style="margin-top: 3em;">
-<span class="badge-cyan">Neon</span>
-<span class="badge-magenta">Bold</span>
-<span class="badge-green">Innovation</span>
+<span class="arcade-badge arcade-badge-cyan">NEON</span>
+<span class="arcade-badge arcade-badge-magenta">CYBERPUNK</span>
+<span class="arcade-badge arcade-badge-lime">Y2K</span>
 </div>
 
 </div>
