@@ -7,7 +7,7 @@ progress: true
 slideNumber: "c/t"
 ---
 
-<!-- .slide: data-background-color="#0d0f0d" -->
+<!-- .slide: data-background-image="design/assets/images/terminal-infra-hero.jpg" data-background-opacity="0.25" data-background-color="#0d0f0d" -->
 
 # Build a Safe Rate Limiter in Node.js
 
@@ -334,6 +334,17 @@ The key test pattern: fire Promise.all with 25 concurrent requests. Redis's Lua 
 
 <!-- .slide: data-background-color="#0d0f0d" -->
 
+## Limiter Flow
+
+<img src="design/assets/diagrams/rate-limiter-flow.svg" style="width: 90%; border-radius: 12px; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);">
+
+Note:
+Use this slide as a reset after the code-heavy steps. The gate visual makes the system easier to remember.
+
+---
+
+<!-- .slide: data-background-color="#0d0f0d" -->
+
 ## Pitfalls to Avoid
 
 <p class="term-label">// what goes wrong in production — and the one-line fix</p>
@@ -373,6 +384,23 @@ The non-atomic pitfall is the most dangerous — it's a subtle bug that only sur
 
 Note:
 That's it — five steps, one Lua script, one middleware factory. The patterns here (atomic Redis operations, fail-open design, sliding windows) apply to throttling, quota enforcement, and abuse prevention throughout your stack. Questions?
+
+---
+
+<!-- .slide: data-background-color="#0d0f0d" -->
+
+## Token Bucket Timeline
+
+<div style="position: relative; height: 220px; margin-top: 1em; border-left: 2px solid #1b5e20; border-bottom: 2px solid #1b5e20;">
+  <div style="position: absolute; left: -40px; top: 50%; transform: rotate(-90deg); font-size: 0.7em; color: #4a7a4a;">Tokens →</div>
+  <div style="position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); font-size: 0.7em; color: #4a7a4a;">Time →</div>
+  <div style="position: absolute; left: 10%; bottom: 120px; width: 70%; height: 6px; background: #00c853; border-radius: 999px;"></div>
+  <div style="position: absolute; left: 35%; bottom: 50px; width: 12px; height: 12px; background: #ffcc80; border-radius: 50%;"></div>
+  <div style="position: absolute; left: 55%; bottom: 80px; width: 12px; height: 12px; background: #ffcc80; border-radius: 50%;"></div>
+  <div style="position: absolute; left: 75%; bottom: 40px; width: 12px; height: 12px; background: #ffcc80; border-radius: 50%;"></div>
+</div>
+
+<p style="font-size: 0.72em; color: #4a7a4a; margin-top: 0.6em;">Green bar refills steadily; yellow dots represent bursts consuming tokens.</p>
 
 <!-- ══════════════════════════════════════════════════════════════
      TERMINAL GREEN THEME — CSS
