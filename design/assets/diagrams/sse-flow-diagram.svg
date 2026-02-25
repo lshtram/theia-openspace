@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#2c2c2c" />
+    </marker>
+  </defs>
+  <rect width="1200" height="700" fill="#fbfbfb" />
+  <rect x="110" y="220" width="260" height="260" rx="20" fill="#f1f5f9" stroke="#2c2c2c" stroke-width="3" />
+  <rect x="830" y="220" width="260" height="260" rx="20" fill="#f1f5f9" stroke="#2c2c2c" stroke-width="3" />
+  <text x="240" y="260" font-family="Arial, sans-serif" font-size="28" fill="#2c2c2c" text-anchor="middle">Browser</text>
+  <text x="960" y="260" font-family="Arial, sans-serif" font-size="28" fill="#2c2c2c" text-anchor="middle">Server</text>
+  <rect x="175" y="300" width="130" height="120" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="2" />
+  <text x="240" y="360" font-family="Arial, sans-serif" font-size="22" fill="#334155" text-anchor="middle">EventSource</text>
+  <rect x="895" y="300" width="130" height="120" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="2" />
+  <text x="960" y="360" font-family="Arial, sans-serif" font-size="22" fill="#334155" text-anchor="middle">Stream</text>
+  <line x1="370" y1="360" x2="830" y2="360" stroke="#2c2c2c" stroke-width="3" marker-end="url(#arrow)" />
+  <line x1="830" y1="410" x2="370" y2="410" stroke="#2c2c2c" stroke-width="3" marker-end="url(#arrow)" />
+  <text x="600" y="345" font-family="Arial, sans-serif" font-size="20" fill="#475569" text-anchor="middle">GET /events</text>
+  <text x="600" y="445" font-family="Arial, sans-serif" font-size="20" fill="#475569" text-anchor="middle">data: ...\n\n</text>
+  <text x="600" y="160" font-family="Arial, sans-serif" font-size="30" fill="#1f2937" text-anchor="middle">SSE Connection Flow</text>
+</svg>
