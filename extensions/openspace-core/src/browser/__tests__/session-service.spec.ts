@@ -292,7 +292,7 @@ describe('SessionService', () => {
             // Start getSessions (slow)
             const slowGetSessions = sinon.stub();
             mockOpenCodeService.getSessions.callsFake(async () => {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await Promise.resolve();  // yield one tick — no wall-clock delay
                 slowGetSessions();
                 return [mockSession];
             });
@@ -376,8 +376,10 @@ describe('SessionService', () => {
 
     describe('init() hub readiness gate on session restore', () => {
         let waitForHubStub: sinon.SinonStub;
+        let clock: sinon.SinonFakeTimers;
 
         beforeEach(() => {
+            clock = sinon.useFakeTimers();
             mockOpenCodeService.getProjects.resolves([mockProject]);
             mockOpenCodeService.getSession.resolves(mockSession);
             mockOpenCodeService.getMessages.resolves([]);
@@ -385,16 +387,21 @@ describe('SessionService', () => {
                 Object.getPrototypeOf(sessionService),
                 'waitForHub'
             );
-            // Seed localStorage with saved IDs via the already-stubbed setItem
+            // Seed localStorage directly — sinon.stub() silently fails on jsdom's localStorage
             window.localStorage.setItem('openspace.activeProjectId', 'proj-1');
             window.localStorage.setItem('openspace.activeSessionId', 'session-1');
+        });
+
+        afterEach(() => {
+            clock.restore();
+            window.localStorage.clear();
         });
 
         it('restores session when hub is ready', async () => {
             waitForHubStub.resolves();
             (sessionService as any).init();
-            // Let the async init() fire
-            await new Promise(r => setTimeout(r, 50));
+            // Drain the microtask/macrotask queue without real wall-clock delay
+            await clock.tickAsync(0);
             expect(waitForHubStub.calledOnce).to.be.true;
             expect(sessionService.activeSession?.id).to.equal('session-1');
         });
@@ -402,7 +409,7 @@ describe('SessionService', () => {
         it('skips session restore and logs warning when hub is not ready', async () => {
             waitForHubStub.rejects(new Error('Hub not ready after 20 attempts'));
             (sessionService as any).init();
-            await new Promise(r => setTimeout(r, 50));
+            await clock.tickAsync(0);
             expect(waitForHubStub.calledOnce).to.be.true;
             // Session should NOT be restored
             expect(sessionService.activeSession).to.be.undefined;
@@ -411,6 +418,8 @@ describe('SessionService', () => {
 });
 
 describe('isStreaming hysteresis', () => {
+    let clock: sinon.SinonFakeTimers;
+
     function createTestService(): SessionServiceImpl {
         const service = new SessionServiceImpl();
         (service as any).openCodeService = {
@@ -433,7 +442,12 @@ describe('isStreaming hysteresis', () => {
         return service;
     }
 
+    beforeEach(() => {
+        clock = sinon.useFakeTimers();
+    });
+
     afterEach(() => {
+        clock.restore();
         sinon.restore();
     });
 
@@ -450,8 +464,8 @@ describe('isStreaming hysteresis', () => {
         const service = createTestService();
         service.updateStreamingMessage('msg1', 'hello', false);
         service.updateStreamingMessage('msg1', '', true);  // isDone=true
-        // Wait for hysteresis (600ms > 500ms window)
-        await new Promise(r => setTimeout(r, 600));
+        // Advance 600ms (> 500ms window) without real wall-clock delay
+        await clock.tickAsync(600);
         expect(service.isStreaming).to.equal(false);
     });
 
@@ -461,7 +475,7 @@ describe('isStreaming hysteresis', () => {
         service.updateStreamingMessage('msg1', '', true);  // isDone=true on msg1
         // New message starts within 500ms window:
         service.updateStreamingMessage('msg2', 'world', false);
-        await new Promise(r => setTimeout(r, 600));
+        await clock.tickAsync(600);
         // Should still be streaming (msg2 is active)
         expect(service.isStreaming).to.equal(true);
     });
