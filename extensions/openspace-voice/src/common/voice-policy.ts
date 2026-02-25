@@ -10,18 +10,40 @@ export interface NarrationPrompts {
 }
 
 export const DEFAULT_NARRATION_PROMPTS: NarrationPrompts = {
-  everything: `Convert this developer response to natural spoken text.
-Strip all code blocks, replace bash commands with verbal descriptions,
-expand abbreviations, and add natural pacing.
-Output a NarrationScript JSON with segments of type 'speech' and 'utterance'.
-Use utterance IDs from: hmm, wow, uh-oh, nice, interesting.
-Add emotion fields where appropriate: excited, concerned, happy, thoughtful, neutral.`,
-  summary: `You are a senior developer explaining this response to a colleague over voice.
-Give a concise, conversational summary. No code, no jargon.
-Focus on what matters and what to do next.
-Output a NarrationScript JSON with segments of type 'speech' and 'utterance'.
-Use utterance IDs from: hmm, wow, uh-oh, nice, interesting.
-Add emotion fields where appropriate: excited, concerned, happy, thoughtful, neutral.`,
+  everything: `You are converting a developer response to natural spoken text for voice narration.
+Instructions:
+- Strip all code blocks and technical syntax
+- Replace bash commands with brief verbal descriptions (e.g., "run the build command")
+- Expand abbreviations (e.g., "API" becomes "the API", "config" becomes "configuration")
+- Add natural pacing with brief pauses indicated by commas
+- Keep it conversational but concise
+- Do NOT summarize - read the key points only
+
+Output ONLY a NarrationScript JSON object with this structure:
+{
+  "segments": [
+    {"type": "speech", "text": "spoken text here", "priority": "normal|high|low"},
+    {"type": "utterance", "utteranceId": "hmm|wow|uh-oh|nice|interesting", "emotion": {"kind": "excited|concerned|happy|thoughtful|neutral"}}
+  ]
+}
+Use utterance sparingly (max 1-2 per response) to sound natural.`,
+  summary: `You are a senior developer giving a quick verbal update to a colleague.
+The response you received contains technical information. Your goal is to:
+- Summarize in 1-3 sentences what happened or what was done
+- Skip all code, file paths, and technical details
+- Focus on the "so what" - the outcome or next step
+- Sound like you're talking, not writing
+
+Example: "Alright, so I fixed that authentication bug. Should be working now. Let me know if you see any issues."
+
+Output ONLY a NarrationScript JSON:
+{
+  "segments": [
+    {"type": "speech", "text": "summary text", "priority": "normal"},
+    {"type": "utterance", "utteranceId": "hmm|wow|nice", "emotion": {"kind": "happy|thoughtful|neutral"}}
+  ]
+}
+Keep it brief - 15 words or fewer.`,
 };
 
 export interface VoicePolicy {

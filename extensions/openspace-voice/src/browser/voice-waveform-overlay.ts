@@ -1,23 +1,91 @@
 // extensions/openspace-voice/src/browser/voice-waveform-overlay.ts
+import type { EmotionKind } from '../common/narration-types';
 
 const OVERLAY_ID = 'openspace-voice-waveform-overlay';
 const WIDTH = 200;
 const HEIGHT = 48;
 const BAR_COUNT = 32;
 const BAR_GAP = 3;
-const BAR_COLOR = '#63b3ed';      // Light blue (matches Theia/our theme)
-const BG_COLOR = 'rgba(40, 40, 40, 0.5)';  // Gray 50% opacity
-const BORDER_RADIUS = '6px';
+const BORDER_RADIUS = '8px';
 
-const NOISE_FLOOR = 10;           // Values below this are considered silence
-const COMPRESSION_POWER = 0.5;    // Power law compression (0.5 = sqrt)
+const NOISE_FLOOR = 10;
+const COMPRESSION_POWER = 0.5;
+
+export type VoiceMode = 'recording' | 'speaking' | 'waiting';
+
+const EMOTION_COLORS: Record<EmotionKind, string> = {
+  excited: '#f6ad55',
+  concerned: '#fc8181',
+  happy: '#68d391',
+  thoughtful: '#63b3ed',
+  neutral: '#a0aec0',
+};
+
+const DEFAULT_RECORDING_COLOR = '#63b3ed';
+const RECORDING_BG = 'rgba(40, 40, 40, 0.85)';
+const SPEAKING_BG = 'rgba(49, 130, 206, 0.9)';
+const SPEAKING_BAR_COLOR = '#ffffff';
+const WAITING_BG = 'rgba(40, 40, 40, 0.85)';
 
 export class VoiceWaveformOverlay {
   private container: HTMLDivElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private smoothedValues: Float32Array = new Float32Array(BAR_COUNT);
-  private smoothingFactor = 0.08;  // Much slower: 8% per frame (words "pass by")
+  private smoothingFactor = 0.08;
+  private currentEmotion: EmotionKind | null = null;
+  private currentMode: VoiceMode = 'recording';
+  private waitingAnimationId: number | null = null;
+
+  get barColor(): string {
+    if (this.currentMode === 'speaking') {
+      return SPEAKING_BAR_COLOR;
+    }
+    return this.currentEmotion ? EMOTION_COLORS[this.currentEmotion] : DEFAULT_RECORDING_COLOR;
+  }
+
+  get backgroundColor(): string {
+    switch (this.currentMode) {
+      case 'speaking': return SPEAKING_BG;
+      case 'waiting': return WAITING_BG;
+      default: return RECORDING_BG;
+    }
+  }
+
+  get glowColor(): string {
+    switch (this.currentMode) {
+      case 'speaking': return 'rgba(49, 130, 206, 0.4)';
+      case 'waiting': return 'rgba(104, 211, 145, 0.3)';
+      default: return 'rgba(99, 179, 237, 0.15)';
+    }
+  }
+
+  get borderColor(): string {
+    switch (this.currentMode) {
+      case 'speaking': return 'rgba(255, 255, 255, 0.4)';
+      case 'waiting': return 'rgba(104, 211, 145, 0.4)';
+      default: return 'rgba(99, 179, 237, 0.3)';
+    }
+  }
+
+  setEmotion(emotion: EmotionKind | null): void {
+    this.currentEmotion = emotion;
+  }
+
+  setMode(mode: VoiceMode): void {
+    if (this.currentMode === mode) return;
+    
+    const wasVisible = this.container !== null;
+    if (wasVisible) {
+      this.hide();
+    }
+    
+    this.currentMode = mode;
+    
+    if (wasVisible) {
+      this.show();
+    }
+  }
 
   show(): void {
     if (this.container) return;
@@ -30,37 +98,77 @@ export class VoiceWaveformOverlay {
       right: '12px',
       width: `${WIDTH}px`,
       height: `${HEIGHT}px`,
-      background: BG_COLOR,
+      background: this.backgroundColor,
       borderRadius: BORDER_RADIUS,
       zIndex: '99999',
       pointerEvents: 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+      boxShadow: `0 4px 12px rgba(0,0,0,0.5), 0 0 20px ${this.glowColor}`,
+      border: `1px solid ${this.borderColor}`,
+      transition: 'background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease',
     });
 
-    const canvas = document.createElement('canvas');
-    canvas.width = WIDTH;
-    canvas.height = HEIGHT;
-    Object.assign(canvas.style, {
-      display: 'block',
-      borderRadius: BORDER_RADIUS,
-    });
+    if (this.currentMode === 'waiting') {
+      container.appendChild(this.createWaitingIndicator());
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.width = WIDTH;
+      canvas.height = HEIGHT;
+      Object.assign(canvas.style, {
+        display: 'block',
+        borderRadius: BORDER_RADIUS,
+      });
 
-    container.appendChild(canvas);
+      container.appendChild(canvas);
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.smoothedValues.fill(0);
+      this._drawFlat();
+    }
+
     document.body.appendChild(container);
-
     this.container = container;
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+  }
 
-    this.smoothedValues.fill(0);
-    this._drawFlat();
+  private createWaitingIndicator(): HTMLDivElement {
+    const indicator = document.createElement('div');
+    Object.assign(indicator.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '4px',
+      width: '100%',
+      height: '100%',
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const dot = document.createElement('div');
+      Object.assign(dot.style, {
+        width: '6px',
+        height: '6px',
+        borderRadius: '50%',
+        background: '#68d391',
+        animation: `voiceWaitingPulse 1.2s ease-in-out ${i * 0.15}s infinite`,
+      });
+      indicator.appendChild(dot);
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes voiceWaitingPulse {
+        0%, 100% { transform: scale(0.8); opacity: 0.5; }
+        50% { transform: scale(1.2); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    return indicator;
   }
 
   push(data: Uint8Array): void {
-    if (!this.ctx || !this.canvas) return;
+    if (!this.ctx || !this.canvas || this.currentMode === 'waiting') return;
 
     const ctx = this.ctx;
     const W = this.canvas.width;
@@ -71,28 +179,24 @@ export class VoiceWaveformOverlay {
     const totalGap = BAR_GAP * (BAR_COUNT - 1);
     const barW = (W - totalGap) / BAR_COUNT;
 
-    ctx.fillStyle = BAR_COLOR;
+    ctx.fillStyle = this.barColor;
 
     for (let i = 0; i < BAR_COUNT; i++) {
       const srcIndex = Math.floor((i / BAR_COUNT) * data.length);
       const sample = data[srcIndex];
 
-      // Apply noise floor - treat quiet sounds as near-zero
       let deviation = Math.abs(sample - 128);
       if (deviation < NOISE_FLOOR) {
-        // Very low response below noise floor (still shows a little for feedback)
         deviation = (deviation / NOISE_FLOOR) * 5;
       } else {
-        // Above noise floor: apply power law compression to boost quiet sounds
         const normalized = (deviation - NOISE_FLOOR) / (255 - NOISE_FLOOR);
         const compressed = Math.pow(normalized, COMPRESSION_POWER);
         deviation = NOISE_FLOOR + compressed * (255 - NOISE_FLOOR);
       }
 
-      const normalized = Math.min(1, deviation / 80); // Normalize, boost for visibility
+      const normalized = Math.min(1, deviation / 80);
       const target = Math.max(0.05, normalized);
 
-      // Smoothing with much slower lerp (words "pass by" effect)
       this.smoothedValues[i] += (target - this.smoothedValues[i]) * this.smoothingFactor;
 
       const barH = Math.max(4, this.smoothedValues[i] * H * 0.85);
@@ -106,6 +210,10 @@ export class VoiceWaveformOverlay {
   }
 
   hide(): void {
+    if (this.waitingAnimationId !== null) {
+      cancelAnimationFrame(this.waitingAnimationId);
+      this.waitingAnimationId = null;
+    }
     if (this.container) {
       this.container.remove();
       this.container = null;
@@ -121,7 +229,7 @@ export class VoiceWaveformOverlay {
     const W = this.canvas.width;
     const H = this.canvas.height;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = BAR_COLOR;
+    ctx.fillStyle = this.barColor;
 
     const totalGap = BAR_GAP * (BAR_COUNT - 1);
     const barW = (W - totalGap) / BAR_COUNT;

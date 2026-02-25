@@ -187,6 +187,7 @@ export class PresentationWidget extends ReactWidget {
      */
     setContent(content: string): void {
         this.deckContent = content;
+        console.log(`[PresentationWidget] setContent called: contentLen=${content.length}, containerRef=${!!this.containerRef?.current}`);
         // Guard: only drive DOM updates when the container is already attached.
         // If called before React has rendered (containerRef.current === null),
         // onAfterAttach() will fire later and pick up deckContent at that point.
@@ -340,11 +341,12 @@ export class PresentationWidget extends ReactWidget {
      */
     protected writeSlidesDom(): void {
         const container = this.containerRef?.current;
-        if (!container) { return; }
+        if (!container) { console.warn('[PresentationWidget] writeSlidesDom: no container'); return; }
         const slidesEl = container.querySelector('.slides');
-        if (!slidesEl) { return; }
+        if (!slidesEl) { console.warn('[PresentationWidget] writeSlidesDom: no .slides element'); return; }
 
         const deck = PresentationWidget.parseDeckContent(this.deckContent);
+        console.log(`[PresentationWidget] writeSlidesDom: ${deck.slides.length} slides, deckContentLen=${this.deckContent.length}`);
         if (deck.slides.length === 0) {
             // Clear any previously injected deck styles
             this.injectDeckStyles(container, '');
@@ -613,16 +615,27 @@ More content</pre>
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
+        console.log(`[PresentationWidget] onAfterAttach: mode=${this.mode}, deckContentLen=${this.deckContent.length}, uri=${this.uri}`);
         if (this.mode === 'presentation') {
             // Defer slide writing until React has committed its first render.
             // onAfterAttach fires synchronously during Lumino's DOM insertion,
             // before React's useLayoutEffect/componentDidMount runs. rAF lets
             // the browser do a layout pass so containerRef.current is non-null.
             requestAnimationFrame(() => {
-                this.writeSlidesDom();
-                this.initializeReveal().catch(err =>
-                    console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
-                );
+                console.log(`[PresentationWidget] rAF in onAfterAttach: containerRef=${!!this.containerRef?.current}, deckContentLen=${this.deckContent.length}`);
+                if (!this.deckContent && this.uri) {
+                    // Widget was restored from saved layout without setContent() being called
+                    // (e.g. page reload). Re-read the file from URI to re-hydrate content.
+                    console.log(`[PresentationWidget] Re-hydrating from URI: ${this.uri}`);
+                    this.rehydrateFromUri().catch(err =>
+                        console.error('[PresentationWidget] Failed to re-hydrate from URI:', err)
+                    );
+                } else {
+                    this.writeSlidesDom();
+                    this.initializeReveal().catch(err =>
+                        console.error('[PresentationWidget] Failed to initialize reveal.js:', err)
+                    );
+                }
             });
         }
         const disposable = attachTabDblClickToggle(
@@ -631,6 +644,28 @@ More content</pre>
             () => this.toggleMode(),
         );
         this.toDisposeOnDetach.push(disposable);
+    }
+
+    /**
+     * Re-hydrate deck content from file URI after a page reload.
+     * Called when the widget is restored from saved layout (deckContent is empty but uri is set).
+     */
+    protected async rehydrateFromUri(): Promise<void> {
+        if (!this.uri) { return; }
+        try {
+            const uriObj = this.uri.startsWith('file://') ? new URI(this.uri) : URI.fromFilePath(this.uri);
+            const content = await this.fileService.read(uriObj);
+            this.deckContent = content.value;
+            // Update tab title from filename
+            const base = uriObj.path.base;
+            this.title.label = base.endsWith('.deck.md') ? base.slice(0, -'.deck.md'.length) : base;
+            this.title.caption = this.title.label;
+            this.writeSlidesDom();
+            await this.initializeReveal();
+            console.log(`[PresentationWidget] Re-hydrated ${this.deckContent.length} chars from ${this.uri}`);
+        } catch (err) {
+            console.error('[PresentationWidget] rehydrateFromUri failed:', err);
+        }
     }
 
     protected onResize(msg: Widget.ResizeMessage): void {
@@ -689,9 +724,10 @@ More content</pre>
 
     protected async initializeReveal(): Promise<void> {
         const container = this.containerRef?.current;
-        if (!container) { return; }
+        if (!container) { console.warn('[PresentationWidget] initializeReveal: no container'); return; }
         const deckElement = container.querySelector('.reveal');
-        if (!deckElement) { return; }
+        if (!deckElement) { console.warn('[PresentationWidget] initializeReveal: no .reveal element'); return; }
+        console.log(`[PresentationWidget] initializeReveal starting, deckElement children=${deckElement.children.length}`);
 
         if (this.revealDeck) {
             this.revealDeck.destroy();
@@ -757,6 +793,24 @@ More content</pre>
                 }}
             />
         );
+    }
+
+    /**
+     * Persist URI and mode across page reloads via Theia's ShellLayoutRestorer.
+     * The restorer stores this alongside the widget's construction options.
+     */
+    storeState(): object {
+        return { uri: this.uri };
+    }
+
+    /**
+     * Restore URI from persisted state. Content is re-hydrated in onAfterAttach()
+     * via rehydrateFromUri() when deckContent is empty but uri is set.
+     */
+    restoreState(oldState: object & { uri?: string }): void {
+        if (oldState?.uri) {
+            this.uri = oldState.uri;
+        }
     }
 
 }

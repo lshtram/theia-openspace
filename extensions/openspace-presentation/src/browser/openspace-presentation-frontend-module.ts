@@ -21,10 +21,16 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
       // createWidget receives the options object from getOrCreateWidget (includes { uri })
       // Theia's WidgetManager caches by (factoryId + JSON.stringify(options)), so each
       // distinct URI gets its own widget instance.
-      createWidget: () => {
+      createWidget: (options?: { uri?: string }) => {
         const child = context.container.createChild();
         child.bind(PresentationWidget).toSelf();
-        return child.get(PresentationWidget);
+        const widget = child.get(PresentationWidget);
+        // Propagate URI from construction options so the widget can re-hydrate
+        // its content after a page reload (layout restoration path).
+        if (options?.uri) {
+          widget.uri = options.uri;
+        }
+        return widget;
       },
     }))
     .whenTargetNamed(PresentationWidget.ID);

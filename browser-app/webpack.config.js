@@ -113,7 +113,7 @@ configs[0].plugins = [
             {
                 from: revealThemesSrc,
                 to: path.join(__dirname, 'lib/frontend/reveal-themes'),
-                globOptions: { ignore: ['**/fonts/**'] },
+                // Include fonts subdirectory so @import url(./fonts/...) in theme CSS resolves.
             },
             {
                 from: revealBaseCssSrc,
