@@ -164,14 +164,14 @@ function applyTheme(theme: BlueprintTheme): void {
   --bp-hi:       #00e5ff;
   --bp-text:     #e8f4fd;
   --bp-muted:    #7eb3d4;
-  --bp-font-mono: 'Courier New', 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --bp-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Courier New', monospace;
   --bp-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* ── Background + Grid Pattern ──────────────────────────────── */
 .reveal {
   font-family: var(--bp-font-body);
-  font-size: 26px;
+  font-size: 28px;
   color: var(--bp-text);
   background: var(--bp-bg);
   background-image:
@@ -239,7 +239,7 @@ function applyTheme(theme: BlueprintTheme): void {
 }
 
 .reveal .lead {
-  font-size: 1.2em;
+  font-size: 1.25em;
   color: var(--bp-muted);
   line-height: 1.6;
 }
