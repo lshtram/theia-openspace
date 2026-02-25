@@ -35,7 +35,7 @@ export default defineConfig({
   /* Shared settings for all projects */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
@@ -65,8 +65,8 @@ export default defineConfig({
    * Use `npm run test:e2e` (not `npx playwright test` directly) so the
    * e2e-precheck.sh guard runs first. */
   webServer: {
-    command: 'yarn start:browser',
-    port: 3000,
+    command: process.env.PLAYWRIGHT_SERVER_CMD || 'yarn start:browser',
+    port: parseInt(process.env.PLAYWRIGHT_PORT || '3000', 10),
     timeout: 120 * 1000,
     reuseExistingServer: true,
   },

@@ -18,6 +18,7 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { Emitter, Event } from '@theia/core/lib/common/event';
 import { Disposable } from '@theia/core/lib/common/disposable';
 import { ILogger } from '@theia/core/lib/common/logger';
+import { MessageService } from '@theia/core/lib/common/message-service';
 import {
     OpenCodeService,
     Project,
@@ -174,6 +175,9 @@ export class SessionServiceImpl implements SessionService {
 
     @inject(ILogger)
     protected readonly logger!: ILogger;
+
+    @inject(MessageService)
+    protected readonly messageService!: MessageService;
 
     // Private state
     private _activeProject: Project | undefined;
@@ -389,6 +393,11 @@ export class SessionServiceImpl implements SessionService {
                     this.logger.warn('[SessionService] Failed to restore session:', err);
                     // Persisted session may be stale (deleted in backend). Avoid repeated restore errors.
                     window.localStorage.removeItem('openspace.activeSessionId');
+                    // Notify the user — they may need to start a new session manually.
+                    this.messageService.warn(
+                        'Previous session could not be restored. You may need to start a new session.',
+                        'OK'
+                    ).catch(() => { /* ignore notification errors */ });
                 }
             }
 

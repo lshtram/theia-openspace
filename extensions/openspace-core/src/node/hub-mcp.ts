@@ -18,10 +18,14 @@ import { Application, Request, Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import { z } from 'zod';
+
 import { AgentCommand } from '../common/command-manifest';
 import { isSensitiveFile } from '../common/sensitive-files';
+import { TOOL } from '../common/tool-names';
+
 import { ArtifactStore } from './artifact-store';
 import { PatchEngine } from './patch-engine';
+import { resolveSafePath } from './path-utils';
 
 // Use exports-map compatible require paths (the package.json exports map resolves these correctly)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -31,8 +35,12 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 
 /** Minimal structural type for McpServer (loaded via require). */
 interface IMcpServer {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tool(name: string, description: string, schema: unknown, handler: (args: any) => Promise<unknown>): void;
+    tool<T extends Record<string, unknown>>(
+        name: string,
+        description: string,
+        schema: unknown,
+        handler: (args: T) => Promise<unknown>
+    ): void;
     connect(transport: unknown): Promise<void>;
 }
 
@@ -162,7 +170,7 @@ export class OpenSpaceMcpServer {
 
     private registerPaneTools(server: IMcpServer): void {
         server.tool(
-            'openspace.pane.open',
+            TOOL.PANE_OPEN,
             'Open a pane in the IDE (editor, terminal, preview, etc.)',
             {
                 type: z.enum(['editor', 'terminal', 'presentation', 'whiteboard']).describe('Pane type'),
@@ -174,32 +182,32 @@ export class OpenSpaceMcpServer {
                               'is placed relative to that specific pane instead of the currently active one. ' +
                               'Use pane.list to obtain pane IDs.'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.pane.open', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PANE_OPEN, args)
         );
 
         server.tool(
-            'openspace.pane.close',
+            TOOL.PANE_CLOSE,
             'Close an open pane by its ID',
             {
                 paneId: z.string().describe('ID of the pane to close')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.pane.close', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PANE_CLOSE, args)
         );
 
         server.tool(
-            'openspace.pane.focus',
+            TOOL.PANE_FOCUS,
             'Focus a specific pane by ID',
             {
                 paneId: z.string().describe('ID of the pane to focus')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.pane.focus', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PANE_FOCUS, args)
         );
 
         server.tool(
-            'openspace.pane.list',
+            TOOL.PANE_LIST,
             'List all open panes and their current state',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.pane.list', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PANE_LIST, args)
         );
     }
 
@@ -207,46 +215,46 @@ export class OpenSpaceMcpServer {
 
     private registerEditorTools(server: IMcpServer): void {
         server.tool(
-            'openspace.editor.open',
+            TOOL.EDITOR_OPEN,
             'Open a file in the editor, optionally jumping to a specific line',
             {
                 path: z.string().describe('File path to open (relative to workspace root or absolute)'),
                 line: z.number().optional().describe('Line number to navigate to (1-indexed)'),
                 column: z.number().optional().describe('Column number to navigate to (1-indexed)')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.open', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_OPEN, args)
         );
 
         server.tool(
-            'openspace.editor.read_file',
+            TOOL.EDITOR_READ_FILE,
             'Read the contents of the currently open file (or a specified file) from the editor',
             {
                 path: z.string().optional().describe('File path to read. Defaults to the currently active editor file.')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.read_file', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_READ_FILE, args)
         );
 
         server.tool(
-            'openspace.editor.close',
+            TOOL.EDITOR_CLOSE,
             'Close the currently active editor tab or a specified file',
             {
                 path: z.string().optional().describe('File path to close. Defaults to the currently active editor.')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.close', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_CLOSE, args)
         );
 
         server.tool(
-            'openspace.editor.scroll_to',
+            TOOL.EDITOR_SCROLL_TO,
             'Scroll the editor to a specific line',
             {
                 path: z.string().optional().describe('File path of the editor to scroll. Defaults to active editor.'),
                 line: z.number().describe('Line number to scroll to (1-indexed)')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.scroll_to', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_SCROLL_TO, args)
         );
 
         server.tool(
-            'openspace.editor.highlight',
+            TOOL.EDITOR_HIGHLIGHT,
             'Highlight (select) a range of lines in the editor',
             {
                 path: z.string().optional().describe('File path. Defaults to active editor.'),
@@ -259,16 +267,16 @@ export class OpenSpaceMcpServer {
                 highlightId: z.string().optional().describe('Optional custom highlight ID for later removal'),
                 color: z.string().optional().describe('Highlight color (e.g. "yellow", "#ffff00")')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.highlight', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_HIGHLIGHT, args)
         );
 
         server.tool(
-            'openspace.editor.clear_highlight',
+            TOOL.EDITOR_CLEAR_HIGHLIGHT,
             'Clear a named highlight in the editor',
             {
                 highlightId: z.string().describe('The highlight ID returned by editor.highlight to clear')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.editor.clear_highlight', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.EDITOR_CLEAR_HIGHLIGHT, args)
         );
     }
 
@@ -276,50 +284,50 @@ export class OpenSpaceMcpServer {
 
     private registerTerminalTools(server: IMcpServer): void {
         server.tool(
-            'openspace.terminal.create',
+            TOOL.TERMINAL_CREATE,
             'Create a new terminal pane',
             {
                 title: z.string().optional().describe('Title for the terminal tab'),
                 cwd: z.string().optional().describe('Working directory for the terminal'),
                 shellPath: z.string().optional().describe('Path to shell executable (must be in allowlist)')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.terminal.create', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.TERMINAL_CREATE, args)
         );
 
         server.tool(
-            'openspace.terminal.send',
+            TOOL.TERMINAL_SEND,
             'Send text/command input to a terminal',
             {
                 terminalId: z.string().describe('ID of the terminal to send input to'),
                 text: z.string().describe('Text to send to the terminal (newline triggers Enter)')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.terminal.send', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.TERMINAL_SEND, args)
         );
 
         server.tool(
-            'openspace.terminal.read_output',
+            TOOL.TERMINAL_READ_OUTPUT,
             'Read recent output from a terminal',
             {
                 terminalId: z.string().describe('ID of the terminal to read output from'),
                 lines: z.number().optional().describe('Number of recent lines to read (default: 50)')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.terminal.read_output', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.TERMINAL_READ_OUTPUT, args)
         );
 
         server.tool(
-            'openspace.terminal.list',
+            TOOL.TERMINAL_LIST,
             'List all open terminals and their IDs',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.terminal.list', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.TERMINAL_LIST, args)
         );
 
         server.tool(
-            'openspace.terminal.close',
+            TOOL.TERMINAL_CLOSE,
             'Close a terminal by its ID',
             {
                 terminalId: z.string().describe('ID of the terminal to close')
             },
-            async (args: unknown) => this.executeViaBridge('openspace.terminal.close', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.TERMINAL_CLOSE, args)
         );
     }
 
@@ -327,18 +335,27 @@ export class OpenSpaceMcpServer {
 
     private registerFileTools(server: IMcpServer): void {
         server.tool(
-            'openspace.file.read',
+            TOOL.FILE_READ,
             'Read the contents of a file from the workspace',
             {
                 path: z.string().describe('File path to read (relative to workspace root or absolute)')
             },
             async (args: { path: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
-                    const content = await fs.promises.readFile(resolved, 'utf-8');
+                    const ts = new Date().toISOString();
+                    console.log(`[${ts}] FETCH_START: FILE_READ ${resolved}`);
+                    let content: string;
+                    try {
+                        content = await fs.promises.readFile(resolved, 'utf-8');
+                        console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_READ ${resolved}`);
+                    } catch (err) {
+                        console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_READ ${resolved}`, err);
+                        throw err;
+                    }
                     return { content: [{ type: 'text', text: content }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
@@ -347,7 +364,7 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
-            'openspace.file.write',
+            TOOL.FILE_WRITE,
             'Write (overwrite) a file in the workspace',
             {
                 path: z.string().describe('File path to write (relative to workspace root or absolute)'),
@@ -355,21 +372,24 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; content: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
                     const relPath = path.relative(this.workspaceRoot, resolved);
+                    console.log(`[${new Date().toISOString()}] FETCH_START: FILE_WRITE ${resolved}`);
                     await this.artifactStore.write(relPath, args.content, { actor: 'agent', reason: 'openspace.file.write MCP tool' });
+                    console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_WRITE ${resolved}`);
                     return { content: [{ type: 'text', text: `Written ${resolved}` }] };
                 } catch (err) {
+                    console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_WRITE`, err);
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
                 }
             }
         );
 
         server.tool(
-            'openspace.file.list',
+            TOOL.FILE_LIST,
             'List files and directories in a workspace directory',
             {
                 path: z.string().optional().describe('Directory path to list (default: workspace root)'),
@@ -377,7 +397,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path?: string; recursive?: boolean }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path || '.');
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path || '.');
                     const entries = this.listDirectory(resolved, args.recursive ?? false);
                     return { content: [{ type: 'text', text: entries.join('\n') }] };
                 } catch (err) {
@@ -387,7 +407,7 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
-            'openspace.file.search',
+            TOOL.FILE_SEARCH,
             'Search for a pattern in workspace files',
             {
                 pattern: z.string().describe('Text or regex pattern to search for'),
@@ -396,7 +416,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { pattern: string; path?: string; glob?: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path || '.');
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path || '.');
                     const results = this.searchFiles(resolved, args.pattern, args.glob);
                     const text = results.length > 0
                         ? results.join('\n')
@@ -409,7 +429,7 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
-            'openspace.file.patch',
+            TOOL.FILE_PATCH,
             'Apply a search-and-replace patch to a file',
             {
                 path: z.string().describe('File path to patch'),
@@ -418,11 +438,18 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; oldText: string; newText: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
-                    const original = await fs.promises.readFile(resolved, 'utf-8');
+                    console.log(`[${new Date().toISOString()}] FETCH_START: FILE_PATCH ${resolved}`);
+                    let original: string;
+                    try {
+                        original = await fs.promises.readFile(resolved, 'utf-8');
+                    } catch (err) {
+                        console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_PATCH read ${resolved}`, err);
+                        throw err;
+                    }
 
                     // Task 7: Count occurrences to prevent silent multi-location replacement
                     const occurrences = original.split(args.oldText).length - 1;
@@ -441,6 +468,7 @@ export class OpenSpaceMcpServer {
                     // Task 11: Route through ArtifactStore for atomic write + backup + audit
                     const relPath = path.relative(this.workspaceRoot, resolved);
                     await this.artifactStore.write(relPath, patched, { actor: 'agent', reason: 'openspace.file.patch MCP tool' });
+                    console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_PATCH ${resolved}`);
                     return { content: [{ type: 'text', text: `Patched ${resolved}` }] };
                 } catch (err) {
                     return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
@@ -449,14 +477,14 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
-            'openspace.artifact.getVersion',
+            TOOL.ARTIFACT_GET_VERSION,
             'Get the current OCC version number for an artifact file. Use this before openspace.artifact.patch to get the correct baseVersion.',
             {
                 path: z.string().describe('File path relative to workspace root'),
             },
             async (args: { path: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     const relPath = path.relative(this.workspaceRoot, resolved);
                     const version = this.patchEngine.getVersion(relPath);
                     return { content: [{ type: 'text', text: JSON.stringify({ path: relPath, version }) }] };
@@ -467,7 +495,7 @@ export class OpenSpaceMcpServer {
         );
 
         server.tool(
-            'openspace.artifact.patch',
+            TOOL.ARTIFACT_PATCH,
             'Apply an OCC-versioned patch to an artifact file. Provides atomic write with backup, audit log, and version conflict detection. Prefer this over openspace.file.write for important artifact files.',
             {
                 path: z.string().describe('File path relative to workspace root'),
@@ -478,7 +506,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; baseVersion: number; actor: 'agent' | 'user'; intent: string; ops: unknown[] }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
@@ -507,56 +535,56 @@ export class OpenSpaceMcpServer {
 
     private registerPresentationTools(server: IMcpServer): void {
         server.tool(
-            'openspace.presentation.list',
+            TOOL.PRESENTATION_LIST,
             'List all .deck.md presentation files in the workspace',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.list', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_LIST, args)
         );
 
         server.tool(
-            'openspace.presentation.read',
+            TOOL.PRESENTATION_READ,
             'Read a .deck.md presentation file and return its parsed structure',
             {
                 path: z.string().describe('Absolute path to the .deck.md file'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.read', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_READ, args)
         );
 
         server.tool(
-            'openspace.presentation.create',
+            TOOL.PRESENTATION_CREATE,
             'Create a new .deck.md presentation file with title and initial slides',
             {
                 path: z.string().describe('Absolute path for the new .deck.md file'),
                 title: z.string().describe('Presentation title'),
                 slides: z.array(z.string()).optional().describe('Array of markdown slide content strings'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.create', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_CREATE, args)
         );
 
         server.tool(
-            'openspace.presentation.update_slide',
+            TOOL.PRESENTATION_UPDATE_SLIDE,
             'Update the content of a single slide in a .deck.md file',
             {
                 path: z.string().describe('Absolute path to the .deck.md file'),
                 slideIndex: z.number().int().min(0).describe('Zero-based slide index'),
                 content: z.string().describe('New markdown content for the slide'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.update_slide', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_UPDATE_SLIDE, args)
         );
 
         server.tool(
-            'openspace.presentation.open',
+            TOOL.PRESENTATION_OPEN,
             'Open a .deck.md file in the presentation viewer pane',
             {
                 path: z.string().describe('Absolute path to the .deck.md file'),
                 splitDirection: z.enum(['right', 'left', 'bottom', 'new-tab']).optional()
                     .describe('Where to open the pane (default: right)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.open', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_OPEN, args)
         );
 
         server.tool(
-            'openspace.presentation.navigate',
+            TOOL.PRESENTATION_NAVIGATE,
             'Navigate to a slide in the active presentation',
             {
                 direction: z.enum(['next', 'prev', 'first', 'last']).optional()
@@ -564,38 +592,38 @@ export class OpenSpaceMcpServer {
                 slideIndex: z.number().int().min(0).optional()
                     .describe('Absolute zero-based slide index to jump to'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.navigate', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_NAVIGATE, args)
         );
 
         server.tool(
-            'openspace.presentation.play',
+            TOOL.PRESENTATION_PLAY,
             'Start autoplay — advances slides automatically on a timer',
             {
                 interval: z.number().int().min(500).optional()
                     .describe('Milliseconds between slides (default: 5000)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.play', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_PLAY, args)
         );
 
         server.tool(
-            'openspace.presentation.pause',
+            TOOL.PRESENTATION_PAUSE,
             'Pause autoplay, keeping current slide position',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.pause', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_PAUSE, args)
         );
 
         server.tool(
-            'openspace.presentation.stop',
+            TOOL.PRESENTATION_STOP,
             'Stop autoplay and return to the first slide',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.stop', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_STOP, args)
         );
 
         server.tool(
-            'openspace.presentation.toggleFullscreen',
+            TOOL.PRESENTATION_TOGGLE_FULLSCREEN,
             'Toggle fullscreen mode for the active presentation viewer',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.presentation.toggleFullscreen', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.PRESENTATION_TOGGLE_FULLSCREEN, args)
         );
     }
 
@@ -603,33 +631,33 @@ export class OpenSpaceMcpServer {
 
     private registerWhiteboardTools(server: IMcpServer): void {
         server.tool(
-            'openspace.whiteboard.list',
+            TOOL.WHITEBOARD_LIST,
             'List all .whiteboard.json files in the workspace',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.list', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_LIST, args)
         );
 
         server.tool(
-            'openspace.whiteboard.read',
+            TOOL.WHITEBOARD_READ,
             'Read a .whiteboard.json file and return its content and shape records',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.read', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_READ, args)
         );
 
         server.tool(
-            'openspace.whiteboard.create',
+            TOOL.WHITEBOARD_CREATE,
             'Create a new .whiteboard.json file, optionally with a title label',
             {
                 path: z.string().describe('Absolute path for the new .whiteboard.json file'),
                 title: z.string().optional().describe('Optional title text label added to the canvas'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.create', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_CREATE, args)
         );
 
         server.tool(
-            'openspace.whiteboard.add_shape',
+            TOOL.WHITEBOARD_ADD_SHAPE,
             'Add a shape to a whiteboard canvas. Shape type must be a tldraw type: "geo" (for rectangles/ellipses/diamonds — set props.geo), "text" (standalone text), "arrow" (directed line), "note" (sticky note). Colors must be tldraw named colors: black, grey, white, red, light-red, orange, yellow, green, light-green, blue, light-blue, violet, light-violet. For geo shapes use props.richText for text labels. Arrow shapes use props.start/end instead of width/height.',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
@@ -640,72 +668,72 @@ export class OpenSpaceMcpServer {
                 height: z.number().optional().describe('Shape height in pixels (not used for arrow shapes)'),
                 props: z.record(z.string(), z.unknown()).optional().describe('Shape props. geo: {geo:"rectangle"|"ellipse"|"diamond", color:"blue", fill:"semi", richText:{type:"doc",content:[{type:"paragraph",content:[{type:"text",text:"label"}]}]}}. arrow: {start:{x:0,y:0}, end:{x:100,y:100}, arrowheadEnd:"arrow", color:"black"}. Colors must be named (not hex).'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.add_shape', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_ADD_SHAPE, args)
         );
 
         server.tool(
-            'openspace.whiteboard.update_shape',
+            TOOL.WHITEBOARD_UPDATE_SHAPE,
             'Update properties of an existing shape on the whiteboard',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
                 shapeId: z.string().describe('ID of the shape to update'),
                 props: z.record(z.string(), z.unknown()).describe('Properties to update on the shape'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.update_shape', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_UPDATE_SHAPE, args)
         );
 
         server.tool(
-            'openspace.whiteboard.delete_shape',
+            TOOL.WHITEBOARD_DELETE_SHAPE,
             'Remove a shape from the whiteboard by ID',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
                 shapeId: z.string().describe('ID of the shape to delete'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.delete_shape', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_DELETE_SHAPE, args)
         );
 
         server.tool(
-            'openspace.whiteboard.open',
+            TOOL.WHITEBOARD_OPEN,
             'Open a .whiteboard.json file in the whiteboard viewer pane',
             {
                 path: z.string().describe('Absolute path to the .whiteboard.json file'),
                 splitDirection: z.enum(['right', 'left', 'bottom', 'new-tab']).optional()
                     .describe('Where to open the pane (default: right)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.open', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_OPEN, args)
         );
 
         server.tool(
-            'openspace.whiteboard.camera.set',
+            TOOL.WHITEBOARD_CAMERA_SET,
             'Set the whiteboard canvas camera position and zoom level',
             {
                 x: z.number().describe('Camera X offset'),
                 y: z.number().describe('Camera Y offset'),
                 zoom: z.number().min(0.01).describe('Zoom level (1.0 = 100%)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.camera.set', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_CAMERA_SET, args)
         );
 
         server.tool(
-            'openspace.whiteboard.camera.fit',
+            TOOL.WHITEBOARD_CAMERA_FIT,
             'Fit the whiteboard camera to show all shapes (or specified shapes)',
             {
                 shapeIds: z.array(z.string()).optional()
                     .describe('Shape IDs to fit into view; omit to fit all shapes'),
                 padding: z.number().optional().describe('Padding in pixels around the fitted area (default 40)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.camera.fit', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_CAMERA_FIT, args)
         );
 
         server.tool(
-            'openspace.whiteboard.camera.get',
+            TOOL.WHITEBOARD_CAMERA_GET,
             'Get the current whiteboard camera position and zoom level',
             {},
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.camera.get', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_CAMERA_GET, args)
         );
 
         server.tool(
-            'openspace.whiteboard.batch_add_shapes',
+            TOOL.WHITEBOARD_BATCH_ADD_SHAPES,
             'Add multiple shapes to a whiteboard in a single call. Much faster than calling add_shape N times. ' +
             'Each shape follows the same rules as add_shape: type must be "geo"|"text"|"arrow"|"note". ' +
             'Colors must be tldraw named colors (black/grey/white/red/light-red/orange/yellow/green/light-green/blue/light-blue/violet/light-violet). ' +
@@ -722,11 +750,11 @@ export class OpenSpaceMcpServer {
                     props: z.record(z.string(), z.unknown()).optional().describe('Shape props (same as add_shape.props)'),
                 })).describe('Array of shapes to add'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.batch_add_shapes', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_BATCH_ADD_SHAPES, args)
         );
 
         server.tool(
-            'openspace.whiteboard.replace',
+            TOOL.WHITEBOARD_REPLACE,
             'Atomically clear all shapes from a whiteboard and replace with a new set. ' +
             'Use this for creating a new diagram or completely replacing an existing one. ' +
             'Much more efficient than delete_shape N times + add_shape N times. ' +
@@ -742,11 +770,11 @@ export class OpenSpaceMcpServer {
                     props: z.record(z.string(), z.unknown()).optional(),
                 })).describe('Complete set of shapes to place on the canvas after clearing'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.replace', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_REPLACE, args)
         );
 
         server.tool(
-            'openspace.whiteboard.find_shapes',
+            TOOL.WHITEBOARD_FIND_SHAPES,
             'Find shapes on a whiteboard by label text, type, or metadata tag. ' +
             'Returns compact shape summaries (id, type, position, size, label text). ' +
             'Use this instead of whiteboard.read when you only need to locate specific shapes, ' +
@@ -758,7 +786,7 @@ export class OpenSpaceMcpServer {
                 tag: z.string().optional().describe('Filter by metadata tag stored in shape.meta.tag'),
                 limit: z.number().int().min(1).max(200).optional().describe('Max results to return (default: 50)'),
             },
-            async (args: unknown) => this.executeViaBridge('openspace.whiteboard.find_shapes', args)
+            async (args: unknown) => this.executeViaBridge(TOOL.WHITEBOARD_FIND_SHAPES, args)
         );
     }
 
@@ -808,42 +836,6 @@ export class OpenSpaceMcpServer {
     }
 
     // ─── File Utilities ───────────────────────────────────────────────────────
-
-    /**
-     * Resolve a path safely, ensuring it stays within the workspace root.
-     * Uses fs.realpath to resolve symlinks before the containment check so that
-     * a symlink inside the workspace that points outside cannot escape the policy.
-     * For paths that do not yet exist, the parent directory is realpath-resolved.
-     * Throws if the resolved path escapes the workspace.
-     */
-    private resolveSafePath(filePath: string): string {
-        const resolved = path.resolve(this.workspaceRoot, filePath);
-        // Resolve symlinks in the workspace root itself (once, cached-style via sync call)
-        let realRoot: string;
-        try {
-            realRoot = fs.realpathSync(this.workspaceRoot);
-        } catch {
-            realRoot = this.workspaceRoot;
-        }
-        // Resolve symlinks in the candidate path; fall back to parent resolution for
-        // non-existent targets (e.g. a file about to be created).
-        let realResolved: string;
-        try {
-            realResolved = fs.realpathSync(resolved);
-        } catch {
-            // Path does not exist yet — resolve the nearest existing parent instead
-            try {
-                realResolved = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
-            } catch {
-                realResolved = resolved;
-            }
-        }
-        const rootWithSep = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
-        if (!realResolved.startsWith(rootWithSep) && realResolved !== realRoot) {
-            throw new Error(`Path traversal detected: "${filePath}" resolves outside workspace root`);
-        }
-        return realResolved;
-    }
 
     private listDirectory(dirPath: string, recursive: boolean, base?: string): string[] {
         const results: string[] = [];
@@ -942,9 +934,9 @@ export class OpenSpaceMcpServer {
 
     // ─── Voice Tools (1) ─────────────────────────────────────────────────────
 
-    private registerVoiceTools(server: any): void {
+    private registerVoiceTools(server: IMcpServer): void {
         server.tool(
-            'voice.set_policy',
+            TOOL.VOICE_SET_POLICY,
             'Update the voice modality policy. Use this to enable/disable voice, change narration mode, speed, or voice ID.',
             {
                 enabled: z.boolean().optional().describe('Enable or disable voice input and narration'),
@@ -957,7 +949,7 @@ export class OpenSpaceMcpServer {
                     summary: z.string().optional().describe('Override the "narrate-summary" LLM preprocessing prompt'),
                 }).optional().describe('Override narration preprocessing prompts'),
             },
-            async (args: any) => this.executeViaBridge('openspace.voice.set_policy', args)
+            async (args: Record<string, unknown>) => this.executeViaBridge(TOOL.VOICE_SET_POLICY, args)
         );
     }
 }

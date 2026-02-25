@@ -159,8 +159,19 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
-     * Make a raw HTTP/HTTPS request and return the response body as a string.
-     * Applies a timeout unless timeoutMs <= 0 (no timeout).
+     * Make a raw HTTP/HTTPS request and return the status code and body as a string.
+     *
+     * Used by all higher-level request helpers. Also called directly for non-JSON
+     * responses (e.g. plain-text endpoints) and endpoints where status-code inspection
+     * is needed before body parsing.
+     *
+     * @param url       - Fully-qualified URL to request
+     * @param method    - HTTP method (GET, POST, DELETE, etc.)
+     * @param headers   - Request headers to send
+     * @param body      - Optional request body string (e.g. JSON-serialised payload)
+     * @param timeoutMs - Request timeout in milliseconds; ≤0 means no timeout (default 30 000)
+     * @returns         Object with `statusCode` and `body` (UTF-8 string)
+     * @throws          On connection errors, DNS failures, or timeout
      */
     protected rawRequest(
         url: string,
@@ -209,7 +220,19 @@ export class OpenCodeProxy implements OpenCodeService {
     }
 
     /**
-     * Make an HTTP request and return the parsed JSON response.
+     * Make an HTTP request to the OpenCode server and return the parsed JSON response.
+     *
+     * Sets `Accept: application/json` and `Content-Type: application/json` by default.
+     * Throws on non-2xx status codes with a message that includes the status code and
+     * raw response body, making failures easy to diagnose in logs.
+     *
+     * @param options.url       - Fully-qualified URL (constructed by callers via `buildUrl`)
+     * @param options.type      - HTTP method string (e.g. `'GET'`, `'POST'`)
+     * @param options.data      - Optional JSON-serialised request body
+     * @param options.headers   - Additional headers to merge (override defaults)
+     * @param options.timeoutMs - Per-request timeout (defaults to `rawRequest` default of 30 000 ms)
+     * @returns Parsed JSON response typed as T
+     * @throws  On non-2xx responses or network errors
      */
     protected async requestJson<T>(options: { url: string; type: string; data?: string; headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
         const headers: Record<string, string> = {
@@ -218,7 +241,17 @@ export class OpenCodeProxy implements OpenCodeService {
             ...options.headers
         };
 
-        const { statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs);
+        const ts = () => new Date().toISOString();
+        console.log(`[${ts()}] FETCH_START: ${options.type} ${options.url}`);
+        let statusCode: number;
+        let body: string;
+        try {
+            ({ statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs));
+        } catch (err) {
+            console.error(`[${ts()}] FETCH_FAIL: ${options.type} ${options.url}`, err);
+            throw err;
+        }
+        console.log(`[${ts()}] FETCH_SUCCESS: ${options.type} ${options.url} (${statusCode})`);
 
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${body}`);
@@ -309,6 +342,11 @@ export class OpenCodeProxy implements OpenCodeService {
 
     // =========================================================================
     // Session Methods
+    //
+    // Note: _projectId parameters are present for interface consistency with
+    // OpenCodeService. The OpenCode API is project-agnostic (sessions are
+    // global, not scoped per project), so the parameter is intentionally
+    // unused. The underscore prefix is the TypeScript convention for this.
     // =========================================================================
 
     async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: number }): Promise<Session[]> {
