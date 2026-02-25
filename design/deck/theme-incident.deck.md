@@ -456,4 +456,10 @@ async function withCircuitBreaker<T>(
   margin: 0.6em 0 1em;
   border-radius: 1px;
 }
+
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px #ef4444; }
+  50%       { opacity: 0.5; box-shadow: 0 0 20px #ef4444, 0 0 40px rgba(239,68,68,0.4); }
+}
 </style>
