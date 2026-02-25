@@ -49,7 +49,7 @@ Note: SSE is the invisible pipe behind AI chat completions, live dashboards, and
 - An AI chat assistant streams its reply token by token <!-- .element: class="fragment fade-up" -->
 - A trading dashboard updates stock prices in real time <!-- .element: class="fragment fade-up" -->
 - A CI/CD system streams live build and test logs <!-- .element: class="fragment fade-up" -->
-- A analytics tool pushes real-time event counts to a browser <!-- .element: class="fragment fade-up" -->
+- An analytics tool pushes real-time event counts to a browser <!-- .element: class="fragment fade-up" -->
 
 Note: OpenAI's streaming API, GitHub Copilot's completions, and Vercel's Edge streaming all use SSE or a very close cousin. Understanding the protocol demystifies all of them.
 
@@ -176,7 +176,7 @@ source.addEventListener('update', (e) => {
 });
 
 source.addEventListener('error', (e) => {
-  if (e.readyState === EventSource.CLOSED) reconnect();
+  if (source.readyState === EventSource.CLOSED) reconnect();
 });
 ```
 <!-- .element: data-line-numbers="1|3-6|8-11|13-15" -->
@@ -325,7 +325,7 @@ Note: The three tags repeat the title slide — a deliberate callback. The promi
      --clr-callout:   #f2ede6  (cream for callout bg)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   --clr-bg:        #faf8f5;
@@ -613,6 +613,16 @@ Note: The three tags repeat the title slide — a deliberate callback. The promi
 .reveal .card-sse {
   border: 2px solid var(--clr-accent);
   background: rgba(181, 101, 29, 0.06);
+}
+
+.reveal .card-poll {
+  border: 2px solid var(--clr-muted);
+  background: rgba(138, 123, 110, 0.06);
+}
+
+.reveal .card-ws {
+  border: 2px solid #4a64aa;
+  background: rgba(74, 100, 170, 0.06);
 }
 
 /* ── Fragments smooth transitions ───────────────────────────── */
