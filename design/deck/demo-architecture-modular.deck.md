@@ -8,7 +8,7 @@ slideNumber: "c/t"
 ---
 
 <!-- SLIDE 1 — TITLE -->
-<!-- .slide: data-background-gradient="linear-gradient(160deg, #0a0e1a 0%, #0d1b2e 50%, #0a1f35 100%)" -->
+<!-- .slide: data-background-image="design/assets/images/modular-blueprint-hero.jpg" data-background-opacity="0.24" data-background-gradient="linear-gradient(160deg, #0a0e1a 0%, #0d1b2e 50%, #0a1f35 100%)" -->
 
 <div class="centered" style="padding-top: 0.5em;">
 
@@ -191,6 +191,17 @@ Note: The standout pattern: Modular Monolith wins everywhere Monolith wins, and 
 
 ---
 
+<!-- SLIDE 7A — ARCHITECTURE DIAGRAM -->
+<!-- .slide: data-background-color="#0a0e1a" -->
+
+## Architecture at a Glance
+
+<img src="design/assets/diagrams/modular-monolith-architecture.svg" style="width: 92%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);">
+
+Note: The diagram makes the boundary story visual — one deployable, but with clear module seams and extraction paths.
+
+---
+
 <!-- SLIDE 8 — DECISION CRITERIA -->
 <!-- .slide: data-background-color="#0a0e1a" -->
 
@@ -213,6 +224,34 @@ Note: The standout pattern: Modular Monolith wins everywhere Monolith wins, and 
 > 6 engineers, 3 squads, 35-min CI blocking two teams, 18-month runway, zero distributed-systems ops experience. <!-- .element: class="fragment fade-up" -->
 
 Note: The recommendation should feel inevitable after this slide. Every criterion maps to a concrete fact from slide 2. No abstraction — just logic applied to reality.
+
+---
+
+<!-- SLIDE 8A — MODULE SEAMS COMPARISON -->
+<!-- .slide: data-background-color="#0a0e1a" -->
+
+## Module Boundaries vs Seams
+
+<div style="display: flex; gap: 2em; align-items: stretch; margin-top: 1em;">
+  <div style="flex: 1; background: rgba(13, 22, 37, 0.85); border: 1px solid rgba(79, 195, 247, 0.3); border-left: 4px solid #ef9a9a; border-radius: 0 8px 8px 0; padding: 1.2em;">
+    <h3 style="margin-top: 0;">Monolith</h3>
+    <ul style="font-size: 0.85em;">
+      <li>Cross-module imports everywhere</li>
+      <li>No enforced ownership</li>
+      <li>Shared deploy blocked by any module</li>
+    </ul>
+  </div>
+  <div style="flex: 1; background: rgba(13, 22, 37, 0.85); border: 1px solid rgba(79, 195, 247, 0.3); border-left: 4px solid #a5d6a7; border-radius: 0 8px 8px 0; padding: 1.2em;">
+    <h3 style="margin-top: 0;">Modular Monolith</h3>
+    <ul style="font-size: 0.85em;">
+      <li>Public interfaces + lint gates</li>
+      <li>Explicit ownership per module</li>
+      <li>CI only runs affected modules</li>
+    </ul>
+  </div>
+</div>
+
+Note: This is the “seams” slide — show how boundaries become extraction paths later.
 
 ---
 
