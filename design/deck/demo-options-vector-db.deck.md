@@ -7,7 +7,7 @@ progress: true
 slideNumber: "c/t"
 ---
 
-<!-- .slide: data-background-gradient="linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #fdf2f8 100%)" -->
+<!-- .slide: data-background-image="design/assets/images/geometry-abstract-divider.jpg" data-background-opacity="0.2" data-background-gradient="linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #fdf2f8 100%)" -->
 
 # Pinecone vs Weaviate vs pgvector
 
@@ -23,6 +23,16 @@ slideNumber: "c/t"
 
 Note:
 Welcome. This deck compares three production-ready vector database options. We'll evaluate each fairly on its own merits before drilling into decision criteria and making a recommendation for a team with an existing Postgres stack and sub-10M vector workload. If your constraints differ, the recommendation may change — we'll make those inflection points explicit.
+
+---
+
+<!-- .slide: data-background-color="#fdfaf6" -->
+
+## Vector Retrieval Flow
+
+<img src="design/assets/diagrams/vector-db-flow.svg" style="width: 90%; border-radius: 14px; box-shadow: 0 10px 24px rgba(26, 26, 46, 0.12);">
+
+Note: Show the minimal flow once so the rest of the options are grounded in the same pipeline.
 
 ---
 
@@ -276,6 +286,44 @@ pgvector is the pragmatist's choice. If you already run Postgres, you can ship v
 
 Note:
 Walk through each row. Note that Pinecone wins on scale and ops simplicity, Weaviate wins on multi-modal and hybrid search, and pgvector wins on cost and Postgres fit. No single option dominates — the recommendation comes from filtering through our specific constraints on the next slide.
+
+---
+
+<!-- .slide: data-background-color="#fdfaf6" -->
+
+## Trade-off Radar (Ops vs Scale vs Flexibility)
+
+<div style="display: flex; justify-content: center; gap: 1.6em; margin-top: 1em;">
+  <div style="flex: 1; min-width: 240px;">
+    <div style="font-size: 0.7em; color: #6b6b7b; text-align: center; margin-bottom: 0.4em;">Low Ops → High Ops</div>
+    <div style="height: 12px; background: linear-gradient(90deg, #f97316, #f59e0b); border-radius: 999px;"></div>
+  </div>
+  <div style="flex: 1; min-width: 240px;">
+    <div style="font-size: 0.7em; color: #6b6b7b; text-align: center; margin-bottom: 0.4em;">Low Scale → Massive Scale</div>
+    <div style="height: 12px; background: linear-gradient(90deg, #0f766e, #14b8a6); border-radius: 999px;"></div>
+  </div>
+  <div style="flex: 1; min-width: 240px;">
+    <div style="font-size: 0.7em; color: #6b6b7b; text-align: center; margin-bottom: 0.4em;">Low Flex → High Flex</div>
+    <div style="height: 12px; background: linear-gradient(90deg, #e11d48, #f97316); border-radius: 999px;"></div>
+  </div>
+</div>
+
+<div style="display: flex; gap: 1.6em; margin-top: 1.2em;">
+  <div style="flex: 1; background: #fff7ed; border: 1px solid #e5e0d8; border-radius: 10px; padding: 0.8em;">
+    <strong>Pinecone</strong>
+    <p style="font-size: 0.72em; color: #6b6b7b; margin: 0.3em 0;">Low ops, massive scale, mid flexibility.</p>
+  </div>
+  <div style="flex: 1; background: #fff7ed; border: 1px solid #e5e0d8; border-radius: 10px; padding: 0.8em;">
+    <strong>Weaviate</strong>
+    <p style="font-size: 0.72em; color: #6b6b7b; margin: 0.3em 0;">Higher ops, high scale, high flexibility.</p>
+  </div>
+  <div style="flex: 1; background: #fff7ed; border: 1px solid #e5e0d8; border-radius: 10px; padding: 0.8em;">
+    <strong>pgvector</strong>
+    <p style="font-size: 0.72em; color: #6b6b7b; margin: 0.3em 0;">Lowest ops, mid scale, high SQL flexibility.</p>
+  </div>
+</div>
+
+Note: This is the visual distillation — show the three axes and where each option sits.
 
 ---
 
