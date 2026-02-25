@@ -107,6 +107,8 @@ Pick the template that matches your intent — copy it from `.opencode/skills/pr
 | `options-comparison.deck.md` | Presenting N options with criteria and a recommendation |
 | `problem-solution.deck.md` | Problem narrative → diagnosis → solution (bug post-mortems, tech debt, refactor proposals) |
 
+**Demo visuals requirement (all templates):** Include at least **1 diagram** and **1 image** in every demo deck.
+
 ## Design Principles
 
 ### The One-Idea-Per-Slide Rule
@@ -205,6 +207,76 @@ Use **separate slides** when each point needs its own visual treatment or when t
 
 **Every presentation must include visuals.** Text-only slides are ineffective for conveying complex technical concepts.
 
+#### Visuals Playbook
+
+**Decision tree:**
+- **Diagram first** when explaining structure, flow, or architecture.
+- **Image/illustration** when a metaphor or emotion clarifies the idea.
+- **Atmosphere image** only for title or section divider slides.
+
+**Minimums:**
+- All decks: at least 2 visuals.
+- Demo decks: 3-5 visuals, including **1 diagram** and **1 image**.
+
+**Local asset workflow (required):**
+1. Search and download a candidate.
+2. Store under `design/assets/`.
+3. Reference the local path in the deck.
+4. Add attribution in speaker notes when required.
+
+**Local asset paths:**
+- `design/assets/images/...`
+- `design/assets/diagrams/...`
+- `design/assets/icons/...`
+
+**Note:** If an image source requires attribution, add a `Note:` in the slide where it appears.
+
+#### Local Visual Examples
+
+**Full background image (local):**
+```markdown
+---
+
+<!-- .slide: data-background-image="design/assets/images/terminal-infra-hero.jpg" data-background-opacity="0.3" -->
+
+# Terminal Lab
+```
+
+**Split layout with diagram image:**
+```markdown
+---
+
+<div style="display: flex; gap: 2em; align-items: center;">
+  <div style="flex: 1;">
+    <h2>Request Flow</h2>
+    <p>Client request passes through limiter gate.</p>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/diagrams/rate-limiter-flow.png" style="width: 100%; border-radius: 10px;">
+  </div>
+</div>
+```
+
+**HTML/CSS axis chart (local theme colors):**
+```markdown
+---
+
+## Latency vs Overhead
+
+<div style="position: relative; height: 320px; margin: 1em 0; border-left: 2px solid var(--axis); border-bottom: 2px solid var(--axis);">
+  <div style="position: absolute; left: -40px; top: 50%; transform: rotate(-90deg); font-size: 0.7em; color: var(--axis-label);">Overhead →</div>
+  <div style="position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); font-size: 0.7em; color: var(--axis-label);">Latency →</div>
+  <div style="position: absolute; left: 20%; bottom: 20%; text-align: center;">
+    <div style="width: 14px; height: 14px; background: var(--chart-1); border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">Polling</p>
+  </div>
+  <div style="position: absolute; left: 60%; bottom: 40%; text-align: center;">
+    <div style="width: 14px; height: 14px; background: var(--chart-2); border-radius: 50%; margin: 0 auto;"></div>
+    <p style="font-size: 0.65em; margin: 0.3em 0;">SSE</p>
+  </div>
+</div>
+```
+
 #### Creating Diagrams
 
 You have several tools for creating diagrams:
@@ -213,8 +285,9 @@ You have several tools for creating diagrams:
 Create diagrams in the local TLDraw whiteboard, then export as images:
 - Open the whiteboard: `whiteboard.open` tool or use the whiteboard pane
 - Draw architecture diagrams, flowcharts, or comparisons
-- Export as PNG/SVG and reference in your presentation
-- Store exported diagrams in `design/assets/` or similar
+- Export as PNG/SVG
+- Store exports under `design/assets/diagrams/`
+- Reference the local asset path in the deck
 
 **2. Mermaid Diagrams**
 RevealJS supports Mermaid for text-based diagrams:
@@ -271,7 +344,7 @@ design/
 <!-- .slide: data-background-image="design/assets/images/server-room.jpg" data-background-opacity="0.3" -->
 ```
 
-**Remote images:** You can use direct URLs (Unsplash, etc.) for quick prototyping, but for production presentations, download and store locally in `design/assets/`.
+**Remote images:** Only acceptable for quick prototyping. Production decks must use local assets stored in `design/assets/`.
 
 #### Background Image Patterns
 
