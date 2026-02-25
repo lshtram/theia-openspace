@@ -88,7 +88,15 @@ export class PresentationOpenHandler implements OpenHandler {
         widget.title.label = base.endsWith('.deck.md') ? base.slice(0, -'.deck.md'.length) : base;
         widget.title.caption = widget.title.label;
 
-        // Read file content and set it on the widget
+        // Attach widget to shell first so React renders the container
+        // and containerRef.current is non-null before setContent() is called.
+        if (!widget.isAttached) {
+            await this.shell.addWidget(widget, { area: 'main' });
+        }
+        await this.shell.activateWidget(widget.id);
+
+        // Read file content and set it on the widget — after attachment so that
+        // writeSlidesDom() finds a live containerRef.current.
         try {
             const content = await this.readFileContent(uri);
             widget.setContent(content);
@@ -96,11 +104,6 @@ export class PresentationOpenHandler implements OpenHandler {
             this.logger.error('[PresentationOpenHandler] Failed to load file content:', error);
             widget.setContent('# Error\n\nFailed to load presentation content.');
         }
-
-        if (!widget.isAttached) {
-            await this.shell.addWidget(widget, { area: 'main' });
-        }
-        await this.shell.activateWidget(widget.id);
 
         return widget;
     }
