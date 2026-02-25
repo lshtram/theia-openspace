@@ -296,6 +296,11 @@ export class OpenCodeProxy implements OpenCodeService {
 
     // =========================================================================
     // Session Methods
+    //
+    // Note: _projectId parameters are present for interface consistency with
+    // OpenCodeService. The OpenCode API is project-agnostic (sessions are
+    // global, not scoped per project), so the parameter is intentionally
+    // unused. The underscore prefix is the TypeScript convention for this.
     // =========================================================================
 
     async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: string }): Promise<Session[]> {
