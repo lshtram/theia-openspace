@@ -91,12 +91,13 @@ export interface SessionService extends Disposable {
     abort(): Promise<void>;
      getSessions(): Promise<Session[]>;
     searchSessions(query: string): Promise<Session[]>;
-    loadMoreSessions(): Promise<void>;
+    loadMoreSessions(): Promise<Session[]>;
     readonly hasMoreSessions: boolean;
     loadOlderMessages(): Promise<void>;
     readonly hasOlderMessages: boolean;
     getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
+    archiveSession(sessionId: string): Promise<void>;
     forkSession(messageId?: string): Promise<void>;
     revertSession(): Promise<void>;
     unrevertSession(): Promise<void>;
@@ -195,7 +196,7 @@ export class SessionServiceImpl implements SessionService {
     private readonly RPC_FALLBACK_DELAY_MS = 5000;
     private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
     private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
-    private _sessionCursor: string | undefined = undefined;
+    private _sessionCursor: number = 0;
     private _hasMoreSessions = false;
     private _messageLoadCursor: string | undefined = undefined;
     private _hasOlderMessages = false;
@@ -581,6 +582,15 @@ export class SessionServiceImpl implements SessionService {
             this._activeSession = session;
             this.onActiveSessionChangedEmitter.fire(session);
             this.logger.debug(`[SessionService] State: activeSession=${session.id}`);
+
+            // BUG-4: Restore the model that was used in this session
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const sessionModel = (session as any).model as { providerID?: string; modelID?: string } | undefined;
+            if (sessionModel?.providerID && sessionModel?.modelID) {
+                const modelId = `${sessionModel.providerID}/${sessionModel.modelID}`;
+                this.setActiveModel(modelId);
+                this.logger.debug(`[SessionService] Restored model from session: ${modelId}`);
+            }
 
             // Persist to localStorage
             window.localStorage.setItem('openspace.activeSessionId', sessionId);
@@ -1002,7 +1012,7 @@ export class SessionServiceImpl implements SessionService {
             const PAGE_SIZE = 20;
             const sessions = await this.openCodeService.getSessions(this._activeProject.id, { limit: PAGE_SIZE });
             this._hasMoreSessions = sessions.length === PAGE_SIZE;
-            this._sessionCursor = sessions[sessions.length - 1]?.id;
+            this._sessionCursor = sessions.length;
             this.logger.debug(`[SessionService] Found ${sessions.length} sessions`);
             return sessions;
         } catch (error) {
@@ -1045,9 +1055,12 @@ export class SessionServiceImpl implements SessionService {
     async refreshDiff(): Promise<void> {
         if (!this._activeSession || !this._activeProject) { return; }
         try {
-            this._sessionDiff = await this.openCodeService.getDiff(
+            const diff = await this.openCodeService.getDiff(
                 this._activeProject.id, this._activeSession.id
             );
+            // Treat empty JSON array/object as "no diff"
+            const trimmed = diff?.trim();
+            this._sessionDiff = (trimmed && trimmed !== '[]' && trimmed !== '{}') ? diff : undefined;
         } catch {
             this._sessionDiff = undefined;
         }
@@ -1062,8 +1075,8 @@ export class SessionServiceImpl implements SessionService {
         }
     }
 
-    async loadMoreSessions(): Promise<void> {
-        if (!this._hasMoreSessions || !this._activeProject || !this._sessionCursor) { return; }
+    async loadMoreSessions(): Promise<Session[]> {
+        if (!this._hasMoreSessions || !this._activeProject) { return []; }
         try {
             const PAGE_SIZE = 20;
             const more = await this.openCodeService.getSessions(this._activeProject.id, {
@@ -1071,10 +1084,12 @@ export class SessionServiceImpl implements SessionService {
                 start: this._sessionCursor
             });
             this._hasMoreSessions = more.length === PAGE_SIZE;
-            this._sessionCursor = more[more.length - 1]?.id ?? this._sessionCursor;
+            this._sessionCursor += more.length;
             this.logger.debug(`[SessionService] Loaded ${more.length} more sessions`);
+            return more;
         } catch (error) {
             this.logger.warn(`[SessionService] loadMoreSessions error: ${error}`);
+            return [];
         }
     }
 
@@ -1113,32 +1128,68 @@ export class SessionServiceImpl implements SessionService {
      * @param sessionId - ID of the session to delete
      * @throws Error if no active project
      */
-    async deleteSession(sessionId: string): Promise<void> {
-        this.logger.info(`[SessionService] Operation: deleteSession(${sessionId})`);
-        
+     async deleteSession(sessionId: string): Promise<void> {
+         this.logger.info(`[SessionService] Operation: deleteSession(${sessionId})`);
+         
+         if (!this._activeProject) {
+             const errorMsg = 'No active project';
+             this.logger.error(`[SessionService] Error: ${errorMsg}`);
+             throw new Error(errorMsg);
+         }
+         
+         // T2-11: Set loading state using counter
+         this.incrementLoading();
+         
+         try {
+             // Delete via backend
+             await this.openCodeService.deleteSession(this._activeProject.id, sessionId);
+             
+             this.logger.debug(`[SessionService] Deleted session: ${sessionId}`);
+             
+             // If deleted session was active, clear active session
+             if (this._activeSession?.id === sessionId) {
+                 this._activeSession = undefined;
+                 this._messages = [];
+                 window.localStorage.removeItem('openspace.activeSessionId');
+                 this.onActiveSessionChangedEmitter.fire(undefined);
+                 this.onMessagesChangedEmitter.fire([]);
+                 this.logger.debug('[SessionService] Cleared active session (was deleted)');
+             }
+         } catch (error) {
+             const errorMsg = error instanceof Error ? error.message : String(error);
+             this.logger.error(`[SessionService] Error: ${errorMsg}`);
+             this._lastError = errorMsg;
+             this.onErrorChangedEmitter.fire(errorMsg);
+             throw error;
+         } finally {
+             // T2-11: Clear loading state using counter
+             this.decrementLoading();
+         }
+     }
+
+    async archiveSession(sessionId: string): Promise<void> {
+        this.logger.info(`[SessionService] Operation: archiveSession(${sessionId})`);
+
         if (!this._activeProject) {
             const errorMsg = 'No active project';
             this.logger.error(`[SessionService] Error: ${errorMsg}`);
             throw new Error(errorMsg);
         }
-        
-        // T2-11: Set loading state using counter
+
         this.incrementLoading();
-        
+
         try {
-            // Delete via backend
-            await this.openCodeService.deleteSession(this._activeProject.id, sessionId);
-            
-            this.logger.debug(`[SessionService] Deleted session: ${sessionId}`);
-            
-            // If deleted session was active, clear active session
+            await this.openCodeService.archiveSession(this._activeProject.id, sessionId);
+            this.logger.debug(`[SessionService] Archived session: ${sessionId}`);
+
+            // If archived session was active, clear active session
             if (this._activeSession?.id === sessionId) {
                 this._activeSession = undefined;
                 this._messages = [];
                 window.localStorage.removeItem('openspace.activeSessionId');
                 this.onActiveSessionChangedEmitter.fire(undefined);
                 this.onMessagesChangedEmitter.fire([]);
-                this.logger.debug('[SessionService] Cleared active session (was deleted)');
+                this.logger.debug('[SessionService] Cleared active session (was archived)');
             }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -1147,7 +1198,6 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         } finally {
-            // T2-11: Clear loading state using counter
             this.decrementLoading();
         }
     }
@@ -1190,6 +1240,21 @@ export class SessionServiceImpl implements SessionService {
 
             this.logger.debug(`[SessionService] Loaded ${this._messages.length} messages`);
             this.logger.debug(`[SessionService] State: messages=${this._messages.length}`);
+
+            // BUG-4 (revised): Restore active model from the most recent assistant message.
+            // The session list API does not include a model field; the model is stored on
+            // individual assistant message info objects as providerID + modelID.
+            // Always restore on session switch (don't gate on !this._activeModel) so that
+            // switching between sessions that used different models updates the selector.
+            for (let i = this._messages.length - 1; i >= 0; i--) {
+                const msg = this._messages[i] as any;
+                if (msg.role === 'assistant' && msg.providerID && msg.modelID) {
+                    const restored = `${msg.providerID}/${msg.modelID}`;
+                    this.setActiveModel(restored);
+                    this.logger.debug(`[SessionService] Restored model from messages: ${restored}`);
+                    break;
+                }
+            }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.logger.error(`[SessionService] Error loading messages: ${errorMsg}`);
@@ -1579,12 +1644,19 @@ export class SessionServiceImpl implements SessionService {
             part[field] = (part[field] || '') + delta;
             parts[partIndex] = part;
         } else {
-            // Part doesn't exist yet — create a stub
+            // Part doesn't exist yet — create a stub.
+            // Infer the correct part type from the field being streamed:
+            //   'reasoning' field         → reasoning part
+            //   'input' or 'output' field → tool part (tool call args or result streaming)
+            //   anything else             → text part (default)
+            const inferredType =
+                field === 'reasoning'                    ? 'reasoning' :
+                field === 'input' || field === 'output'  ? 'tool'      : 'text';
             const newPart: any = {
                 id: partId,
                 sessionID: message.sessionID,
                 messageID: messageId,
-                type: field === 'reasoning' ? 'reasoning' : 'text',
+                type: inferredType,
                 [field]: delta
             };
             parts.push(newPart);

@@ -1416,7 +1416,7 @@
     background: var(--oc-bg-hover);
 }
 
-.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-delete {
+.openspace-sessions-widget .sessions-widget-item:hover .sessions-widget-archive {
     opacity: 1;
 }
 
@@ -1445,7 +1445,7 @@
     color: var(--oc-text-dim);
 }
 
-.openspace-sessions-widget .sessions-widget-delete {
+.openspace-sessions-widget .sessions-widget-archive {
     opacity: 0;
     transition: opacity 0.1s;
 }

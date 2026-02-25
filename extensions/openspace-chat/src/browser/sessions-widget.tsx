@@ -79,8 +79,9 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
     }, [sessionService, messageService, load]);
 
     const handleLoadMore = async () => {
-        await sessionService.loadMoreSessions();
-        await load();
+        const more = await sessionService.loadMoreSessions();
+        setSessions(prev => [...prev, ...more]);
+        setHasMore(sessionService.hasMoreSessions ?? false);
     };
 
     React.useEffect(() => {
@@ -107,15 +108,15 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
         }
     };
 
-    const handleDelete = async (session: Session, e: React.MouseEvent) => {
+    const handleArchive = async (session: Session, e: React.MouseEvent) => {
         e.stopPropagation();
-        const action = await messageService.warn(`Delete "${session.title}"?`, 'Delete', 'Cancel');
-        if (action !== 'Delete') { return; }
+        const action = await messageService.warn(`Archive "${session.title}"?`, 'Archive', 'Cancel');
+        if (action !== 'Archive') { return; }
         try {
-            await sessionService.deleteSession(session.id);
+            await sessionService.archiveSession(session.id);
             await load();
         } catch (err) {
-            messageService.error(`Failed to delete session: ${err}`);
+            messageService.error(`Failed to archive session: ${err}`);
         }
     };
 
@@ -180,6 +181,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     <div
                         key={session.id}
                         className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${(session as any).parentID ? ' session-child session-forked' : ''}`}
+                        data-session-id={session.id}
                         data-parent-id={(session as any).parentID ?? undefined}
                         onClick={() => handleSwitch(session.id)}
                         role="button"
@@ -206,10 +208,10 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                             </span>
                             <button
                                 type="button"
-                                className="sessions-widget-delete sessions-icon-btn"
-                                onClick={(e) => handleDelete(session, e)}
-                                title="Delete session"
-                                aria-label="Delete session"
+                                className="sessions-widget-archive sessions-icon-btn"
+                                onClick={(e) => handleArchive(session, e)}
+                                title="Archive session"
+                                aria-label="Archive session"
                             >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
                                     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>

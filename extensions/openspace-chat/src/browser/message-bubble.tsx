@@ -114,6 +114,8 @@ function renderPart(
 function renderTextPart(part: any, index: number, onOpenFile?: (filePath: string) => void): React.ReactNode {
     const text: string = part.text || '';
     if (!text) return null;
+    // Suppress pure JSON artifacts (empty array/object leaked from tool output streaming)
+    if (text.trim() === '[]' || text.trim() === '{}') return null;
     return (
         <div key={`text-${index}`} className="part-text">
             {renderMarkdown(text, onOpenFile)}

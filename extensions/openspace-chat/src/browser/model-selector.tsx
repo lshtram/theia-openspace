@@ -273,7 +273,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         if (provider && model) {
             return `${provider.name} ${model.name}`;
         }
-        return activeModel;
+        // Providers not yet fetched — show the model ID part only (skip provider prefix)
+        return modelId || activeModel;
     }, [activeModel, providers]);
 
     // Get recent model objects

@@ -264,6 +264,19 @@ export class OpenCodeProxy implements OpenCodeService {
         }
     }
 
+    /**
+     * Make a PATCH request with body.
+     */
+    protected async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+        const url = this.buildUrl(endpoint);
+        this.logger.debug(`[OpenCodeProxy] PATCH ${url}`);
+        return this.requestJson<T>({
+            url,
+            type: 'PATCH',
+            data: body ? JSON.stringify(body) : undefined
+        });
+    }
+
     // =========================================================================
     // MCP Management
     // =========================================================================
@@ -298,12 +311,12 @@ export class OpenCodeProxy implements OpenCodeService {
     // Session Methods
     // =========================================================================
 
-    async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: string }): Promise<Session[]> {
+    async getSessions(_projectId: string, options?: { search?: string; limit?: number; start?: number }): Promise<Session[]> {
         // OpenCode API: GET /session - list all sessions
         const query: Record<string, string | undefined> = {};
         if (options?.search) { query['search'] = options.search; }
         if (options?.limit !== undefined) { query['limit'] = String(options.limit); }
-        if (options?.start) { query['start'] = options.start; }
+        if (options?.start !== undefined) { query['start'] = String(options.start); }
         return this.get<Session[]>('/session', query);
     }
 
@@ -330,6 +343,13 @@ export class OpenCodeProxy implements OpenCodeService {
     async deleteSession(_projectId: string, sessionId: string): Promise<void> {
         // OpenCode API: DELETE /session/:id
         return this.delete(`/session/${encodeURIComponent(sessionId)}`);
+    }
+
+    async archiveSession(_projectId: string, sessionId: string): Promise<Session> {
+        // OpenCode API: PATCH /session/:id with { time: { archived: <timestamp> } }
+        return this.patch<Session>(`/session/${encodeURIComponent(sessionId)}`, {
+            time: { archived: Date.now() }
+        });
     }
 
     async initSession(_projectId: string, sessionId: string): Promise<Session> {
