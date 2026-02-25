@@ -374,8 +374,6 @@ The non-atomic pitfall is the most dangerous — it's a subtle bug that only sur
 Note:
 That's it — five steps, one Lua script, one middleware factory. The patterns here (atomic Redis operations, fail-open design, sliding windows) apply to throttling, quota enforcement, and abuse prevention throughout your stack. Questions?
 
----
-
 <!-- ══════════════════════════════════════════════════════════════
      TERMINAL GREEN THEME — CSS
      IMPORTANT: This block MUST remain at the END of the file.
