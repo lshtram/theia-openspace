@@ -22,6 +22,7 @@ import { AgentCommand } from '../common/command-manifest';
 import { isSensitiveFile } from '../common/sensitive-files';
 import { ArtifactStore } from './artifact-store';
 import { PatchEngine } from './patch-engine';
+import { resolveSafePath } from './path-utils';
 
 // Use exports-map compatible require paths (the package.json exports map resolves these correctly)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -334,7 +335,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
@@ -355,7 +356,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; content: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
@@ -377,7 +378,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path?: string; recursive?: boolean }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path || '.');
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path || '.');
                     const entries = this.listDirectory(resolved, args.recursive ?? false);
                     return { content: [{ type: 'text', text: entries.join('\n') }] };
                 } catch (err) {
@@ -396,7 +397,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { pattern: string; path?: string; glob?: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path || '.');
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path || '.');
                     const results = this.searchFiles(resolved, args.pattern, args.glob);
                     const text = results.length > 0
                         ? results.join('\n')
@@ -418,7 +419,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; oldText: string; newText: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
@@ -456,7 +457,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     const relPath = path.relative(this.workspaceRoot, resolved);
                     const version = this.patchEngine.getVersion(relPath);
                     return { content: [{ type: 'text', text: JSON.stringify({ path: relPath, version }) }] };
@@ -478,7 +479,7 @@ export class OpenSpaceMcpServer {
             },
             async (args: { path: string; baseVersion: number; actor: 'agent' | 'user'; intent: string; ops: unknown[] }) => {
                 try {
-                    const resolved = this.resolveSafePath(args.path);
+                    const resolved = resolveSafePath(this.workspaceRoot, args.path);
                     if (isSensitiveFile(resolved)) {
                         return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                     }
@@ -808,42 +809,6 @@ export class OpenSpaceMcpServer {
     }
 
     // ─── File Utilities ───────────────────────────────────────────────────────
-
-    /**
-     * Resolve a path safely, ensuring it stays within the workspace root.
-     * Uses fs.realpath to resolve symlinks before the containment check so that
-     * a symlink inside the workspace that points outside cannot escape the policy.
-     * For paths that do not yet exist, the parent directory is realpath-resolved.
-     * Throws if the resolved path escapes the workspace.
-     */
-    private resolveSafePath(filePath: string): string {
-        const resolved = path.resolve(this.workspaceRoot, filePath);
-        // Resolve symlinks in the workspace root itself (once, cached-style via sync call)
-        let realRoot: string;
-        try {
-            realRoot = fs.realpathSync(this.workspaceRoot);
-        } catch {
-            realRoot = this.workspaceRoot;
-        }
-        // Resolve symlinks in the candidate path; fall back to parent resolution for
-        // non-existent targets (e.g. a file about to be created).
-        let realResolved: string;
-        try {
-            realResolved = fs.realpathSync(resolved);
-        } catch {
-            // Path does not exist yet — resolve the nearest existing parent instead
-            try {
-                realResolved = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
-            } catch {
-                realResolved = resolved;
-            }
-        }
-        const rootWithSep = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
-        if (!realResolved.startsWith(rootWithSep) && realResolved !== realRoot) {
-            throw new Error(`Path traversal detected: "${filePath}" resolves outside workspace root`);
-        }
-        return realResolved;
-    }
 
     private listDirectory(dirPath: string, recursive: boolean, base?: string): string[] {
         const results: string[] = [];
