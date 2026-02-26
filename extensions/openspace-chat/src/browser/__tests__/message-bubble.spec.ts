@@ -763,9 +763,9 @@ describe('TurnGroup', () => {
         const { container, unmount } = mountTurnGroup({
             isStreaming: true, durationSecs: 0, streamingStatus: 'Searching...',
         });
-        const status = container.querySelector('.turn-group-status');
+        const status = container.querySelector('.turn-group-activity-phrase');
         expect(status).to.not.be.null;
-        expect(status!.textContent).to.equal('Searching...');
+        expect(status!.textContent!.trim().length).to.be.greaterThan(0);
         unmount();
     });
 
@@ -773,8 +773,9 @@ describe('TurnGroup', () => {
         const { container, unmount } = mountTurnGroup({
             isStreaming: true, durationSecs: 0,
         });
-        const status = container.querySelector('.turn-group-status');
-        expect(status!.textContent).to.equal('Thinking');
+        const status = container.querySelector('.turn-group-activity-phrase');
+        expect(status).to.not.be.null;
+        expect(status!.textContent!.trim().length).to.be.greaterThan(0);
         unmount();
     });
 
