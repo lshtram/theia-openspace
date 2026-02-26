@@ -2,7 +2,12 @@ import { ContainerModule, injectable, inject } from '@theia/core/shared/inversif
 import { ConnectionHandler, JsonRpcConnectionHandler } from '@theia/core/lib/common/messaging';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { OpenCodeService, OpenCodeClient, openCodeServicePath } from '../common/opencode-protocol';
-import { OpenCodeProxy, OpenCodeServerUrl } from './opencode-proxy';
+import { OpenCodeProxy, OpenCodeServerUrl } from './opencode-proxy/opencode-proxy';
+import { HttpClient } from './opencode-proxy/http-client';
+import { RestApiFacade } from './opencode-proxy/rest-api';
+import { SseConnectionManager } from './opencode-proxy/sse-connection';
+import { SseEventRouter } from './opencode-proxy/sse-event-router';
+import { NodeUtils } from './opencode-proxy/node-utils';
 import { OpenSpaceHub } from './hub';
 
 const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || 'http://localhost:7890';
@@ -67,7 +72,14 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
   // Bind the OpenCode server URL
   bind<string>(OpenCodeServerUrl).toConstantValue(DEFAULT_OPENCODE_URL).whenTargetIsDefault();
 
-  // Bind the OpenCodeProxy as itself AND as OpenCodeService
+  // 1. Bind sub-services for the decomposed OpenCodeProxy
+  bind(HttpClient).toSelf().inSingletonScope();
+  bind(RestApiFacade).toSelf().inSingletonScope();
+  bind(SseEventRouter).toSelf().inSingletonScope();
+  bind(SseConnectionManager).toSelf().inSingletonScope();
+  bind(NodeUtils).toSelf().inSingletonScope();
+
+  // 2. Bind the OpenCodeProxy facade as itself AND as OpenCodeService
   // This allows both direct injection (for lifecycle) and interface-based injection
   bind<OpenCodeProxy>(OpenCodeProxy).toSelf().inSingletonScope();
   bind<OpenCodeService>(OpenCodeService).toService(OpenCodeProxy);
