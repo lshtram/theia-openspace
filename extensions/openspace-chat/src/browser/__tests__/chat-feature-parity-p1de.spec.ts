@@ -27,7 +27,7 @@ const { MessageBubble, TurnGroup } = _require('openspace-chat/lib/browser/messag
     TurnGroup: React.FC<any>;
 };
 
-const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget/chat-widget') as {
     ChatComponent: React.FC<any>;
 };
 

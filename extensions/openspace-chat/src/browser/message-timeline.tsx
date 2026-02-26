@@ -19,7 +19,7 @@ import { Message, MessagePart, OpenCodeService, PermissionNotification } from 'o
 import type { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import type { SessionViewStore } from './session-view-store';
 import { MessageBubble, TurnGroup } from './message-bubble/message-bubble';
-import type { ShellOutput } from './chat-widget';
+import type { ShellOutput } from './chat-widget/chat-widget';
 
 /**
  * Props for the MessageTimeline component.

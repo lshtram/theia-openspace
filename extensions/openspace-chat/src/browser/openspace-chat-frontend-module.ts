@@ -9,7 +9,7 @@ import { ColorContribution } from '@theia/core/lib/browser/color-application-con
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { KeybindingContribution } from '@theia/core/lib/browser/keybinding';
 import { OpenspaceChatAgent } from './chat-agent';
-import { ChatWidget } from './chat-widget';
+import { ChatWidget } from './chat-widget/chat-widget';
 import { ChatViewContribution, ChatCommandContribution } from './chat-view-contribution';
 import { SessionsWidget, SessionsWidgetContribution } from './sessions-widget';
 import { OpenspaceChatColorContribution } from './chat-color-contribution';

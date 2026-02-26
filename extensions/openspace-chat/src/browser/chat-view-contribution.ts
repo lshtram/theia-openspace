@@ -20,7 +20,7 @@ import { FrontendApplication } from '@theia/core/lib/browser/frontend-applicatio
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
-import { ChatWidget } from './chat-widget';
+import { ChatWidget } from './chat-widget/chat-widget';
 
 /**
  * Command ID for toggling the OpenSpace chat widget.

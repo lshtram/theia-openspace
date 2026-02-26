@@ -33,7 +33,7 @@ import { createRequire } from 'node:module';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore TS1343 — file runs as ESM at test time despite module:commonjs in tsconfig
 const _require = createRequire(import.meta.url);
-const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget/chat-widget') as {
     ChatComponent: React.FC<any>
 };
 
