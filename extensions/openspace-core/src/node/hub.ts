@@ -163,7 +163,7 @@ export class OpenSpaceHub implements BackendApplicationContribution {
     configure(app: Application): void {
         // Resolve workspace root (use HOME as fallback)
         const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd();
-        this.mcpServer = new OpenSpaceMcpServer(workspaceRoot);
+        this.mcpServer = new OpenSpaceMcpServer(workspaceRoot, this.logger);
 
         // Rate-limit all Hub routes — must be first middleware to protect all endpoints
         app.use('/openspace', (req: Request, res: Response, next: () => void) => {

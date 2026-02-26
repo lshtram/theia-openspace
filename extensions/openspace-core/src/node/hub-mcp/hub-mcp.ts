@@ -20,7 +20,7 @@ import { AgentCommand } from '../../common/command-manifest';
 import { ArtifactStore } from '../artifact-store';
 import { PatchEngine } from '../patch-engine';
 
-import type { IMcpServer, BridgeDeps, FileDeps } from './types';
+import type { IMcpServer, BridgeDeps, FileDeps, HubLogger } from './types';
 import { registerPaneTools } from './pane-tools';
 import { registerEditorTools } from './editor-tools';
 import { registerTerminalTools } from './terminal-tools';
@@ -78,20 +78,21 @@ export class OpenSpaceMcpServer {
     }>();
     private bridgeCallback: BridgeCallback | undefined;
 
-    /** Absolute path of the workspace root (enforced for file tools). */
     private workspaceRoot: string;
+    private readonly logger: HubLogger;
 
     private artifactStore!: ArtifactStore;
     private patchEngine!: PatchEngine;
 
     private readonly commandTimeoutMs = 30_000; // 30 seconds
 
-    constructor(workspaceRoot: string) {
+    constructor(workspaceRoot: string, logger?: HubLogger) {
         this.workspaceRoot = workspaceRoot;
+        this.logger = logger ?? console;
         this.artifactStore = new ArtifactStore(this.workspaceRoot);
         this.patchEngine = new PatchEngine(this.workspaceRoot, this.artifactStore);
         this.patchEngine.loadVersions().catch((err: unknown) =>
-            console.error('[Hub] Failed to load patch versions:', err)
+            this.logger.error('[Hub] Failed to load patch versions:', err)
         );
     }
 
@@ -156,6 +157,7 @@ export class OpenSpaceMcpServer {
             workspaceRoot: this.workspaceRoot,
             artifactStore: this.artifactStore,
             patchEngine: this.patchEngine,
+            logger: this.logger,
         };
 
         registerPaneTools(server, bridgeDeps);

@@ -17,6 +17,17 @@
 import { ArtifactStore } from '../artifact-store';
 import { PatchEngine } from '../patch-engine';
 
+/**
+ * Minimal logger interface — compatible with Theia ILogger and console.
+ * Allows hub-mcp modules to log through the structured logger without a DI dependency.
+ */
+export interface HubLogger {
+    info(message: string, ...args: unknown[]): void;
+    warn(message: string, ...args: unknown[]): void;
+    error(message: string, ...args: unknown[]): void;
+    debug(message: string, ...args: unknown[]): void;
+}
+
 /** Minimal structural type for McpServer (loaded via require). */
 export interface IMcpServer {
     tool<T extends Record<string, unknown>>(
@@ -43,4 +54,5 @@ export interface FileDeps extends BridgeDeps {
     workspaceRoot: string;
     artifactStore: ArtifactStore;
     patchEngine: PatchEngine;
+    logger: HubLogger;
 }

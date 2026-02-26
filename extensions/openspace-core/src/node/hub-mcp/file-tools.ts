@@ -37,13 +37,13 @@ export function registerFileTools(server: IMcpServer, deps: FileDeps): void {
                     return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                 }
                 const ts = new Date().toISOString();
-                console.log(`[${ts}] FETCH_START: FILE_READ ${resolved}`);
+                deps.logger.info(`[${ts}] FETCH_START: FILE_READ ${resolved}`);
                 let content: string;
                 try {
                     content = await fs.promises.readFile(resolved, 'utf-8');
-                    console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_READ ${resolved}`);
+                    deps.logger.info(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_READ ${resolved}`);
                 } catch (err) {
-                    console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_READ ${resolved}`, err);
+                    deps.logger.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_READ ${resolved}`, err);
                     throw err;
                 }
                 return { content: [{ type: 'text', text: content }] };
@@ -67,12 +67,12 @@ export function registerFileTools(server: IMcpServer, deps: FileDeps): void {
                     return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                 }
                 const relPath = path.relative(deps.workspaceRoot, resolved);
-                console.log(`[${new Date().toISOString()}] FETCH_START: FILE_WRITE ${resolved}`);
+                deps.logger.info(`[${new Date().toISOString()}] FETCH_START: FILE_WRITE ${resolved}`);
                 await deps.artifactStore.write(relPath, args.content, { actor: 'agent', reason: 'openspace.file.write MCP tool' });
-                console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_WRITE ${resolved}`);
+                deps.logger.info(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_WRITE ${resolved}`);
                 return { content: [{ type: 'text', text: `Written ${resolved}` }] };
             } catch (err) {
-                console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_WRITE`, err);
+                deps.logger.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_WRITE`, err);
                 return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
             }
         }
@@ -132,12 +132,12 @@ export function registerFileTools(server: IMcpServer, deps: FileDeps): void {
                 if (isSensitiveFile(resolved)) {
                     return { content: [{ type: 'text', text: 'Error: Access denied — sensitive file' }], isError: true };
                 }
-                console.log(`[${new Date().toISOString()}] FETCH_START: FILE_PATCH ${resolved}`);
+                deps.logger.info(`[${new Date().toISOString()}] FETCH_START: FILE_PATCH ${resolved}`);
                 let original: string;
                 try {
                     original = await fs.promises.readFile(resolved, 'utf-8');
                 } catch (err) {
-                    console.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_PATCH read ${resolved}`, err);
+                    deps.logger.error(`[${new Date().toISOString()}] FETCH_FAIL: FILE_PATCH read ${resolved}`, err);
                     throw err;
                 }
 
@@ -158,7 +158,7 @@ export function registerFileTools(server: IMcpServer, deps: FileDeps): void {
                 // Route through ArtifactStore for atomic write + backup + audit
                 const relPath = path.relative(deps.workspaceRoot, resolved);
                 await deps.artifactStore.write(relPath, patched, { actor: 'agent', reason: 'openspace.file.patch MCP tool' });
-                console.log(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_PATCH ${resolved}`);
+                deps.logger.info(`[${new Date().toISOString()}] FETCH_SUCCESS: FILE_PATCH ${resolved}`);
                 return { content: [{ type: 'text', text: `Patched ${resolved}` }] };
             } catch (err) {
                 return { content: [{ type: 'text', text: `Error: ${String(err)}` }], isError: true };
