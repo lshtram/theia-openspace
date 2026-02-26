@@ -11,7 +11,7 @@ interface TodoPanelProps {
 }
 
 export const TodoPanel: React.FC<TodoPanelProps> = ({ todos }) => {
-    if (todos.length === 0) { return null; }
+    if (!todos || todos.length === 0) { return null; }
     return (
         <div className="openspace-todo-panel" data-testid="todo-panel">
             <div className="todo-panel-header">Todos</div>

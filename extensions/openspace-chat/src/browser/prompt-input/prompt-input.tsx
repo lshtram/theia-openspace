@@ -9,13 +9,16 @@
  * - Keyboard navigation and polish (Phase 5)
  */
 
-// T2-14: Use Theia's shared React import
 import * as React from '@theia/core/shared/react';
 import { parseFromDOM } from './parse-from-dom';
 import { buildRequestParts } from './build-request-parts';
 import type { PromptInputProps, Prompt, ImagePart, FilePart } from './types';
 import type { CommandInfo, AgentInfo } from 'openspace-core/lib/common/opencode-protocol';
+import { PromptSessionStore } from '../prompt-session-store';
 import '../style/prompt-input.css';
+
+// P1-C: module-level singleton — one store shared across all PromptInput mounts
+const promptSessionStore = new PromptSessionStore();
 
 // Simple unique ID generator
 const generateId = () => crypto.randomUUID();
@@ -212,9 +215,48 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         };
     }, [typeaheadType, typeaheadQuery, serverAgents, sessionId, openCodeService]);
 
-    /**
-     * Get the current prompt from editor and attachments.
-     */
+    // P1-C: Save current draft to the outgoing session; restore draft for the incoming session.
+    // prevSessionIdRef tracks the session that was active before the current render.
+    const prevSessionIdRef = React.useRef<string | undefined>(undefined);
+    React.useEffect(() => {
+        const prev = prevSessionIdRef.current;
+        const next = sessionId;
+
+        if (prev === next) return; // no actual switch
+
+        // Save current editor content under the outgoing session
+        if (prev !== undefined && editorRef.current) {
+            const html = editorRef.current.innerHTML;
+            const text = editorRef.current.textContent ?? '';
+            if (text.trim()) {
+                promptSessionStore.save(prev, { text: html });
+            }
+        }
+
+        // Restore draft for the incoming session
+        if (next !== undefined && editorRef.current) {
+            const snapshot = promptSessionStore.restore(next);
+            if (snapshot) {
+                editorRef.current.innerHTML = sanitizeHtml(snapshot.text);
+                // Move cursor to end
+                const range = document.createRange();
+                range.selectNodeContents(editorRef.current);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+                setHasContent(true);
+            } else {
+                editorRef.current.innerHTML = '';
+                setHasContent(false);
+            }
+        }
+
+        prevSessionIdRef.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
+
+
     const getCurrentPrompt = (): Prompt => {
         if (!editorRef.current) {
             return [...fileAttachments, ...imageAttachments];

@@ -25,11 +25,19 @@ function applyFilesystemCache(config) {
         type: 'filesystem',
         cacheDirectory: path.resolve(__dirname, '.webpack-cache'),
         buildDependencies: {
-            // Invalidate cache when any webpack config changes
+            // Invalidate cache when any webpack config changes, or when local
+            // extension lib files change (without this, the cache serves stale
+            // bundles after a `tsc` recompile of local extensions).
             config: [
                 __filename,
                 path.resolve(__dirname, 'gen-webpack.config.js'),
                 path.resolve(__dirname, 'gen-webpack.node.config.js'),
+                // Local extension entry points — changing these busts the cache
+                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/chat-widget.js'),
+                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/message-bubble.js'),
+                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/prompt-input/prompt-input.js'),
+                path.resolve(__dirname, '../extensions/openspace-core/lib/browser/session-service.js'),
+                path.resolve(__dirname, '../extensions/openspace-core/lib/node/opencode-proxy.js'),
             ],
         },
     };
@@ -61,6 +69,12 @@ configs.forEach(config => {
     // directly to ensure webpack gets the function as module.exports, giving
     // import_hotkeys_js.default = the hotkeys function (not a double-wrapped namespace).
     if (config.resolve) {
+        // Prevent webpack from resolving symlinks to their real paths.
+        // Without this, webpack deduplicates node_modules/openspace-chat
+        // to the main repo's copy (via symlink resolution), so the worktree's
+        // compiled lib/ files are never included in the bundle.
+        config.resolve.symlinks = false;
+
         config.resolve.alias = {
             ...config.resolve.alias,
             'hotkeys-js': path.resolve(__dirname, '../node_modules/hotkeys-js/dist/hotkeys.common.js'),

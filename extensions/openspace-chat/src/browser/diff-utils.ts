@@ -56,6 +56,54 @@ export function computeSimpleDiff(oldText: string, newText: string): DiffResult 
 }
 
 /**
+ * Represents a row in a side-by-side (split) diff view.
+ */
+export interface SplitDiffLine {
+    left?: { type: 'del' | 'ctx'; text: string; lineNo: number };
+    right?: { type: 'add' | 'ctx'; text: string; lineNo: number };
+}
+
+/**
+ * Compute a side-by-side (split) diff between two text strings.
+ * Returns an array of SplitDiffLine rows suitable for a two-column diff view.
+ */
+export function computeSplitDiff(oldText: string, newText: string): SplitDiffLine[] {
+    if (oldText === newText) {
+        // Return context rows for identical inputs
+        if (oldText === '') return [];
+        const lines = oldText.split('\n');
+        return lines.map((text, i) => ({
+            left: { type: 'ctx', text, lineNo: i + 1 },
+            right: { type: 'ctx', text, lineNo: i + 1 },
+        }));
+    }
+
+    const unified = computeSimpleDiff(oldText, newText);
+    const result: SplitDiffLine[] = [];
+    let leftLineNo = 1;
+    let rightLineNo = 1;
+
+    for (const line of unified.lines) {
+        if (line.type === 'ctx') {
+            result.push({
+                left: { type: 'ctx', text: line.text, lineNo: leftLineNo++ },
+                right: { type: 'ctx', text: line.text, lineNo: rightLineNo++ },
+            });
+        } else if (line.type === 'del') {
+            result.push({
+                left: { type: 'del', text: line.text, lineNo: leftLineNo++ },
+            });
+        } else if (line.type === 'add') {
+            result.push({
+                right: { type: 'add', text: line.text, lineNo: rightLineNo++ },
+            });
+        }
+    }
+
+    return result;
+}
+
+/**
  * Compute the Longest Common Subsequence of two string arrays.
  */
 export function computeLCS(a: string[], b: string[]): string[] {

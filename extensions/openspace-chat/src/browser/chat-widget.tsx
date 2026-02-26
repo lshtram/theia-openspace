@@ -201,6 +201,8 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
 }) => {
     const [showMenu, setShowMenu] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const [isEditingTitle, setIsEditingTitle] = React.useState(false);
+    const [titleInputValue, setTitleInputValue] = React.useState('');
 
     React.useEffect(() => {
         if (!showMenu) return;
@@ -213,22 +215,66 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
         return () => document.removeEventListener('mousedown', handleOutside);
     }, [showMenu]);
 
+    const handleTitleClick = React.useCallback(() => {
+        setTitleInputValue(activeSession?.title ?? '');
+        setIsEditingTitle(true);
+    }, [activeSession]);
+
+    const commitTitleEdit = React.useCallback((value: string) => {
+        setIsEditingTitle(false);
+        if (activeSession && value.trim()) {
+            sessionService.renameSession(activeSession.id, value.trim());
+        }
+    }, [activeSession, sessionService]);
+
+    const summary = (activeSession as any)?.summary as { additions: number; deletions: number; files?: number } | undefined;
+
     return (
         <div className="chat-header-bar session-header">
-            {/* Session title — clicking opens dropdown */}
+            {/* Session title — clicking the title text enters edit mode */}
             <div className="session-selector">
+                {isEditingTitle ? (
+                    <input
+                        className="session-title-input"
+                        type="text"
+                        value={titleInputValue}
+                        autoFocus
+                        onChange={e => setTitleInputValue(e.target.value)}
+                        onBlur={e => commitTitleEdit(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') { commitTitleEdit(titleInputValue); }
+                            if (e.key === 'Escape') { setIsEditingTitle(false); }
+                        }}
+                    />
+                ) : (
+                    <button
+                        type="button"
+                         className={`chat-header-title oc-icon-btn ${activeSession ? '' : 'no-session'}`}
+                        style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 6px', borderRadius: 3, textAlign: 'left' }}
+                        onClick={handleTitleClick}
+                        data-test-sessions-count={sessions.length}
+                        title={activeSession?.title ?? 'No Session'}
+                    >
+                        {activeSession ? activeSession.title : 'No Session'}
+                        {summary && (
+                            <span className="session-summary-badge">
+                                <span className="session-summary-additions">+{summary.additions}</span>
+                                <span className="session-summary-deletions">-{summary.deletions}</span>
+                            </span>
+                        )}
+                    </button>
+                )}
+                {/* Dropdown chevron — separate from title click */}
                 <button
                     type="button"
-                     className={`chat-header-title oc-icon-btn session-dropdown-button ${activeSession ? '' : 'no-session'}`}
-                    style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 6px', borderRadius: 3, textAlign: 'left' }}
+                    className="oc-icon-btn session-dropdown-button"
                     onClick={onToggleDropdown}
-                    data-test-sessions-count={sessions.length}
                     aria-haspopup="listbox"
                     aria-expanded={showSessionList}
-                    title={activeSession?.title ?? 'No Session'}
+                    title="Switch session"
+                    style={{ padding: '4px 4px' }}
                 >
-                    {activeSession ? activeSession.title : 'No Session'}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" aria-hidden="true">
                         <path d="m6 9 6 6 6-6"/>
                     </svg>
                 </button>
@@ -388,14 +434,27 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
-const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streamingStatus: string }> = ({ isStreaming, sessionBusy, streamingStatus }) => {
+const ChatFooter: React.FC<{
+    isStreaming: boolean;
+    sessionBusy: boolean;
+    streamingStatus: string;
+    contextUsage?: { inputTokens: number; outputTokens: number; contextLimit?: number };
+}> = ({ isStreaming, sessionBusy, streamingStatus, contextUsage }) => {
     const active = isStreaming || sessionBusy;
+    const isWarning = contextUsage && contextUsage.contextLimit
+        ? contextUsage.inputTokens / contextUsage.contextLimit > 0.8
+        : false;
     return (
         <div className="chat-footer-bar">
             <div className="chat-footer-status">
                 <div className={`status-dot ${active ? 'streaming' : 'connected'}`} />
                 <span>{active ? (streamingStatus || 'Thinking') : 'Ready'}</span>
             </div>
+            {contextUsage && (
+                <div className={`context-usage${isWarning ? ' context-usage--warning' : ''}`}>
+                    {contextUsage.inputTokens}
+                </div>
+            )}
         </div>
     );
 };
@@ -443,6 +502,23 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         });
         return () => disposable.dispose();
     }, [preferenceService]);
+
+    // P1-E: Derive context usage from last assistant message's last step-finish part
+    const contextUsage = React.useMemo(() => {
+        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+        if (!lastAssistant) return undefined;
+        const stepFinishParts = (lastAssistant.parts ?? []).filter((p: { type: string }) => p.type === 'step-finish');
+        if (stepFinishParts.length === 0) return undefined;
+        const lastPart = stepFinishParts[stepFinishParts.length - 1] as {
+            tokens?: { input?: number; output?: number };
+            cost?: number;
+            contextLimit?: number;
+        };
+        const inputTokens = lastPart.tokens?.input ?? 0;
+        const outputTokens = lastPart.tokens?.output ?? 0;
+        if (inputTokens === 0 && outputTokens === 0) return undefined;
+        return { inputTokens, outputTokens, contextLimit: lastPart.contextLimit };
+    }, [messages]);
 
     const handleManageModels = React.useCallback(() => {
         commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, 'AI Models');
@@ -1044,7 +1120,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             openCodeService={openCodeService}
                             sessionId={activeSession?.id}
                         />
-                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} />
+                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} contextUsage={contextUsage} />
                     </>
                 )}
             </div>

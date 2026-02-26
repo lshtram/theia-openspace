@@ -9,5 +9,5 @@
     "jsxFragmentFactory": "React.Fragment"
   },
   "include": ["src"],
-  "exclude": ["lib", "node_modules"]
+  "exclude": ["lib", "node_modules", "src/browser/__tests__"]
 }

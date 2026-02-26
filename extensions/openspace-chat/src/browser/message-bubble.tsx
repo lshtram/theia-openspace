@@ -19,7 +19,7 @@ import * as React from '@theia/core/shared/react';
 import { Message, MessagePart, OpenCodeService, MessageWithParts, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import type { SessionService } from 'openspace-core/lib/browser/session-service';
 import { renderMarkdown } from './markdown-renderer';
-import { computeSimpleDiff } from './diff-utils';
+import { computeSimpleDiff, computeSplitDiff } from './diff-utils';
 import { pickPhrase, statusToCategory } from './streaming-vocab';
 
 /**
@@ -76,7 +76,7 @@ const EDIT_WRITE_TOOL_NAMES = /^(edit|Edit|write|Write)$/;
 const WEBFETCH_TOOL_NAMES = /^(webfetch|WebFetch|web_fetch)$/i;
 const TODOWRITE_TOOL_NAMES = /^(todowrite|TodoWrite|todo_write)$/i;
 const EDIT_TOOL_NAMES = /^(edit|Edit)$/;
-const WRITE_TOOL_NAMES = /^(write|Write)$/;
+const WRITE_TOOL_NAMES = /^(write|Write|write_file)$/;
 
 /** Returns true if the string looks like an absolute file path (no whitespace — excludes shell commands). */
 const isFilePath = (s: string): boolean =>
@@ -219,6 +219,7 @@ const ToolBlock: React.FC<{
     onOpenFile?: (filePath: string) => void;
 }> = ({ part, pendingPermissions, onReplyPermission, onOpenFile }) => {
     const [expanded, setExpanded] = React.useState(false);
+    const [diffMode, setDiffMode] = React.useState<'unified' | 'split'>('unified');
     const state = part.state;
     const stateStr: string = typeof state === 'string' ? state :
         (state && typeof state === 'object' ? (state.status || state.type || 'completed') : 'completed');
@@ -253,7 +254,20 @@ const ToolBlock: React.FC<{
 
     // Memoize diff computation — computeSimpleDiff uses O(m*n) LCS, expensive during streaming re-renders
     const diffResult = React.useMemo(() => {
-        if (!isEditOrWrite || typeof input !== 'object' || input === null) return null;
+        if (!isEditOrWrite || typeof input !== 'object' || input === null) {
+            // Also check write_file with state.output containing {old, new}
+            if (WRITE_TOOL_NAMES.test(part.tool || '') && typeof output === 'string') {
+                try {
+                    const parsed = JSON.parse(output);
+                    if (parsed && typeof parsed.old === 'string' && typeof parsed.new === 'string') {
+                        return computeSimpleDiff(parsed.old, parsed.new);
+                    }
+                } catch {
+                    // not JSON
+                }
+            }
+            return null;
+        }
         if (isEdit) {
             const oldStr = (input as any).oldString || '';
             const newStr = (input as any).newString || '';
@@ -261,6 +275,17 @@ const ToolBlock: React.FC<{
                 return computeSimpleDiff(oldStr, newStr);
             }
         } else if (isWrite) {
+            // Check for state.output with {old, new} first (write_file tool)
+            if (typeof output === 'string') {
+                try {
+                    const parsed = JSON.parse(output);
+                    if (parsed && typeof parsed.old === 'string' && typeof parsed.new === 'string') {
+                        return computeSimpleDiff(parsed.old, parsed.new);
+                    }
+                } catch {
+                    // not JSON
+                }
+            }
             const content = (input as any).content || '';
             if (content) {
                 const contentLines = content.split('\n');
@@ -272,7 +297,7 @@ const ToolBlock: React.FC<{
             }
         }
         return null;
-    }, [isEditOrWrite, isEdit, isWrite, input]);
+    }, [isEditOrWrite, isEdit, isWrite, input, output, part.tool]);
 
     const hasBody = !!(input || output || diffResult);
 
@@ -293,7 +318,7 @@ const ToolBlock: React.FC<{
             data-state={stateStr}
         >
             <div
-                className="part-tool-header"
+                className="part-tool-header tool-block-header"
                 onClick={() => !isRunning && (hasBody || isBash) && setExpanded(e => !e)}
                 style={{ cursor: isRunning ? 'default' : ((hasBody || isBash) ? 'pointer' : 'default') }}
             >
@@ -365,16 +390,51 @@ const ToolBlock: React.FC<{
             {expanded && !isRunning && (
                 <div className={isEditOrWrite && diffResult ? 'part-tool-body part-tool-diff-body' : 'part-tool-body'}>
                     {isEditOrWrite && diffResult ? (
-                        <div className="part-tool-diff">
-                            {diffResult.lines.map((line: { type: 'add' | 'del' | 'ctx'; text: string }, idx: number) => (
-                                <div key={idx} className={`diff-line diff-line-${line.type}`}>
-                                    <span className="diff-line-indicator">
-                                        {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
-                                    </span>
-                                    <span className="diff-line-text">{line.text || '\u00a0'}</span>
+                        <>
+                            <button
+                                type="button"
+                                className="diff-style-toggle"
+                                onClick={() => setDiffMode(m => m === 'unified' ? 'split' : 'unified')}
+                            >
+                                {diffMode === 'unified' ? 'Split' : 'Unified'}
+                            </button>
+                            {diffMode === 'unified' ? (
+                                <div className="diff-view--unified part-tool-diff">
+                                    {diffResult.lines.map((line: { type: 'add' | 'del' | 'ctx'; text: string }, idx: number) => (
+                                        <div key={idx} className={`diff-line diff-line-${line.type}`}>
+                                            <span className="diff-line-indicator">
+                                                {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
+                                            </span>
+                                            <span className="diff-line-text">{line.text || '\u00a0'}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            ) : (
+                                <div className="diff-view--split part-tool-diff">
+                                    {computeSplitDiff(
+                                        (() => {
+                                            if (isEdit) return (input as any)?.oldString || '';
+                                            if (typeof output === 'string') { try { const p = JSON.parse(output); if (p?.old) return p.old; } catch {} }
+                                            return '';
+                                        })(),
+                                        (() => {
+                                            if (isEdit) return (input as any)?.newString || '';
+                                            if (typeof output === 'string') { try { const p = JSON.parse(output); if (p?.new) return p.new; } catch {} }
+                                            return (input as any)?.content || '';
+                                        })()
+                                    ).map((row: any, idx: number) => (
+                                        <div key={idx} className="diff-split-row">
+                                            <div className={`diff-split-cell diff-split-left${row.left ? ` diff-line-${row.left.type}` : ''}`}>
+                                                {row.left && <><span className="diff-line-no">{row.left.lineNo}</span><span className="diff-line-text">{row.left.text || '\u00a0'}</span></>}
+                                            </div>
+                                            <div className={`diff-split-cell diff-split-right${row.right ? ` diff-line-${row.right.type}` : ''}`}>
+                                                {row.right && <><span className="diff-line-no">{row.right.lineNo}</span><span className="diff-line-text">{row.right.text || '\u00a0'}</span></>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     ) : isBash ? (
                         <>
                             {bashCmd && <pre className="part-tool-io part-tool-input">{bashCmd}</pre>}
@@ -1200,6 +1260,39 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
         () => isIntermediateStep ? groupParts(parts) : [],
         [isIntermediateStep, parts]
     );
+
+    // ── Copy button state — must be declared before any early return (hooks rules) ──
+    const [copied, setCopied] = React.useState(false);
+    const showCopyBtn = !isUser && !isStreaming && parts.some(p => p.type === 'text');
+    const lastTextPart = React.useMemo(() => {
+        const textParts = parts.filter(p => p.type === 'text');
+        return textParts.length > 0 ? textParts[textParts.length - 1] : null;
+    }, [parts]);
+    const handleCopy = React.useCallback(() => {
+        if (!lastTextPart) return;
+        navigator.clipboard.writeText((lastTextPart as any).text || '').then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    }, [lastTextPart]);
+
+    // ── Cost bar data ────────────────────────────────────────────────
+    const stepFinishParts = React.useMemo(
+        () => !isUser && !isStreaming ? parts.filter(p => p.type === 'step-finish') : [],
+        [isUser, isStreaming, parts]
+    );
+    const costBarData = React.useMemo(() => {
+        if (stepFinishParts.length === 0) return null;
+        let totalInput = 0, totalOutput = 0, totalCost = 0;
+        for (const p of stepFinishParts) {
+            totalInput += (p as any).tokens?.input || 0;
+            totalOutput += (p as any).tokens?.output || 0;
+            totalCost += (p as any).cost || 0;
+        }
+        if (totalCost <= 0) return null;
+        return { input: totalInput, output: totalOutput, cost: totalCost };
+    }, [stepFinishParts]);
+
     if (isIntermediateStep) {
         return (
             <div className="message-bubble-intermediate">
@@ -1247,16 +1340,27 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
             <div className="message-bubble-content">
                 {hasIntermediateParts ? (
                     <>
-                        {/* Intermediate parts (tool calls + reasoning) wrapped in TurnGroup */}
+                        {/* Intermediate parts (tool calls + reasoning) wrapped in TurnGroup.
+                            Exception: if there is no final text part and not streaming, render flat
+                            so tool blocks are immediately accessible (not hidden inside collapsed TurnGroup). */}
                         {groupedIntermediateParts.length > 0 && (
-                            <TurnGroup isStreaming={isStreaming} durationSecs={0}>
-                                {groupedIntermediateParts.map((group, gi) => {
+                            lastTextPartIndex >= 0 || isStreaming ? (
+                                <TurnGroup isStreaming={isStreaming} durationSecs={0}>
+                                    {groupedIntermediateParts.map((group, gi) => {
+                                        if (group.type === 'context-group') {
+                                            return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
+                                        }
+                                        return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
+                                    })}
+                                </TurnGroup>
+                            ) : (
+                                groupedIntermediateParts.map((group, gi) => {
                                     if (group.type === 'context-group') {
                                         return <ContextToolGroup key={`ctx-group-${gi}`} parts={group.parts} />;
                                     }
-                                     return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
-                                })}
-                            </TurnGroup>
+                                    return renderPart(group.part, group.index, openCodeService, sessionService, pendingPermissions, onReplyPermission, onOpenFile);
+                                })
+                            )
                         )}
                         {/* Final text response — rendered outside the TurnGroup */}
                         {finalTextPartWithIndex && renderTextPart(finalTextPartWithIndex.part, finalTextPartWithIndex.index)}
@@ -1274,6 +1378,39 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 {retryInfo && <RetryBanner retryInfo={retryInfo} />}
                 {/* Streaming cursor */}
                 {isStreaming && <span className="message-streaming-cursor" aria-hidden="true">&#x258B;</span>}
+                {/* Footer row: copy icon + token/cost bar */}
+                {(showCopyBtn || costBarData) && (
+                    <div className="message-bubble-footer">
+                        {costBarData && (
+                            <div className="turn-cost-bar">
+                                <span className="turn-cost-tokens">{costBarData.input}↑ {costBarData.output}↓</span>
+                                <span className="turn-cost-price">${costBarData.cost.toFixed(4)}</span>
+                            </div>
+                        )}
+                        {showCopyBtn && (
+                            <button
+                                type="button"
+                                className={copied ? 'copy-response-btn copy-response-btn--copied' : 'copy-response-btn'}
+                                onClick={handleCopy}
+                                aria-label={copied ? 'Copied!' : 'Copy response'}
+                                title={copied ? 'Copied!' : 'Copy response'}
+                            >
+                                {copied ? (
+                                    // Checkmark icon when copied
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                ) : (
+                                    // Clipboard icon
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <rect x="9" y="2" width="6" height="4" rx="1"/>
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                    </svg>
+                                )}
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </article>
     );

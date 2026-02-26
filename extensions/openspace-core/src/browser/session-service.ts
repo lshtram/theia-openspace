@@ -103,6 +103,7 @@ export interface SessionService extends Disposable {
     revertSession(): Promise<void>;
     unrevertSession(): Promise<void>;
     compactSession(): Promise<void>;
+    renameSession(sessionId: string, title: string): Promise<void>;
     autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
 
 
@@ -1112,6 +1113,13 @@ export class SessionServiceImpl implements SessionService {
         this.logger.info(`[SessionService] Operation: compactSession(${this._activeSession.id})`);
         await this.openCodeService.compactSession(this._activeProject.id, this._activeSession.id);
         // session.compacted SSE will refresh the message list
+    }
+
+    async renameSession(sessionId: string, title: string): Promise<void> {
+        if (!this._activeProject) { return; }
+        this.logger.info(`[SessionService] Operation: renameSession(${sessionId}, ${title})`);
+        const updated = await this.openCodeService.renameSession(this._activeProject.id, sessionId, title);
+        this.notifySessionChanged(updated);
     }
 
     /**
