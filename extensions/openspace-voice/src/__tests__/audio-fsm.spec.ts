@@ -31,7 +31,7 @@ class MockMediaRecorder {
   start() {}
   stop() { setTimeout(() => this.onstop && this.onstop(), 0); }
 }
-(global as { MediaRecorder?: typeof MockMediaRecorder }).MediaRecorder = MockMediaRecorder;
+(global as unknown as { MediaRecorder?: typeof MockMediaRecorder }).MediaRecorder = MockMediaRecorder;
 
 describe('AudioFsm (state transitions only — no real mic)', () => {
   let fsm: AudioFsm;
