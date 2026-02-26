@@ -18,7 +18,7 @@ import * as React from '@theia/core/shared/react';
 import { Message, MessagePart, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import type { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import type { SessionViewStore } from './session-view-store';
-import { MessageBubble, TurnGroup } from './message-bubble';
+import { MessageBubble, TurnGroup } from './message-bubble/message-bubble';
 import type { ShellOutput } from './chat-widget';
 
 /**

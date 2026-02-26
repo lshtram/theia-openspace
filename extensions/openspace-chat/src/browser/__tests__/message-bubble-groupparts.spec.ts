@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 
 // @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
-const { MessageBubble, TurnGroup } = _require('openspace-chat/lib/browser/message-bubble') as {
+const { MessageBubble, TurnGroup } = _require('openspace-chat/lib/browser/message-bubble/message-bubble') as {
     MessageBubble: React.NamedExoticComponent<any> & { compare?: (prev: any, next: any) => boolean };
     TurnGroup: React.FC<any>;
 };
