@@ -387,28 +387,28 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
     // --- searchFiles ---
 
     describe('openspace.file.search (searchFiles)', () => {
-        it('finds pattern matches in files', () => {
+        it('finds pattern matches in files', async () => {
             fs.writeFileSync(path.join(workspaceDir, 'search-me.ts'), 'const TARGET = 42;\n', 'utf-8');
 
-            const results = searchFiles(workspaceDir, 'TARGET');
+            const results = await searchFiles(workspaceDir, 'TARGET');
             expect(results.length).to.be.greaterThan(0);
             expect(results[0]).to.include('search-me.ts');
             expect(results[0]).to.include('TARGET');
         });
 
-        it('returns empty array when pattern is not found', () => {
+        it('returns empty array when pattern is not found', async () => {
             fs.writeFileSync(path.join(workspaceDir, 'no-match.ts'), 'const x = 1;\n', 'utf-8');
 
-            const results = searchFiles(workspaceDir, 'ZZZNOMATCH999');
+            const results = await searchFiles(workspaceDir, 'ZZZNOMATCH999');
             expect(results).to.deep.equal([]);
         });
 
-        it('respects glob filter (extension)', () => {
+        it('respects glob filter (extension)', async () => {
             fs.writeFileSync(path.join(workspaceDir, 'match.ts'), 'const FIND_ME = 1;\n', 'utf-8');
             fs.writeFileSync(path.join(workspaceDir, 'no-match.js'), 'const FIND_ME = 1;\n', 'utf-8');
 
-            const tsResults = searchFiles(workspaceDir, 'FIND_ME', '**/*.ts');
-            const jsResults = searchFiles(workspaceDir, 'FIND_ME', '**/*.js');
+            const tsResults = await searchFiles(workspaceDir, 'FIND_ME', '**/*.ts');
+            const jsResults = await searchFiles(workspaceDir, 'FIND_ME', '**/*.js');
 
             // .ts filter: match.ts included, no-match.js excluded
             const tsFiles = tsResults.map((r: string) => path.basename(r.split(':')[0]));
