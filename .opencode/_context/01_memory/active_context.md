@@ -1,45 +1,37 @@
 # Active Context
 
 **Project:** Theia Openspace
-**Last Updated:** 2026-02-26
+**Last Updated:** 2026-02-27
 
 ## GitHub Issues - Task Tracking
 
 All tasks are now managed in GitHub Issues: https://github.com/lshtram/theia-openspace/issues
 
 ## Current Focus
-- **Status:** God object decomposition COMPLETE on branch `refactor/god-object-decomposition`. Pushed to remote. Ready for merge/PR.
-- **Previous:** Phases 2.5, 2.6 complete on master. Phases 2.7, 2.8 partially implemented.
-- **Next:** Merge god-object-decomposition branch into master, then continue with Phase 2.7/2.8 or R1 hygiene tasks.
+- **Status:** R1 Hygiene (all 7 items) COMPLETE and merged to master.
+- **Previous:** God object decomposition merged to master. R1 hygiene fix branch created and completed.
+- **Next:** Phase 2.7 model selector enhancements or Phase 2.8 notifications & feedback.
 
-## God Object Decomposition (2026-02-26/27) -- COMPLETE
+## R1 Hygiene (2026-02-27) -- COMPLETE
 
-**Branch:** `refactor/god-object-decomposition` (pushed to `origin/refactor/god-object-decomposition`)
-**Worktree:** `.worktrees/god-object-decomposition/`
-**Design doc:** `docs/plans/2026-02-27-god-object-decomposition-design.md`
-**Test baseline:** 1231 passing, 0 failing, 1 pending (maintained across all 6 commits)
+**Branch:** `fix/r1-hygiene` — merged to master via fast-forward, worktree removed.
+**Plan:** `docs/plans/2026-02-27-r1-hygiene.md`
+**Test baseline after merge:** 1231 passing, 1 pending, 0 failing
 
-| Phase | File | Original | Modules | Max Lines | Commit |
-|-------|------|----------|---------|-----------|--------|
-| 1 | `hub-mcp.ts` | 956L | 10 | 222 | `4af4f01` |
-| 2 | `opencode-proxy.ts` | 1,330L | 6 | 375 | `5a221bb` |
-| 3 | `session-service.ts` | 2,118L | 7 | 385 | `583af66` |
-| 4a | `message-bubble.tsx` | 1,455L | 6 | 392 | `228ce9b` |
-| 4b | `chat-widget.tsx` | 1,280L | 7 | 390 | `392b836` |
-| 4c | `prompt-input.tsx` | 1,186L | 10 | 394 | `859f786` |
-| **Total** | | **8,325L** | **46** | **<400** | |
+| Task | Item | Commit | Description |
+|------|------|--------|-------------|
+| 1 | I9 | `a70980f` | Platform-aware shell (not `/bin/bash`) |
+| 2 | M13 | `41d87a7` | Replace console.log with structured logger |
+| 3 | C2 | `e1bf7a4` | ReDoS guard (isSafeRegex) in searchFiles |
+| 4 | C3 | `3a0cb68` | Convert sync fs to async (searchFiles, artifact-store) |
+| 5 | C1/E2 | `be689b3` | Move getMcpConfig to backend RPC, remove fs from browser |
+| 6 | I8 | `ba1e746` | Prune stale localStorage entries in notification service |
+| 7 | I5 | `b61ad0b` | Replace custom sanitizeHtml with DOMPurify |
+| — | fix | `28aaf71` | Update searchFiles tests to await async (C3 follow-up) |
 
-All original monolith files deleted. Facades maintain existing public APIs. No DI binding changes needed for hub-mcp (not DI-managed) or chat frontend modules (React components).
+**Note:** DOMPurify installed at workspace root (`dompurify@3.3.1`, `@types/dompurify@3.2.0`).
 
-### Subdirectory Locations
-- `extensions/openspace-core/src/node/hub-mcp/` — 10 files
-- `extensions/openspace-core/src/node/opencode-proxy/` — 6 files
-- `extensions/openspace-core/src/browser/session-service/` — 7 files
-- `extensions/openspace-chat/src/browser/message-bubble/` — 6 files
-- `extensions/openspace-chat/src/browser/chat-widget/` — 7 files
-- `extensions/openspace-chat/src/browser/prompt-input/` — 10 files (4 pre-existing + 6 new)
-
-## Pending Work (not on this branch)
+## Pending Work
 
 ### Phase 2.7 Model Selector Enhancements -- IN PROGRESS
 | Item | Feature | Status |
@@ -55,12 +47,8 @@ All original monolith files deleted. Facades maintain existing public APIs. No D
 ### Phase 2.8 Notifications & Feedback -- NOT STARTED
 6 gaps (N1-A through N2-C), 1 partial (N2-B copy state)
 
-### R1 Hygiene Tasks
-Plan at `docs/plans/2026-02-27-r1-hygiene.md` — not yet started.
-
 ## Server State
-- **PID 23917:** Port 3000, repo root — SOLE server
-- **Worktree server:** Not running (killed)
+- Theia not running at time of last session. Start with: `node browser-app/lib/backend/main.js --port 3000`
 
 ## Key References
 
@@ -75,6 +63,6 @@ Plan at `docs/plans/2026-02-27-r1-hygiene.md` — not yet started.
 
 ## Known Issues for Future Agents
 - **proxy-factory.js patch**: In `node_modules/` — survives `yarn build` but NOT `yarn install`
-- **7 pre-existing test failures on master**: TurnGroup streaming (x4) + AudioFsm (x2) + 1 other — use `--no-verify` when pushing master
-- **Worktree test count differs from master**: Worktree has 1231 passing; master has 1270 passing (different test set)
-- **After merging decomposition branch**: Import paths in any new code must use subdirectory paths (e.g., `./session-service/session-service` not `./session-service`)
+- **Pre-existing test failures on master**: TurnGroup streaming (x4) + AudioFsm (x2) — use `--no-verify` when pushing master
+- **Import paths must use subdirectories**: e.g., `./session-service/session-service` not `./session-service`
+- **searchFiles is async**: All callers must `await` the result (C3 change)

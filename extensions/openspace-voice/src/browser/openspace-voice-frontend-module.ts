@@ -80,16 +80,23 @@ export default new ContainerModule((bind) => {
 
     // DOM-based narration trigger: observe when assistant messages finish streaming
     let lastNarratedMessageId: string | null = null;
+    let narrationObserver: MutationObserver | null = null;
+    const MAX_SETUP_RETRIES = 60;
+    let setupRetries = 0;
 
     const setupObserver = (): void => {
       const timeline = document.querySelector('.message-timeline-content');
       if (!timeline) {
-        // Chat not rendered yet — retry after a short delay
+        setupRetries++;
+        if (setupRetries >= MAX_SETUP_RETRIES) {
+          console.warn('[Voice] Chat timeline not found after', MAX_SETUP_RETRIES, 'retries — narration observer not attached');
+          return;
+        }
         setTimeout(setupObserver, 1000);
         return;
       }
 
-      const observer = new MutationObserver((mutations) => {
+      narrationObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
           if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
           const target = mutation.target as HTMLElement;
@@ -128,7 +135,7 @@ export default new ContainerModule((bind) => {
         }
       });
 
-      observer.observe(timeline, {
+      narrationObserver.observe(timeline, {
         attributes: true,
         attributeFilter: ['class'],
         attributeOldValue: true,
@@ -137,6 +144,12 @@ export default new ContainerModule((bind) => {
 
       console.log('[Voice] DOM narration observer attached');
     };
+
+    // Disconnect observer on page unload to prevent leaks
+    window.addEventListener('unload', () => {
+      narrationObserver?.disconnect();
+      narrationObserver = null;
+    });
 
     // Start observing once DOM is ready
     if (document.readyState === 'complete') {

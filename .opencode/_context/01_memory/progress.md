@@ -36,7 +36,24 @@ Tests: **1231 passing, 0 failing, 1 pending** — maintained across all commits.
 **Phase 4b (chat-widget/):** 7 files — use-session-subscriptions, use-session-actions, use-message-queue, use-shell-execution, use-model-preference, chat-header-bar, chat-widget facade
 **Phase 4c (prompt-input/):** 10 files — 4 pre-existing (types, build-request-parts, parse-from-dom, prompt-context-items) + 6 new (cursor-utils, prompt-constants, sanitize-html, use-prompt-history, use-typeahead, use-attachments) + rewritten facade
 
-### Phase 2.6 Session Management Parity (2026-02-26) -- COMPLETE
+### R1 Hygiene (2026-02-27) -- COMPLETE
+
+All 7 code quality issues from CODE-REVIEW-2026-02-27.md fixed and merged to master.
+Tests: **1231 passing, 0 failing, 1 pending**
+
+| Task | Item | Fix |
+|------|------|-----|
+| I9 | Platform-aware shell | `node-utils.ts` |
+| M13 | Structured logger | `HubLogger` interface, `FileDeps.logger` |
+| C2 | ReDoS guard | `isSafeRegex` in `file-utils.ts` |
+| C3 | Async fs | `searchFiles` async, `artifact-store` async |
+| C1/E2 | `getMcpConfig` RPC | Moved to backend, removed browser `fs` import |
+| I8 | Prune localStorage | `pruneStaleEntries` in notification-service |
+| I5 | DOMPurify | Replaced custom sanitize impl in `sanitize-html.ts` |
+
+Note: `searchFiles` is now async — all callers must `await` it.
+
+
 
 All 13 items (S1-A through S3-C) confirmed implemented. 6 CSS classes added for hygiene.
 
