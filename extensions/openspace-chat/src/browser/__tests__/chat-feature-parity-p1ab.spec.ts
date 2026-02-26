@@ -164,7 +164,21 @@ function renderChatComponent(sessionService: any) {
 // ─── P1-A: Copy Response Button ───────────────────────────────────────────────
 
 describe('P1-A: Copy response button', () => {
-    afterEach(() => { document.body.innerHTML = ''; sinon.restore(); });
+    let savedNavigator: unknown;
+    beforeEach(() => {
+        savedNavigator = (globalThis as { navigator?: unknown }).navigator;
+    });
+    afterEach(() => {
+        if (savedNavigator !== undefined) {
+            Object.defineProperty(globalThis, 'navigator', {
+                value: savedNavigator,
+                configurable: true,
+                writable: true,
+            });
+        }
+        document.body.innerHTML = '';
+        sinon.restore();
+    });
 
     it('renders a .copy-response-btn on a completed assistant message', () => {
         const msg = makeMessage('assistant', [makeTextPart('Hello from the assistant.')]);
@@ -189,11 +203,17 @@ describe('P1-A: Copy response button', () => {
 
     it('calls navigator.clipboard.writeText with the last text part on click', async () => {
         const written: string[] = [];
-        (globalThis as any).navigator = {
-            clipboard: {
-                writeText: (text: string) => { written.push(text); return Promise.resolve(); },
+        // Preserve existing navigator, only stub clipboard
+        Object.defineProperty(globalThis, 'navigator', {
+            value: {
+                ...(globalThis as { navigator?: object }).navigator,
+                clipboard: {
+                    writeText: (text: string) => { written.push(text); return Promise.resolve(); },
+                },
             },
-        };
+            configurable: true,
+            writable: true,
+        });
 
         const msg = makeMessage('assistant', [
             makeTextPart('First paragraph.'),
@@ -213,11 +233,17 @@ describe('P1-A: Copy response button', () => {
 
     it('shows "Copied" label on the button after clicking', async () => {
         const written: string[] = [];
-        (globalThis as any).navigator = {
-            clipboard: {
-                writeText: (text: string) => { written.push(text); return Promise.resolve(); },
+        // Preserve existing navigator, only stub clipboard
+        Object.defineProperty(globalThis, 'navigator', {
+            value: {
+                ...(globalThis as { navigator?: object }).navigator,
+                clipboard: {
+                    writeText: (text: string) => { written.push(text); return Promise.resolve(); },
+                },
             },
-        };
+            configurable: true,
+            writable: true,
+        });
 
         const msg = makeMessage('assistant', [makeTextPart('Some response text')]);
         const { container, unmount } = mountBubble({ message: msg, isUser: false, isStreaming: false });

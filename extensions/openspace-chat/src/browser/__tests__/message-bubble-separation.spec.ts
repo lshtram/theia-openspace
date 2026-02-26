@@ -717,7 +717,7 @@ describe('MessageBubble separation logic', () => {
         it('[reasoning, text] — reasoning IS visible in expanded TurnGroup during streaming', () => {
             // During streaming, reasoning should be shown (like OpenCode reference client).
             const msg = makeMessage('assistant', [
-                reasoningPart('Let me think about this...'),
+                reasoningPart('Let me think about this idea'),
                 textPart('Partial answer so far.'),
             ]);
             const { container, unmount } = mount({ message: msg, isUser: false, isStreaming: true });
@@ -726,7 +726,7 @@ describe('MessageBubble separation logic', () => {
                 const reasoningEls = container.querySelectorAll('.part-reasoning-inline');
                 expect(reasoningEls.length).to.be.greaterThan(0,
                     'Reasoning parts should be visible during streaming');
-                expect(container.textContent).to.include('Let me think about this...');
+                expect(container.textContent).to.include('Let me think about this idea');
                 // Response text also visible
                 expect(container.textContent).to.include('Partial answer so far.');
             } finally {
