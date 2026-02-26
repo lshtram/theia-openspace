@@ -282,7 +282,14 @@ export class SessionServiceImpl implements SessionService {
 
     // ── Session CRUD delegation ──
     async getSessions(): Promise<Session[]> {
-        try { return await this.lifecycle.getSessions(); } catch (e) { this.captureError(e); return []; }
+        try {
+            const sessions = await this.lifecycle.getSessions();
+            // Prune notification counts for sessions that no longer exist
+            if (this._notificationService) {
+                this._notificationService.pruneStaleEntries(new Set(sessions.map(s => s.id)));
+            }
+            return sessions;
+        } catch (e) { this.captureError(e); return []; }
     }
     async searchSessions(q: string): Promise<Session[]> { return this.lifecycle.searchSessions(q); }
     async loadMoreSessions(): Promise<Session[]> { return this.lifecycle.loadMoreSessions(); }

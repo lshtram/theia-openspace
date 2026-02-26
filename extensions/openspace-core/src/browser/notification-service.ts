@@ -32,6 +32,8 @@ export interface SessionNotificationService {
     getUnseenCount(sessionId: string): number;
     markSeen(sessionId: string): void;
     incrementUnseen(sessionId: string): void;
+    /** Remove entries for sessions that no longer exist to prevent unbounded growth. */
+    pruneStaleEntries(activeSessionIds: Set<string>): void;
     /** Fired whenever any unseen count changes. */
     readonly onUnseenChanged: Event<void>;
 }
@@ -65,6 +67,19 @@ export class SessionNotificationServiceImpl implements SessionNotificationServic
         this._counts.set(sessionId, current + 1);
         this._save();
         this._onUnseenChangedEmitter.fire();
+    }
+
+    pruneStaleEntries(activeSessionIds: Set<string>): void {
+        let changed = false;
+        for (const sessionId of this._counts.keys()) {
+            if (!activeSessionIds.has(sessionId)) {
+                this._counts.delete(sessionId);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this._save();
+        }
     }
 
     private _load(): void {
