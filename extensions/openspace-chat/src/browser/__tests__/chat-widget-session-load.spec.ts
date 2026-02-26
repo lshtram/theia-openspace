@@ -30,6 +30,7 @@ import * as React from '@theia/core/shared/react';
 import { createRoot } from '@theia/core/shared/react-dom/client';
 import type { Root } from 'react-dom/client';
 import { act } from '@theia/core/shared/react';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ChatComponent } = require('openspace-chat/lib/browser/chat-widget') as {
     ChatComponent: React.FC<any>
 };
@@ -109,6 +110,12 @@ function createMockSessionService(overrides: Partial<any> = {}): any {
         answerQuestion: sinon.stub().resolves(),
         rejectQuestion: sinon.stub().resolves(),
         replyPermission: sinon.stub().resolves(),
+        // Sprint 1-3 additions
+        renameSession: sinon.stub().resolves(),
+        shareSession: sinon.stub().resolves('https://share.example.com/session'),
+        unshareSession: sinon.stub().resolves(),
+        getSessionError: sinon.stub().returns(undefined),
+        getMessagesForPreview: sinon.stub().resolves([]),
         ...overrides,
     };
 }

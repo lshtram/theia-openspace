@@ -24,6 +24,7 @@ import {
     Project,
     Session,
     Message,
+    MessagePart,
     MessagePartInput,
     ProviderWithModels,
     PermissionNotification
@@ -32,6 +33,7 @@ import * as SDKTypes from '../common/opencode-sdk-types';
 import * as fs from 'fs';
 import * as path from './browser-path';
 import { waitForHub as waitForHubFn } from './hub-readiness';
+import type { SessionNotificationService } from './notification-service';
 
 /**
  * Streaming update event data for incremental message updates.
@@ -99,6 +101,9 @@ export interface SessionService extends Disposable {
     getAvailableModels(): Promise<ProviderWithModels[]>;
     deleteSession(sessionId: string): Promise<void>;
     archiveSession(sessionId: string): Promise<void>;
+    renameSession(sessionId: string, title: string): Promise<void>;
+    shareSession(sessionId: string): Promise<Session>;
+    unshareSession(sessionId: string): Promise<void>;
     forkSession(messageId?: string): Promise<void>;
     revertSession(): Promise<void>;
     unrevertSession(): Promise<void>;
@@ -125,11 +130,15 @@ export interface SessionService extends Disposable {
     updateSessionStatus(status: SDKTypes.SessionStatus, sessionId?: string): void;
     /** Get the current status for any session by ID. */
     getSessionStatus(sessionId: string): SDKTypes.SessionStatus | undefined;
+    /** Get the last error message for any session by ID (from session.error SSE). */
+    getSessionError(sessionId: string): string | undefined;
     applyPartDelta(messageId: string, partId: string, field: string, delta: string): void;
     /** Clear accumulated text/reasoning on all parts of a streaming message. Called before SSE reconnect replay. */
     clearStreamingPartText(messageId: string): void;
     /** Reload messages for the active session (used after compaction). */
     reloadMessages(): Promise<void>;
+    /** Fetch the last 5 messages of any session for hover preview (read-only, no state change). */
+    getMessagesForPreview(sessionId: string): Promise<Message[]>;
 
     // Question state
     readonly pendingQuestions: SDKTypes.QuestionRequest[];
@@ -198,6 +207,9 @@ export class SessionServiceImpl implements SessionService {
     private readonly RPC_FALLBACK_DELAY_MS = 5000;
     private _rpcFallbackTimer: ReturnType<typeof setTimeout> | undefined;
     private _sessionStatuses = new Map<string, SDKTypes.SessionStatus>();
+    private _sessionErrors = new Map<string, string>();
+    /** Optional notification service — wired lazily via setNotificationService() to avoid DI cycles. */
+    private _notificationService: SessionNotificationService | undefined;
     // _sessionLoadLimit: grows by PAGE_SIZE each time "Load More" is clicked.
     // The OpenCode API does not support offset pagination (start= is ignored),
     // so we re-fetch with a larger limit and deduplicate by id client-side.
@@ -316,7 +328,7 @@ export class SessionServiceImpl implements SessionService {
             }
             // In browser bundles, Node fs may be unavailable/polyfilled.
             // MCP config is optional, so gracefully skip when fs APIs are missing.
-            if (typeof (fs as any).existsSync !== 'function' || typeof (fs as any).readFileSync !== 'function') {
+            if (typeof (fs as { existsSync?: unknown }).existsSync !== 'function' || typeof (fs as { readFileSync?: unknown }).readFileSync !== 'function') {
                 this.logger.debug('[SessionService] Skipping MCP config read: fs APIs unavailable in browser runtime');
                 return undefined;
             }
@@ -538,14 +550,23 @@ export class SessionServiceImpl implements SessionService {
     async setActiveSession(sessionId: string): Promise<void> {
         this.logger.info(`[SessionService] Operation: setActiveSession(${sessionId})`);
 
-        // Abort any in-progress prompt on the current session before switching
-        if (this._activeSession && this._activeSession.id !== sessionId && this._isStreaming && this._activeProject) {
-            try {
-                await this.openCodeService.abortSession(this._activeProject.id, this._activeSession.id);
-                this.logger.debug(`[SessionService] Aborted session ${this._activeSession.id} before switch`);
-            } catch (e) {
-                this.logger.warn(`[SessionService] Could not abort session before switch: ${e}`);
+        // Do NOT abort in-progress prompts on session switch.
+        // Let the backend task continue running. When the user switches back,
+        // loadMessages() will fetch the complete history including any new
+        // messages produced by the background task.
+        // The user can explicitly abort via the Stop button if they want to cancel.
+        if (this._activeSession && this._activeSession.id !== sessionId && this._isStreaming) {
+            this.logger.debug(`[SessionService] Session ${this._activeSession.id} is streaming; leaving it running in background`);
+            // Clear local streaming state since we're switching away — the UI for
+            // the new session should not show streaming indicators from the old session.
+            this._streamingMessageId = undefined;
+            if (this._streamingDoneTimer) {
+                clearTimeout(this._streamingDoneTimer);
+                this._streamingDoneTimer = undefined;
             }
+            this._isStreaming = false;
+            this.onIsStreamingChangedEmitter.fire(false);
+            this.resetStreamingStatus();
         }
 
         // Cancel any in-flight session load operation
@@ -605,6 +626,9 @@ export class SessionServiceImpl implements SessionService {
             // Persist to localStorage
             window.localStorage.setItem('openspace.activeSessionId', sessionId);
 
+            // Mark this session as seen (clears blue unseen dot)
+            this._notificationService?.markSeen(sessionId);
+
             // Reconnect SSE to the session's actual directory (may differ from project worktree)
             if (session.directory) {
                 try {
@@ -618,6 +642,14 @@ export class SessionServiceImpl implements SessionService {
             // Load messages for the new session
             await this.loadMessages();
             if (signal.aborted) { return; }
+
+            // Restore session status for the UI — if this session was running in the
+            // background, the cached status in _sessionStatuses tells the UI to show
+            // busy/streaming indicators.
+            const cachedStatus = this._sessionStatuses.get(sessionId);
+            if (cachedStatus) {
+                this.onSessionStatusChangedEmitter.fire(cachedStatus);
+            }
 
             // Load any pending questions that were created before the SSE connection
             // (e.g., questions from a previous server session that are still unanswered)
@@ -1142,8 +1174,18 @@ export class SessionServiceImpl implements SessionService {
          this.incrementLoading();
          
          try {
-             // Delete via backend
-             await this.openCodeService.deleteSession(this._activeProject.id, sessionId);
+             // Build list of IDs to delete: target + all descendants
+             // Fetch current session list to find children
+              let allSessions: Session[] = [];
+              try {
+                  allSessions = (await this.openCodeService.getSessions(this._activeProject.id, {})) ?? [];
+              } catch {
+                  // If we can't fetch sessions, fall back to deleting only the target
+              }
+             const toDelete = [sessionId, ...this.findDescendantSessionIds(allSessions, sessionId)];
+             this.logger.debug(`[SessionService] Cascade deleting ${toDelete.length} session(s): ${toDelete.join(', ')}`);
+
+             await Promise.all(toDelete.map(id => this.openCodeService.deleteSession(this._activeProject!.id, id)));
              
              this.logger.debug(`[SessionService] Deleted session: ${sessionId}`);
              
@@ -1167,6 +1209,16 @@ export class SessionServiceImpl implements SessionService {
              this.decrementLoading();
          }
      }
+
+    /**
+     * Returns all descendant session IDs (children, grandchildren, etc.) via DFS.
+     */
+    private findDescendantSessionIds(allSessions: Session[], rootId: string): string[] {
+        const children = allSessions
+            .filter(s => (s as unknown as { parentID?: string }).parentID === rootId)
+            .map(s => s.id);
+        return [...children, ...children.flatMap(c => this.findDescendantSessionIds(allSessions, c))];
+    }
 
     async archiveSession(sessionId: string): Promise<void> {
         this.logger.info(`[SessionService] Operation: archiveSession(${sessionId})`);
@@ -1204,11 +1256,107 @@ export class SessionServiceImpl implements SessionService {
     }
 
     /**
+     * Rename a session (update its title).
+     * Fires onActiveSessionChangedEmitter after updating.
+     *
+     * @param sessionId - ID of the session to rename
+     * @param title - New title
+     * @throws Error if no active project
+     */
+    async renameSession(sessionId: string, title: string): Promise<void> {
+        this.logger.info(`[SessionService] Operation: renameSession(${sessionId}, "${title}")`);
+
+        if (!this._activeProject) {
+            const errorMsg = 'No active project';
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
+            throw new Error(errorMsg);
+        }
+
+        this.incrementLoading();
+
+        try {
+            const updated = await this.openCodeService.renameSession(this._activeProject.id, sessionId, title);
+            this.logger.debug(`[SessionService] Renamed session: ${sessionId}`);
+
+            // Reflect the rename in the active session cache
+            if (this._activeSession?.id === sessionId) {
+                this._activeSession = updated;
+                this.onActiveSessionChangedEmitter.fire(updated);
+            } else {
+                // Fire a generic event so session lists can refresh
+                this.onActiveSessionChangedEmitter.fire(this._activeSession);
+            }
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] Error: ${errorMsg}`);
+            this._lastError = errorMsg;
+            this.onErrorChangedEmitter.fire(errorMsg);
+            throw error;
+        } finally {
+            this.decrementLoading();
+        }
+    }
+
+    async shareSession(sessionId: string): Promise<Session> {
+        this.logger.info(`[SessionService] Operation: shareSession(${sessionId})`);
+        if (!this._activeProject) { throw new Error('No active project'); }
+        this.incrementLoading();
+        try {
+            const updated = await this.openCodeService.shareSession(this._activeProject.id, sessionId);
+            if (this._activeSession?.id === sessionId) {
+                this._activeSession = updated;
+                this.onActiveSessionChangedEmitter.fire(updated);
+            }
+            return updated;
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] shareSession error: ${errorMsg}`);
+            throw error;
+        } finally {
+            this.decrementLoading();
+        }
+    }
+
+    async unshareSession(sessionId: string): Promise<void> {
+        this.logger.info(`[SessionService] Operation: unshareSession(${sessionId})`);
+        if (!this._activeProject) { throw new Error('No active project'); }
+        this.incrementLoading();
+        try {
+            await this.openCodeService.unshareSession(this._activeProject.id, sessionId);
+            if (this._activeSession?.id === sessionId) {
+                const updated = { ...this._activeSession, share: undefined } as Session;
+                this._activeSession = updated;
+                this.onActiveSessionChangedEmitter.fire(updated);
+            }
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[SessionService] unshareSession error: ${errorMsg}`);
+            throw error;
+        } finally {
+            this.decrementLoading();
+        }
+    }
+
+    /**
      * Load messages for the active session.
      * Private method called automatically when session changes.
      */
     async reloadMessages(): Promise<void> {
         return this.loadMessages();
+    }
+
+    /**
+     * Fetch the last 5 messages for any session (for hover preview).
+     * Does NOT change active session or message state.
+     */
+    async getMessagesForPreview(sessionId: string): Promise<Message[]> {
+        if (!this._activeProject) { return []; }
+        try {
+            const msgs = await this.openCodeService.getMessages(this._activeProject.id, sessionId, 5);
+            return msgs.map(m => ({ ...m.info, parts: m.parts ?? [] }));
+        } catch {
+            return [];
+        }
     }
 
     private async loadMessages(): Promise<void> {
@@ -1248,7 +1396,7 @@ export class SessionServiceImpl implements SessionService {
             // Always restore on session switch (don't gate on !this._activeModel) so that
             // switching between sessions that used different models updates the selector.
             for (let i = this._messages.length - 1; i >= 0; i--) {
-                const msg = this._messages[i] as any;
+                const msg = this._messages[i] as Message & { providerID?: string; modelID?: string };
                 if (msg.role === 'assistant' && msg.providerID && msg.modelID) {
                     const restored = `${msg.providerID}/${msg.modelID}`;
                     this.setActiveModel(restored);
@@ -1319,6 +1467,11 @@ export class SessionServiceImpl implements SessionService {
 
         this._messages.push(message);
         this.onMessagesChangedEmitter.fire([...this._messages]);
+
+        // Increment unseen count for background sessions (non-active)
+        if (message.sessionID && message.sessionID !== this._activeSession?.id && this._notificationService) {
+            this._notificationService.incrementUnseen(message.sessionID);
+        }
     }
 
     /**
@@ -1548,6 +1701,7 @@ export class SessionServiceImpl implements SessionService {
      * Sets the error state so the UI can display it.
      */
     notifySessionError(sessionId: string, errorMessage: string): void {
+        this._sessionErrors.set(sessionId, errorMessage);
         if (this._activeSession?.id !== sessionId) { return; }
         this._lastError = errorMessage;
         this.onErrorChangedEmitter.fire(errorMessage);
@@ -1589,11 +1743,19 @@ export class SessionServiceImpl implements SessionService {
         if (!id) { return; }
         this.logger.debug(`[SessionService] Session status [${id}]: ${status.type}`);
         this._sessionStatuses.set(id, status);
+        // Clear error dot when a new turn starts (busy) or session returns to idle
+        if (status.type === 'busy' || status.type === 'idle') {
+            this._sessionErrors.delete(id);
+        }
         this.onSessionStatusChangedEmitter.fire(status);
     }
 
     getSessionStatus(sessionId: string): SDKTypes.SessionStatus | undefined {
         return this._sessionStatuses.get(sessionId);
+    }
+
+    getSessionError(sessionId: string): string | undefined {
+        return this._sessionErrors.get(sessionId);
     }
 
     /**
@@ -1638,9 +1800,10 @@ export class SessionServiceImpl implements SessionService {
         const parts = [...(message.parts || [])];
 
         // Find existing part by ID
-        const partIndex = parts.findIndex(p => (p as any).id === partId);
+        const partIndex = parts.findIndex(p => (p as { id?: string }).id === partId);
         if (partIndex >= 0) {
             // Append delta to existing part's field
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const part = { ...parts[partIndex] } as any;
             part[field] = (part[field] || '') + delta;
             parts[partIndex] = part;
@@ -1684,8 +1847,9 @@ export class SessionServiceImpl implements SessionService {
         }
 
         const message = this._messages[index];
-        const parts = (message.parts || []).map((p: any) => {
-            const copy = { ...p };
+        const parts = (message.parts || []).map((p: MessagePart) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const copy = { ...p } as any;
             if (copy.text !== undefined) {
                 copy.text = '';
             }
@@ -1887,6 +2051,14 @@ export class SessionServiceImpl implements SessionService {
             this.onErrorChangedEmitter.fire(errorMsg);
             throw error;
         }
+    }
+
+    /**
+     * Lazily wire the notification service (avoids DI cycles).
+     * Called from the frontend module via queueMicrotask wiring.
+     */
+    setNotificationService(svc: SessionNotificationService): void {
+        this._notificationService = svc;
     }
 
     /**

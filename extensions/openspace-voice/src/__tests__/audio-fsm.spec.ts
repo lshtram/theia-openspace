@@ -2,18 +2,22 @@
 import { assert } from 'chai';
 import { AudioFsm } from '../browser/audio-fsm';
 
+interface MockStream {
+    getTracks: () => Array<{ stop: () => void }>;
+}
+
 // Mock navigator.mediaDevices for jsdom (navigator is read-only, must use Object.defineProperty).
 // jsdom defines userAgent and platform as prototype getters, not own enumerable properties —
 // spread alone misses them. Read them explicitly before overriding so transitive deps
 // (@lumino/domutils reads platform, react-dom reads userAgent) don't see undefined.
-const mockStream = { getTracks: () => [{ stop: () => {} }] } as any;
-const _origNavigator = (global as any).navigator || {};
+const mockStream: MockStream = { getTracks: () => [{ stop: () => {} }] };
+const _origNavigator = (global as { navigator?: { userAgent?: string; platform?: string } }).navigator || {};
 Object.defineProperty(global, 'navigator', {
   value: {
     userAgent: _origNavigator.userAgent,
     platform: _origNavigator.platform,
     mediaDevices: {
-      getUserMedia: async (_constraints: any) => mockStream,
+      getUserMedia: async (_constraints: unknown) => mockStream,
     },
   },
   configurable: true,
@@ -27,7 +31,7 @@ class MockMediaRecorder {
   start() {}
   stop() { setTimeout(() => this.onstop && this.onstop(), 0); }
 }
-(global as any).MediaRecorder = MockMediaRecorder;
+(global as { MediaRecorder?: typeof MockMediaRecorder }).MediaRecorder = MockMediaRecorder;
 
 describe('AudioFsm (state transitions only — no real mic)', () => {
   let fsm: AudioFsm;
@@ -57,7 +61,7 @@ describe('AudioFsm (state transitions only — no real mic)', () => {
     try {
       await fsm.startCapture();
       assert.fail('should have thrown');
-    } catch (err: any) {
+    } catch (err: unknown) {
       assert.instanceOf(err, Error);
     }
   });

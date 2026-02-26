@@ -19,7 +19,7 @@ describe('VoicePolicy', () => {
 
   it('throws on invalid narrationMode', () => {
     assert.throws(
-      () => resolveVoicePolicy({ narrationMode: 'bad' as any }),
+      () => resolveVoicePolicy({ narrationMode: 'bad' as 'narrate-off' | 'narrate-everything' | 'narrate-summary' }),
       /narrationMode/
     );
   });
@@ -31,5 +31,19 @@ describe('VoicePolicy', () => {
 
   it('throws on empty language', () => {
     assert.throws(() => resolveVoicePolicy({ language: '' }), /language/);
+  });
+
+  it('allows valid voice overrides', () => {
+    const policy = resolveVoicePolicy({ voice: 'am_adam' });
+    assert.equal(policy.voice, 'am_adam');
+  });
+
+  it('throws on empty voice', () => {
+    assert.throws(() => resolveVoicePolicy({ voice: '  ' }), /voice cannot be empty/);
+    assert.throws(() => resolveVoicePolicy({ voice: '' }), /voice cannot be empty/);
+  });
+
+  it('throws on invalid voice', () => {
+    assert.throws(() => resolveVoicePolicy({ voice: 'invalid_voice' }), /voice must be one of:/);
   });
 });

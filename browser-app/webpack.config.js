@@ -81,10 +81,12 @@ configs.forEach(config => {
         };
         // Stub Node.js built-ins used by voice-core adapters (whisper-cpp, kokoro)
         // These adapters are server-side only; the browser bundle should never call them.
+        // path is shimmed with path-browserify (already in the dep tree) so that
+        // Theia's terminal widget can call path.basename() without crashing.
         config.resolve.fallback = {
             ...config.resolve.fallback,
             fs: false,
-            path: false,
+            path: require.resolve('path-browserify'),
             child_process: false,
             os: false,
             stream: false,

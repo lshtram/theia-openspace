@@ -15,8 +15,9 @@
  ********************************************************************************/
 
 import * as React from '@theia/core/shared/react';
-import { Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
+import { Message, MessagePart, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import type { SessionService } from 'openspace-core/lib/browser/session-service';
+import type { SessionViewStore } from './session-view-store';
 import { MessageBubble, TurnGroup } from './message-bubble';
 import type { ShellOutput } from './chat-widget';
 
@@ -46,6 +47,10 @@ export interface MessageTimelineProps {
     onReplyPermission?: (requestId: string, reply: 'once' | 'always' | 'reject') => void;
     /** Callback to open a file in the editor when a file path subtitle is clicked */
     onOpenFile?: (filePath: string) => void;
+    /** Active session ID — used to restore scroll position when switching sessions */
+    sessionId?: string;
+    /** View store for persisting per-session scroll state */
+    viewStore?: SessionViewStore;
 }
 
 /**
@@ -146,6 +151,8 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     pendingPermissions,
     onReplyPermission,
     onOpenFile,
+    sessionId,
+    viewStore,
 }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const bottomSentinelRef = React.useRef<HTMLDivElement>(null);
@@ -154,6 +161,10 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     const lastMessageCountRef = React.useRef(messages.length);
     const userScrolledUpRef = React.useRef(false);
     const lastProgrammaticScrollRef = React.useRef(0);
+    /** Debounce timer for scroll-position persistence */
+    const scrollSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** The sessionId that was active when the container last mounted/switched */
+    const prevSessionIdRef = React.useRef<string | undefined>(sessionId);
 
     // Latch the "session is active" flag so transient false drops (between SSE
     // chunks) don't cause the TurnGroup to briefly switch to its collapsed state
@@ -259,6 +270,129 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
         bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
     }, []);
 
+    /**
+     * Save scroll position to ViewStore with 250ms debounce.
+     * Runs on every native scroll event inside the container.
+     * 
+     * Guard: suppress saves for 500ms after a session switch to prevent the
+     * messages-cleared -> scrollTop=0 reset from overwriting the saved position
+     * of the NEW session before restore has a chance to run.
+     */
+    const sessionSwitchTimestampRef = React.useRef(0);
+
+    React.useEffect(() => {
+        if (!viewStore || !sessionId) return;
+        const container = containerRef.current;
+        if (!container) return;
+
+        // Mark session-switch time so the save handler can suppress stale writes
+        sessionSwitchTimestampRef.current = Date.now();
+
+        const handleScrollSave = () => {
+            // Suppress saves during the first 500ms after a session switch
+            // to avoid overwriting saved state with 0 (from messages being cleared)
+            if (Date.now() - sessionSwitchTimestampRef.current < 500) { return; }
+
+            if (scrollSaveTimerRef.current !== null) {
+                clearTimeout(scrollSaveTimerRef.current);
+            }
+            scrollSaveTimerRef.current = setTimeout(() => {
+                scrollSaveTimerRef.current = null;
+                if (viewStore && sessionId) {
+                    viewStore.set(sessionId, { scrollTop: container.scrollTop });
+                }
+            }, 250);
+        };
+
+        container.addEventListener('scroll', handleScrollSave, { passive: true });
+        return () => {
+            container.removeEventListener('scroll', handleScrollSave);
+            if (scrollSaveTimerRef.current !== null) {
+                clearTimeout(scrollSaveTimerRef.current);
+                scrollSaveTimerRef.current = null;
+            }
+        };
+    }, [viewStore, sessionId]);
+
+    /**
+     * Restore scroll position when sessionId changes AND messages have loaded.
+     * 
+     * Two-phase approach:
+     * 1. When sessionId changes, reset the "needs restore" flag.
+     * 2. When messages.length goes from 0 → N (messages loaded), perform the restore.
+     * 
+     * This avoids the race condition where restore fires on an empty container
+     * before messages have been fetched from the backend.
+     */
+    const needsScrollRestoreRef = React.useRef(false);
+
+    // Phase 1: Detect session switch — mark that restore is needed
+    React.useEffect(() => {
+        if (!viewStore || !sessionId) return;
+        if (prevSessionIdRef.current === sessionId) return;
+        prevSessionIdRef.current = sessionId;
+        needsScrollRestoreRef.current = true;
+
+        // Reset user scroll state on session switch
+        userScrolledUpRef.current = false;
+        setIsScrolledUp(false);
+        setHasNewMessages(false);
+    }, [sessionId, viewStore]);
+
+    // Phase 2: Restore scroll position once messages are loaded
+    React.useEffect((): (() => void) | void => {
+        if (!needsScrollRestoreRef.current) return;
+        if (!viewStore || !sessionId) return;
+        // Wait until messages have been loaded (length > 0)
+        // OR if we switched to a truly empty session, restore after a brief timeout
+        if (messages.length === 0) {
+            // Schedule a fallback restore after 300ms for empty sessions
+            const fallbackTimer = setTimeout(() => {
+                if (needsScrollRestoreRef.current) {
+                    needsScrollRestoreRef.current = false;
+                    lastProgrammaticScrollRef.current = Date.now();
+                    requestAnimationFrame(() => {
+                        bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+                        setIsScrolledUp(false);
+                        userScrolledUpRef.current = false;
+                    });
+                }
+            }, 300);
+            return () => clearTimeout(fallbackTimer);
+        }
+
+        needsScrollRestoreRef.current = false;
+
+        const saved = viewStore.get(sessionId);
+        const container = containerRef.current;
+        if (!container) return;
+
+        if (saved) {
+            // Restore saved position — suppress auto-scroll for 1 frame
+            lastProgrammaticScrollRef.current = Date.now();
+            requestAnimationFrame(() => {
+                if (containerRef.current) {
+                    containerRef.current.scrollTop = saved.scrollTop;
+                    // If not near the bottom, mark as scrolled up
+                    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+                    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+                    if (distanceFromBottom > SCROLLED_UP_THRESHOLD) {
+                        userScrolledUpRef.current = true;
+                        setIsScrolledUp(true);
+                    }
+                }
+            });
+        } else {
+            // No saved position — scroll to bottom
+            lastProgrammaticScrollRef.current = Date.now();
+            requestAnimationFrame(() => {
+                bottomSentinelRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+                setIsScrolledUp(false);
+                userScrolledUpRef.current = false;
+            });
+        }
+    }, [sessionId, viewStore, messages.length]);
+
     // Determine message groups
     const getMessageGroupInfo = (index: number): { isFirst: boolean; isLast: boolean } => {
         const currentMessage = messages[index];
@@ -325,7 +459,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
     const shellsByPlanIndex = React.useMemo(() => {
         const map: Record<number, ShellOutput[]> = {};
         for (const shell of shellOutputs) {
-            const afterIdx = (shell as any).afterMessageIndex;
+            const afterIdx = shell.afterMessageIndex;
             if (typeof afterIdx === 'number' && afterIdx >= 0) {
                 // Find the renderPlan item that covers this message index
                 const planIdx = planMaxIndices.findIndex(maxIdx => maxIdx >= afterIdx);
@@ -424,7 +558,8 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             const totalDurationSecs = indices.reduce((sum, idx) => {
                                 const m = messages[idx];
                                 const c = m.time?.created;
-                                const d = (m.time as any)?.completed;
+                                const assistantMsg = m as Message & { time: { created?: number; completed?: number } };
+                                const d = assistantMsg.time?.completed;
                                 if (!c || !d) return sum;
                                 const cMs = typeof c === 'number' ? c : new Date(c).getTime();
                                 const dMs = typeof d === 'number' ? d : new Date(d).getTime();
@@ -437,7 +572,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             const lastMessageParts = lastMessage?.parts || [];
                             let responsePartIndex = -1;
                             for (let pi = lastMessageParts.length - 1; pi >= 0; pi--) {
-                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as any).text) {
+                                if (lastMessageParts[pi].type === 'text' && (lastMessageParts[pi] as MessagePart & { text: string }).text) {
                                     responsePartIndex = pi;
                                     break;
                                 }

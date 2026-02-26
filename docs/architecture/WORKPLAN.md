@@ -3,7 +3,7 @@ id: WORKPLAN-THEIA-OPENSPACE
 author: oracle_e3f7
 status: ACTIVE
 date: 2026-02-16
-updated: 2026-02-19
+updated: 2026-02-25
 task_id: TheiaOpenspaceWorkplan
 ---
 
@@ -29,26 +29,38 @@ task_id: TheiaOpenspaceWorkplan
 | Phase T3: MCP Agent Control System | ✅ COMPLETE | Hub MCP server live; stream interceptor removed |
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
-| **Phase 2: Chat Polish** | ⬜ NOT STARTED (2.0 ✅) | 2.1–2.10 not started |
+| **Phase 2: Chat Polish** | ✅ COMPLETE (2.0–2.8) | Code-level audit 2026-02-25: all core tasks done |
+| **Phase 2.5: Chat Parity Gaps** | ✅ COMPLETE | All 15 features done (P1-A→E, P2-A→E, P3-A→E); branch `feature/chat-feature-parity` |
+| **Phase 2.6: Session Management Parity** | ⬜ NOT STARTED | 13 gaps vs opencode; see session-management-parity.md |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ✅ COMPLETE | Presentation done; whiteboard MCP fully wired |
 | **Phase T4: PatchEngine** | ✅ COMPLETE | OCC-versioned artifact mutations via MCP tools |
 | **Phase T5: ArtifactStore** | ✅ COMPLETE | Atomic writes, backups, audit log |
 | **Phase T6: Voice Modality** | ✅ COMPLETE | Kokoro TTS narration + Whisper STT; merged 2026-02-22 |
 | **Phase 6.8: Extension Marketplace** | ✅ COMPLETE | Open VSX registry + plugin-ext wired; merged 2026-02-20 |
-| Phase 5: Polish & Desktop | ⬜ NOT STARTED | Blocked on T4 + T5 (now unblocked) |
+| Phase 5: Polish & Desktop | 🟡 IN PROGRESS | 5.1 done; 5.2–5.7 not started |
 | Phase 6: Extended Features | ⬜ NOT STARTED | Post-MVP |
 | Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 | Phase EW.5: Markdown Viewer | ✅ COMPLETE | openspace-viewers extension; MarkdownViewerWidget with Mermaid diagram support and Monaco edit mode; 16 new unit tests (569 total passing) |
 
-**Next Task:** Phase 5: Polish & Desktop (T4 + T5 + T6 now complete and unblocked)
+**Next Task:** Phase 2.6: Session Management Parity (13 items, S1→S3) — Phase 2.5 Chat Parity complete.
 
 ---
 
 ## What's Next
 
-**Immediate:** Phase 5: Polish & Desktop — Electron build, custom layout, theming, settings UI. All prerequisites (T3, T4, T5) are now complete. Phase T6 (Voice) and Phase 6.8 (Extension Marketplace) also complete.
+**Immediate:** Phase 2.6 Session Management Parity track (Phase 2.5 Chat Parity is complete).
 
-**Parallel options:** Phase 2 (Chat Polish — 2.1–2.10 not yet started) and Phase 6 extended features (6.1–6.7 remaining) are all unblocked and independent.
+**Phase 2.5 — Chat Parity Gaps:** ✅ COMPLETE (2026-02-26). All 15 features implemented on branch `feature/chat-feature-parity`:
+- Sprint 1 (P1): P1-A copy button ✅, P1-B inline title editing ✅, P1-C prompt autosave ✅, P1-D token/cost per turn ✅, P1-E context usage indicator ✅.
+- Sprint 2 (P2): P2-A file line range ✅, P2-B context items panel ✅, P2-C toast system ✅, P2-D split diff ✅, P2-E session summary badge ✅.
+- Sprint 3 (P3): P3-A review panel ✅, P3-B line comments ✅, P3-C scroll-spy ✅, P3-D scroll persistence ✅, P3-E model pricing tooltip ✅.
+
+**Phase 2.6 — Session Management Parity:** Bridging session UX gaps vs opencode client (skeleton loader, archive animation, back-nav, cascade delete, error dot, keyboard shortcuts, hover preview, unseen tracking, scroll persistence, etc.). Full plan: `docs/plans/2026-02-25-session-management-parity.md`.
+- Sprint 1 (S1): S1-A inline title edit (shared with P1-B), S1-B skeleton loader, S1-C archive animation, S1-D back-nav, S1-E cascade delete.
+- Sprint 2 (S2): S2-A error dot, S2-B diff badge (shared with P2-E), S2-C panel rename, S2-D share UI, S2-E keybinds.
+- Sprint 3 (S3): S3-A hover preview, S3-B unseen tracking, S3-C scroll persistence.
+
+**Also available (parallel):** Phase 5 Polish & Desktop (Electron build, theming, settings UI) and Phase 6 extended features remain unblocked.
 
 ---
 
@@ -71,6 +83,9 @@ task_id: TheiaOpenspaceWorkplan
 | Phase T5: ArtifactStore | 2026-02-19 | `ArtifactStore` with atomic writes (tmp→fsync→rename), rolling backups (last 20), NDJSON audit log, chokidar file watcher, `p-queue` concurrency; `openspace.file.write` routed through store; 12 unit tests |
 | Phase 6.8: Extension Marketplace | 2026-02-20 | `@theia/plugin-ext` + `@theia/plugin-ext-vscode` + `@theia/vsx-registry` added; `plugins/builtin/` directory + manifest; download-plugins script; curated recommendations (yaml, git-graph, prettier, markdown, python); `Ctrl+Shift+X` Extensions sidebar live |
 | Phase T6: Voice Modality | 2026-02-22 | `openspace-voice` extension; AudioFsm (STT/Whisper), NarrationFsm (Kokoro TTS), SessionFsm; VoiceWaveformOverlay; status bar indicator; `Ctrl+M` toggle; Voice: Set Policy wizard; language selection; text post-processing + custom vocabulary; `voice-core` shared package; VS Code extension (`openspace-voice-vscode`) |
+| Chat Feature Parity Audit | 2026-02-25 | Code-level audit vs opencode client; Phase 2 tasks 2.1–2.8 retroactively confirmed complete; 13 chat UX gaps identified → Phase 2.5 |
+| Session Management Parity Audit | 2026-02-25 | Code-level audit vs opencode client; core CRUD/archive/fork/revert/compact/pagination confirmed complete; 13 session UX gaps identified → Phase 2.6 |
+| Phase 2.5: Chat Parity Gaps | 2026-02-26 | All 15 features implemented (P1-A→E copy/title/autosave/cost/ctx, P2-A→E file-range/context-items/toast/split-diff/badge, P3-A→E review-panel/comments/scroll-spy/scroll-persist/model-tooltip); branch `feature/chat-feature-parity` |
 
 Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCHIVE-2026-02-18.md](./WORKPLAN-ARCHIVE-2026-02-18.md).
 
@@ -165,101 +180,168 @@ Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCH
 
 **Goal:** Full chat experience matching (and exceeding) the opencode client. Rich prompt input, message rendering, session management.
 
-**Status:** ⬜ NOT STARTED (Task 2.0 ✅)  
-**Duration estimate:** 2 sessions  
-**Exit criteria:** Chat experience is feature-complete relative to the opencode client. Multi-part prompts, streaming, file mentions, response renderers all working.
+**Status:** ✅ COMPLETE — code-level audit (2026-02-25) confirmed tasks 2.1–2.8 are implemented.
+See `docs/plans/2026-02-25-chat-feature-parity.md` for detailed verification.
+Remaining gaps tracked in Phase 2.5 below.
 
 **V&V Targets:**
-- [x] Session list loads immediately on chat widget open (Task 2.0 ✅)
-- [ ] Model selection dropdown works and persists per-session (2.1)
-- [ ] Multi-part prompt: text + file attachment + @mention sent correctly (2.2)
-- [ ] Message timeline renders streaming response with progress indicator (2.3)
-- [ ] Code blocks syntax-highlighted with working Copy button (2.4)
-- [ ] File:line references in responses are clickable and open editor at correct line (2.6)
-- [ ] Session sidebar shows all sessions with create/switch/delete (2.7)
-- [ ] Session fork/revert/compact operations work through UI (2.8)
-- [ ] Token usage displays and updates during streaming (2.9)
-- [ ] Chat integration test (2.10) passes
+- [x] Session list loads immediately on chat widget open (2.0 ✅)
+- [x] Model selection dropdown works and persists per-session (2.1 ✅)
+- [x] Multi-part prompt: text + file attachment + @mention sent correctly (2.2 ✅)
+- [x] Message timeline renders streaming response with progress indicator (2.3 ✅)
+- [x] Code blocks syntax-highlighted (2.4 ✅)
+- [x] File:line references clickable and open editor (2.5/2.6 ✅)
+- [x] Session sidebar with create/switch/delete/archive (2.7 ✅)
+- [x] Session fork/revert/compact operations (2.8 ✅)
+- [ ] Token usage display (2.9 — carried to Phase 2.5 as P1-D)
+- [ ] Chat integration test (2.10 — carried to Phase 2.5)
 
-### 2.1 — Model Selection (PRIORITY)
+### 2.1 — Model Selection
 | | |
 |---|---|
-| **What** | Add model selection dropdown to chat widget. Fetch available models via `GET /config/providers`. Store selected model in SessionService per-session state. Pass model metadata with each message. Display current model name in chat header. Model format: `provider/model` (e.g., "anthropic/claude-sonnet-4-5"). |
-| **Acceptance** | User can see current model in chat header. Dropdown opens with available models. Selecting a model updates the active model. New messages use the selected model. Model selection persists for the session. |
-| **Dependencies** | Phase 1 complete, Task 1.15 |
-| **Status** | ⬜ |
+| **What** | Model selection dropdown with provider grouping, search, recent models, and preference-filtered list. |
+| **Status** | ✅ — `model-selector.tsx` (475 lines); provider grouping, search, recent (max 5), keyboard nav, `openspace.models.enabled` preference integration |
 
 ### 2.2 — Multi-part prompt input
 | | |
 |---|---|
-| **What** | Upgrade prompt input to support multiple parts: text (default), file attachments (drag-drop or button), image attachments, @agent mentions (typeahead). Port multi-part input pattern from opencode client. |
-| **Acceptance** | Can compose a message with text + attached files + @mention. Parts sent to opencode server correctly. |
-| **Dependencies** | Phase 1 complete |
-| **Status** | ✅ |
+| **What** | Contenteditable prompt with text, file attachments, image attachments, @agent mentions with typeahead. |
+| **Status** | ✅ — `prompt-input/` directory; `types.ts`, `prompt-input.tsx`, `build-request-parts.ts`, `parse-from-dom.ts`; image paste/drag-drop; 100-entry history navigation; slash commands |
 
 ### 2.3 — Message timeline with streaming
 | | |
 |---|---|
-| **What** | Replace basic message list with a proper timeline. User messages right-aligned, assistant messages left-aligned. Streaming indicator during response. Auto-scroll to bottom on new content; respect user scrolling up (scroll spy). |
-| **Acceptance** | Conversation reads naturally. Streaming shows real-time text. Scrolling up stops auto-scroll; returning to bottom resumes it. |
-| **Dependencies** | Phase 1 complete |
-| **Status** | ✅ |
+| **What** | Message list with streaming, auto-scroll, TurnGroup collapsible steps, streaming vocabulary activity bar. |
+| **Status** | ✅ — `message-timeline.tsx` (579 lines); ResizeObserver auto-scroll; scroll-to-bottom button; new-messages indicator; `useLatchedBool` flicker prevention; `TurnGroup` with shimmer themes + elapsed timer |
 
-### 2.4 — Response renderers: code blocks
+### 2.4 — Code block renderer
 | | |
 |---|---|
-| **What** | Create `response-renderers/code-renderer.tsx`. Detect markdown code blocks. Render with syntax highlighting. Add "Copy" button and "Apply to file" button. |
-| **Acceptance** | Code blocks syntax-highlighted with working Copy button. |
-| **Dependencies** | 2.3 |
-| **Status** | ⬜ |
+| **What** | Syntax-highlighted code blocks with copy button; ANSI color support; Mermaid diagrams; KaTeX math. |
+| **Status** | ✅ — `markdown-renderer.tsx`; highlight.js; `CodeBlock` + `AnsiBlock` + `MermaidBlock`; copy button; KaTeX; DOMPurify sanitization |
 
-### 2.5 — Response renderers: diff view
+### 2.5 — Diff renderer
 | | |
 |---|---|
-| **What** | Create `diff-renderer.tsx`. Detect diff blocks. Render as inline diff view with green/red highlighting. |
-| **Acceptance** | Diffs render with color-coded added/removed lines. |
-| **Dependencies** | 2.2 |
-| **Status** | ⬜ |
+| **What** | Inline diff view with added/removed line highlighting inside tool call blocks. |
+| **Status** | ✅ — `diff-utils.ts` LCS `computeSimpleDiff()`; rendered in `message-bubble.tsx:ToolBlock`; +/− counts; 1000-line cap |
 
-### 2.6 — Response renderers: file references
+### 2.6 — File reference renderer
 | | |
 |---|---|
-| **What** | Create `file-ref-renderer.tsx`. Detect file path references (e.g., `src/index.ts:42`). Render as clickable links that open the file at the referenced line via `EditorManager.open()`. |
-| **Acceptance** | Clicking a file:line reference opens the file and scrolls to that line. |
-| **Dependencies** | 2.3 |
-| **Status** | ⬜ |
+| **What** | Clickable file path links in markdown responses that open the editor at the referenced line. |
+| **Status** | ✅ — `markdown-renderer.tsx:linkifyFilePaths()`; absolute paths wrapped in `file://` anchors; `onOpenFile` → `OpenerService` |
 
 ### 2.7 — Session sidebar
 | | |
 |---|---|
-| **What** | Create a sidebar panel showing session list with title, creation date, last message preview. Clicking switches active session. "New Session" button at top. Context menu with Delete, Fork options. |
-| **Acceptance** | Session list appears in left sidebar. All CRUD operations work. |
-| **Dependencies** | Phase 1 complete |
-| **Status** | ⬜ |
+| **What** | Left panel session list with search, pagination, timestamps, archive toggle, parent/child indentation. |
+| **Status** | ✅ — `sessions-widget.tsx`; `SessionsView` with 250ms debounce search; relative timestamps; archive; `hasMore` pagination |
 
 ### 2.8 — Session operations: fork / revert / compact
 | | |
 |---|---|
-| **What** | Implement session fork, revert, compact, and unrevert. Wire to SessionService → OpenCodeProxy → opencode server API. Add UI trigger: context menu on messages or session toolbar buttons. |
-| **Acceptance** | Can fork a session at a specific message → new session created. Revert removes messages after target. Compact calls the server API. |
-| **Dependencies** | 2.7 |
-| **Status** | ⬜ |
+| **What** | Fork, revert, unrevert, compact via chat header action menu. |
+| **Status** | ✅ — `chat-widget.tsx:ChatHeaderBar` "More actions" menu; `handleForkSession`, `handleRevertSession`, `handleCompactSession` |
 
 ### 2.9 — Token usage display
 | | |
 |---|---|
-| **What** | Display token usage (input, output, total) in session header or status bar. Data from message metadata via opencode API. Update in real-time during streaming. |
-| **Acceptance** | Token counts visible and updating during/after each message exchange. |
-| **Dependencies** | 2.3 |
-| **Status** | ⬜ |
+| **What** | Token counts (input/output/cache) and cost after each turn; context usage in footer. |
+| **Status** | ⬜ — Carried to Phase 2.5 as P1-D (turn cost) and P1-E (footer indicator) |
 
 ### 2.10 — Chat integration test
 | | |
 |---|---|
-| **What** | End-to-end test covering: multi-part prompt → send → streaming response with code block → click file reference → editor opens. Session create/switch/delete. |
-| **Acceptance** | Test passes reliably. |
-| **Dependencies** | 2.1–2.9 |
-| **Status** | ⬜ |
+| **What** | E2E test: multi-part send → streaming → code block → file reference → editor opens; session CRUD. |
+| **Status** | ⬜ — Carried to Phase 2.5 |
+
+---
+
+## Phase 2.5: Chat Parity Gaps
+
+**Goal:** Close the remaining UX gaps between theia-openspace chat and the opencode client, as identified by the 2026-02-25 code-level audit.
+
+**Reference:** `docs/plans/2026-02-25-chat-feature-parity.md` — full comparison with file-level implementation pointers.
+
+**Status:** ⬜ NOT STARTED
+**Duration estimate:** 3 sprints
+
+### Sprint 1 — P1 (High Impact, Self-Contained)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.5-P1A | Copy response button | `message-bubble.tsx` | S | ⬜ |
+| 2.5-P1B | Inline session title editing | `chat-widget.tsx`, `opencode-protocol.ts`, `opencode-proxy.ts` | M | ⬜ |
+| 2.5-P1C | Prompt autosave per session | new `prompt-session-store.ts`, `prompt-input.tsx` | M | ⬜ |
+| 2.5-P1D | Token/cost display per turn | `message-bubble.tsx` (aggregate `step-finish` parts) | M | ⬜ |
+| 2.5-P1E | Context usage indicator in footer | `chat-widget.tsx:ChatFooter` | S | ⬜ |
+
+### Sprint 2 — P2 (Medium Effort)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.5-P2A | File attachment line range | `prompt-input/types.ts`, `prompt-input.tsx`, `build-request-parts.ts` | L | ⬜ |
+| 2.5-P2B | Prompt context items panel | new `prompt-context-items.tsx` | M | ⬜ |
+| 2.5-P2C | Toast / notification system | new `toast-service.ts`, `toast-stack.tsx` | M | ⬜ |
+| 2.5-P2D | Split diff view toggle | `diff-utils.ts`, `message-bubble.tsx`, new `diff-split-view.tsx` | M | ⬜ |
+| 2.5-P2E | Session summary badge | `chat-widget.tsx:ChatHeaderBar` | S | ⬜ |
+
+### Sprint 3 — P3 (Larger Subsystems)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.5-P3A | Standalone review panel | new `review-panel/` sub-module | L | ⬜ |
+| 2.5-P3B | Line comments on diffs | new `comments-service.ts`, `review-panel/` | L | ⬜ |
+| 2.5-P3C | Scroll-spy + message navigation | `message-timeline.tsx`, `chat-view-contribution.ts` | M | ⬜ |
+| 2.5-P3D | Per-session scroll persistence | new `scroll-position-store.ts`, `message-timeline.tsx` | S | ⬜ |
+| 2.5-P3E | Model detail tooltip + pricing | `model-selector.tsx` | M | ⬜ |
+
+*S = small (<4h), M = medium (4–8h), L = large (1–3 days)*
+
+---
+
+## Phase 2.6: Session Management Parity
+
+**Goal:** Close the UX gaps in session management between theia-openspace and the opencode client, as identified by the 2026-02-25 code-level audit. Core session operations (CRUD, archive, fork, revert, compact, pagination) are fully implemented; these tasks address polish, animations, keyboard access, and new notification/state features.
+
+**Reference:** `docs/plans/2026-02-25-session-management-parity.md` — full comparison with file-level implementation pointers and code samples.
+
+**Status:** ⬜ NOT STARTED
+**Duration estimate:** 3 sprints
+
+**What's already implemented (no action needed):**
+Session CRUD, archive, fork, revert, compact, abort controller for stale loads, hub readiness gating, model restoration on switch, SSE reconnect, clearStreamingPartText (prevents N× duplication), 500ms streaming hysteresis, 5s RPC fallback, optimistic inserts, per-session status tracking (busy/retry/permissions), loadMoreSessions() with API bug workaround, loadOlderMessages() (400 pages), searchSessions().
+
+### Sprint 1 — S1 (High Impact, Self-Contained)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.6-S1A | Inline session title editing | `opencode-protocol.ts`, `opencode-proxy.ts`, `session-service.ts`, `chat-widget.tsx` | M | ⬜ (shared with 2.5-P1B) |
+| 2.6-S1B | Skeleton loader for session list | `sessions-widget.tsx`, CSS | S | ⬜ |
+| 2.6-S1C | Archive button hover animation | CSS only | S | ⬜ |
+| 2.6-S1D | Parent session back-navigation | `chat-widget.tsx:ChatHeaderBar` | S | ⬜ |
+| 2.6-S1E | Cascade delete for child sessions | `session-service.ts:deleteSession()` | S | ⬜ |
+
+### Sprint 2 — S2 (Medium Effort)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.6-S2A | Error status dot wiring | `sessions-widget.tsx`, `chat-widget.tsx` | S | ⬜ |
+| 2.6-S2B | Session diff summary badge | `sessions-widget.tsx`, CSS | S | ⬜ (shared with 2.5-P2E) |
+| 2.6-S2C | Double-click rename in sessions panel | `sessions-widget.tsx` (depends on S1A) | S | ⬜ |
+| 2.6-S2D | Session share UI | `chat-widget.tsx:ChatHeaderBar` | M | ⬜ |
+| 2.6-S2E | Keyboard shortcuts for session ops | `chat-view-contribution.ts` | M | ⬜ |
+
+### Sprint 3 — S3 (Larger Features)
+
+| Task | Feature | Key Files | Effort | Status |
+|---|---|---|---|---|
+| 2.6-S3A | Hover preview card | new `session-hover-preview.tsx`, `sessions-widget.tsx` | L | ⬜ |
+| 2.6-S3B | Unseen message tracking + blue dot | new `notification-service.ts`, `sessions-widget.tsx` | L | ⬜ |
+| 2.6-S3C | Per-session scroll persistence | new `session-view-store.ts`, `message-timeline.tsx` | L | ⬜ |
+
+*S = small (<4h), M = medium (4–8h), L = large (1–3 days)*
 
 ---
 

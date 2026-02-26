@@ -29,6 +29,7 @@ import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { Message, MessagePartInput, Session, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
+import { OPENSPACE_RENAME_SESSION_EVENT } from './chat-view-contribution';
 import { PromptInput } from './prompt-input/prompt-input';
 import { ModelSelector } from './model-selector';
 import { MessageTimeline } from './message-timeline';
@@ -36,6 +37,7 @@ import { QuestionDock } from './question-dock';
 import { TodoPanel } from './todo-panel';
 import type { MessagePart as PromptMessagePart } from './prompt-input/types';
 import type * as SDKTypes from 'openspace-core/lib/common/opencode-sdk-types';
+import { SessionViewStore } from './session-view-store';
 
 /**
  * Chat Widget - displays messages from active session and allows sending new messages.
@@ -65,6 +67,9 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
 
     @inject(PreferenceService)
     protected readonly preferenceService!: PreferenceService;
+
+    @inject(SessionViewStore)
+    protected readonly viewStore!: SessionViewStore;
 
     constructor() {
         super();
@@ -127,6 +132,7 @@ export class ChatWidget extends ReactWidget implements ExtractableWidget {
             openerService={this.openerService}
             commandService={this.commandService}
             preferenceService={this.preferenceService}
+            viewStore={this.viewStore}
         />;
     }
 }
@@ -139,6 +145,7 @@ interface ChatComponentProps {
     openerService: OpenerService;
     commandService: CommandService;
     preferenceService: PreferenceService;
+    viewStore?: SessionViewStore;
 }
 
 /**
@@ -174,6 +181,10 @@ interface ChatHeaderBarProps {
     onForkSession: () => void;
     onRevertSession: () => void;
     onCompactSession: () => void;
+    onShareSession: () => void;
+    onUnshareSession: () => void;
+    onRenameSession: (title: string) => Promise<void>;
+    onNavigateToParent: (parentId: string) => void;
     onToggleDropdown: () => void;
     enabledModels: string[];
     onManageModels: () => void;
@@ -195,14 +206,47 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onForkSession,
     onRevertSession,
     onCompactSession,
+    onShareSession,
+    onUnshareSession,
+    onRenameSession,
+    onNavigateToParent,
     onToggleDropdown,
     enabledModels,
     onManageModels
 }) => {
     const [showMenu, setShowMenu] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
-    const [isEditingTitle, setIsEditingTitle] = React.useState(false);
-    const [titleInputValue, setTitleInputValue] = React.useState('');
+    const [copyFeedback, setCopyFeedback] = React.useState(false);
+    const [titleEdit, setTitleEdit] = React.useState<{ draft: string; editing: boolean; saving: boolean }>({
+        draft: '',
+        editing: false,
+        saving: false
+    });
+    const titleInputRef = React.useRef<HTMLInputElement>(null);
+
+    const startTitleEdit = React.useCallback(() => {
+        if (!activeSession) { return; }
+        setTitleEdit({ draft: activeSession.title, editing: true, saving: false });
+        requestAnimationFrame(() => titleInputRef.current?.select());
+    }, [activeSession]);
+
+    const saveTitleEdit = React.useCallback(async () => {
+        const draft = titleEdit.draft.trim();
+        if (!draft || !activeSession) {
+            setTitleEdit(t => ({ ...t, editing: false, saving: false }));
+            return;
+        }
+        setTitleEdit(t => ({ ...t, saving: true }));
+        try {
+            await onRenameSession(draft);
+        } finally {
+            setTitleEdit({ draft: '', editing: false, saving: false });
+        }
+    }, [titleEdit.draft, activeSession, onRenameSession]);
+
+    const cancelTitleEdit = React.useCallback(() => {
+        setTitleEdit({ draft: '', editing: false, saving: false });
+    }, []);
 
     React.useEffect(() => {
         if (!showMenu) return;
@@ -215,69 +259,62 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
         return () => document.removeEventListener('mousedown', handleOutside);
     }, [showMenu]);
 
-    const handleTitleClick = React.useCallback(() => {
-        setTitleInputValue(activeSession?.title ?? '');
-        setIsEditingTitle(true);
-    }, [activeSession]);
-
-    const commitTitleEdit = React.useCallback((value: string) => {
-        setIsEditingTitle(false);
-        if (activeSession && value.trim()) {
-            sessionService.renameSession(activeSession.id, value.trim());
-        }
-    }, [activeSession, sessionService]);
-
-    const summary = (activeSession as any)?.summary as { additions: number; deletions: number; files?: number } | undefined;
+    // Listen for the keyboard-shortcut rename event (Mod+Shift+N) dispatched by ChatCommandContribution
+    React.useEffect(() => {
+        const handler = () => { if (activeSession) { startTitleEdit(); } };
+        document.addEventListener(OPENSPACE_RENAME_SESSION_EVENT, handler);
+        return () => document.removeEventListener(OPENSPACE_RENAME_SESSION_EVENT, handler);
+    }, [activeSession, startTitleEdit]);
 
     return (
         <div className="chat-header-bar session-header">
-            {/* Session title — clicking the title text enters edit mode */}
+            {/* Session title — clicking opens dropdown; double-click edits inline */}
             <div className="session-selector">
-                {isEditingTitle ? (
+                {/* Back button for forked sessions */}
+                {(activeSession as unknown as { parentID?: string } | undefined)?.parentID && (
+                    <button
+                        type="button"
+                        className="oc-icon-btn back-to-parent"
+                        onClick={() => onNavigateToParent((activeSession as unknown as { parentID: string }).parentID)}
+                        title="Go to parent session"
+                        aria-label="Go to parent session"
+                    >
+                        ←
+                    </button>
+                )}
+                {titleEdit.editing ? (
                     <input
-                        className="session-title-input"
+                        ref={titleInputRef}
                         type="text"
-                        value={titleInputValue}
-                        autoFocus
-                        onChange={e => setTitleInputValue(e.target.value)}
-                        onBlur={e => commitTitleEdit(e.target.value)}
+                        className="session-title-input"
+                        value={titleEdit.draft}
+                        disabled={titleEdit.saving}
+                        onChange={e => setTitleEdit(t => ({ ...t, draft: e.target.value }))}
                         onKeyDown={e => {
-                            if (e.key === 'Enter') { commitTitleEdit(titleInputValue); }
-                            if (e.key === 'Escape') { setIsEditingTitle(false); }
+                            if (e.key === 'Enter') { e.preventDefault(); saveTitleEdit(); }
+                            if (e.key === 'Escape') { e.preventDefault(); cancelTitleEdit(); }
                         }}
+                        onBlur={saveTitleEdit}
+                        aria-label="Session title"
                     />
                 ) : (
                     <button
                         type="button"
-                         className={`chat-header-title oc-icon-btn ${activeSession ? '' : 'no-session'}`}
+                         className={`chat-header-title oc-icon-btn session-dropdown-button ${activeSession ? '' : 'no-session'}`}
                         style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 6px', borderRadius: 3, textAlign: 'left' }}
-                        onClick={handleTitleClick}
+                        onClick={onToggleDropdown}
+                        onDoubleClick={startTitleEdit}
                         data-test-sessions-count={sessions.length}
+                        aria-haspopup="listbox"
+                        aria-expanded={showSessionList}
                         title={activeSession?.title ?? 'No Session'}
                     >
                         {activeSession ? activeSession.title : 'No Session'}
-                        {summary && (
-                            <span className="session-summary-badge">
-                                <span className="session-summary-additions">+{summary.additions}</span>
-                                <span className="session-summary-deletions">-{summary.deletions}</span>
-                            </span>
-                        )}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
                     </button>
                 )}
-                {/* Dropdown chevron — separate from title click */}
-                <button
-                    type="button"
-                    className="oc-icon-btn session-dropdown-button"
-                    onClick={onToggleDropdown}
-                    aria-haspopup="listbox"
-                    aria-expanded={showSessionList}
-                    title="Switch session"
-                    style={{ padding: '4px 4px' }}
-                >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" aria-hidden="true">
-                        <path d="m6 9 6 6 6-6"/>
-                    </svg>
-                </button>
 
                 {showSessionList && (
                     <div className="session-list-dropdown" role="listbox" aria-label="Session list">
@@ -305,7 +342,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         )}
                         {sessionService.activeProject && !isLoadingSessions && !sessionLoadError && sessions.map(session => {
                             const isActive = session.id === activeSession?.id;
-                            // Status indicator: spinner if active+streaming, yellow dot if active+permissions, dash otherwise
+                            // Status indicator: spinner if active+streaming, yellow dot if active+permissions, red dot if error, dash otherwise
                             let statusIndicator: React.ReactNode;
                             if (isActive && isStreaming) {
                                 statusIndicator = (
@@ -315,6 +352,8 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                                 );
                             } else if (isActive && pendingPermissions.length > 0) {
                                 statusIndicator = <span className="session-status-dot permissions" aria-label="Permissions pending" />;
+                            } else if (sessionService.getSessionError(session.id)) {
+                                statusIndicator = <span className="session-status-dot error" aria-label="Session error" />;
                             } else {
                                 statusIndicator = <span className="session-status-dash" aria-label="Idle" />;
                             }
@@ -387,6 +426,16 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                     <div className="chat-header-menu" role="menu">
                         <button
                             type="button"
+                            className="chat-header-menu-item rename-session-button"
+                            data-testid="rename-session-button"
+                            role="menuitem"
+                            disabled={!activeSession}
+                            onClick={() => { setShowMenu(false); startTitleEdit(); }}
+                        >
+                            Rename session
+                        </button>
+                        <button
+                            type="button"
                             className="chat-header-menu-item fork-session-button"
                             data-testid="fork-session-button"
                             role="menuitem"
@@ -415,6 +464,46 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         >
                             Compact session
                         </button>
+                        {activeSession && !(activeSession as unknown as { share?: { url: string } }).share?.url && (
+                            <button
+                                type="button"
+                                className="chat-header-menu-item share-session-button"
+                                data-testid="share-session-button"
+                                role="menuitem"
+                                onClick={() => { setShowMenu(false); onShareSession(); }}
+                            >
+                                Share session
+                            </button>
+                        )}
+                        {activeSession && (activeSession as unknown as { share?: { url: string } }).share?.url && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="chat-header-menu-item copy-share-url-button"
+                                    data-testid="copy-share-url-button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                        const url = (activeSession as unknown as { share: { url: string } }).share.url;
+                                        navigator.clipboard.writeText(url).then(() => {
+                                            setCopyFeedback(true);
+                                            setTimeout(() => setCopyFeedback(false), 2000);
+                                        }).catch(() => undefined);
+                                        setShowMenu(false);
+                                    }}
+                                >
+                                    {copyFeedback ? 'Copied!' : 'Copy share URL'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="chat-header-menu-item unshare-session-button"
+                                    data-testid="unshare-session-button"
+                                    role="menuitem"
+                                    onClick={() => { setShowMenu(false); onUnshareSession(); }}
+                                >
+                                    Unshare session
+                                </button>
+                            </>
+                        )}
                         <button
                             type="button"
                             className="chat-header-menu-item"
@@ -434,27 +523,14 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
-const ChatFooter: React.FC<{
-    isStreaming: boolean;
-    sessionBusy: boolean;
-    streamingStatus: string;
-    contextUsage?: { inputTokens: number; outputTokens: number; contextLimit?: number };
-}> = ({ isStreaming, sessionBusy, streamingStatus, contextUsage }) => {
+const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streamingStatus: string }> = ({ isStreaming, sessionBusy, streamingStatus }) => {
     const active = isStreaming || sessionBusy;
-    const isWarning = contextUsage && contextUsage.contextLimit
-        ? contextUsage.inputTokens / contextUsage.contextLimit > 0.8
-        : false;
     return (
         <div className="chat-footer-bar">
             <div className="chat-footer-status">
                 <div className={`status-dot ${active ? 'streaming' : 'connected'}`} />
                 <span>{active ? (streamingStatus || 'Thinking') : 'Ready'}</span>
             </div>
-            {contextUsage && (
-                <div className={`context-usage${isWarning ? ' context-usage--warning' : ''}`}>
-                    {contextUsage.inputTokens}
-                </div>
-            )}
         </div>
     );
 };
@@ -465,7 +541,7 @@ const ChatFooter: React.FC<{
  * T3-10: Added messageService prop for dialogs
  * Exported for unit testing.
  */
-export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService, commandService, preferenceService }) => {
+export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, openCodeService, workspaceRoot, messageService, openerService, commandService, preferenceService, viewStore }) => {
     const [messages, setMessages] = React.useState<Message[]>([]);
     // Task 23: Ref to always access latest messages in stable callbacks without stale closure.
     const messagesRef = React.useRef<Message[]>(messages);
@@ -502,23 +578,6 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         });
         return () => disposable.dispose();
     }, [preferenceService]);
-
-    // P1-E: Derive context usage from last assistant message's last step-finish part
-    const contextUsage = React.useMemo(() => {
-        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
-        if (!lastAssistant) return undefined;
-        const stepFinishParts = (lastAssistant.parts ?? []).filter((p: { type: string }) => p.type === 'step-finish');
-        if (stepFinishParts.length === 0) return undefined;
-        const lastPart = stepFinishParts[stepFinishParts.length - 1] as {
-            tokens?: { input?: number; output?: number };
-            cost?: number;
-            contextLimit?: number;
-        };
-        const inputTokens = lastPart.tokens?.input ?? 0;
-        const outputTokens = lastPart.tokens?.output ?? 0;
-        if (inputTokens === 0 && outputTokens === 0) return undefined;
-        return { inputTokens, outputTokens, contextLimit: lastPart.contextLimit };
-    }, [messages]);
 
     const handleManageModels = React.useCallback(() => {
         commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, 'AI Models');
@@ -771,11 +830,18 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const handleDeleteSession = React.useCallback(async () => {
         const activeSession = sessionService.activeSession;
         if (!activeSession) return;
-        
-        const action = await messageService.warn(
-            `Delete session "${activeSession.title}"?`,
-            'Delete', 'Cancel'
-        );
+
+        // Count direct + indirect child sessions
+        const countDescendants = (parentId: string): number => {
+            const children = sessions.filter(s => (s as unknown as { parentID?: string }).parentID === parentId);
+            return children.length + children.reduce((acc, c) => acc + countDescendants(c.id), 0);
+        };
+        const childCount = countDescendants(activeSession.id);
+        const confirmMsg = childCount > 0
+            ? `Delete session "${activeSession.title}" and ${childCount} child session${childCount === 1 ? '' : 's'}?`
+            : `Delete session "${activeSession.title}"?`;
+
+        const action = await messageService.warn(confirmMsg, 'Delete', 'Cancel');
         if (action !== 'Delete') return;
         
         try {
@@ -787,13 +853,31 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             }
             messageService.error(`Failed to delete session: ${error}`);
         }
-    }, [sessionService, loadSessions, messageService]);
+    }, [sessionService, loadSessions, messageService, sessions]);
 
     const handleForkSession = React.useCallback(async () => {
         try {
             await sessionService.forkSession();
         } catch (error) {
             messageService.error(`Failed to fork session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleRenameSession = React.useCallback(async (title: string) => {
+        const active = sessionService.activeSession;
+        if (!active) { return; }
+        try {
+            await sessionService.renameSession(active.id, title);
+        } catch (error) {
+            messageService.error(`Failed to rename session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleNavigateToParent = React.useCallback(async (parentId: string) => {
+        try {
+            await sessionService.setActiveSession(parentId);
+        } catch (error) {
+            messageService.error(`Failed to navigate to parent session: ${error}`);
         }
     }, [sessionService, messageService]);
 
@@ -816,6 +900,32 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             await sessionService.compactSession();
         } catch (error) {
             messageService.error(`Failed to compact session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleShareSession = React.useCallback(async () => {
+        const active = sessionService.activeSession;
+        if (!active) { return; }
+        try {
+            const updated = await sessionService.shareSession(active.id);
+            const shareUrl = (updated as unknown as { share?: { url: string } }).share?.url;
+            if (shareUrl) {
+                navigator.clipboard.writeText(shareUrl).catch(() => undefined);
+                messageService.info('Session shared — URL copied to clipboard');
+            }
+        } catch (error) {
+            messageService.error(`Failed to share session: ${error}`);
+        }
+    }, [sessionService, messageService]);
+
+    const handleUnshareSession = React.useCallback(async () => {
+        const active = sessionService.activeSession;
+        if (!active) { return; }
+        try {
+            await sessionService.unshareSession(active.id);
+            messageService.info('Session unshared');
+        } catch (error) {
+            messageService.error(`Failed to unshare session: ${error}`);
         }
     }, [sessionService, messageService]);
 
@@ -1026,11 +1136,15 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     pendingPermissions={pendingPermissions}
                     onLoadSessions={loadSessions}
                     onSessionSwitch={handleSessionSwitch}
-                    onNewSession={handleNewSession}
-                    onDeleteSession={handleDeleteSession}
-                    onForkSession={handleForkSession}
-                    onRevertSession={handleRevertSession}
-                    onCompactSession={handleCompactSession}
+                     onNewSession={handleNewSession}
+                     onDeleteSession={handleDeleteSession}
+                     onForkSession={handleForkSession}
+                     onRevertSession={handleRevertSession}
+                     onCompactSession={handleCompactSession}
+                     onShareSession={handleShareSession}
+                     onUnshareSession={handleUnshareSession}
+                     onRenameSession={handleRenameSession}
+                    onNavigateToParent={handleNavigateToParent}
                     onToggleDropdown={handleToggleDropdown}
                     enabledModels={enabledModels}
                     onManageModels={handleManageModels}
@@ -1054,6 +1168,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             pendingPermissions={pendingPermissions}
                             onReplyPermission={handleReplyPermission}
                             onOpenFile={handleOpenFile}
+                            sessionId={activeSession?.id}
+                            viewStore={viewStore}
                         />
 
                         {/* QuestionDock — shown when the server asks a question */}
@@ -1120,7 +1236,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             openCodeService={openCodeService}
                             sessionId={activeSession?.id}
                         />
-                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} contextUsage={contextUsage} />
+                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} />
                     </>
                 )}
             </div>

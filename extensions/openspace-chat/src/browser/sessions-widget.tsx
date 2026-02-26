@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
+import * as ReactDOM from '@theia/core/shared/react-dom';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
@@ -22,6 +23,13 @@ import { FrontendApplication } from '@theia/core/lib/browser/frontend-applicatio
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service';
 import { Session } from 'openspace-core/lib/common/opencode-protocol';
+
+interface ExtendedSession extends Session {
+    parentID?: string;
+    time: Session['time'] & { archived?: number };
+}
+import { SessionNotificationService } from 'openspace-core/lib/browser/notification-service';
+import { SessionHoverPreview } from './session-hover-preview';
 
 /** Formats a timestamp as a relative time string (e.g. "2h ago"). */
 function relativeTime(ms: number): string {
@@ -32,17 +40,36 @@ function relativeTime(ms: number): string {
     return `${Math.floor(diff / 86_400_000)}d`;
 }
 
+/** Shimmer skeleton shown while sessions are loading. */
+function SessionSkeleton(): React.ReactElement {
+    return (
+        <div className="sessions-skeleton" aria-busy="true" aria-label="Loading sessions">
+            {[80, 60, 75, 50].map((w, i) => (
+                <div key={i} className="session-skeleton-item" style={{ width: `${w}%` }} />
+            ))}
+        </div>
+    );
+}
+
 interface SessionsViewProps {
     sessionService: SessionService;
     messageService: MessageService;
+    notificationService: SessionNotificationService;
 }
 
-const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageService }) => {
+const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageService, notificationService }) => {
     const [sessions, setSessions] = React.useState<Session[]>([]);
     const [isLoading, setIsLoading] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [showArchived, setShowArchived] = React.useState(false);
     const [hasMore, setHasMore] = React.useState(false);
+    const [editingId, setEditingId] = React.useState<string | undefined>(undefined);
+    const [editDraft, setEditDraft] = React.useState('');
+    const [isSavingTitle, setIsSavingTitle] = React.useState(false);
+    const [unseenRevision, setUnseenRevision] = React.useState(0);
+    /** Hover preview state: sessionId being hovered, and the DOM rect for positioning */
+    const [hoverPreview, setHoverPreview] = React.useState<{ sessionId: string; rect: DOMRect } | null>(null);
+    const hoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const load = React.useCallback(async () => {
@@ -91,6 +118,25 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
         return () => { d1.dispose(); d2.dispose(); };
     }, [sessionService, load]);
 
+    // Re-render when unseen counts change
+    React.useEffect(() => {
+        const d = notificationService.onUnseenChanged(() => setUnseenRevision(v => v + 1));
+        return () => d.dispose();
+    }, [notificationService]);
+
+    const handleHoverEnter = (sessionId: string, e: React.MouseEvent<HTMLDivElement>) => {
+        if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); }
+        const rect = e.currentTarget.getBoundingClientRect();
+        hoverTimerRef.current = setTimeout(() => {
+            setHoverPreview({ sessionId, rect });
+        }, 1000);
+    };
+
+    const handleHoverLeave = () => {
+        if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); }
+        setHoverPreview(null);
+    };
+
     const handleNew = async () => {
         try {
             await sessionService.createSession(`Session ${new Date().toLocaleString()}`);
@@ -120,7 +166,34 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
         }
     };
 
+    const startRename = (session: Session, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingId(session.id);
+        setEditDraft(session.title);
+    };
+
+    const saveRename = async (sessionId: string) => {
+        if (!editDraft.trim() || isSavingTitle) { return; }
+        setIsSavingTitle(true);
+        try {
+            await sessionService.renameSession(sessionId, editDraft.trim());
+            setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: editDraft.trim() } : s));
+        } catch (e) {
+            messageService.error(`Failed to rename session: ${e}`);
+        } finally {
+            setIsSavingTitle(false);
+            setEditingId(undefined);
+        }
+    };
+
+    const cancelRename = () => {
+        setEditingId(undefined);
+        setEditDraft('');
+    };
+
     const active = sessionService.activeSession;
+    // Suppress unused variable warning for unseenRevision — it triggers re-renders
+    void unseenRevision;
 
     return (
         <div className="sessions-widget">
@@ -163,37 +236,55 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                     aria-label="Search sessions"
                 />
             </div>
-            {isLoading && (
-                <div className="sessions-widget-loading">
-                    <svg className="sessions-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                    </svg>
-                </div>
-            )}
+            {isLoading && <SessionSkeleton />}
             {!isLoading && sessions.length === 0 && (
                 <div className="sessions-widget-empty">No sessions yet</div>
             )}
             <div className="sessions-widget-list">
                 {sessions
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    .filter(s => showArchived ? true : !(s.time as any)?.archived)
-                    .map(session => (
+                    .filter(s => showArchived ? true : !(s as ExtendedSession).time?.archived)
+                    .map(session => {
+                    const extSession = session as ExtendedSession;
+                    return (
                     <div
                         key={session.id}
-                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${(session as any).parentID ? ' session-child session-forked' : ''}`}
+                        className={`sessions-widget-item ${session.id === active?.id ? 'active' : ''}${extSession.parentID ? ' session-child session-forked' : ''}`}
                         data-session-id={session.id}
-                        data-parent-id={(session as any).parentID ?? undefined}
-                        onClick={() => handleSwitch(session.id)}
+                        data-parent-id={extSession.parentID ?? undefined}
+                        onClick={() => { if (editingId !== session.id) { handleSwitch(session.id); } }}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { handleSwitch(session.id); } }}
-                        title={session.title}
-                        style={(session as any).parentID ? { paddingLeft: '24px' } : undefined}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && editingId !== session.id) { handleSwitch(session.id); } }}
+                        title={editingId === session.id ? undefined : session.title}
+                        style={extSession.parentID ? { paddingLeft: '24px' } : undefined}
+                        onMouseEnter={(e) => handleHoverEnter(session.id, e)}
+                        onMouseLeave={handleHoverLeave}
                     >
-                        <span className="sessions-widget-item-title">
-                            {session.title}
-                            {(() => {
+                        <span className="sessions-widget-item-title" onDoubleClick={(e) => startRename(session, e)}>
+                            {editingId === session.id ? (
+                                <input
+                                    className="sessions-title-input"
+                                    value={editDraft}
+                                    disabled={isSavingTitle}
+                                    autoFocus
+                                    onChange={e => setEditDraft(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') { e.preventDefault(); saveRename(session.id); }
+                                        else if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+                                    }}
+                                    onBlur={() => saveRename(session.id)}
+                                    onClick={e => e.stopPropagation()}
+                                    aria-label="Edit session title"
+                                />
+                            ) : (
+                                session.title
+                            )}
+                            {editingId !== session.id && (() => {
                                 const status = sessionService.getSessionStatus(session.id);
+                                const hasError = !!sessionService.getSessionError(session.id);
+                                if (hasError) {
+                                    return <span className="session-status-dot error" aria-label="Session error" />;
+                                }
                                 if (!status || status.type === 'idle') { return null; }
                                 return (
                                     <span className={`session-status-badge session-status-${status.type}`}>
@@ -201,8 +292,20 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                                     </span>
                                 );
                             })()}
+                            {editingId !== session.id && session.id !== active?.id && (() => {
+                                const unseen = notificationService.getUnseenCount(session.id);
+                                return unseen > 0 ? (
+                                    <span className="session-unseen-dot" aria-label={`${unseen} unseen message${unseen > 1 ? 's' : ''}`} />
+                                ) : null;
+                            })()}
                         </span>
                         <div className="sessions-widget-item-actions">
+                            {session.summary && (session.summary.additions > 0 || session.summary.deletions > 0) && (
+                                <span className="session-diff-badge" aria-label={`${session.summary.additions} additions, ${session.summary.deletions} deletions`}>
+                                    {session.summary.additions > 0 && <span className="session-diff-add">+{session.summary.additions}</span>}
+                                    {session.summary.deletions > 0 && <span className="session-diff-del">-{session.summary.deletions}</span>}
+                                </span>
+                            )}
                             <span className="sessions-widget-item-time">
                                 {session.time?.created ? relativeTime(session.time.created) : ''}
                             </span>
@@ -219,7 +322,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                             </button>
                         </div>
                     </div>
-                ))}
+                );})}
             </div>
             {hasMore && !searchQuery && (
                 <button
@@ -230,6 +333,14 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                 >
                     Load more sessions
                 </button>
+            )}
+            {hoverPreview && ReactDOM.createPortal(
+                <SessionHoverPreview
+                    sessionId={hoverPreview.sessionId}
+                    sessionService={sessionService}
+                    anchorRect={hoverPreview.rect}
+                />,
+                document.body
             )}
         </div>
     );
@@ -245,6 +356,9 @@ export class SessionsWidget extends ReactWidget {
 
     @inject(MessageService)
     protected readonly messageService!: MessageService;
+
+    @inject(SessionNotificationService)
+    protected readonly notificationService!: SessionNotificationService;
 
     constructor() {
         super();
@@ -266,6 +380,7 @@ export class SessionsWidget extends ReactWidget {
             <SessionsView
                 sessionService={this.sessionService}
                 messageService={this.messageService}
+                notificationService={this.notificationService}
             />
         );
     }

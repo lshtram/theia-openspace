@@ -22,11 +22,13 @@ import {
     OpenCodeClient,
     SessionNotification,
     MessageNotification,
-     MessagePartDeltaNotification,
-     FileNotification,
-     PermissionNotification,
-     QuestionNotification,
-     TodoNotification
+    MessagePartDeltaNotification,
+    MessagePart,
+    Message,
+    FileNotification,
+    PermissionNotification,
+    QuestionNotification,
+    TodoNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
 import { SessionService } from './session-service';
@@ -210,8 +212,10 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     /**
      * Handle session lifecycle events (created/updated/deleted/init/abort/etc.).
      * 
-     * Only processes events for the currently active session. Updates SessionService
-     * state based on event type.
+     * Processes session events. Session-wide events (error, status) apply to ALL
+     * sessions — they write to per-session maps in SessionService and are needed
+     * for the session-list status dots. Only session-mutating events are gated
+     * to the active session.
      * 
      * @param event - Session event notification
      */
@@ -220,13 +224,38 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             if (this.queueIfNotReady('onSessionEvent', event)) { return; }
             this.logger.debug(`[SyncService] Session event: ${event.type}, sessionId=${event.sessionId}`);
 
-            // Only process events for the currently active session
-            if (this.sessionService.activeSession?.id !== event.sessionId) {
+            const isActiveSession = this.sessionService.activeSession?.id === event.sessionId;
+
+            // Handle session-wide events first (no active-session gate)
+            switch (event.type) {
+                case 'error_occurred':
+                    // Forward session error to session-service so UI can display it
+                    if (event.data) {
+                        const errorData = event.data as unknown as { error?: string };
+                        this.sessionService.notifySessionError(
+                            event.sessionId,
+                            errorData.error ?? 'Unknown session error'
+                        );
+                    }
+                    return;
+
+                case 'status_changed':
+                    if (event.sessionStatus) {
+                        this.sessionService.updateSessionStatus(event.sessionStatus, event.sessionId);
+                    }
+                    return;
+
+                default:
+                    break;
+            }
+
+            // All other session events only apply to the active session
+            if (!isActiveSession) {
                 this.logger.debug('[SyncService] Ignoring event for non-active session');
                 return;
             }
 
-            // Handle event types
+            // Handle active-session event types
             switch (event.type) {
                 case 'created':
                     if (event.data) {
@@ -288,23 +317,6 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     }
                     break;
 
-                case 'error_occurred':
-                    // Forward session error to session-service so UI can display it
-                    if (event.data) {
-                        const errorData = event.data as unknown as { error?: string };
-                        this.sessionService.notifySessionError(
-                            event.sessionId,
-                            errorData.error ?? 'Unknown session error'
-                        );
-                    }
-                    break;
-
-                case 'status_changed':
-                    if (event.sessionStatus) {
-                        this.sessionService.updateSessionStatus(event.sessionStatus, event.sessionId);
-                    }
-                    break;
-
                 default:
                     this.logger.warn(`[SyncService] Unknown session event type: ${event.type}`);
             }
@@ -332,9 +344,16 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
             if (this.queueIfNotReady('onMessageEvent', event)) { return; }
             this.logger.debug(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}`);
 
-            // Only process events for the currently active session
+            // Only process full message streaming for the currently active session.
+            // For non-active sessions, just track unseen message count.
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                this.logger.debug('[SyncService] Ignoring event for non-active session');
+                // Increment unseen count when a new assistant message arrives for a background session
+                if (event.type === 'created' && event.data?.info?.role === 'assistant') {
+                    this.logger.debug(`[SyncService] Incrementing unseen count for background session ${event.sessionId}`);
+                    (this.sessionService as { _notificationService?: { incrementUnseen: (id: string) => void } })
+                        ._notificationService?.incrementUnseen(event.sessionId);
+                }
+                this.logger.debug('[SyncService] Ignoring message event for non-active session');
                 return;
             }
 
@@ -433,7 +452,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // matches parts by ID and replaces them in-place, so each message.part.updated carrying a new
         // state will overwrite the previous part record. No bug here.
         const allParts = event.data.parts || [];
-        const toolParts = allParts.filter((p: any) => {
+        const toolParts = allParts.filter((p: MessagePart) => {
             if (p.type !== 'text' && p.type !== 'reasoning') {
                 return true;
             }
@@ -585,7 +604,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 // SSE event from a reconnect for a historical message — drop it to prevent
                 // appending on top of already-final content (which causes N× duplication).
                 const existingMsg = this.sessionService.messages.find(m => m.id === event.messageID);
-                if (existingMsg && (existingMsg.time as any)?.completed) {
+                if (existingMsg && (existingMsg.time as { completed?: number })?.completed) {
                     this.logger.debug(`[SyncService] Dropping replayed delta for completed message: ${event.messageID}`);
                     return;
                 }
@@ -597,7 +616,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     sessionID: event.sessionID,
                     role: 'assistant',
                     time: { created: Date.now() }
-                } as any);
+                } as Message);
             }
 
             // Apply the delta directly to the part in session service
@@ -630,11 +649,11 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                this.logger.debug('[SyncService] Ignoring event for non-active session');
+                this.logger.debug('[SyncService] Ignoring file event for non-active session');
                 return;
             }
 
-            // Phase 1: Log only (no immediate action)
+            // Handle event types
             switch (event.type) {
                 case 'changed':
                     this.logger.debug('[SyncService] File changed (no action in Phase 1)');
@@ -722,7 +741,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
 
             // Only process events for the currently active session
             if (this.sessionService.activeSession?.id !== event.sessionId) {
-                this.logger.debug(`[SyncService] Ignoring question event for non-active session: event.sessionId=${event.sessionId}`);
+                this.logger.debug('[SyncService] Ignoring question event for non-active session');
                 return;
             }
 

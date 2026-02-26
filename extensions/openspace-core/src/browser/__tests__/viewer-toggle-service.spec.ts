@@ -38,7 +38,7 @@ function makeHandlersProviderSpy(handlers: Array<{ id: string; priority: number 
 function makeService(handlers: Array<{ id: string; priority: number }>) {
     const svc = new ViewerToggleService();
     // Inject stub ContributionProvider<OpenHandler> manually (bypasses DI for tests)
-    (svc as any).handlersProvider = makeHandlersProvider(handlers);
+    (svc as ViewerToggleService & { handlersProvider: { getContributions: () => Array<{ id: string; canHandle: (u: URI) => number; open: (u: URI) => Promise<object | undefined> }> } }).handlersProvider = makeHandlersProvider(handlers);
     return svc;
 }
 
@@ -89,7 +89,7 @@ describe('ViewerToggleService', () => {
             // invisible and canToggle() always returns false, causing files to open as plain text.
             const spy = makeHandlersProviderSpy([{ id: 'csv-viewer-handler', priority: 200 }]);
             const svc = new ViewerToggleService();
-            (svc as any).handlersProvider = spy;
+            (svc as ViewerToggleService & { handlersProvider: { getContributions: (recursive?: boolean) => Array<{ id: string; canHandle: (u: URI) => number; open: (u: URI) => Promise<object | undefined> }> } }).handlersProvider = spy;
             await svc.canToggle(new URI('file:///test.csv'));
             assert.strictEqual(spy.getLastRecursiveArg(), true,
                 'getContributions must be called with recursive=true');

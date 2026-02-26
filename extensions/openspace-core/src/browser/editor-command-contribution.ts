@@ -439,7 +439,7 @@ export class EditorCommandContribution implements CommandContribution {
             // ViewerToggleOpenHandler (priority 150) will intercept and route to
             // the preview/viewer handler when toggle state is 'preview' (default).
             const widget = await openUri(this.openerService, uri, { mode: 'activate' });
-            const editorId = widget ? (widget as any).id as string | undefined : undefined;
+            const editorId = widget ? (widget as { id?: string }).id : undefined;
             return { success: true, editorId };
         } catch (error) {
             this.logger.error('[EditorCommand] Error opening editor:', error);

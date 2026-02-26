@@ -45,6 +45,11 @@ const Anser = require('anser');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const hljs: HLJSApi = require('highlight.js/lib/core');
 
+interface Token {
+    info: string;
+    content: string;
+}
+
 interface HLJSApi {
     highlight(languageName: string, code: string, ignoreIllegals?: boolean): { value: string };
     highlightAuto(code: string): { value: string };
@@ -133,7 +138,7 @@ md.use(texmath, { engine: katex, delimiters: 'dollars' });
 //   - <oc-mermaid data-code="...base64..."></oc-mermaid>  → MermaidBlock
 //   - <oc-ansi data-code="...base64..."></oc-ansi>        → AnsiBlock
 //   - <oc-code lang="..." data-code="...base64..."></oc-code>  → CodeBlock
-md.renderer.rules.fence = (tokens: any[], idx: number) => {
+md.renderer.rules.fence = (tokens: Token[], idx: number) => {
     const token = tokens[idx];
     const lang = token.info.trim().split(/\s+/)[0] || '';
     const encoded = btoa(unescape(encodeURIComponent(token.content)));

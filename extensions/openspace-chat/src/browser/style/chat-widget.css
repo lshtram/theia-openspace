@@ -2539,3 +2539,79 @@
     color: var(--theia-foreground, #ccc);
     font-variant-numeric: tabular-nums;
 }
+
+/* ─── Session hover preview card (S3-A) ────────────────────────────────── */
+.session-hover-preview {
+    position: fixed;
+    z-index: 9999;
+    min-width: 220px;
+    max-width: 320px;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #3c3c3c);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    padding: 10px 12px;
+    pointer-events: none;
+    font-size: 11px;
+    color: var(--oc-text, #ccc);
+}
+
+.session-hover-preview-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--oc-text, #eee);
+}
+
+.session-hover-preview-loading,
+.session-hover-preview-empty {
+    color: var(--oc-text-dim, #858585);
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.session-hover-preview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.session-hover-preview-item {
+    padding: 3px 0;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 2px;
+}
+
+.session-hover-preview-item.role-user {
+    color: var(--oc-text, #ccc);
+    opacity: 0.85;
+}
+
+.session-hover-preview-item.role-assistant {
+    color: var(--oc-accent, #9cdcfe);
+    opacity: 0.9;
+}
+
+/* ─── Unseen message dot (S3-B) ─────────────────────────────────────────── */
+.session-unseen-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--oc-accent, #007acc);
+    margin-left: 5px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    animation: unseen-pulse 2s ease-in-out infinite;
+}
+
+@keyframes unseen-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}

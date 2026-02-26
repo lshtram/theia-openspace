@@ -826,7 +826,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             throw new Error(`No active whiteboard editor for path: ${args.path}`);
         }
 
-        const shapePartials = args.shapes.map((s, i) => {
+        const shapePartials = args.shapes.map((s, _i) => {
             const id = this.nextShapeId();
             const isArrow = s.type === 'arrow';
             const isText = s.type === 'text';
@@ -860,7 +860,7 @@ export class WhiteboardCommandContribution implements CommandContribution {
             throw new Error(`No active whiteboard editor for path: ${args.path}`);
         }
 
-        const shapePartials = args.shapes.map((s, i) => {
+        const shapePartials = args.shapes.map((s, _i) => {
             const id = this.nextShapeId();
             const isArrow = s.type === 'arrow';
             const isText = s.type === 'text';
