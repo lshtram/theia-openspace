@@ -68,11 +68,11 @@ All tasks are now managed in GitHub Issues: https://github.com/lshtram/theia-ope
 7. **Final state:** 1270 passing, 7 failing (all pre-existing), 1 pending
 8. **Committed** `990f26e`, **rebuilt** webpack, **pushed** to `origin/master`
 
-## Server State (2026-02-26)
-- **PID 23917:** Port 3000, repo root (`/Users/Shared/dev/theia-openspace/browser-app/`)
-- **PID 26671:** Port 3001, worktree (`.worktrees/chat-feature-parity/`) — no longer primary
-- **Webpack:** Rebuilt for port 3000 — bundle is current
-- **Browser:** Hard-refresh (Cmd+Shift+R) needed to pick up changes
+## Server State (2026-02-26 — end of session)
+- **PID 23917:** Port 3000, repo root (`/Users/Shared/dev/theia-openspace/browser-app/`) — SOLE server
+- **PID 26671 (port 3001 worktree):** KILLED — no longer running
+- **Webpack:** Rebuilt for port 3000 — bundle includes Phase 2.6 CSS fixes; current as of session close
+- **Browser:** Hard-refresh (Cmd+Shift+R) required to pick up new bundle
 
 ### Build commands
 ```bash
@@ -101,5 +101,4 @@ yarn --cwd browser-app webpack --config webpack.config.js --mode development
 - LSP/TS errors in Theia's own `node_modules` are pre-existing — ignore
 - webpack build errors in openspace-layout are pre-existing — unrelated
 - **GIF animation slot**: Awaiting user-created assets. Drop files in `extensions/openspace-chat/src/browser/style/animations/`
-- **7 pre-existing test failures**: TurnGroup streaming (×4) + AudioFsm (×2) + 1 other — all in master before Phase 2.5; use `--no-verify` when pushing
-- **Port 3001 worktree**: `.worktrees/chat-feature-parity/` is still running at PID 26671 — it can be left running or killed; it's no longer the primary server
+- **7 pre-existing test failures**: TurnGroup streaming (×4) + AudioFsm (×2) + 1 other — all in master; use `--no-verify` when pushing
