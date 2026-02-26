@@ -31,7 +31,8 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { OpenSpaceMcpServer, CommandBridgeResult, BridgeCallback } from '../hub-mcp';
+import { OpenSpaceMcpServer, CommandBridgeResult, BridgeCallback } from '../hub-mcp/hub-mcp';
+import { listDirectory, searchFiles } from '../hub-mcp/file-utils';
 import { resolveSafePath } from '../path-utils';
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,13 @@ function priv(obj: OpenSpaceMcpServer): any {
 function makeTempDir(): string {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mcp-test-'));
     return fs.realpathSync(tmpDir);
+}
+
+/** Read and concatenate all .ts files in the hub-mcp/ directory for source-scanning tests. */
+function readHubMcpSource(): string {
+    const hubMcpDir = path.join(__dirname, '../hub-mcp');
+    const files = fs.readdirSync(hubMcpDir).filter(f => f.endsWith('.ts'));
+    return files.map(f => fs.readFileSync(path.join(hubMcpDir, f), 'utf-8')).join('\n');
 }
 
 /** Build a minimal CommandBridgeResult for promise resolution tests. */
@@ -261,11 +269,9 @@ describe('OpenSpaceMcpServer — resolveSafePath()', () => {
 
 describe('OpenSpaceMcpServer — file tool handlers', () => {
     let workspaceDir: string;
-    let server: OpenSpaceMcpServer;
 
     beforeEach(() => {
         workspaceDir = makeTempDir();
-        server = new OpenSpaceMcpServer(workspaceDir);
     });
 
     afterEach(() => {
@@ -329,7 +335,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
             fs.writeFileSync(path.join(workspaceDir, 'b.ts'), '', 'utf-8');
             fs.mkdirSync(path.join(workspaceDir, 'subdir'));
 
-            const entries = priv(server).listDirectory(workspaceDir, false);
+            const entries = listDirectory(workspaceDir, false);
             expect(entries).to.include('a.ts');
             expect(entries).to.include('b.ts');
             expect(entries).to.include('subdir/');
@@ -339,14 +345,14 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
             fs.mkdirSync(path.join(workspaceDir, 'sub'));
             fs.writeFileSync(path.join(workspaceDir, 'sub', 'nested.ts'), '', 'utf-8');
 
-            const entries = priv(server).listDirectory(workspaceDir, true);
+            const entries = listDirectory(workspaceDir, true);
             expect(entries).to.include('sub/nested.ts');
         });
 
         it('returns empty array for empty directory', () => {
             const emptyDir = path.join(workspaceDir, 'empty');
             fs.mkdirSync(emptyDir);
-            const entries = priv(server).listDirectory(emptyDir, false);
+            const entries = listDirectory(emptyDir, false);
             expect(entries).to.deep.equal([]);
         });
     });
@@ -384,7 +390,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
         it('finds pattern matches in files', () => {
             fs.writeFileSync(path.join(workspaceDir, 'search-me.ts'), 'const TARGET = 42;\n', 'utf-8');
 
-            const results = priv(server).searchFiles(workspaceDir, 'TARGET');
+            const results = searchFiles(workspaceDir, 'TARGET');
             expect(results.length).to.be.greaterThan(0);
             expect(results[0]).to.include('search-me.ts');
             expect(results[0]).to.include('TARGET');
@@ -393,7 +399,7 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
         it('returns empty array when pattern is not found', () => {
             fs.writeFileSync(path.join(workspaceDir, 'no-match.ts'), 'const x = 1;\n', 'utf-8');
 
-            const results = priv(server).searchFiles(workspaceDir, 'ZZZNOMATCH999');
+            const results = searchFiles(workspaceDir, 'ZZZNOMATCH999');
             expect(results).to.deep.equal([]);
         });
 
@@ -401,8 +407,8 @@ describe('OpenSpaceMcpServer — file tool handlers', () => {
             fs.writeFileSync(path.join(workspaceDir, 'match.ts'), 'const FIND_ME = 1;\n', 'utf-8');
             fs.writeFileSync(path.join(workspaceDir, 'no-match.js'), 'const FIND_ME = 1;\n', 'utf-8');
 
-            const tsResults = priv(server).searchFiles(workspaceDir, 'FIND_ME', '**/*.ts');
-            const jsResults = priv(server).searchFiles(workspaceDir, 'FIND_ME', '**/*.js');
+            const tsResults = searchFiles(workspaceDir, 'FIND_ME', '**/*.ts');
+            const jsResults = searchFiles(workspaceDir, 'FIND_ME', '**/*.js');
 
             // .ts filter: match.ts included, no-match.js excluded
             const tsFiles = tsResults.map((r: string) => path.basename(r.split(':')[0]));
@@ -436,10 +442,7 @@ describe('OpenSpaceMcpServer — presentation tool registrations', () => {
     let toolNamesSrc: string;
 
     before(() => {
-        hubMcpSrc = fs.readFileSync(
-            path.join(__dirname, '../hub-mcp.ts'),
-            'utf-8'
-        );
+        hubMcpSrc = readHubMcpSource();
         toolNamesSrc = fs.readFileSync(
             path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
@@ -499,10 +502,7 @@ describe('OpenSpaceMcpServer — whiteboard tool registrations', () => {
     let toolNamesSrc: string;
 
     before(() => {
-        hubMcpSrc = fs.readFileSync(
-            path.join(__dirname, '../hub-mcp.ts'),
-            'utf-8'
-        );
+        hubMcpSrc = readHubMcpSource();
         toolNamesSrc = fs.readFileSync(
             path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
@@ -562,10 +562,7 @@ describe('OpenSpaceMcpServer — openspace.artifact.patch tool', () => {
             path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
         );
-        const hubMcpSrc = fs.readFileSync(
-            path.join(__dirname, '../hub-mcp.ts'),
-            'utf-8'
-        );
+        const hubMcpSrc = readHubMcpSource();
         // String value defined in tool-names.ts
         expect(toolNamesSrc).to.include("'openspace.artifact.patch'");
         // hub-mcp.ts uses the TOOL constant
@@ -656,10 +653,7 @@ describe('OpenSpaceMcpServer — openspace.artifact.getVersion tool', () => {
             path.join(__dirname, '../../common/tool-names.ts'),
             'utf-8'
         );
-        const hubMcpSrc = fs.readFileSync(
-            path.join(__dirname, '../hub-mcp.ts'),
-            'utf-8'
-        );
+        const hubMcpSrc = readHubMcpSource();
         // String value defined in tool-names.ts
         expect(toolNamesSrc).to.include("'openspace.artifact.getVersion'");
         // hub-mcp.ts uses the TOOL constant
