@@ -58,13 +58,13 @@ export class ArtifactStore extends EventEmitter {
             awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
         });
 
-        this.watcher.on('change', (absolutePath: string) => {
+        this.watcher.on('change', async (absolutePath: string) => {
             const rel = path.relative(this.projectRoot, absolutePath).replace(/\\/g, '/');
             // Task 13: Hash-based suppression instead of setTimeout race.
             // If the file still matches the hash of what we wrote, it's our own write.
             if (this.lastWrittenHash.has(rel)) {
                 try {
-                    const current = fs.readFileSync(absolutePath);
+                    const current = await fs.promises.readFile(absolutePath);
                     const currentHash = crypto.createHash('sha256').update(current).digest('hex');
                     if (currentHash === this.lastWrittenHash.get(rel)) {
                         return; // self-write — suppress

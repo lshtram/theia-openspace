@@ -107,7 +107,7 @@ export function registerFileTools(server: IMcpServer, deps: FileDeps): void {
         async (args: { pattern: string; path?: string; glob?: string }) => {
             try {
                 const resolved = resolveSafePath(deps.workspaceRoot, args.path || '.');
-                const results = searchFiles(resolved, args.pattern, args.glob);
+                const results = await searchFiles(resolved, args.pattern, args.glob);
                 const text = results.length > 0
                     ? results.join('\n')
                     : 'No matches found';

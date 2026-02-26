@@ -62,7 +62,7 @@ function isSafeRegex(pattern: string): boolean {
 /**
  * Search files in a directory for a regex pattern with safety limits.
  */
-export function searchFiles(dirPath: string, pattern: string, globFilter?: string): string[] {
+export async function searchFiles(dirPath: string, pattern: string, globFilter?: string): Promise<string[]> {
     const results: string[] = [];
 
     // Safety limits to prevent DoS via large trees / large files / pathological regex
@@ -92,7 +92,7 @@ export function searchFiles(dirPath: string, pattern: string, globFilter?: strin
     let filesScanned = 0;
     const deadline = Date.now() + REGEX_TIMEOUT_MS;
 
-    const walk = (dir: string, depth: number): void => {
+    const walk = async (dir: string, depth: number): Promise<void> => {
         if (results.length >= MAX_RESULTS) return;
         if (filesScanned >= MAX_FILES_SCANNED) return;
         if (depth > MAX_DEPTH) return;
@@ -100,7 +100,7 @@ export function searchFiles(dirPath: string, pattern: string, globFilter?: strin
 
         let entries: fs.Dirent[];
         try {
-            entries = fs.readdirSync(dir, { withFileTypes: true });
+            entries = await fs.promises.readdir(dir, { withFileTypes: true });
         } catch {
             return;
         }
@@ -112,14 +112,14 @@ export function searchFiles(dirPath: string, pattern: string, globFilter?: strin
             const full = path.join(dir, entry.name);
             if (entry.isDirectory()) {
                 if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
-                    walk(full, depth + 1);
+                    await walk(full, depth + 1);
                 }
             } else if (!ext || entry.name.endsWith(ext)) {
                 filesScanned++;
                 try {
-                    const stat = fs.statSync(full);
+                    const stat = await fs.promises.stat(full);
                     if (stat.size > MAX_FILE_SIZE_BYTES) continue; // skip oversized files
-                    const content = fs.readFileSync(full, 'utf-8');
+                    const content = await fs.promises.readFile(full, 'utf-8');
                     const lines = content.split('\n');
                     for (let idx = 0; idx < lines.length; idx++) {
                         if (results.length >= MAX_RESULTS) break;
@@ -134,6 +134,6 @@ export function searchFiles(dirPath: string, pattern: string, globFilter?: strin
         }
     };
 
-    walk(dirPath, 0);
+    await walk(dirPath, 0);
     return results;
 }
