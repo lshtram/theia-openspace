@@ -2,20 +2,18 @@
 import { injectable } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { Application, Request, Response } from 'express';
-import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import { VoiceBackendService } from './voice-backend-service';
 import { SttProviderSelector } from './stt/stt-provider-selector';
 import { TtsProviderSelector } from './tts/tts-provider-selector';
-import type { LlmCaller } from './narration-preprocessor';
 
 /**
  * Registers /openspace/voice/* HTTP routes on the Theia backend application.
  *
  * Routes:
  *   POST /openspace/voice/stt       -- Speech-to-text transcription
- *   POST /openspace/voice/narrate   -- LLM narration preprocessing + TTS synthesis
+ *   POST /openspace/voice/narrate   -- Text cleanup + TTS synthesis
  *   GET  /openspace/voice/utterances/:filename -- Serve utterance WAV files
  */
 @injectable()
@@ -58,7 +56,7 @@ export class VoiceHubContribution implements BackendApplicationContribution {
             }
         );
 
-        // POST /openspace/voice/narrate -- LLM narration preprocessing + TTS synthesis
+        // POST /openspace/voice/narrate -- Text cleanup + TTS synthesis
         app.post(
             '/openspace/voice/narrate',
             express.json(),
@@ -119,14 +117,10 @@ export class VoiceHubContribution implements BackendApplicationContribution {
 
     /**
      * Initialize VoiceBackendService with auto-selected STT/TTS providers.
-     * Uses the real opencode LLM caller for narration preprocessing (Task 15).
      */
     private initVoiceService(): void {
         const sttSelector = new SttProviderSelector();
         const ttsSelector = new TtsProviderSelector();
-
-        const realLlmCaller: LlmCaller = (prompt: string, text: string) =>
-            callOpenCodeLlm(prompt, text);
 
         // M-5: Assign to readyPromise so handlers can await it
         this.readyPromise = Promise.all([sttSelector.selectProvider(), ttsSelector.selectProvider()])
@@ -134,7 +128,6 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                 this.voiceService = new VoiceBackendService({
                     sttProvider: stt,
                     ttsProvider: tts,
-                    llmCaller: realLlmCaller,
                 });
                 console.log(`[VoiceHub] Providers ready (STT: ${stt.id}, TTS: ${tts.id})`);
             })
@@ -152,153 +145,7 @@ export class VoiceHubContribution implements BackendApplicationContribution {
                         synthesize: async () => ({ audio: new Uint8Array(0), sampleRate: 24000 }),
                         dispose: async () => { /* no-op */ },
                     },
-                    llmCaller: realLlmCaller,
                 });
             });
     }
-}
-
-/**
- * Call the opencode LLM with a one-shot session for narration preprocessing.
- * Creates an ephemeral session, posts the prompt+text, polls for the assistant
- * reply, deletes the session, and returns the assistant's text content.
- *
- * @throws on HTTP error, timeout, or if no assistant reply arrives within 30s.
- */
-async function callOpenCodeLlm(
-    prompt: string,
-    text: string,
-    baseUrl = process.env.OPENCODE_SERVER_URL ?? 'http://localhost:7890',
-): Promise<string> {
-    const POLL_INTERVAL_MS = 500;
-    const TIMEOUT_MS = 30_000;
-
-    // 1. Create ephemeral session
-    const session = await httpPost<{ id: string }>(baseUrl, '/session', {});
-    const sessionId = session.id;
-
-    try {
-        // 2. Post the user message
-        await httpPost(baseUrl, `/session/${encodeURIComponent(sessionId)}/message`, {
-            parts: [{ type: 'text', text: `${prompt}\n\n${text}` }],
-        });
-
-        // 3. Poll for assistant reply
-        const deadline = Date.now() + TIMEOUT_MS;
-        while (Date.now() < deadline) {
-            await sleep(POLL_INTERVAL_MS);
-            const messages = await httpGet<Array<{
-                info: { id: string; role: string; time: { created: number; completed?: number } };
-                parts: Array<{ type: string; content?: string; text?: string }>;
-            }>>(baseUrl, `/session/${encodeURIComponent(sessionId)}/message`);
-
-            const assistant = messages.find(
-                (m) => m.info.role === 'assistant' && m.info.time.completed !== undefined,
-            );
-            if (assistant) {
-                // Extract text from first text part
-                const textPart = assistant.parts.find((p) => p.type === 'text');
-                return textPart?.content ?? textPart?.text ?? '';
-            }
-        }
-        throw new Error('[VoiceHub] LLM call timed out after 30s');
-    } finally {
-        // 4. Always delete the ephemeral session
-        try {
-            await httpDelete(baseUrl, `/session/${encodeURIComponent(sessionId)}`);
-        } catch (e) {
-            console.warn('[VoiceHub] Failed to delete ephemeral LLM session:', e);
-        }
-    }
-}
-
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function httpPost<T>(baseUrl: string, path: string, body: unknown): Promise<T> {
-    const url = `${baseUrl}${path}`;
-    const data = JSON.stringify(body);
-    return new Promise<T>((resolve, reject) => {
-        const parsedUrl = new URL(url);
-        const req = http.request(
-            {
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            },
-            (res: http.IncomingMessage) => {
-                const chunks: Buffer[] = [];
-                res.on('data', (c: Buffer) => chunks.push(c));
-                res.on('end', () => {
-                    const text = Buffer.concat(chunks).toString();
-                    if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) {
-                        return reject(new Error(`HTTP ${res.statusCode}: ${text}`));
-                    }
-                    try { resolve(JSON.parse(text) as T); } catch (e) { reject(e); }
-                });
-                res.on('error', reject);
-            },
-        );
-        req.on('error', reject);
-        req.write(data);
-        req.end();
-    });
-}
-
-async function httpGet<T>(baseUrl: string, path: string): Promise<T> {
-    const url = `${baseUrl}${path}`;
-    return new Promise<T>((resolve, reject) => {
-        const parsedUrl = new URL(url);
-        http.get(
-            {
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                headers: { 'Accept': 'application/json' },
-            },
-            (res: http.IncomingMessage) => {
-                const chunks: Buffer[] = [];
-                res.on('data', (c: Buffer) => chunks.push(c));
-                res.on('end', () => {
-                    const text = Buffer.concat(chunks).toString();
-                    if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) {
-                        return reject(new Error(`HTTP ${res.statusCode}: ${text}`));
-                    }
-                    try { resolve(JSON.parse(text) as T); } catch (e) { reject(e); }
-                });
-                res.on('error', reject);
-            },
-        ).on('error', reject);
-    });
-}
-
-async function httpDelete(baseUrl: string, path: string): Promise<void> {
-    const url = `${baseUrl}${path}`;
-    return new Promise<void>((resolve, reject) => {
-        const parsedUrl = new URL(url);
-        const req = http.request(
-            {
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                method: 'DELETE',
-                headers: { 'Accept': 'application/json' },
-            },
-            (res: http.IncomingMessage) => {
-                res.resume(); // drain
-                res.on('end', () => {
-                    if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) {
-                        return reject(new Error(`HTTP DELETE ${res.statusCode}`));
-                    }
-                    resolve();
-                });
-                res.on('error', reject);
-            },
-        );
-        req.on('error', reject);
-        req.end();
-    });
 }
