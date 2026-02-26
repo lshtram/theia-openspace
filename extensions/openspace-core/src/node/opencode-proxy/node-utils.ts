@@ -98,7 +98,9 @@ export class NodeUtils {
                     cwd,
                     timeout: TIMEOUT,
                     maxBuffer: MAX_OUTPUT,
-                    shell: '/bin/bash',
+                    shell: process.platform === 'win32'
+                        ? (process.env.COMSPEC || 'cmd.exe')
+                        : (process.env.SHELL || '/bin/sh'),
                     env: { ...process.env, TERM: 'dumb' },
                 }, (error, stdout, stderr) => {
                     if (error) {
