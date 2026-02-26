@@ -277,6 +277,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // Shell command execution (Node-side, uses child_process.exec)
     executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }>;
+
+    // MCP config reading (Node-side, resolves C1/E2 — no fs access in browser bundle)
+    getMcpConfig(directory: string): Promise<Record<string, unknown> | undefined>;
 }
 
 /**

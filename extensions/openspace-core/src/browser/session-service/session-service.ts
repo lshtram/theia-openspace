@@ -22,8 +22,6 @@ import {
     OpenCodeService, Session, Message, MessagePartInput, ProviderWithModels, PermissionNotification
 } from '../../common/opencode-protocol';
 import * as SDKTypes from '../../common/opencode-sdk-types';
-import * as fs from 'fs';
-import * as path from '../browser-path';
 import { waitForHub as waitForHubFn } from '../hub-readiness';
 import type { SessionNotificationService } from '../notification-service';
 import { SessionService } from './types';
@@ -107,14 +105,18 @@ export class SessionServiceImpl implements SessionService {
         this.clearError(); this.incrementLoading();
         try { return await fn(); } catch (e) { this.captureError(e); throw e; } finally { this.decrementLoading(); }
     }
-    private getMcpConfig(): Record<string, unknown> | undefined {
+    private async getMcpConfig(): Promise<Record<string, unknown> | undefined> {
         try {
             const wt = this.lifecycle.activeProject?.worktree;
-            if (!wt || typeof (fs as { existsSync?: unknown }).existsSync !== 'function') { return undefined; }
-            const cp = path.join(wt, 'opencode.json');
-            if (!fs.existsSync(cp)) { return undefined; }
-            return JSON.parse(fs.readFileSync(cp, 'utf-8')).mcp as Record<string, unknown> | undefined;
-        } catch { return undefined; }
+            if (!wt) {
+                this.logger.warn('[SessionService] No worktree available for MCP config');
+                return undefined;
+            }
+            return await this.openCodeService.getMcpConfig(wt);
+        } catch (error) {
+            this.logger.error('[SessionService] Error reading MCP config: ' + (error instanceof Error ? error.message : String(error)));
+            return undefined;
+        }
     }
 
     /** Testability seam — tests stub this to avoid real hub polling. */
@@ -216,7 +218,7 @@ export class SessionServiceImpl implements SessionService {
         if (!this.lifecycle.activeProject) { throw this.setError('No active project'); }
         return this.withLoading(async () => {
             await this.waitForHub();
-            const mcpConfig = this.getMcpConfig();
+            const mcpConfig = await this.getMcpConfig();
             const session = await this.openCodeService.createSession(this.lifecycle.activeProject!.id, { title, mcp: mcpConfig });
             try { await this.openCodeService.initSession(this.lifecycle.activeProject!.id, session.id); }
             catch (e) { this.logger.warn(`[SessionService] Session init failed (non-fatal): ${e}`); }

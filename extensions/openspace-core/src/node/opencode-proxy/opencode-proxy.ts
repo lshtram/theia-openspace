@@ -32,6 +32,8 @@
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ILogger } from '@theia/core/lib/common/logger';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
     OpenCodeService,
     OpenCodeClient,
@@ -178,5 +180,22 @@ export class OpenCodeProxy implements OpenCodeService {
 
     executeShellCommand(command: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; error?: string }> {
         return this.nodeUtils.executeShellCommand(command, cwd);
+    }
+
+    async getMcpConfig(directory: string): Promise<Record<string, unknown> | undefined> {
+        const configPath = path.join(directory, 'opencode.json');
+        try {
+            const raw = await fs.promises.readFile(configPath, 'utf-8');
+            const config = JSON.parse(raw);
+            if (config.mcp) {
+                this.logger.info('[OpenCodeProxy] Found MCP config in: ' + configPath);
+                return config.mcp as Record<string, unknown>;
+            }
+            this.logger.debug('[OpenCodeProxy] No mcp section in: ' + configPath);
+            return undefined;
+        } catch {
+            this.logger.debug('[OpenCodeProxy] No opencode.json at: ' + configPath);
+            return undefined;
+        }
     }
 }
