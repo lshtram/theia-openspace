@@ -101,6 +101,33 @@ npx playwright test app-load.spec.ts mcp-tools.spec.ts chat-message-flow.spec.ts
 - **Symptom**: Tests throw `TypeError: sessionService.xxx is not a function` at component mount time.
 - **Solution**: Maintain a `createMockSessionService()` factory in each spec file (or a shared test util) that stubs all required methods. When adding new session service calls to `chat-widget.tsx`, immediately add matching stubs to all 5 spec files.
 
+## God Object Decomposition Patterns (Added 2026-02-27)
+
+### Pattern: Sub-Directories Over Flat Naming
+- **Context**: When decomposing a god object into multiple modules, two strategies: flat files with naming prefix (e.g., `hub-mcp-editor-tools.ts`) vs subdirectory (e.g., `hub-mcp/editor-tools.ts`).
+- **Decision**: Sub-directories chosen for this project. Each god object gets its own directory. The facade file keeps the original name inside the directory.
+- **Example**: `hub-mcp.ts` -> `hub-mcp/hub-mcp.ts` (facade) + `hub-mcp/editor-tools.ts`, etc.
+
+### Pattern: Stale Compiled Files When Source Moves From File to Directory
+- **Context**: When `foo.tsx` becomes `foo/foo.tsx`, the old `lib/browser/foo.js`, `foo.d.ts`, `foo.js.map`, `foo.d.ts.map` remain in `lib/`. Since `foo` is now a directory, these stale files conflict.
+- **Symptom**: `require('package/lib/browser/foo')` resolves to the stale `.js` file instead of the new `foo/foo.js` directory index.
+- **Solution**: After `tsc` compilation, manually `rm` the stale `lib/browser/foo.*` files. Then re-run `tsc` to generate the correct `lib/browser/foo/foo.js` etc.
+
+### Pattern: CSS Import Stub for Tests
+- **Context**: React components that import `.css` files (e.g., `import './style/prompt-input.css'`) fail in mocha because Node.js can't parse CSS.
+- **Solution**: Create empty CSS stubs in the `lib/` directory: `mkdir -p lib/browser/style && touch lib/browser/style/prompt-input.css`
+- **When**: Run after every `tsc` compilation, before running mocha tests.
+
+### Pattern: DI-Managed vs Plain Class Decomposition
+- **Context**: God objects come in two flavors: DI-managed (`@injectable()`) and plain classes.
+- **DI-managed** (opencode-proxy, session-service): Sub-services need their own `@injectable()` decorators, DI symbols, and bindings in the container module. Facade injects sub-services via DI.
+- **Plain class** (hub-mcp): Sub-modules export plain functions/classes. Facade imports and wires them directly. No DI changes needed.
+- **React components** (message-bubble, chat-widget, prompt-input): Extract custom hooks and sub-components. Facade wires hooks in the main component. No DI involved.
+
+### Pattern: Worktree Test Command Differences
+- **Context**: The worktree may have a different set of test files than master. The test count (1231 vs 1270) can differ.
+- **Solution**: Always verify the test baseline count in the worktree, not against master's count.
+
 ## Build & Deploy Gotchas (Updated 2026-02-23)
 
 ### CRITICAL: Verify Server Location Before Every Build

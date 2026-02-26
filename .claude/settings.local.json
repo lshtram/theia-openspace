@@ -19,7 +19,14 @@
       "Bash(kill 2281:*)",
       "Bash(sudo cp:*)",
       "Bash(lsof:*)",
-      "Bash(sudo lsof:*)"
+      "Bash(sudo lsof:*)",
+      "Bash(yarn test:*)",
+      "WebFetch(domain:opencode.ai)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:marketplace.visualstudio.com)",
+      "WebFetch(domain:zed.dev)"
     ]
   }
 }
