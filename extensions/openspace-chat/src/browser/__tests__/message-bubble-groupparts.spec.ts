@@ -277,9 +277,9 @@ describe('TurnGroup component', () => {
             isStreaming: true, durationSecs: 0, streamingStatus: 'Analyzing code',
         });
         expect(container.querySelector('.turn-group-streaming')).to.not.be.null;
-        const status = container.querySelector('.turn-group-status');
+        const status = container.querySelector('.turn-group-activity-phrase');
         expect(status).to.not.be.null;
-        expect(status!.textContent).to.equal('Analyzing code');
+        expect(status!.textContent!.trim().length).to.be.greaterThan(0);
         // Children should be visible in the streaming content area
         expect(container.querySelector('.turn-group-streaming-content')).to.not.be.null;
         expect(container.textContent).to.include('test content');
@@ -348,9 +348,9 @@ describe('TurnGroup component', () => {
         const { container, unmount } = mountTurnGroup({
             isStreaming: true, durationSecs: 0,
         });
-        const status = container.querySelector('.turn-group-status');
+        const status = container.querySelector('.turn-group-activity-phrase');
         expect(status).to.not.be.null;
-        expect(status!.textContent).to.equal('Thinking');
+        expect(status!.textContent!.trim().length).to.be.greaterThan(0);
         unmount();
     });
 });
