@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
-import type { SessionService } from 'openspace-core/lib/browser/session-service';
+import type { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { Message } from 'openspace-core/lib/common/opencode-protocol';
 
 interface SessionHoverPreviewProps {

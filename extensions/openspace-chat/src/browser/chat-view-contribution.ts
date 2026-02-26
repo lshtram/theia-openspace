@@ -19,7 +19,7 @@ import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-con
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { ChatWidget } from './chat-widget';
 
 /**

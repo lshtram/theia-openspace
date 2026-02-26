@@ -12,7 +12,7 @@ import {
     PreferenceNodeRendererCreator,
 } from '@theia/preferences/lib/browser/views/components/preference-node-renderer-creator';
 import { Preference } from '@theia/preferences/lib/browser/util/preference-types';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol';
 import { OpenspacePreferences } from './openspace-preferences';
 import { resolveEffectiveEnabled, toggleModel, toggleAll, toggleProvider } from './ai-models-toggle-logic';

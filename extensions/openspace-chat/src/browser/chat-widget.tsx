@@ -27,7 +27,7 @@ import { PreferenceService } from '@theia/core/lib/common/preferences';
 import { CommonCommands } from '@theia/core/lib/browser/common-frontend-contribution';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service';
+import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service/session-service';
 import { Message, MessagePartInput, Session, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { OPENSPACE_RENAME_SESSION_EVENT } from './chat-view-contribution';
 import { PromptInput } from './prompt-input/prompt-input';

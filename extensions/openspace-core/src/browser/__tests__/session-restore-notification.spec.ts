@@ -19,7 +19,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { expect } from 'chai';
 import * as sinon from 'sinon';
-import { SessionServiceImpl } from '../session-service';
+import { SessionServiceImpl } from '../session-service/session-service';
+import { StreamingStateServiceImpl } from '../session-service/streaming-state';
+import { MessageStoreServiceImpl } from '../session-service/message-store';
+import { SessionLifecycleServiceImpl } from '../session-service/session-lifecycle';
+import { InteractionServiceImpl } from '../session-service/interaction-handlers';
+import { ModelPreferenceServiceImpl } from '../session-service/model-preference';
 import { buildProject, buildSession } from '../../test-utils/fixture-builders';
 
 describe('SessionService — init() session restore failure notification (Issue 9)', () => {
@@ -55,12 +60,40 @@ describe('SessionService — init() session restore failure notification (Issue 
 
         sessionService = new SessionServiceImpl();
         (sessionService as any).openCodeService = mockOpenCodeService;
-        (sessionService as any).logger = {
+        const mockLogger = {
             info:  sinon.stub(),
             warn:  sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (sessionService as any).logger = mockLogger;
+
+        // Wire decomposed sub-services
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOpenCodeService;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOpenCodeService;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOpenCodeService;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOpenCodeService;
+
+        (sessionService as any).streamingState = streamingState;
+        (sessionService as any).messageStore = messageStore;
+        (sessionService as any).lifecycle = lifecycle;
+        (sessionService as any).interactions = interactions;
+        (sessionService as any).modelPref = modelPref;
 
         // Stub waitForHub so the session restore code path is reached
         sinon.stub(Object.getPrototypeOf(sessionService), 'waitForHub').resolves();

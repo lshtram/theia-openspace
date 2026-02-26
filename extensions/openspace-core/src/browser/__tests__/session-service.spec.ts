@@ -13,7 +13,12 @@ import { expect } from '../../test-utils/assertions';
 import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SessionServiceImpl } from '../session-service';
+import { SessionServiceImpl } from '../session-service/session-service';
+import { StreamingStateServiceImpl } from '../session-service/streaming-state';
+import { MessageStoreServiceImpl } from '../session-service/message-store';
+import { SessionLifecycleServiceImpl } from '../session-service/session-lifecycle';
+import { InteractionServiceImpl } from '../session-service/interaction-handlers';
+import { ModelPreferenceServiceImpl } from '../session-service/model-preference';
 import { OpenCodeService, Project, Session } from '../../common/opencode-protocol';
 import { buildProject, buildSession } from '../../test-utils/fixture-builders';
 
@@ -52,12 +57,40 @@ describe('SessionService', () => {
         // Create SessionService instance
         sessionService = new SessionServiceImpl();
         (sessionService as any).openCodeService = mockOpenCodeService;
-        (sessionService as any).logger = {
+        const mockLogger = {
             info: sinon.stub(),
             warn: sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (sessionService as any).logger = mockLogger;
+
+        // Wire decomposed sub-services
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOpenCodeService;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOpenCodeService;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOpenCodeService;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOpenCodeService;
+
+        (sessionService as any).streamingState = streamingState;
+        (sessionService as any).messageStore = messageStore;
+        (sessionService as any).lifecycle = lifecycle;
+        (sessionService as any).interactions = interactions;
+        (sessionService as any).modelPref = modelPref;
     });
 
     afterEach(() => {
@@ -204,13 +237,36 @@ describe('SessionService', () => {
         it('should throw error if no active project', async () => {
             // Create new service without project
             const newService = new SessionServiceImpl();
-            (newService as any).openCodeService = mockOpenCodeService;
-            (newService as any).logger = {
+            const mockLogger2 = {
                 info: sinon.stub(),
                 warn: sinon.stub(),
                 error: sinon.stub(),
                 debug: sinon.stub(),
             };
+            (newService as any).openCodeService = mockOpenCodeService;
+            (newService as any).logger = mockLogger2;
+
+            // Wire sub-services
+            const ms = new MessageStoreServiceImpl();
+            (ms as any).logger = mockLogger2;
+            (ms as any).openCodeService = mockOpenCodeService;
+            const ss = new StreamingStateServiceImpl();
+            (ss as any).logger = mockLogger2;
+            (ss as any).messageStore = ms;
+            const lc = new SessionLifecycleServiceImpl();
+            (lc as any).logger = mockLogger2;
+            (lc as any).openCodeService = mockOpenCodeService;
+            const ih = new InteractionServiceImpl();
+            (ih as any).logger = mockLogger2;
+            (ih as any).openCodeService = mockOpenCodeService;
+            const mp = new ModelPreferenceServiceImpl();
+            (mp as any).logger = mockLogger2;
+            (mp as any).openCodeService = mockOpenCodeService;
+            (newService as any).streamingState = ss;
+            (newService as any).messageStore = ms;
+            (newService as any).lifecycle = lc;
+            (newService as any).interactions = ih;
+            (newService as any).modelPref = mp;
             
             try {
                 await newService.deleteSession('session-1');
@@ -324,7 +380,7 @@ describe('SessionService', () => {
     describe('UUID format for IDs (T3-6)', () => {
         it('should use UUID format (not Date.now) for optimistic message part IDs', () => {
             const src = fs.readFileSync(
-                path.join(__dirname, '../session-service.ts'),
+                path.join(__dirname, '../session-service/streaming-state.ts'),
                 'utf-8'
             );
             // Should NOT use Date.now() for temp-part IDs
@@ -422,7 +478,7 @@ describe('isStreaming hysteresis', () => {
 
     function createTestService(): SessionServiceImpl {
         const service = new SessionServiceImpl();
-        (service as any).openCodeService = {
+        const mockOCS = {
             getProjects: sinon.stub(),
             getSession: sinon.stub(),
             getSessions: sinon.stub(),
@@ -433,12 +489,40 @@ describe('isStreaming hysteresis', () => {
             abortSession: sinon.stub(),
             connectToProject: sinon.stub().resolves()
         };
-        (service as any).logger = {
+        const mockLogger = {
             info: sinon.stub(),
             warn: sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (service as any).openCodeService = mockOCS;
+        (service as any).logger = mockLogger;
+
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOCS;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOCS;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOCS;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOCS;
+
+        (service as any).streamingState = streamingState;
+        (service as any).messageStore = messageStore;
+        (service as any).lifecycle = lifecycle;
+        (service as any).interactions = interactions;
+        (service as any).modelPref = modelPref;
         return service;
     }
 
@@ -484,7 +568,7 @@ describe('isStreaming hysteresis', () => {
 describe('sendMessage() SSE-first message delivery', () => {
     function createTestService(): SessionServiceImpl {
         const service = new SessionServiceImpl();
-        (service as any).openCodeService = {
+        const mockOCS = {
             getProjects: sinon.stub(),
             getSession: sinon.stub(),
             getSessions: sinon.stub(),
@@ -495,12 +579,40 @@ describe('sendMessage() SSE-first message delivery', () => {
             abortSession: sinon.stub(),
             connectToProject: sinon.stub().resolves()
         };
-        (service as any).logger = {
+        const mockLogger = {
             info: sinon.stub(),
             warn: sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (service as any).openCodeService = mockOCS;
+        (service as any).logger = mockLogger;
+
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOCS;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOCS;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOCS;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOCS;
+
+        (service as any).streamingState = streamingState;
+        (service as any).messageStore = messageStore;
+        (service as any).lifecycle = lifecycle;
+        (service as any).interactions = interactions;
+        (service as any).modelPref = modelPref;
         return service;
     }
 
@@ -511,8 +623,8 @@ describe('sendMessage() SSE-first message delivery', () => {
     it('does not immediately push the assistant message from RPC result', async () => {
         const service = createTestService();
         const mockOpenCodeService = (service as any).openCodeService;
-        (service as any)._activeProject = { id: 'proj-1' };
-        (service as any)._activeSession = { id: 'sess-1' };
+        ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+        ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
         // Mock createMessage to return a result with an assistant message
         mockOpenCodeService.createMessage = sinon.stub().resolves({
@@ -527,10 +639,10 @@ describe('sendMessage() SSE-first message delivery', () => {
         expect(assistantMessages.length).to.equal(0);
 
         // Clean up the pending fallback timer
-        const timer = (service as any)._rpcFallbackTimer;
+        const timer = (service as any).streamingState._rpcFallbackTimer;
         if (timer) {
             clearTimeout(timer);
-            (service as any)._rpcFallbackTimer = undefined;
+            (service as any).streamingState._rpcFallbackTimer = undefined;
         }
     });
 
@@ -539,8 +651,8 @@ describe('sendMessage() SSE-first message delivery', () => {
         try {
             const service = createTestService();
             const mockOpenCodeService = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             mockOpenCodeService.createMessage = sinon.stub().resolves({
                 info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
@@ -570,8 +682,8 @@ describe('sendMessage() SSE-first message delivery', () => {
         try {
             const service = createTestService();
             const mockOCS = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             mockOCS.createMessage = sinon.stub().resolves({
                 info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
@@ -605,8 +717,8 @@ describe('sendMessage() SSE-first message delivery', () => {
         try {
             const service = createTestService();
             const mockOCS = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             mockOCS.createMessage = sinon.stub().resolves({
                 info: { id: 'msg-final', sessionID: 'sess-1', role: 'assistant', time: { created: Date.now() } },
@@ -634,7 +746,7 @@ describe('sendMessage() SSE-first message delivery', () => {
 describe('sendMessage() RPC fallback empty-parts safety net', () => {
     function createTestService(): SessionServiceImpl {
         const service = new SessionServiceImpl();
-        (service as any).openCodeService = {
+        const mockOCS = {
             getProjects: sinon.stub(),
             getSession: sinon.stub(),
             getSessions: sinon.stub(),
@@ -646,12 +758,40 @@ describe('sendMessage() RPC fallback empty-parts safety net', () => {
             abortSession: sinon.stub(),
             connectToProject: sinon.stub().resolves()
         };
-        (service as any).logger = {
+        const mockLogger = {
             info: sinon.stub(),
             warn: sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (service as any).openCodeService = mockOCS;
+        (service as any).logger = mockLogger;
+
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOCS;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOCS;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOCS;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOCS;
+
+        (service as any).streamingState = streamingState;
+        (service as any).messageStore = messageStore;
+        (service as any).lifecycle = lifecycle;
+        (service as any).interactions = interactions;
+        (service as any).modelPref = modelPref;
         return service;
     }
 
@@ -664,8 +804,8 @@ describe('sendMessage() RPC fallback empty-parts safety net', () => {
         try {
             const service = createTestService();
             const mockOCS = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             // createMessage returns empty parts (as observed in the bug)
             mockOCS.createMessage = sinon.stub().resolves({
@@ -705,8 +845,8 @@ describe('sendMessage() RPC fallback empty-parts safety net', () => {
         try {
             const service = createTestService();
             const mockOCS = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             // createMessage returns populated parts
             mockOCS.createMessage = sinon.stub().resolves({
@@ -738,8 +878,8 @@ describe('sendMessage() RPC fallback empty-parts safety net', () => {
         try {
             const service = createTestService();
             const mockOCS = (service as any).openCodeService;
-            (service as any)._activeProject = { id: 'proj-1' };
-            (service as any)._activeSession = { id: 'sess-1' };
+            ((service as any).lifecycle as any)._activeProject = { id: 'proj-1' };
+            ((service as any).lifecycle as any)._activeSession = { id: 'sess-1' };
 
             // createMessage returns empty parts
             mockOCS.createMessage = sinon.stub().resolves({
@@ -771,7 +911,7 @@ describe('sendMessage() RPC fallback empty-parts safety net', () => {
 describe('applyPartDelta SSE reconnect duplication', () => {
     function createTestService(): SessionServiceImpl {
         const service = new SessionServiceImpl();
-        (service as any).openCodeService = {
+        const mockOCS = {
             getProjects: sinon.stub(),
             getSession: sinon.stub(),
             getSessions: sinon.stub(),
@@ -782,12 +922,40 @@ describe('applyPartDelta SSE reconnect duplication', () => {
             abortSession: sinon.stub(),
             connectToProject: sinon.stub().resolves()
         };
-        (service as any).logger = {
+        const mockLogger = {
             info: sinon.stub(),
             warn: sinon.stub(),
             error: sinon.stub(),
             debug: sinon.stub(),
         };
+        (service as any).openCodeService = mockOCS;
+        (service as any).logger = mockLogger;
+
+        const messageStore = new MessageStoreServiceImpl();
+        (messageStore as any).logger = mockLogger;
+        (messageStore as any).openCodeService = mockOCS;
+
+        const streamingState = new StreamingStateServiceImpl();
+        (streamingState as any).logger = mockLogger;
+        (streamingState as any).messageStore = messageStore;
+
+        const lifecycle = new SessionLifecycleServiceImpl();
+        (lifecycle as any).logger = mockLogger;
+        (lifecycle as any).openCodeService = mockOCS;
+
+        const interactions = new InteractionServiceImpl();
+        (interactions as any).logger = mockLogger;
+        (interactions as any).openCodeService = mockOCS;
+
+        const modelPref = new ModelPreferenceServiceImpl();
+        (modelPref as any).logger = mockLogger;
+        (modelPref as any).openCodeService = mockOCS;
+
+        (service as any).streamingState = streamingState;
+        (service as any).messageStore = messageStore;
+        (service as any).lifecycle = lifecycle;
+        (service as any).interactions = interactions;
+        (service as any).modelPref = modelPref;
         return service;
     }
 

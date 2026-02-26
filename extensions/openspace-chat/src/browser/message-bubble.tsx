@@ -17,7 +17,7 @@
 
 import * as React from '@theia/core/shared/react';
 import { Message, MessagePart, OpenCodeService, MessageWithParts, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
-import type { SessionService } from 'openspace-core/lib/browser/session-service';
+import type { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { renderMarkdown } from './markdown-renderer';
 import { computeSimpleDiff, computeSplitDiff } from './diff-utils';
 import { pickPhrase, statusToCategory } from './streaming-vocab';
