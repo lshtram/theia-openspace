@@ -12,6 +12,7 @@
     "@theia/ai-core": "1.68.2",
     "@theia/ai-chat": "1.68.2",
     "anser": "^2.3.5",
+    "dompurify": "^3.3.1",
     "mermaid": "^11.4.1",
     "markdown-it-texmath": "^1.0.0"
   },
