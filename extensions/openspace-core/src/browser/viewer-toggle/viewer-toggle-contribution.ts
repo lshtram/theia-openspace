@@ -7,6 +7,7 @@ import { inject, injectable } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shell';
 import { OpenerService, open as openUri } from '@theia/core/lib/browser/opener-service';
+import { Disposable } from '@theia/core/lib/common/disposable';
 import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { ViewerToggleService } from './viewer-toggle-service';
@@ -67,6 +68,6 @@ export class ViewerToggleContribution implements FrontendApplicationContribution
         );
 
         // Dispose the listener when the widget is detached.
-        (widget as { toDisposeOnDetach?: Disposable[] }).toDisposeOnDetach?.push(disposable);
+        (widget as { toDisposeOnDetach?: Disposable[] }).toDisposeOnDetach?.push(Disposable.create(() => disposable.dispose()));
     }
 }

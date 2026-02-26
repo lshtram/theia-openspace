@@ -1147,13 +1147,6 @@ export class SessionServiceImpl implements SessionService {
         // session.compacted SSE will refresh the message list
     }
 
-    async renameSession(sessionId: string, title: string): Promise<void> {
-        if (!this._activeProject) { return; }
-        this.logger.info(`[SessionService] Operation: renameSession(${sessionId}, ${title})`);
-        const updated = await this.openCodeService.renameSession(this._activeProject.id, sessionId, title);
-        this.notifySessionChanged(updated);
-    }
-
     /**
      * Delete a session.
      * If the deleted session was active, clears active session and messages.

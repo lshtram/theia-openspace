@@ -320,6 +320,8 @@ ChatHeaderBar
 ---
 
 #### P2-C: Toast / Notification System
+> **Superseded (2026-02-26):** This item is fully covered by Phase 2.8 `docs/plans/2026-02-26-notifications-feedback.md` (N1-A turn-complete toast, N1-B error toast, N1-C preferences, N2-A sounds, N2-B copied state). Uses Theia's built-in `MessageService` instead of a custom toast stack. Do not implement P2-C independently.
+
 **Effort:** Medium (4–6 hours)
 
 **What:** Add a lightweight toast stack for turn-complete, errors, and file operation feedback.
@@ -348,6 +350,8 @@ ChatHeaderBar
 ---
 
 #### P2-D: Split Diff View Toggle
+> **OUT OF SCOPE — DO NOT IMPLEMENT (2026-02-26):** The inline diff in tool blocks is sufficient for showing what a tool call changed. Full diff review belongs in Theia's native diff editor. Expanding the inline diff into a split-view creates a mini-IDE inside the chat panel — the wrong abstraction layer. **Do not re-introduce this item.**
+
 **Effort:** Medium (4–6 hours)
 
 **What:** Add toggle between unified (current) and split (side-by-side) diff in `ToolBlock`.
@@ -389,6 +393,8 @@ ChatHeaderBar
 ---
 
 #### P3-A: Standalone Review Panel
+> **OUT OF SCOPE — DO NOT IMPLEMENT (2026-02-26):** Theia-openspace will rely on Theia's native diff editor and file-tree integration for reviewing file changes (Monaco's built-in diff view, Source Control panel). A custom React diff panel duplicates native IDE capability and creates permanent maintenance debt. The opencode `SessionReviewTab` has no equivalent in theia-openspace by design. **Do not re-introduce this item in any future plan or review.**
+
 **Effort:** Large (3–5 days)
 
 **What:** A dedicated right-panel view showing file diffs from the current session, matching `SessionReviewTab`.
@@ -411,6 +417,8 @@ ChatHeaderBar
 ---
 
 #### P3-B: Line Comments on Diffs
+> **OUT OF SCOPE — DO NOT IMPLEMENT (2026-02-26):** Depends on P3-A (standalone review panel), which is excluded. Line-level commentary belongs in the native Theia editor (CodeLens, inline decorations) if ever needed. **Do not re-introduce this item.**
+
 **Effort:** Large (3–5 days)
 
 **What:** Allow adding comments to specific lines in the review panel, with comments persisted per session.
@@ -471,6 +479,8 @@ ChatHeaderBar
 ---
 
 #### P3-E: Model Detail Tooltip + Pricing
+> **Superseded (2026-02-26):** This item is fully covered by Phase 2.7 `docs/plans/2026-02-26-model-selector-enhancements.md` (M2-A hover tooltip, M1-B free tag, M1-C status tags, M2-B favorites). Do not implement P3-E independently.
+
 **Effort:** Medium (4–6 hours)
 
 **What:** Show model capabilities (context window, pricing) in a tooltip from the model selector.
@@ -494,14 +504,14 @@ ChatHeaderBar
 | P1-E | Context usage indicator in footer | `chat-widget.tsx:ChatFooter` | S | 🔴 P1 |
 | P2-A | File attachment with line range | `types.ts`, `prompt-input.tsx`, `build-request-parts.ts` | L | 🟡 P2 |
 | P2-B | Prompt context items panel | new `prompt-context-items.tsx` | M | 🟡 P2 |
-| P2-C | Toast / notification system | new `toast-service.ts`, `toast-stack.tsx`, `chat-widget.tsx` | M | 🟡 P2 |
-| P2-D | Split diff view toggle | `diff-utils.ts`, `message-bubble.tsx`, new `diff-split-view.tsx` | M | 🟡 P2 |
+| P2-C | ~~Toast / notification system~~ | **Superseded by Phase 2.8** (notifications-feedback.md) | M | ~~🟡 P2~~ |
+| P2-D | ~~Split diff view toggle~~ | **OUT OF SCOPE** — use Theia native diff editor | M | ~~🟡 P2~~ |
 | P2-E | Session summary badge in header | `chat-widget.tsx:ChatHeaderBar` | S | 🟡 P2 |
-| P3-A | Standalone review panel | new `review-panel/` | L | 🟢 P3 |
-| P3-B | Line comments on diffs | new `comments-service.ts`, `review-panel/` | L | 🟢 P3 |
+| P3-A | ~~Standalone review panel~~ | **OUT OF SCOPE** — use Theia native diff editor | L | ~~🟢 P3~~ |
+| P3-B | ~~Line comments on diffs~~ | **OUT OF SCOPE** — depends on P3-A | L | ~~🟢 P3~~ |
 | P3-C | Scroll-spy + message navigation | `message-timeline.tsx`, `chat-view-contribution.ts` | M | 🟢 P3 |
 | P3-D | Per-session scroll persistence | new `scroll-position-store.ts`, `message-timeline.tsx` | S | 🟢 P3 |
-| P3-E | Model detail tooltip + pricing | `model-selector.tsx` | M | 🟢 P3 |
+| P3-E | ~~Model detail tooltip + pricing~~ | **Superseded by Phase 2.7** (model-selector-enhancements.md) | M | ~~🟢 P3~~ |
 
 *S = small (<4h), M = medium (4–8h), L = large (1–3 days)*
 

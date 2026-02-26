@@ -315,6 +315,17 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         </svg>
                     </button>
                 )}
+                {/* P2-E: Session summary diff badge */}
+                {(() => {
+                    const summary = (activeSession as unknown as { summary?: { additions: number; deletions: number; files: number } } | undefined)?.summary;
+                    if (!summary) return null;
+                    return (
+                        <span className="session-summary-badge" title={`${summary.files} file(s) changed`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, marginLeft: 4, opacity: 0.8 }}>
+                            <span style={{ color: '#4caf50' }}>+{summary.additions}</span>
+                            <span style={{ color: '#f44336' }}>-{summary.deletions}</span>
+                        </span>
+                    );
+                })()}
 
                 {showSessionList && (
                     <div className="session-list-dropdown" role="listbox" aria-label="Session list">
@@ -523,14 +534,22 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     );
 };
 
-const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streamingStatus: string }> = ({ isStreaming, sessionBusy, streamingStatus }) => {
+const ChatFooter: React.FC<{ isStreaming: boolean; sessionBusy: boolean; streamingStatus: string; contextUsage?: { input: number; output: number; contextLimit?: number } | null }> = ({ isStreaming, sessionBusy, streamingStatus, contextUsage }) => {
     const active = isStreaming || sessionBusy;
+    const totalTokens = contextUsage ? contextUsage.input + contextUsage.output : 0;
+    const warningThreshold = contextUsage?.contextLimit ? contextUsage.contextLimit * 0.8 : Infinity;
+    const isWarning = contextUsage && totalTokens > warningThreshold;
     return (
         <div className="chat-footer-bar">
             <div className="chat-footer-status">
                 <div className={`status-dot ${active ? 'streaming' : 'connected'}`} />
                 <span>{active ? (streamingStatus || 'Thinking') : 'Ready'}</span>
             </div>
+            {contextUsage && totalTokens > 0 && (
+                <div className={`context-usage${isWarning ? ' context-usage--warning' : ''}`} title="Context token usage">
+                    {totalTokens.toLocaleString()} tokens
+                </div>
+            )}
         </div>
     );
 };
@@ -1116,6 +1135,22 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const hasActiveSession = sessionService.activeSession !== undefined;
     const activeSession = sessionService.activeSession;
 
+    // P1-E: Compute context usage from the last assistant message's step-finish parts
+    const contextUsage = React.useMemo(() => {
+        if (isStreaming) return null;
+        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+        if (!lastAssistant) return null;
+        const stepFinish = (lastAssistant.parts ?? []).filter((p: any) => p.type === 'step-finish');
+        if (stepFinish.length === 0) return null;
+        let totalInput = 0, totalOutput = 0, contextLimit: number | undefined;
+        for (const p of stepFinish) {
+            totalInput += (p as any).tokens?.input || 0;
+            totalOutput += (p as any).tokens?.output || 0;
+            if ((p as any).contextLimit) contextLimit = (p as any).contextLimit;
+        }
+        return totalInput + totalOutput > 0 ? { input: totalInput, output: totalOutput, contextLimit } : null;
+    }, [messages, isStreaming]);
+
     // Toggle session dropdown
     const handleToggleDropdown = React.useCallback(() => {
         setShowSessionList(prev => !prev);
@@ -1236,7 +1271,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             openCodeService={openCodeService}
                             sessionId={activeSession?.id}
                         />
-                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} />
+                        <ChatFooter isStreaming={isStreaming} sessionBusy={sessionBusy} streamingStatus={streamingStatus} contextUsage={contextUsage} />
                     </>
                 )}
             </div>

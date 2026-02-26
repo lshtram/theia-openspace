@@ -122,9 +122,20 @@ function makeMockSessionService(overrides: Partial<any> = {}): any {
         pendingPermissions: [],
         streamingMessageId: undefined,
         currentStreamingStatus: '',
+        sessionStatus: undefined,
+        todos: [],
         answerQuestion: sinon.stub().resolves(),
         rejectQuestion: sinon.stub().resolves(),
         replyPermission: sinon.stub().resolves(),
+        shareSession: sinon.stub().resolves('https://share.example.com/session'),
+        unshareSession: sinon.stub().resolves(),
+        forkSession: sinon.stub().resolves(undefined),
+        compactSession: sinon.stub().resolves(),
+        revertSession: sinon.stub().resolves(),
+        unrevertSession: sinon.stub().resolves(),
+        getSessionError: sinon.stub().returns(undefined),
+        getMessagesForPreview: sinon.stub().resolves([]),
+        onSessionStatusChanged: sinon.stub().returns({ dispose: sinon.stub() }),
         ...overrides,
     };
 }
@@ -226,7 +237,7 @@ describe('P1-A: Copy response button', () => {
 describe('P1-B: Inline session title editing', () => {
     afterEach(() => { document.body.innerHTML = ''; sinon.restore(); });
 
-    it('shows an editable title input when the session title is clicked', async () => {
+    it('shows an editable title input when the session title is double-clicked', async () => {
         const svc = makeMockSessionService();
         const { container, unmount } = renderChatComponent(svc);
 
@@ -235,9 +246,12 @@ describe('P1-B: Inline session title editing', () => {
         const titleEl = container.querySelector('.chat-header-title') as HTMLElement;
         expect(titleEl).to.not.be.null;
 
-        await act(async () => { titleEl.click(); });
+        await act(async () => {
+            const win = titleEl.ownerDocument.defaultView!;
+            titleEl.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true }));
+        });
 
-        // After clicking, an input for editing the title should appear
+        // After double-clicking, an input for editing the title should appear
         const titleInput = container.querySelector('.session-title-input') as HTMLInputElement;
         expect(titleInput).to.not.be.null;
         unmount();
@@ -250,7 +264,10 @@ describe('P1-B: Inline session title editing', () => {
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
         const titleEl = container.querySelector('.chat-header-title') as HTMLElement;
-        await act(async () => { titleEl.click(); });
+        await act(async () => {
+            const win = titleEl.ownerDocument.defaultView!;
+            titleEl.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true }));
+        });
 
         const titleInput = container.querySelector('.session-title-input') as HTMLInputElement;
         expect(titleInput.value).to.equal('My Cool Session');
@@ -264,7 +281,10 @@ describe('P1-B: Inline session title editing', () => {
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
         const titleEl = container.querySelector('.chat-header-title') as HTMLElement;
-        await act(async () => { titleEl.click(); });
+        await act(async () => {
+            const win = titleEl.ownerDocument.defaultView!;
+            titleEl.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true }));
+        });
 
         const titleInput = container.querySelector('.session-title-input') as HTMLInputElement;
 
@@ -318,11 +338,15 @@ describe('P1-B: Inline session title editing', () => {
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
         const titleEl = container.querySelector('.chat-header-title') as HTMLElement;
-        await act(async () => { titleEl.click(); });
+        await act(async () => {
+            const win = titleEl.ownerDocument.defaultView!;
+            titleEl.dispatchEvent(new win.MouseEvent('dblclick', { bubbles: true }));
+        });
 
         const titleInput = container.querySelector('.session-title-input') as HTMLInputElement;
         await act(async () => {
-            titleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            const win = titleInput.ownerDocument.defaultView!;
+            titleInput.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         });
 
         // Input should be gone; title button should be visible again

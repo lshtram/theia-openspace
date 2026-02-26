@@ -442,11 +442,6 @@ export class OpenCodeProxy implements OpenCodeService {
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/fork`, messageId ? { messageID: messageId } : {});
     }
 
-    async renameSession(_projectId: string, sessionId: string, title: string): Promise<Session> {
-        // OpenCode API: POST /session/:id — update session title
-        return this.post<Session>(`/session/${encodeURIComponent(sessionId)}`, { title });
-    }
-
     async getDiff(_projectId: string, sessionId: string): Promise<string> {
         // OpenCode API: GET /session/:id/diff — returns text, not JSON
         const url = this.buildUrl(`/session/${encodeURIComponent(sessionId)}/diff`);

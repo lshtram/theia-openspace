@@ -117,7 +117,7 @@ describe('path-validator', () => {
         } as unknown as OpenCodeService;
         const result = await validatePath('src/foo.ts', ws as unknown as WorkspaceService, makeLogger() as unknown as ILogger, openCodeService, opts);
         expect(result).to.equal(resolvedPath);
-        expect(openCodeService.validatePath.calledOnce).to.be.true;
+        expect((openCodeService.validatePath as unknown as sinon.SinonStub).calledOnce).to.be.true;
     });
 
     it('rejects when openCodeService reports symlink outside workspace', async () => {

@@ -32,6 +32,8 @@ task_id: TheiaOpenspaceWorkplan
 | **Phase 2: Chat Polish** | ✅ COMPLETE (2.0–2.8) | Code-level audit 2026-02-25: all core tasks done |
 | **Phase 2.5: Chat Parity Gaps** | ✅ COMPLETE | All 15 features done (P1-A→E, P2-A→E, P3-A→E); branch `feature/chat-feature-parity` |
 | **Phase 2.6: Session Management Parity** | ⬜ NOT STARTED | 13 gaps vs opencode; see session-management-parity.md |
+| **Phase 2.7: Model Selector Enhancements** | ⬜ NOT STARTED | 7 gaps vs opencode; see model-selector-enhancements.md |
+| **Phase 2.8: Notifications & Feedback** | ⬜ NOT STARTED | 6 gaps vs opencode; see notifications-feedback.md |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ✅ COMPLETE | Presentation done; whiteboard MCP fully wired |
 | **Phase T4: PatchEngine** | ✅ COMPLETE | OCC-versioned artifact mutations via MCP tools |
 | **Phase T5: ArtifactStore** | ✅ COMPLETE | Atomic writes, backups, audit log |
@@ -42,7 +44,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 | Phase EW.5: Markdown Viewer | ✅ COMPLETE | openspace-viewers extension; MarkdownViewerWidget with Mermaid diagram support and Monaco edit mode; 16 new unit tests (569 total passing) |
 
-**Next Task:** Phase 2.6: Session Management Parity (13 items, S1→S3) — Phase 2.5 Chat Parity complete.
+**Next Task:** Phase 2.6: Session Management Parity (13 items, S1→S3) + Phase 2.7: Model Selector Enhancements (7 items, M1→M2) + Phase 2.8: Notifications & Feedback (6 items, N1→N2) — Phase 2.5 Chat Parity complete.
 
 ---
 
@@ -59,6 +61,16 @@ task_id: TheiaOpenspaceWorkplan
 - Sprint 1 (S1): S1-A inline title edit (shared with P1-B), S1-B skeleton loader, S1-C archive animation, S1-D back-nav, S1-E cascade delete.
 - Sprint 2 (S2): S2-A error dot, S2-B diff badge (shared with P2-E), S2-C panel rename, S2-D share UI, S2-E keybinds.
 - Sprint 3 (S3): S3-A hover preview, S3-B unseen tracking, S3-C scroll persistence.
+
+**Phase 2.7 — Model Selector Enhancements:** 7 gaps vs opencode client (recent models persistence, free/status tags, tooltip, favorites, provider sort, empty state CTA). Full plan: `docs/plans/2026-02-26-model-selector-enhancements.md`.
+- Sprint 1 (M1): M1-A recent persistence, M1-B free tag, M1-C status tags, M1-D provider sort.
+- Sprint 2 (M2): M2-A hover tooltip, M2-B favorites, M2-C provider CTA.
+
+**Phase 2.8 — Notifications & Feedback:** 6 gaps vs opencode client (turn-complete toast, error toast, preferences, sounds, copied state, context warning). Full plan: `docs/plans/2026-02-26-notifications-feedback.md`.
+- Sprint 1 (N1): N1-A turn-complete toast, N1-B error toast, N1-C notification preferences.
+- Sprint 2 (N2): N2-A sound system, N2-B copied state, N2-C context warning.
+
+**Permanently excluded — Diff / Review panel:** opencode's `SessionReviewTab`, split diff, and line comments are **intentionally not ported**. Theia provides native diff editing (Monaco diff editor, Source Control panel) that is superior to any custom React implementation. Do not create a Phase 2.x for this area. See exclusion notes in `docs/plans/2026-02-25-chat-feature-parity.md` (P2-D, P3-A, P3-B).
 
 **Also available (parallel):** Phase 5 Polish & Desktop (Electron build, theming, settings UI) and Phase 6 extended features remain unblocked.
 
