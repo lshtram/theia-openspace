@@ -30,6 +30,11 @@ interface FlatModel {
     modelId: string;
     modelName: string;
     fullId: string; // provider/model
+    free?: boolean;
+    latest?: boolean;
+    inputPrice?: number;
+    outputPrice?: number;
+    contextLength?: number;
 }
 
 /**
@@ -79,7 +84,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                         providerName: provider.name,
                         modelId: model.id,
                         modelName: model.name,
-                        fullId
+                        fullId,
+                        free: (model as unknown as { free?: boolean }).free,
+                        latest: (model as unknown as { latest?: boolean }).latest,
+                        inputPrice: (model as unknown as { inputPrice?: number }).inputPrice,
+                        outputPrice: (model as unknown as { outputPrice?: number }).outputPrice,
+                        contextLength: (model as unknown as { contextLength?: number }).contextLength,
                     });
                 }
             }
@@ -182,6 +192,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 
     // Track focused option index for keyboard navigation
     const [focusedIndex, setFocusedIndex] = React.useState(-1);
+    // P3-E: Track hovered model for tooltip
+    const [hoveredModelId, setHoveredModelId] = React.useState<string | undefined>();
 
     // Reset focused index when dropdown opens/closes or filtered models change
     React.useEffect(() => {
@@ -384,7 +396,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                             {recentModelObjects.length > 0 && !searchQuery && (
                                 <div className="model-section">
                                     <div className="model-section-header">Recent</div>
-                                    {recentModelObjects.map(model => {
+                                     {recentModelObjects.map(model => {
                                         const flatIdx = filteredModels.indexOf(model);
                                         return (
                                             <ModelOption
@@ -392,7 +404,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                                                 model={model}
                                                 isSelected={model.fullId === activeModel}
                                                 isFocused={flatIdx === focusedIndex}
+                                                isHovered={hoveredModelId === model.fullId}
                                                 onSelect={handleSelect}
+                                                onHover={setHoveredModelId}
                                             />
                                         );
                                     })}
@@ -413,7 +427,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                                                 model={model}
                                                 isSelected={model.fullId === activeModel}
                                                 isFocused={flatIdx === focusedIndex}
+                                                isHovered={hoveredModelId === model.fullId}
                                                 onSelect={handleSelect}
+                                                onHover={setHoveredModelId}
                                             />
                                         );
                                     })}
@@ -443,10 +459,27 @@ interface ModelOptionProps {
     model: FlatModel;
     isSelected: boolean;
     isFocused?: boolean;
+    isHovered?: boolean;
     onSelect: (fullId: string) => void;
+    onHover?: (fullId: string | undefined) => void;
 }
 
-const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, onSelect }) => {
+const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, isHovered, onSelect, onHover }) => {
+    const divRef = React.useRef<HTMLDivElement>(null);
+    const [localHovered, setLocalHovered] = React.useState(false);
+
+    React.useEffect(() => {
+        const el = divRef.current;
+        if (!el) return;
+        const onEnter = () => { setLocalHovered(true); onHover?.(model.fullId); };
+        const onLeave = () => { setLocalHovered(false); onHover?.(undefined); };
+        el.addEventListener('mouseenter', onEnter);
+        el.addEventListener('mouseleave', onLeave);
+        return () => { el.removeEventListener('mouseenter', onEnter); el.removeEventListener('mouseleave', onLeave); };
+    }, [model.fullId, onHover]);
+
+    const showTooltip = (isHovered || localHovered) && (model.contextLength !== undefined || model.inputPrice !== undefined || model.outputPrice !== undefined);
+
     const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -456,6 +489,7 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
 
     return (
         <div
+            ref={divRef}
             className={`model-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
             onClick={() => onSelect(model.fullId)}
             onKeyDown={handleKeyDown}
@@ -468,7 +502,19 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
                 {isSelected && <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true"><circle cx="4" cy="4" r="3"/></svg>}
                 {model.modelName}
             </span>
+            {model.free && <span className="model-free-badge">Free</span>}
+            {model.latest && <span className="model-latest-badge">Latest</span>}
             <span className="model-option-id">{model.fullId}</span>
+            {showTooltip && (
+                <div className="model-tooltip">
+                    {model.contextLength !== undefined && (
+                        <span className="model-tooltip-context">{Math.round(model.contextLength / 1000)}k ctx</span>
+                    )}
+                    {model.inputPrice !== undefined && (
+                        <span className="model-tooltip-price">${model.inputPrice}/${model.outputPrice} per M</span>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

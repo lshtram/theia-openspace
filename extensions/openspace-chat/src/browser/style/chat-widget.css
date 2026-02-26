@@ -36,42 +36,6 @@
     font-style: italic;
 }
 
-/* Inline title editing input — matches the title button dimensions */
-.openspace-chat-widget .session-title-input {
-    flex: 1;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--oc-text, #ccc);
-    background: var(--oc-bg-active, rgba(255,255,255,0.1));
-    border: 1px solid var(--oc-border, rgba(255,255,255,0.15));
-    border-radius: 3px;
-    padding: 3px 6px;
-    outline: none;
-    min-width: 0;
-    width: 100%;
-}
-
-.openspace-chat-widget .session-title-input:focus {
-    border-color: var(--oc-accent, #007acc);
-}
-
-.openspace-chat-widget .session-title-input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Back-to-parent navigation button (forked sessions) */
-.openspace-chat-widget .back-to-parent {
-    font-size: 14px;
-    opacity: 0.7;
-    flex-shrink: 0;
-    padding: 2px 4px;
-}
-
-.openspace-chat-widget .back-to-parent:hover {
-    opacity: 1;
-}
-
 /* Model pill inside header */
 .openspace-chat-widget .model-selector {
     position: relative;
@@ -1431,30 +1395,6 @@
     gap: 8px;
 }
 
-/* Skeleton shimmer loader */
-@keyframes shimmer {
-    0%   { background-position: -200% center; }
-    100% { background-position:  200% center; }
-}
-
-.openspace-sessions-widget .sessions-skeleton {
-    padding: 8px 0;
-}
-
-.openspace-sessions-widget .session-skeleton-item {
-    height: 14px;
-    border-radius: 4px;
-    background: linear-gradient(
-        90deg,
-        var(--oc-bg-hover, rgba(255,255,255,0.05)) 25%,
-        var(--oc-bg-active, rgba(255,255,255,0.12)) 50%,
-        var(--oc-bg-hover, rgba(255,255,255,0.05)) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.4s ease infinite;
-    margin: 6px 12px;
-}
-
 .openspace-sessions-widget .sessions-widget-list {
     flex: 1;
     overflow-y: auto;
@@ -1491,26 +1431,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.openspace-sessions-widget .session-status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.openspace-sessions-widget .session-status-dot.error {
-    background: #f14c4c;
-    box-shadow: 0 0 4px rgba(241, 76, 76, 0.4);
-}
-
-.openspace-sessions-widget .session-status-badge {
-    font-size: 10px;
-    flex-shrink: 0;
 }
 
 .openspace-sessions-widget .sessions-widget-item-actions {
@@ -1527,51 +1447,7 @@
 
 .openspace-sessions-widget .sessions-widget-archive {
     opacity: 0;
-    transition: opacity 0.15s ease;
-}
-
-/* Always visible on active/focused items (keyboard a11y) */
-.openspace-sessions-widget .sessions-widget-item.active .sessions-widget-archive,
-.openspace-sessions-widget .sessions-widget-item:focus-within .sessions-widget-archive {
-    opacity: 1;
-}
-
-/* Inline title edit input in sessions panel */
-.openspace-sessions-widget .sessions-title-input {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--theia-focusBorder, #007acc);
-    color: inherit;
-    font: inherit;
-    font-size: inherit;
-    padding: 0;
-    outline: none;
-    width: 100%;
-}
-
-.openspace-sessions-widget .sessions-title-input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Diff summary badge (+N -M) on session list items */
-.openspace-sessions-widget .session-diff-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 10px;
-    font-family: var(--vscode-editor-font-family, monospace);
-    flex-shrink: 0;
-}
-
-.openspace-sessions-widget .session-diff-add {
-    color: var(--theia-gitDecoration-addedResourceForeground, #73c991);
-}
-
-.openspace-sessions-widget .session-diff-del {
-    color: var(--theia-gitDecoration-deletedResourceForeground, #f14c4c);
+    transition: opacity 0.1s;
 }
 
 /* Sessions widget icon buttons (standalone, not scoped to .openspace-chat-widget) */
@@ -2595,6 +2471,75 @@
 }
 .session-error-dismiss:hover { opacity: 1; }
 
+/* ── P1-A: Copy icon + P1-D: Token/cost bar — footer row ──────────── */
+
+/* Footer row: flex container that holds the cost bar (left) and copy icon (right) */
+.message-bubble-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    min-height: 18px;
+}
+
+/* Copy icon — invisible until the containing bubble is hovered */
+.copy-response-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 2px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--theia-foreground, #ccc);
+    opacity: 0;                         /* hidden by default */
+    transition: opacity 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+    margin-left: auto;                  /* push to far right when no cost bar */
+}
+
+/* Reveal subtly when the message bubble is hovered */
+.message-bubble:hover .copy-response-btn {
+    opacity: 0.35;
+}
+
+/* Full emphasis when directly hovering the icon */
+.message-bubble:hover .copy-response-btn:hover {
+    opacity: 1;
+    color: var(--theia-focusBorder, #007fd4);
+}
+
+/* Copied state — briefly show a green checkmark */
+.copy-response-btn--copied {
+    opacity: 1 !important;
+    color: var(--theia-testing-runAction, #4caf50) !important;
+}
+
+/* ── P1-D: Token/cost bar ──────────────────────────────────────────── */
+.turn-cost-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+}
+
+.message-bubble:hover .turn-cost-bar {
+    opacity: 0.7;
+}
+
+.turn-cost-tokens {
+    color: var(--theia-foreground, #ccc);
+    letter-spacing: 0.02em;
+}
+
+.turn-cost-price {
+    color: var(--theia-foreground, #ccc);
+    font-variant-numeric: tabular-nums;
+}
+
 /* ─── Session hover preview card (S3-A) ────────────────────────────────── */
 .session-hover-preview {
     position: fixed;
@@ -2670,4 +2615,3 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
 }
-

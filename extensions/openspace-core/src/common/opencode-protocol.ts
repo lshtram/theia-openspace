@@ -218,6 +218,8 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
     /** Fork a session, optionally at a specific message. Returns the new forked session. */
     forkSession(projectId: string, sessionId: string, messageId?: string): Promise<Session>;
+    /** Rename a session. */
+    renameSession(projectId: string, sessionId: string, title: string): Promise<Session>;
     /** Fetch the unified diff of all files changed in this session. */
     getDiff(projectId: string, sessionId: string): Promise<string>;
     /** Fetch the current live todo list for a session. */
