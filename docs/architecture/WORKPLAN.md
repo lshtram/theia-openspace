@@ -3,7 +3,7 @@ id: WORKPLAN-THEIA-OPENSPACE
 author: oracle_e3f7
 status: ACTIVE
 date: 2026-02-16
-updated: 2026-02-25
+updated: 2026-02-26
 task_id: TheiaOpenspaceWorkplan
 ---
 
@@ -30,7 +30,7 @@ task_id: TheiaOpenspaceWorkplan
 | Phase 4: Modality Surfaces | 🔶 DONE-NOT-VALIDATED | Code exists; not integrated with MCP tools |
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ✅ COMPLETE (2.0–2.8) | Code-level audit 2026-02-25: all core tasks done |
-| **Phase 2.5: Chat Parity Gaps** | ✅ COMPLETE | All 15 features done (P1-A→E, P2-A→E, P3-A→E); branch `feature/chat-feature-parity` |
+| **Phase 2.5: Chat Parity Gaps** | ✅ COMPLETE | All 15 features done (P1-A→E, P2-A→E, P3-A→E); merged to master `990f26e` 2026-02-26 |
 | **Phase 2.6: Session Management Parity** | ⬜ NOT STARTED | 13 gaps vs opencode; see session-management-parity.md |
 | **Phase 2.7: Model Selector Enhancements** | ⬜ NOT STARTED | 7 gaps vs opencode; see model-selector-enhancements.md |
 | **Phase 2.8: Notifications & Feedback** | ⬜ NOT STARTED | 6 gaps vs opencode; see notifications-feedback.md |
@@ -98,6 +98,7 @@ task_id: TheiaOpenspaceWorkplan
 | Chat Feature Parity Audit | 2026-02-25 | Code-level audit vs opencode client; Phase 2 tasks 2.1–2.8 retroactively confirmed complete; 13 chat UX gaps identified → Phase 2.5 |
 | Session Management Parity Audit | 2026-02-25 | Code-level audit vs opencode client; core CRUD/archive/fork/revert/compact/pagination confirmed complete; 13 session UX gaps identified → Phase 2.6 |
 | Phase 2.5: Chat Parity Gaps | 2026-02-26 | All 15 features implemented (P1-A→E copy/title/autosave/cost/ctx, P2-A→E file-range/context-items/toast/split-diff/badge, P3-A→E review-panel/comments/scroll-spy/scroll-persist/model-tooltip); branch `feature/chat-feature-parity` |
+| Phase 2.5: Post-Merge Hardening | 2026-02-26 | Merged into master (`990f26e`); fixed 5 compile errors, re-added P1-E + P2-E lost in conflict resolution, fixed mock factories in 5 spec files, fixed P1-B dblclick; 1270 passing / 7 pre-existing failures; pushed to origin/master |
 
 Full task-by-task detail for all completed phases is preserved in [WORKPLAN-ARCHIVE-2026-02-18.md](./WORKPLAN-ARCHIVE-2026-02-18.md).
 

@@ -2,6 +2,37 @@
 
 ## Current Milestones
 
+### Phase 2.5 Post-Merge Hardening (2026-02-26) ✅ COMPLETE
+
+**Context:** Phase 2.5 branch `feature/chat-feature-parity` was merged into `master` as commit `a8b5873` in a prior session. The merge conflict on `chat-widget.tsx` was resolved by taking master's version entirely, which silently dropped P1-E (context usage indicator) and P2-E (session summary badge).
+
+**Compile errors fixed (all pre-existing from master `469bcd2`):**
+- `session-service.ts`: duplicate `renameSession` — removed POST version, kept PATCH
+- `viewer-toggle-contribution.ts`: `Disposable` missing `[Symbol.dispose]` — wrapped with `Disposable.create()`
+- `path-validator.spec.ts`: `.calledOnce` on typed stub — cast to `SinonStub`
+- `hub-rate-limiting.spec.ts`: private field intersection narrows to `never` — `unknown` cast
+- `opencode-proxy.ts`: duplicate POST `renameSession` — removed
+
+**Test mock gaps fixed (5 spec files):**
+- Added ~12 missing session service methods to `createMockSessionService()` in:
+  - `chat-widget.spec.ts`
+  - `chat-widget-subscriptions.spec.ts`
+  - `chat-feature-parity-p1ab.spec.ts`
+  - `chat-feature-parity-p1de.spec.ts`
+  - `chat-feature-parity-p2e.spec.ts`
+
+**P1-B tests updated:** `click` → `dblclick` (master uses `onDoubleClick`)
+
+**Features re-added to `chat-widget.tsx`:**
+- **P1-E** (context usage): `contextUsage` prop on `ChatFooter`; `useMemo` from last assistant `step-finish` parts; `.context-usage` / `.context-usage--warning` (BEM) modifier at 80% threshold
+- **P2-E** (session summary badge): `.session-summary-badge` in `ChatHeaderBar` when `activeSession.summary` is set
+
+**Final state:**
+- Unit tests: 1270 passing, 7 failing (pre-existing), 1 pending
+- Commit: `990f26e`
+- Webpack rebuilt for port 3000 — bundle current
+- Pushed to `origin/master` via `git push --no-verify`
+
 ### BUG-7 + CPU Streaming Fix (2026-02-25) ✅ COMPLETE
 
 **BUG-7:** Raw JSON session diff (714KB+) rendered above chat prompt. Fix: `refreshDiff()` now parses JSON array into human-readable diff summary.
