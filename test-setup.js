@@ -5,6 +5,7 @@ require('global-jsdom/register');
 const tsNode = require('ts-node');
 const path = require('path');
 const fs = require('fs');
+const Module = require('module');
 tsNode.register({
     transpileOnly: true,
     files: true,
@@ -14,6 +15,19 @@ tsNode.register({
         jsxFragmentFactory: 'React.Fragment'
     }
 });
+
+// Patch Module._compile to transform `import.meta.url` into its CJS equivalent.
+// ts-node (CJS mode) leaves `import.meta.url` verbatim in compiled TypeScript when
+// module=commonjs; Node.js detects `import.meta` and tries to load the file as ESM,
+// causing "exports is not defined in ES module scope". This patch replaces
+// `import.meta.url` with `require('url').pathToFileURL(__filename).href` so CJS
+// test files that use createRequire(import.meta.url) execute correctly.
+const _originalCompile = Module.prototype._compile;
+Module.prototype._compile = function (code, filename) {
+    const patched = code.replace(/\bimport\.meta\.url\b/g,
+        "require('url').pathToFileURL(__filename).href");
+    return _originalCompile.call(this, patched, filename);
+};
 
 // Ignore CSS imports in Node.js (Theia imports CSS from TypeScript files)
 require.extensions['.css'] = () => {};

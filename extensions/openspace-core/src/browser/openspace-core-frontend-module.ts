@@ -17,6 +17,7 @@ import {
 
 // Services
 import { SessionService, SessionServiceImpl } from './session-service';
+import { SessionNotificationService, SessionNotificationServiceImpl } from './notification-service';
 import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
 import { OpenSpaceBridgeContribution } from './bridge-contribution';
 import { PaneService, PaneServiceImpl } from './pane-service';
@@ -43,6 +44,7 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
 
     // 2. Core frontend services (Phase 1)
     bind(SessionService).to(SessionServiceImpl).inSingletonScope();
+    bind(SessionNotificationService).to(SessionNotificationServiceImpl).inSingletonScope();
     bind(OpenCodeSyncService).to(OpenCodeSyncServiceImpl).inSingletonScope();
     bind(PaneService).to(PaneServiceImpl).inSingletonScope();
 
@@ -66,6 +68,17 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // Binding retained (returns null) to avoid breaking existing injection points that may
     // depend on the SessionServiceWiring token being present in the container.
     bind(SessionServiceWiring).toConstantValue(null);
+
+    // 5b. Wire SessionNotificationService into SessionService via setter injection.
+    // Resolved eagerly via FrontendApplicationContribution lifecycle (onStart).
+    // This avoids circular DI — SessionService does not @inject() NotificationService.
+    bind(FrontendApplicationContribution).toDynamicValue(ctx => ({
+        onStart: async () => {
+            const sessionService = ctx.container.get<SessionServiceImpl>(SessionService);
+            const notificationService = ctx.container.get<SessionNotificationServiceImpl>(SessionNotificationService);
+            sessionService.setNotificationService(notificationService);
+        }
+    })).inSingletonScope();
 
     // 6. Application contributions
     // BridgeContribution runs on app startup (collects commands, publishes manifest, connects to Hub)

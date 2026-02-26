@@ -110,6 +110,12 @@ function createMockSessionService(overrides: Partial<any> = {}): any {
         answerQuestion: sinon.stub().resolves(),
         rejectQuestion: sinon.stub().resolves(),
         replyPermission: sinon.stub().resolves(),
+        // Sprint 1-3 additions
+        renameSession: sinon.stub().resolves(),
+        shareSession: sinon.stub().resolves('https://share.example.com/session'),
+        unshareSession: sinon.stub().resolves(),
+        getSessionError: sinon.stub().returns(undefined),
+        getMessagesForPreview: sinon.stub().resolves([]),
         ...overrides,
     };
 }

@@ -208,6 +208,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     createSession(projectId: string, session: Partial<Session> & { mcp?: Record<string, unknown> }): Promise<Session>;
      deleteSession(projectId: string, sessionId: string): Promise<void>;
     archiveSession(projectId: string, sessionId: string): Promise<Session>;
+    renameSession(projectId: string, sessionId: string, title: string): Promise<Session>;
     initSession(projectId: string, sessionId: string): Promise<Session>;
     abortSession(projectId: string, sessionId: string): Promise<Session>;
      shareSession(projectId: string, sessionId: string): Promise<Session>;

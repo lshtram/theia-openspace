@@ -4,7 +4,7 @@ import type { CancellationToken } from '../providers/stt-provider.interface';
 
 // Minimal type for KokoroTTS to avoid hard dependency on kokoro-js types at compile time
 interface KokoroTTSInstance {
-  generate(text: string, options: { voice: string }): Promise<Float32Array>;
+  generate(text: string, options: { voice: string }): Promise<{ audio: Float32Array; sampling_rate: number }>;
 }
 
 export class KokoroAdapter implements TtsProvider {

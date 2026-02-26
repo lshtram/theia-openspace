@@ -390,6 +390,11 @@ export class OpenCodeProxy implements OpenCodeService {
         });
     }
 
+    async renameSession(_projectId: string, sessionId: string, title: string): Promise<Session> {
+        // OpenCode API: PATCH /session/:id with { title }
+        return this.patch<Session>(`/session/${encodeURIComponent(sessionId)}`, { title });
+    }
+
     async initSession(_projectId: string, sessionId: string): Promise<Session> {
         // OpenCode API: POST /session/:id/init
         return this.post<Session>(`/session/${encodeURIComponent(sessionId)}/init`, {});
