@@ -249,9 +249,21 @@ export class SessionServiceImpl implements SessionService {
             const projId = this.lifecycle.activeProject.id;
             const sessId = this.lifecycle.activeSession.id;
             this.streamingState.startRpcFallback(() => {
+                const signalDone = (): void => {
+                    // Signal streaming completion so listeners (e.g. voice narration)
+                    // know the response is ready, even when SSE events were not received
+                    // (e.g. session ID mismatch between UI and OpenCode backend).
+                    this.streamingState.updateStreamingMessage(assistantMsg.id, '', true);
+                };
                 if (!this.messageStore.hasMessage(assistantMsg.id)) {
-                    if (!assistantMsg.parts?.length) { this.messageStore.fetchAndInsertFallback(projId, sessId, assistantMsg); }
-                    else { this.appendMessage(assistantMsg); }
+                    if (!assistantMsg.parts?.length) {
+                        this.messageStore.fetchAndInsertFallback(projId, sessId, assistantMsg).then(signalDone, signalDone);
+                    } else {
+                        this.appendMessage(assistantMsg);
+                        signalDone();
+                    }
+                } else {
+                    signalDone();
                 }
             });
         } catch (e) { this.messageStore.removeMessage(optimistic.id); this.captureError(e); throw e; }

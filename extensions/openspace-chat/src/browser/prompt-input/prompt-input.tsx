@@ -120,6 +120,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         if (!editorRef.current) return;
         history.resetIndex();
 
+        // Save current cursor position so insertTypeaheadItem can restore it
+        // even after onMouseDown+preventDefault on the dropdown item.
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+            const r = sel.getRangeAt(0);
+            if (r.startContainer.nodeType === Node.TEXT_NODE) {
+                typeahead.savedRangeRef.current = { node: r.startContainer, start: r.startOffset };
+            }
+        }
+
         if (shellMode) {
             typeahead.setShowTypeahead(false);
             slashMenu.setShowSlashMenu(false);
@@ -292,7 +302,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     ) : (
                         typeahead.typeaheadItems.map((item, index) => (
                             <div key={`${item.type}-${item.name}`} className={`typeahead-item ${index === typeahead.selectedTypeaheadIndex ? 'selected' : ''}`}
-                                onClick={() => typeahead.insertTypeaheadItem(item, editorRef)} onMouseEnter={() => typeahead.setSelectedTypeaheadIndex(index)}
+                                onMouseDown={(e) => { e.preventDefault(); typeahead.insertTypeaheadItem(item, editorRef); }} onMouseEnter={() => typeahead.setSelectedTypeaheadIndex(index)}
                                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); typeahead.insertTypeaheadItem(item, editorRef); } }}
                                 role="button" tabIndex={0}>
                                 <span className={`typeahead-icon ${item.type}`}>
@@ -317,7 +327,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                 <div className="prompt-input-typeahead" role="listbox" aria-label="Commands">
                     {slashMenu.filteredSlashCommands.map((cmd, index) => (
                         <div key={cmd.name} className={`typeahead-item ${index === slashMenu.selectedSlashIndex ? 'selected' : ''}`}
-                            onClick={() => slashMenu.selectSlashCommand(cmd, editorRef, setHasContent, onBuiltinCommand)}
+                            onMouseDown={(e) => { e.preventDefault(); slashMenu.selectSlashCommand(cmd, editorRef, setHasContent, onBuiltinCommand); }}
                             onMouseEnter={() => slashMenu.setSelectedSlashIndex(index)} role="option" tabIndex={0}>
                             <span className="typeahead-icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>

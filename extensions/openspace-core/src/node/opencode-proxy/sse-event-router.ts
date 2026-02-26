@@ -79,7 +79,7 @@ export class SseEventRouter {
             }
             const eventType = innerEvent.type;
 
-            this.logger.debug(`[SseEventRouter] SSE event: ${eventType}`);
+            this.logger.info(`[SseEventRouter] SSE event: ${eventType}`);
 
             // Route event by type prefix
             if (eventType.startsWith('session.')) {
@@ -199,7 +199,7 @@ export class SseEventRouter {
                 }
 
                 client.onMessageEvent(notification);
-                this.logger.debug(`[SseEventRouter] Forwarded message.updated: ${msgInfo.id}${previousMessageId ? ` (streaming stub: ${previousMessageId})` : ''}`);
+                this.logger.info(`[SseEventRouter] Forwarded message.updated: ${msgInfo.id}, role=${msgInfo.role}${previousMessageId ? ` (streaming stub: ${previousMessageId})` : ''}`);
 
             } else if (event.type === 'message.part.updated') {
                 const part = event.properties.part;

@@ -130,7 +130,12 @@ export class SseConnectionManager {
         }
 
         const endpoint = `/event`;
-        const url = this.http.buildUrl(endpoint, { directory: this.currentDirectory });
+        // OpenCode API: GET /event (SSE) — subscribe to ALL events.
+        // We intentionally omit the `directory` query parameter because the
+        // OpenCode server's directory filter silently drops message events
+        // when directory is set (only heartbeats come through).  Instead we
+        // filter by directory on the client side before routing each event.
+        const url = this.http.buildUrl(endpoint);
         const parsedUrl = new URL(url);
 
         this.logger.debug(`[SseConnectionManager] Establishing SSE connection to ${url}`);
@@ -155,6 +160,20 @@ export class SseConnectionManager {
         const parser = createParser((event: ParseEvent) => {
             if (event.type === 'event') {
                 if (this._client) {
+                    // Client-side directory filtering: when the event is wrapped in a
+                    // GlobalEvent envelope ({ directory, payload }), only process events
+                    // whose directory matches our current directory.
+                    try {
+                        const parsed = JSON.parse(event.data);
+                        if (parsed.directory && this.currentDirectory) {
+                            if (parsed.directory !== this.currentDirectory) {
+                                // Event is for a different project — skip silently
+                                return;
+                            }
+                        }
+                    } catch {
+                        // Not JSON or no directory field — let the router handle it
+                    }
                     this.eventRouter.handleSSEEvent(event, this._client);
                 } else {
                     this.logger.debug('[SseConnectionManager] Received SSE event but no client connected');

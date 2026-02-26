@@ -9,6 +9,7 @@ import { SseConnectionManager } from './opencode-proxy/sse-connection';
 import { SseEventRouter } from './opencode-proxy/sse-event-router';
 import { NodeUtils } from './opencode-proxy/node-utils';
 import { OpenSpaceHub } from './hub';
+import { execSync } from 'child_process';
 
 const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || 'http://localhost:7890';
 
@@ -40,10 +41,58 @@ export function validateOpenCodeServerUrl(url: string): void {
 validateOpenCodeServerUrl(DEFAULT_OPENCODE_URL);
 
 /**
+ * Kill all direct child processes of this Node process.
+ * Used as a safety-net on SIGTERM / SIGINT to prevent terminal process leaks
+ * when Theia is shut down non-gracefully (Bug #3).
+ *
+ * Uses pgrep (macOS/Linux) to enumerate children and sends SIGTERM to each.
+ * Failures are swallowed — this is best-effort cleanup only.
+ */
+function killChildProcesses(): void {
+    try {
+        const out = execSync(`pgrep -P ${process.pid}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        if (!out) { return; }
+        const pids = out.split('\n').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        for (const pid of pids) {
+            try { process.kill(pid, 'SIGTERM'); } catch { /* already dead */ }
+        }
+    } catch {
+        // pgrep exits 1 when no children found — that's fine
+    }
+}
+
+/** Whether cleanup has already been initiated (avoid double-kill on re-entrant signals). */
+let _cleanupInitiated = false;
+
+/**
+ * Register process-level signal handlers to kill terminal child processes before
+ * Theia exits. This is the safety-net for SIGTERM / SIGINT — the normal graceful
+ * shutdown path is handled by Theia's ProcessManager.onStop().
+ *
+ * SIGKILL cannot be caught; that case remains a known limitation.
+ */
+function registerTerminalCleanupHandlers(): void {
+    const cleanup = (signal: NodeJS.Signals): void => {
+        if (_cleanupInitiated) { return; }
+        _cleanupInitiated = true;
+        console.info(`[TerminalCleanup] Received ${signal} — killing child terminal processes`);
+        killChildProcesses();
+        // Re-raise the signal with default handling so the process actually exits
+        process.removeAllListeners(signal);
+        process.kill(process.pid, signal);
+    };
+
+    process.once('SIGTERM', () => cleanup('SIGTERM'));
+    process.once('SIGINT',  () => cleanup('SIGINT'));
+}
+
+/**
  * Lifecycle contribution to manage OpenCodeProxy startup and shutdown.
  * T2-6: Ensures SSE connections and timers are cleaned up on backend stop.
  * Fix: On start, reconnects openspace-hub in case OpenCode started before Theia
  *      and marked the MCP server as failed due to ECONNREFUSED.
+ * Bug #3: Registers terminal child-process cleanup handlers to prevent zsh leaks
+ *         on non-graceful shutdown.
  */
 @injectable()
 class OpenCodeProxyLifecycle implements BackendApplicationContribution {
@@ -51,6 +100,10 @@ class OpenCodeProxyLifecycle implements BackendApplicationContribution {
     private readonly proxy!: OpenCodeProxy;
 
     onStart(): void {
+        // Bug #3: Register signal handlers to kill child terminal processes on shutdown.
+        // This prevents zsh process leaks when Theia is stopped via SIGTERM/SIGINT.
+        registerTerminalCleanupHandlers();
+
         // OpenCode may have started before Theia and failed to connect to
         // openspace-hub (ECONNREFUSED). Trigger a reconnect after a short
         // delay to allow Theia's own HTTP server to be fully ready.

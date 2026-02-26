@@ -342,7 +342,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
     onMessageEvent(event: MessageNotification): void {
         try {
             if (this.queueIfNotReady('onMessageEvent', event)) { return; }
-            this.logger.debug(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}`);
+            this.logger.info(`[SyncService] Message event: ${event.type}, messageId=${event.messageId}, sessionId=${event.sessionId}`);
 
             // Only process full message streaming for the currently active session.
             // For non-active sessions, just track unseen message count.
@@ -352,7 +352,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                     this.logger.debug(`[SyncService] Incrementing unseen count for background session ${event.sessionId}`);
                     this.sessionService.incrementUnseenForSession(event.sessionId);
                 }
-                this.logger.debug('[SyncService] Ignoring message event for non-active session');
+                this.logger.info(`[SyncService] Ignoring message event for non-active session (active=${this.sessionService.activeSession?.id}, event=${event.sessionId})`);
                 return;
             }
 
@@ -474,6 +474,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
      * Handle message.completed event - final complete message.
      */
     private handleMessageCompleted(event: MessageNotification): void {
+        this.logger.info(`[SyncService] handleMessageCompleted: messageId=${event.messageId}, role=${event.data?.info?.role}, previousMessageId=${event.previousMessageId}`);
         if (!event.data) {
             this.logger.warn('[SyncService] message.completed event missing data');
             return;
@@ -482,7 +483,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // Skip completed events for user messages. The opencode SSE fires message.updated for
         // the user message too, which would wipe the user message content with parts:[].
         if (event.data.info?.role === 'user') {
-            this.logger.debug(`[SyncService] Skipping completed event for user message: ${event.messageId}`);
+            this.logger.info(`[SyncService] Skipping completed event for user message: ${event.messageId}`);
             return;
         }
 
@@ -495,7 +496,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         // The opencode SSE stream replays all past message.updated events on reconnect,
         // which would fire isDone:true for every historical message. Guard with streamingMessages.
         if (!this.streamingMessages.has(streamingStubId) && !this.streamingMessages.has(event.messageId)) {
-            this.logger.debug(`[SyncService] Skipping isDone signal for non-streaming message: ${streamingStubId}`);
+            this.logger.info(`[SyncService] Skipping isDone signal for non-streaming message: stubId=${streamingStubId}, messageId=${event.messageId}, streamingMessages=[${[...this.streamingMessages.keys()].join(',')}]`);
             // Still replace the message in case the SSE replay brings updated content.
             const incomingPartsEarly = event.data.parts || [];
             const existingByStub = this.sessionService.messages.find(m => m.id === streamingStubId);
@@ -522,6 +523,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
         }
 
         // Signal streaming completion on the stub that was being streamed
+        this.logger.info(`[SyncService] Firing isDone:true for streamingStubId=${streamingStubId}`);
         this.sessionService.updateStreamingMessage(streamingStubId, '', true);
 
         // Replace streaming stub with final message.

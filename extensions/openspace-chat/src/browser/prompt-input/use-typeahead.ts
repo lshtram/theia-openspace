@@ -37,6 +37,12 @@ export interface TypeaheadState {
     setSelectedTypeaheadIndex: React.Dispatch<React.SetStateAction<number>>;
     /** Insert a typeahead item (pill) into the contenteditable editor at the cursor. */
     insertTypeaheadItem: (item: TypeaheadItem, editorRef: React.RefObject<HTMLDivElement | null>) => void;
+    /**
+     * Ref to save the last cursor position from handleInput.
+     * Call savedRangeRef.current = { node, start } on each input event so that
+     * insertTypeaheadItem can restore the caret after onMouseDown+preventDefault resets it.
+     */
+    savedRangeRef: React.MutableRefObject<{ node: Node; start: number } | null>;
 }
 
 export function useTypeahead(
@@ -49,6 +55,11 @@ export function useTypeahead(
     const [typeaheadType, setTypeaheadType] = React.useState<'agent' | 'file' | null>(null);
     const [typeaheadItems, setTypeaheadItems] = React.useState<TypeaheadItem[]>([]);
     const [typeaheadResolved, setTypeaheadResolved] = React.useState(false);
+
+    // Saved cursor position – updated on every input event inside the editor so that
+    // onMouseDown on a typeahead item (which calls e.preventDefault() to keep focus) can
+    // restore the caret to its correct location before inserting the pill.
+    const savedRangeRef = React.useRef<{ node: Node; start: number } | null>(null);
 
     // B04/B05: Server agents fetched from GET /agent
     const [serverAgents, setServerAgents] = React.useState<AgentInfo[]>([]);
@@ -118,11 +129,40 @@ export function useTypeahead(
         if (!selection || selection.rangeCount === 0) return;
 
         const range = selection.getRangeAt(0);
-        const textNode = range.startContainer;
+        let textNode: Node = range.startContainer;
+        let cursorPosition = range.startOffset;
+
+        // onMouseDown+preventDefault keeps focus but Chrome resets the caret offset to 0.
+        // Fall back to the range we captured on the last input event.
+        if (
+            textNode.nodeType !== Node.TEXT_NODE ||
+            (cursorPosition === 0 && savedRangeRef.current)
+        ) {
+            if (savedRangeRef.current) {
+                textNode = savedRangeRef.current.node;
+                cursorPosition = savedRangeRef.current.start;
+            } else {
+                // Last resort: walk down to the last text node child
+                if (textNode.nodeType !== Node.TEXT_NODE) {
+                    const offset = range.startOffset;
+                    const candidate = textNode.childNodes[offset > 0 ? offset - 1 : 0];
+                    if (candidate && candidate.nodeType === Node.TEXT_NODE) {
+                        textNode = candidate;
+                        cursorPosition = (candidate.textContent || '').length;
+                    } else {
+                        const children = Array.from(textNode.childNodes);
+                        const lastText = children.reverse().find(n => n.nodeType === Node.TEXT_NODE);
+                        if (lastText) {
+                            textNode = lastText;
+                            cursorPosition = (lastText.textContent || '').length;
+                        }
+                    }
+                }
+            }
+        }
 
         if (textNode.nodeType === Node.TEXT_NODE) {
             const text = textNode.textContent || '';
-            const cursorPosition = range.startOffset;
             const beforeCursor = text.slice(0, cursorPosition);
             const atIndex = beforeCursor.lastIndexOf('@');
 
@@ -162,12 +202,12 @@ export function useTypeahead(
         }
 
         setShowTypeahead(false);
-    }, []);
+    }, [savedRangeRef]);
 
     return {
         showTypeahead, typeaheadQuery, selectedTypeaheadIndex, typeaheadItems, typeaheadResolved,
         setShowTypeahead, setTypeaheadQuery, setTypeaheadType, setSelectedTypeaheadIndex,
-        insertTypeaheadItem
+        insertTypeaheadItem, savedRangeRef
     };
 }
 
