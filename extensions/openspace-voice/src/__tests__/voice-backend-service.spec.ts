@@ -3,7 +3,6 @@ import { assert } from 'chai';
 import { VoiceBackendService } from '../node/voice-backend-service';
 import type { SttProvider } from '@openspace-ai/voice-core';
 import type { TtsProvider } from '@openspace-ai/voice-core';
-import type { LlmCaller } from '../node/narration-preprocessor';
 
 const mockStt: SttProvider = {
   kind: 'stt',
@@ -12,17 +11,17 @@ const mockStt: SttProvider = {
   transcribe: async (_req) => ({ text: 'hello world' }),
 };
 
+let lastSynthesizedText = '';
 const mockTts: TtsProvider = {
   kind: 'tts',
   id: 'mock-tts',
   isAvailable: async () => true,
-  synthesize: async (_req) => ({ audio: new Uint8Array([1, 2, 3]), sampleRate: 24000 }),
+  synthesize: async (req) => {
+    lastSynthesizedText = req.text;
+    return { audio: new Uint8Array([1, 2, 3]), sampleRate: 24000 };
+  },
   dispose: async () => { /* no-op */ },
 };
-
-const mockLlm: LlmCaller = async (_prompt, text) => JSON.stringify({
-  segments: [{ type: 'speech', text, priority: 'normal' }],
-});
 
 describe('VoiceBackendService', () => {
   let service: VoiceBackendService;
@@ -31,8 +30,11 @@ describe('VoiceBackendService', () => {
     service = new VoiceBackendService({
       sttProvider: mockStt,
       ttsProvider: mockTts,
-      llmCaller: mockLlm,
     });
+  });
+
+  beforeEach(() => {
+    lastSynthesizedText = '';
   });
 
   it('transcribeSpeech delegates to STT provider', async () => {
@@ -62,5 +64,29 @@ describe('VoiceBackendService', () => {
     });
     assert.isArray(result.segments);
     assert.isAtLeast(result.segments.length, 1);
+  });
+
+  it('narrateText strips markdown before sending to TTS', async () => {
+    const result = await service.narrateText({
+      text: 'This is **bold** and `code`',
+      mode: 'narrate-everything',
+      voice: 'af_sarah',
+      speed: 1.0,
+    });
+    assert.equal(result.segments.length, 1);
+    assert.equal(result.segments[0].type, 'speech');
+    assert.isString(result.segments[0].audioBase64);
+    // Verify the text sent to TTS was cleaned
+    assert.equal(lastSynthesizedText, 'This is bold and code');
+  });
+
+  it('narrateText returns empty segments when text is only code blocks', async () => {
+    const result = await service.narrateText({
+      text: '```js\nconsole.log("hi");\n```',
+      mode: 'narrate-everything',
+      voice: 'af_sarah',
+      speed: 1.0,
+    });
+    assert.deepEqual(result.segments, []);
   });
 });

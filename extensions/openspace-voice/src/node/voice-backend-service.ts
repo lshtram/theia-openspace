@@ -1,7 +1,7 @@
 // extensions/openspace-voice/src/node/voice-backend-service.ts
 import type { NarrationMode } from '@openspace-ai/voice-core';
 import type { SttProvider, TtsProvider } from '@openspace-ai/voice-core';
-import { NarrationPreprocessor, type LlmCaller } from './narration-preprocessor';
+import { cleanTextForTts } from '../common/text-cleanup';
 
 export interface TranscribeSpeechRequest {
   audio: Uint8Array;
@@ -34,22 +34,15 @@ export interface NarrateTextResult {
 export interface VoiceBackendServiceOptions {
   sttProvider: SttProvider;
   ttsProvider: TtsProvider;
-  llmCaller: LlmCaller;
-  narrationPrompts?: { everything?: string; summary?: string };
 }
 
 export class VoiceBackendService {
   private readonly sttProvider: SttProvider;
   private readonly ttsProvider: TtsProvider;
-  private readonly narrationPreprocessor: NarrationPreprocessor;
 
   constructor(options: VoiceBackendServiceOptions) {
     this.sttProvider = options.sttProvider;
     this.ttsProvider = options.ttsProvider;
-    this.narrationPreprocessor = new NarrationPreprocessor({
-      llmCaller: options.llmCaller,
-      prompts: options.narrationPrompts,
-    });
   }
 
   async transcribeSpeech(request: TranscribeSpeechRequest): Promise<TranscribeSpeechResult> {
@@ -57,38 +50,27 @@ export class VoiceBackendService {
   }
 
   async narrateText(request: NarrateTextRequest): Promise<NarrateTextResult> {
-    const script = await this.narrationPreprocessor.process({
-      text: request.text,
-      mode: request.mode,
-    });
-
-    if (script.segments.length === 0) {
+    if (request.mode === 'narrate-off') {
       return { segments: [] };
     }
 
-    const results: NarrateSegmentResult[] = [];
-    for (const segment of script.segments) {
-      if (segment.type === 'utterance') {
-        results.push({
-          type: 'utterance',
-          utteranceId: segment.utteranceId,
-          emotion: segment.emotion,
-        });
-      } else if (segment.type === 'speech' && segment.text) {
-        const ttsResult = await this.ttsProvider.synthesize({
-          text: segment.text,
-          language: 'en-US',
-          speed: request.speed,
-          voice: request.voice,
-        });
-        results.push({
-          type: 'speech',
-          audioBase64: Buffer.from(ttsResult.audio).toString('base64'),
-          emotion: segment.emotion,
-        });
-      }
+    const cleaned = cleanTextForTts(request.text);
+    if (!cleaned) {
+      return { segments: [] };
     }
 
-    return { segments: results };
+    const ttsResult = await this.ttsProvider.synthesize({
+      text: cleaned,
+      language: 'en-US',
+      speed: request.speed,
+      voice: request.voice,
+    });
+
+    return {
+      segments: [{
+        type: 'speech',
+        audioBase64: Buffer.from(ttsResult.audio).toString('base64'),
+      }],
+    };
   }
 }
