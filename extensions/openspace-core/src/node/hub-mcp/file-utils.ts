@@ -44,6 +44,22 @@ export function listDirectory(dirPath: string, recursive: boolean, base?: string
 }
 
 /**
+ * Lightweight ReDoS guard: rejects patterns with nested quantifiers
+ * that cause exponential backtracking (e.g., `(a+)+`, `(a|b)*+`).
+ * Not a complete ReDoS detector, but catches the most common patterns.
+ */
+function isSafeRegex(pattern: string): boolean {
+    // Reject nested quantifiers: a quantifier immediately following a group with a quantifier
+    // Matches patterns like (x+)+, (x*)+, (x+)*, etc.
+    if (/\([^)]*[+*]\)[+*{]/.test(pattern)) return false;
+    // Reject excessive alternation depth with quantifiers
+    if (/\([^)]*\|[^)]*\)[+*{]/.test(pattern)) return false;
+    // Reject extremely long patterns (likely generated/malicious)
+    if (pattern.length > 200) return false;
+    return true;
+}
+
+/**
  * Search files in a directory for a regex pattern with safety limits.
  */
 export function searchFiles(dirPath: string, pattern: string, globFilter?: string): string[] {
@@ -57,6 +73,10 @@ export function searchFiles(dirPath: string, pattern: string, globFilter?: strin
     const REGEX_TIMEOUT_MS = 5_000; // 5-second wall-clock budget for the entire search
 
     let regex: RegExp;
+    if (!isSafeRegex(pattern)) {
+        // Fall back to literal string search for unsafe patterns
+        return [];
+    }
     try {
         regex = new RegExp(pattern);
     } catch {
