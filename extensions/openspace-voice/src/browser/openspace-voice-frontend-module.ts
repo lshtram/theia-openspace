@@ -3,7 +3,6 @@ import { ContainerModule } from '@theia/core/shared/inversify';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { KeybindingContribution } from '@theia/core/lib/browser/keybinding';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
-import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
@@ -79,88 +78,71 @@ export default new ContainerModule((bind) => {
       },
     });
 
-    // Subscribe to agent message streaming completion for narration
-    const coreSessionService = container.get<{
-      onMessageStreaming: (handler: (update: { messageId: string; delta: string; isDone: boolean }) => void) => { dispose: () => void };
-      onMessagesChanged: (handler: (messages: unknown[]) => void) => { dispose: () => void };
-      messages: Array<{ id?: string; role: string; parts?: Array<{ type?: string; text?: string }> }>;
-    }>(SessionService);
-
-    if (!coreSessionService?.onMessageStreaming) {
-      return narrationFsm;
-    }
-
+    // DOM-based narration trigger: observe when assistant messages finish streaming
     let lastNarratedMessageId: string | null = null;
 
-    /** Extract narration text from the last assistant message and enqueue it. */
-    const tryNarrate = (triggeredBy: string): void => {
-      const lastAssistant = [...coreSessionService.messages].reverse().find((m) => m.role === 'assistant');
-      if (!lastAssistant) return;
-
-      // Extract text content from message parts (type === 'text' only)
-      const text = lastAssistant.parts
-        ?.filter((p) => p.type === 'text' && typeof p.text === 'string')
-        .map((p) => p.text as string)
-        .join('')
-        .trim();
-
-      console.log(`[Voice] tryNarrate(${triggeredBy}) - text length: ${text?.length ?? 0}`);
-      if (text) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        lastNarratedMessageId = (lastAssistant as any).id ?? lastNarratedMessageId;
-        console.log('[Voice] Enqueueing narration, mode:', sessionFsm.policy.narrationMode, 'text preview:', text.substring(0, 80));
-        narrationFsm.enqueue({
-          text,
-          mode: sessionFsm.policy.narrationMode,
-          voice: sessionFsm.policy.voice,
-          speed: sessionFsm.policy.speed,
-        });
-      }
-    };
-
-    /** Pending messageId awaiting replaceMessage before narration can read text. */
-    let pendingNarrationMessageId: string | null = null;
-
-    coreSessionService.onMessageStreaming((update) => {
-      console.log('[Voice] Message streaming update - isDone:', update.isDone, 'sessionFsm.state:', sessionFsm.state, 'narrationMode:', sessionFsm.policy.narrationMode);
-      if (!update.isDone) return;
-      if (sessionFsm.state === 'inactive') {
-        console.log('[Voice] Skipping narration - voice inactive');
-        return;
-      }
-      if (sessionFsm.policy.narrationMode === 'narrate-off') {
-        console.log('[Voice] Skipping narration - mode is narrate-off');
+    const setupObserver = (): void => {
+      const timeline = document.querySelector('.message-timeline-content');
+      if (!timeline) {
+        // Chat not rendered yet — retry after a short delay
+        setTimeout(setupObserver, 1000);
         return;
       }
 
-      // Deduplicate: guard against any residual duplicate isDone:true fires for the same message
-      if (update.messageId && update.messageId === lastNarratedMessageId) return;
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
+          const target = mutation.target as HTMLElement;
+          if (!target.matches?.('article.message-bubble-assistant')) continue;
 
-      // The isDone:true event fires BEFORE replaceMessage() populates the message parts.
-      // Defer to the next microtask so replaceMessage() has time to run.
-      pendingNarrationMessageId = update.messageId;
-      setTimeout(() => {
-        // Another isDone for a different message may have superseded this one
-        if (pendingNarrationMessageId !== update.messageId) return;
-        // Already narrated by the fallback path
-        if (update.messageId === lastNarratedMessageId) return;
-        tryNarrate('deferred-isDone');
-      }, 0);
-    });
+          // We care about the streaming class being REMOVED (message is now complete)
+          const wasStreaming = (mutation.oldValue ?? '').includes('message-bubble-streaming');
+          const isStreaming = target.classList.contains('message-bubble-streaming');
+          if (!wasStreaming || isStreaming) continue;
 
-    // Fallback: if the deferred isDone still found empty parts (e.g. replaceMessage
-    // ran asynchronously via refreshCompletedMessageFromBackend), trigger narration
-    // when messages change.
-    if (coreSessionService.onMessagesChanged) {
-      coreSessionService.onMessagesChanged(() => {
-        if (!pendingNarrationMessageId) return;
-        if (pendingNarrationMessageId === lastNarratedMessageId) return;
-        tryNarrate('onMessagesChanged-fallback');
-        // Clear pending once successfully narrated
-        if (pendingNarrationMessageId === lastNarratedMessageId) {
-          pendingNarrationMessageId = null;
+          // Message just finished streaming
+          const messageId = target.getAttribute('data-message-id');
+          if (!messageId || messageId === lastNarratedMessageId) continue;
+
+          // Check voice state
+          if (sessionFsm.state === 'inactive') continue;
+          if (sessionFsm.policy.narrationMode === 'narrate-off') continue;
+
+          // Extract text from rendered DOM (skip code blocks)
+          const mdBodies = target.querySelectorAll('.message-bubble-content .part-text .md-body');
+          const text = Array.from(mdBodies)
+            .map(el => (el as HTMLElement).textContent ?? '')
+            .join('\n')
+            .trim();
+
+          if (!text) continue;
+
+          lastNarratedMessageId = messageId;
+          console.log('[Voice] Narrating message', messageId, '- text length:', text.length);
+          narrationFsm.enqueue({
+            text,
+            mode: sessionFsm.policy.narrationMode,
+            voice: sessionFsm.policy.voice,
+            speed: sessionFsm.policy.speed,
+          });
         }
       });
+
+      observer.observe(timeline, {
+        attributes: true,
+        attributeFilter: ['class'],
+        attributeOldValue: true,
+        subtree: true,
+      });
+
+      console.log('[Voice] DOM narration observer attached');
+    };
+
+    // Start observing once DOM is ready
+    if (document.readyState === 'complete') {
+      setupObserver();
+    } else {
+      window.addEventListener('load', setupObserver);
     }
 
     return narrationFsm;
