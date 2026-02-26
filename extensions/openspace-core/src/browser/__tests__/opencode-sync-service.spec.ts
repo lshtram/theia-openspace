@@ -25,8 +25,13 @@
 
 import { expect } from 'chai';
 import { OpenCodeSyncServiceImpl } from '../opencode-sync-service';
-import { SessionService } from '../session-service';
-import { SessionServiceImpl } from '../session-service';
+import { SessionService } from '../session-service/session-service';
+import { SessionServiceImpl } from '../session-service/session-service';
+import { StreamingStateServiceImpl } from '../session-service/streaming-state';
+import { MessageStoreServiceImpl } from '../session-service/message-store';
+import { SessionLifecycleServiceImpl } from '../session-service/session-lifecycle';
+import { InteractionServiceImpl } from '../session-service/interaction-handlers';
+import { ModelPreferenceServiceImpl } from '../session-service/model-preference';
 
 const SESSION_ID = 'test-session-id';
 
@@ -155,13 +160,41 @@ function makeRealSessionService(sessionId = SESSION_ID): SessionServiceImpl {
         });
     } catch { /* already stubbed */ }
 
+    const mockLogger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
+
+    // Wire decomposed sub-services
+    const messageStore = new MessageStoreServiceImpl();
+    (messageStore as any).logger = mockLogger;
+    (messageStore as any).openCodeService = mockOpenCodeService;
+
+    const streamingState = new StreamingStateServiceImpl();
+    (streamingState as any).logger = mockLogger;
+    (streamingState as any).messageStore = messageStore;
+
+    const lifecycle = new SessionLifecycleServiceImpl();
+    (lifecycle as any).logger = mockLogger;
+    (lifecycle as any).openCodeService = mockOpenCodeService;
+
+    const interactions = new InteractionServiceImpl();
+    (interactions as any).logger = mockLogger;
+    (interactions as any).openCodeService = mockOpenCodeService;
+
+    const modelPref = new ModelPreferenceServiceImpl();
+    (modelPref as any).logger = mockLogger;
+    (modelPref as any).openCodeService = mockOpenCodeService;
+
     const svc = new SessionServiceImpl();
     (svc as any).openCodeService = mockOpenCodeService;
-    (svc as any).logger = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined };
+    (svc as any).logger = mockLogger;
+    (svc as any).streamingState = streamingState;
+    (svc as any).messageStore = messageStore;
+    (svc as any).lifecycle = lifecycle;
+    (svc as any).interactions = interactions;
+    (svc as any).modelPref = modelPref;
 
     // Pre-load a session and a message so streaming methods have something to target
-    (svc as any)._activeSession = { id: sessionId };
-    (svc as any)._messages = [{
+    (lifecycle as any)._activeSession = { id: sessionId };
+    (messageStore as any)._messages = [{
         id: 'msg-1',
         sessionID: sessionId,
         role: 'assistant',
@@ -194,7 +227,7 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
         const syncSvc = makeService();
         const sessionSvc = makeRealSessionService(sessionId);
         // Override the pre-loaded message to use our IDs
-        (sessionSvc as any)._messages = [{
+        ((sessionSvc as any).messageStore as any)._messages = [{
             id: messageId,
             sessionID: sessionId,
             role: 'assistant',
@@ -262,7 +295,7 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
 
         const syncSvc = makeService();
         const sessionSvc = makeRealSessionService(sessionId);
-        (sessionSvc as any)._messages = [{
+        ((sessionSvc as any).messageStore as any)._messages = [{
             id: messageId,
             sessionID: sessionId,
             role: 'assistant',
@@ -306,7 +339,7 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
 
         const syncSvc = makeService();
         const sessionSvc = makeRealSessionService(sessionId);
-        (sessionSvc as any)._messages = [{
+        ((sessionSvc as any).messageStore as any)._messages = [{
             id: messageId,
             sessionID: sessionId,
             role: 'assistant',
@@ -341,8 +374,8 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
         const sessionSvc = makeRealSessionService(sessionId);
 
         // Ensure active project/session exist for backend message fetch
-        (sessionSvc as any)._activeProject = { id: 'global' };
-        (sessionSvc as any)._activeSession = { id: sessionId };
+        ((sessionSvc as any).lifecycle as any)._activeProject = { id: 'global' };
+        ((sessionSvc as any).lifecycle as any)._activeSession = { id: sessionId };
 
         // Mock backend getMessage to return canonical parts (reasoning + final text)
         const mockGetMessage = async () => ({
@@ -360,7 +393,7 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
         (sessionSvc as any).openCodeService.getMessage = mockGetMessage;
 
         // Seed with a streaming stub containing duplicated text-only content
-        (sessionSvc as any)._messages = [{
+        ((sessionSvc as any).messageStore as any)._messages = [{
             id: messageId,
             sessionID: sessionId,
             role: 'assistant',
@@ -409,9 +442,9 @@ describe('OpenCodeSyncService - Text streaming duplication (Bug B)', () => {
         const syncSvc = makeService();
         const sessionSvc = makeRealSessionService(sessionId);
 
-        (sessionSvc as any)._activeProject = { id: 'global' };
-        (sessionSvc as any)._activeSession = { id: sessionId };
-        (sessionSvc as any)._messages = [{
+        ((sessionSvc as any).lifecycle as any)._activeProject = { id: 'global' };
+        ((sessionSvc as any).lifecycle as any)._activeSession = { id: sessionId };
+        ((sessionSvc as any).messageStore as any)._messages = [{
             id: messageId,
             sessionID: sessionId,
             role: 'assistant',

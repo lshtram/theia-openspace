@@ -16,7 +16,15 @@ import {
 } from '../common/opencode-protocol';
 
 // Services
-import { SessionService, SessionServiceImpl } from './session-service';
+import { SessionService, SessionServiceImpl,
+    StreamingStateService, MessageStoreService, SessionLifecycleService,
+    InteractionService, ModelPreferenceService
+} from './session-service/session-service';
+import { StreamingStateServiceImpl } from './session-service/streaming-state';
+import { MessageStoreServiceImpl } from './session-service/message-store';
+import { SessionLifecycleServiceImpl } from './session-service/session-lifecycle';
+import { InteractionServiceImpl } from './session-service/interaction-handlers';
+import { ModelPreferenceServiceImpl } from './session-service/model-preference';
 import { SessionNotificationService, SessionNotificationServiceImpl } from './notification-service';
 import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
 import { OpenSpaceBridgeContribution } from './bridge-contribution';
@@ -37,6 +45,13 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     bind(FilterContribution).to(OpenSpaceFilterContribution).inSingletonScope();
 
     // 2. Core frontend services (Phase 1)
+    // Sub-services for SessionService decomposition
+    bind(StreamingStateService).to(StreamingStateServiceImpl).inSingletonScope();
+    bind(MessageStoreService).to(MessageStoreServiceImpl).inSingletonScope();
+    bind(SessionLifecycleService).to(SessionLifecycleServiceImpl).inSingletonScope();
+    bind(InteractionService).to(InteractionServiceImpl).inSingletonScope();
+    bind(ModelPreferenceService).to(ModelPreferenceServiceImpl).inSingletonScope();
+    // Facade
     bind(SessionService).to(SessionServiceImpl).inSingletonScope();
     bind(SessionNotificationService).to(SessionNotificationServiceImpl).inSingletonScope();
     bind(OpenCodeSyncService).to(OpenCodeSyncServiceImpl).inSingletonScope();

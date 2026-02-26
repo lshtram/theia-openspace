@@ -24,12 +24,12 @@ import { createRequire } from 'node:module';
 // @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
 
-const { MessageBubble, TurnGroup } = _require('openspace-chat/lib/browser/message-bubble') as {
+const { MessageBubble, TurnGroup } = _require('openspace-chat/lib/browser/message-bubble/message-bubble') as {
     MessageBubble: React.FC<any>;
     TurnGroup: React.FC<any>;
 };
 
-const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget/chat-widget') as {
     ChatComponent: React.FC<any>;
 };
 

@@ -39,7 +39,7 @@ const __dirname_chat = path.dirname(new URL(import.meta.url).pathname);
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore TS1343 — file runs as ESM at test time despite module:commonjs in tsconfig
 const _require = createRequire(import.meta.url);
-const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget') as {
+const { ChatComponent } = _require('openspace-chat/lib/browser/chat-widget/chat-widget') as {
     ChatComponent: React.FC<any>
 };
 
@@ -763,7 +763,7 @@ describe('ChatWidget - Session Management', () => {
 describe('ChatWidget - MessageService for delete confirmation (T3-10)', () => {
     it('should use messageService.warn for delete session confirmation, not window.confirm', () => {
         const src = fs.readFileSync(
-            path.join(__dirname_chat, '../chat-widget.tsx'),
+            path.join(__dirname_chat, '../chat-widget/use-session-actions.ts'),
             'utf-8'
         );
         // Must NOT use window.confirm
@@ -777,7 +777,7 @@ describe('ChatWidget - MessageService for delete confirmation (T3-10)', () => {
 describe('ModelSelector - multi-slash model ID parsing (T3-12)', () => {
     it('should parse multi-slash model IDs correctly', () => {
         const src = fs.readFileSync(
-            path.join(__dirname_chat, '../chat-widget.tsx'),
+            path.join(__dirname_chat, '../chat-widget/use-message-queue.ts'),
             'utf-8'
         );
         // Must NOT use destructuring that drops extra slashes
@@ -790,7 +790,7 @@ describe('ModelSelector - multi-slash model ID parsing (T3-12)', () => {
 describe('ChatWidget - File path resolution (Bug #2 fix)', () => {
     it('should resolve file paths relative to workspace root when opening files', () => {
         const src = fs.readFileSync(
-            path.join(__dirname_chat, '../chat-widget.tsx'),
+            path.join(__dirname_chat, '../chat-widget/use-session-actions.ts'),
             'utf-8'
         );
         // Must check for workspaceRoot in handleOpenFile
@@ -805,7 +805,7 @@ describe('ChatWidget - File path resolution (Bug #2 fix)', () => {
 
     it('should handle Windows absolute paths without modification', () => {
         const src = fs.readFileSync(
-            path.join(__dirname_chat, '../chat-widget.tsx'),
+            path.join(__dirname_chat, '../chat-widget/use-session-actions.ts'),
             'utf-8'
         );
         // Should check for Windows paths (C:\ or C:/)

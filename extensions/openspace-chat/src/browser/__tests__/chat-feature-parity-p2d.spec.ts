@@ -22,7 +22,7 @@ import { computeSplitDiff } from '../diff-utils';
 
 // @ts-expect-error TS1343
 const _require = createRequire(import.meta.url);
-const { MessageBubble } = _require('openspace-chat/lib/browser/message-bubble') as {
+const { MessageBubble } = _require('openspace-chat/lib/browser/message-bubble/message-bubble') as {
     MessageBubble: React.FC<any>;
 };
 

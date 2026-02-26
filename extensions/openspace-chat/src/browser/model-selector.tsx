@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol';
 
 interface ModelSelectorProps {

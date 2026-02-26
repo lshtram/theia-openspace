@@ -31,7 +31,7 @@ import {
     TodoNotification
 } from '../common/opencode-protocol';
 import { AgentCommand } from '../common/command-manifest';
-import { SessionService } from './session-service';
+import { SessionService } from './session-service/session-service';
 
 /**
  * OpenCodeSyncService Symbol for DI binding.

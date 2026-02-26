@@ -3,7 +3,7 @@ import { ContainerModule } from '@theia/core/shared/inversify';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { KeybindingContribution } from '@theia/core/lib/browser/keybinding';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';

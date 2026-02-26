@@ -21,7 +21,7 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { MessageService } from '@theia/core/lib/common/message-service';
-import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service';
+import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service/session-service';
 import { Session } from 'openspace-core/lib/common/opencode-protocol';
 
 interface ExtendedSession extends Session {

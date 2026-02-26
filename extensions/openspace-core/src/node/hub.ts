@@ -19,7 +19,7 @@ import { BackendApplicationContribution } from '@theia/core/lib/node/backend-app
 import { Application, Request, Response } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { MutableHubState, AgentCommand, PaneStateSnapshot, CommandDefinition } from '../common/command-manifest';
-import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp';
+import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp/hub-mcp';
 
 /**
  * Simple sliding-window rate limiter.

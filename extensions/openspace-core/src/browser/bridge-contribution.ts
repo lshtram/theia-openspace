@@ -19,7 +19,7 @@ import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { PaneService, PaneStateSnapshot } from './pane-service';
 import { OpenCodeSyncService, OpenCodeSyncServiceImpl } from './opencode-sync-service';
-import { SessionService } from './session-service';
+import { SessionService } from './session-service/session-service';
 
 /**
  * Command result structure for feedback mechanism.
