@@ -241,17 +241,16 @@ export class OpenCodeProxy implements OpenCodeService {
             ...options.headers
         };
 
-        const ts = () => new Date().toISOString();
-        console.log(`[${ts()}] FETCH_START: ${options.type} ${options.url}`);
         let statusCode: number;
         let body: string;
+        this.logger.debug(`[OpenCodeProxy] FETCH_START: ${options.type} ${options.url}`);
         try {
             ({ statusCode, body } = await this.rawRequest(options.url, options.type, headers, options.data, options.timeoutMs));
         } catch (err) {
-            console.error(`[${ts()}] FETCH_FAIL: ${options.type} ${options.url}`, err);
+            this.logger.warn(`[OpenCodeProxy] FETCH_FAIL: ${options.type} ${options.url}: ${err}`);
             throw err;
         }
-        console.log(`[${ts()}] FETCH_SUCCESS: ${options.type} ${options.url} (${statusCode})`);
+        this.logger.debug(`[OpenCodeProxy] FETCH_SUCCESS: ${options.type} ${options.url} (${statusCode})`);
 
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`OpenCodeProxy: HTTP ${statusCode} - ${body}`);

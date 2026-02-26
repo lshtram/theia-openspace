@@ -2615,3 +2615,92 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
 }
+
+/* ─── Inline title edit inputs (S1-A, S2-C) ─────────────────────────────── */
+.session-title-input,
+.sessions-title-input {
+    flex: 1;
+    background: var(--theia-input-background, #1e1e1e);
+    color: var(--theia-input-foreground, #cccccc);
+    border: 1px solid var(--theia-focusBorder, #007acc);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: inherit;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+    width: 100%;
+}
+
+.session-title-input:disabled,
+.sessions-title-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ─── Back-to-parent button (S1-D) ──────────────────────────────────────── */
+.back-to-parent {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    margin-right: 4px;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 3px;
+    opacity: 0.7;
+    transition: opacity 0.1s;
+}
+
+.back-to-parent:hover {
+    opacity: 1;
+}
+
+/* ─── Skeleton loader (S1-B) ─────────────────────────────────────────────── */
+.sessions-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.session-skeleton-item {
+    height: 18px;
+    border-radius: 4px;
+    background: var(--theia-editorWidget-background, #252526);
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* ─── Diff badge (S2-B) ──────────────────────────────────────────────────── */
+.session-diff-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+.session-diff-add {
+    color: #4caf50;
+}
+
+.session-diff-del {
+    color: #f44336;
+}
+
+/* ─── Session summary badge in header (P2-E / S2-B) ─────────────────────── */
+.session-summary-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-left: 4px;
+    opacity: 0.8;
+}

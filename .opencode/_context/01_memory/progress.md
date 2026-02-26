@@ -2,6 +2,41 @@
 
 ## Current Milestones
 
+### Phase 2.6 Session Management Parity Audit & CSS Fixes (2026-02-26) ✅ COMPLETE
+
+**Context:** Phase 2.6 items (13 total, S1-A through S3-C) were implemented by a previous agent without updating documentation. A codebase audit confirmed all 13 items. CSS hygiene issues (6 missing CSS classes) were also fixed.
+
+**Items confirmed implemented:**
+- S1-A: Inline title edit (chat header) — `chat-widget.tsx:220,289,306`
+- S1-B: Skeleton loader — `sessions-widget.tsx:44-52`
+- S1-C: Archive button hover animation — `chat-widget.css:1448`
+- S1-D: Parent back-navigation — `chat-widget.tsx:274-284`
+- S1-E: Cascade delete — `session-service.ts:1166-1223`
+- S2-A: Error dot — `sessions-widget.tsx:284-287`
+- S2-B: Session diff summary badge — `sessions-widget.tsx:303-308` / `chat-widget.tsx:319-328`
+- S2-C: Double-click rename in sessions panel — `sessions-widget.tsx:263`
+- S2-D: Session share UI — `chat-widget.tsx:478-517`
+- S2-E: Keyboard shortcuts — `chat-view-contribution.ts:68-109`
+- S3-A: Hover preview card — `session-hover-preview.tsx`
+- S3-B: Unseen message tracking — `notification-service.ts`
+- S3-C: Scroll/UI state persistence — `session-view-store.ts`
+
+**CSS classes added** (were referenced in TSX but absent from `chat-widget.css`):
+- `.session-title-input` / `.sessions-title-input`
+- `.back-to-parent`
+- `.sessions-skeleton` / `.session-skeleton-item`
+- `.session-diff-badge` / `.session-diff-add` / `.session-diff-del`
+- `.session-summary-badge`
+
+**Phase 2.7 audit results:**
+- M1-B Free tag ✅, M2-A tooltip ✅ (delivered as P3-E)
+- M1-A persistence Partial (in-memory, no localStorage), M1-D sort Partial (grouped, not sorted)
+- M1-C status tags ❌, M2-B favorites ❌, M2-C provider CTA ❌
+
+**Phase 2.8 audit results:** 0/6 done; N2-B partially done (copy-URL button only); N2-C visual indicator exists but no toast
+
+**Commit:** pending (CSS + docs)
+
 ### Phase 2.5 Post-Merge Hardening (2026-02-26) ✅ COMPLETE
 
 **Context:** Phase 2.5 branch `feature/chat-feature-parity` was merged into `master` as commit `a8b5873` in a prior session. The merge conflict on `chat-widget.tsx` was resolved by taking master's version entirely, which silently dropped P1-E (context usage indicator) and P2-E (session summary badge).

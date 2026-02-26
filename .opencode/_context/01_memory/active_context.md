@@ -8,9 +8,47 @@
 All tasks are now managed in GitHub Issues: https://github.com/lshtram/theia-openspace/issues
 
 ## Current Focus
-- **Status:** Phase 2.5 Chat Parity MERGED & PUSHED to master. Post-merge hardening complete.
-- **Previous:** Phase 2.5 branch `feature/chat-feature-parity` merged into master (commit `a8b5873`); post-merge compile errors and test mock gaps found and fixed (commit `990f26e`)
-- **Next:** Phase 2.6 Session Management Parity, Phase 2.7 Model Selector Enhancements, or Phase 2.8 Notifications & Feedback
+- **Status:** Phase 2.6 Session Management Parity confirmed COMPLETE (audit + CSS fixes). Phase 2.7 and 2.8 partially implemented.
+- **Previous:** Phase 2.5 branch merged to master (`990f26e`); Phase 2.6 codebase audit confirmed all 13 items already implemented; CSS hygiene fixes added for 6 missing classes.
+- **Next:** Phase 2.7 (5 remaining gaps: M1-A persistence, M1-C status tags, M1-D sort, M2-B favorites, M2-C CTA) + Phase 2.8 (6 gaps: N1-A through N2-C)
+
+## Phase 2.6 Audit & CSS Fixes (2026-02-26) ✅ COMPLETE
+
+**What happened this session:**
+
+1. **Codebase audit** confirmed all 13 Phase 2.6 items (S1-A through S3-C) were implemented by a previous agent
+2. **CSS hygiene** — 6 CSS classes referenced in TSX but absent from `chat-widget.css` were added:
+   - `.session-title-input` / `.sessions-title-input` — inline title edit inputs
+   - `.back-to-parent` — back navigation button
+   - `.sessions-skeleton` / `.session-skeleton-item` — shimmer skeleton loader
+   - `.session-diff-badge` / `.session-diff-add` / `.session-diff-del` — diff badge in sessions panel
+   - `.session-summary-badge` — diff badge in chat header
+3. **Phase 2.7 audit** — 2/7 done, 2 partial, 3 missing
+4. **Phase 2.8 audit** — 0/6 done, 1 partial (N2-B copy state)
+5. **Docs updated** — WORKPLAN.md, active_context.md, progress.md, AGENTS.md
+
+## Phase 2.7 Status (2026-02-26) 🟡 IN PROGRESS
+
+| Item | Feature | Status |
+|---|---|---|
+| M1-A | Recent models persistence (localStorage) | Partial — in-memory only, no localStorage |
+| M1-B | Free tag badge | ✅ DONE (`model-selector.tsx:505`) |
+| M1-C | Status tags (slow/fast/offline) | ❌ Missing |
+| M1-D | Provider sort (alphabetical) | Partial — grouped but insertion-order only |
+| M2-A | Hover tooltip | ✅ DONE (delivered as P3-E in Phase 2.5) |
+| M2-B | Favorites (star models) | ❌ Missing |
+| M2-C | Provider CTA (empty state) | ❌ Missing |
+
+## Phase 2.8 Status (2026-02-26) ⬜ NOT STARTED
+
+| Item | Feature | Status |
+|---|---|---|
+| N1-A | Turn-complete toast (background sessions) | ❌ Missing |
+| N1-B | Error notification toast | ❌ Missing |
+| N1-C | Notification preferences in Settings | ❌ Missing |
+| N2-A | Sound system (Web Audio API) | ❌ Missing |
+| N2-B | Inline "Copied ✓" state | Partial — copy-URL button only, not share action |
+| N2-C | Context usage warning toast | Partial — visual indicator exists, no toast |
 
 ## Phase 2.5 Merge & Post-Merge Hardening (2026-02-26) ✅ COMPLETE
 

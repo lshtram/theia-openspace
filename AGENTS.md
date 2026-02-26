@@ -29,10 +29,10 @@ See `.opencode/_context/01_memory/progress.md` for the detailed phase-by-phase c
 - ✅ Phase T4/T5/T6/EW/EW.5: ArtifactStore, PatchEngine, voice, waveform, streaming UX
 - ✅ Phase 6.8/1C: E2E suite, code hardening
 - ✅ Phase 2.5: Chat parity gaps — all 15 features merged to master (2026-02-26)
+- ✅ Phase 2.6: Session management parity — all 13 items confirmed implemented (2026-02-26)
 - 🔄 Phase 5: Polish & Desktop - in progress
-- ⬜ Phase 2.6: Session management parity (13 gaps)
-- ⬜ Phase 2.7: Model selector enhancements (7 gaps)
-- ⬜ Phase 2.8: Notifications & feedback (6 gaps)
+- 🟡 Phase 2.7: Model selector enhancements — 2/7 done, 2 partial, 3 missing (M1-C, M2-B, M2-C)
+- ⬜ Phase 2.8: Notifications & feedback (6 gaps, 1 partial)
 - ⬜ Phase 6: Extended features
 
 **Known pre-existing test failures (7):** TurnGroup streaming ×4, AudioFsm ×2 — use `git push --no-verify` when pushing master.

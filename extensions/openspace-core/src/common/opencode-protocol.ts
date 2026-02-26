@@ -191,6 +191,12 @@ export const OpenCodeClient = Symbol('OpenCodeClient');
 
 /**
  * OpenCode Service interface - RPC methods for the backend.
+ *
+ * NOTE: projectId parameters are carried for forward-compatibility only.
+ * The opencode REST API is currently session-global (not project-scoped).
+ * All proxy implementations ignore this parameter (_projectId prefix).
+ * Do NOT add new per-project logic relying on projectId until the opencode
+ * backend exposes per-project endpoints.
  */
 export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     // Project methods
@@ -218,8 +224,6 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     unrevertSession(projectId: string, sessionId: string): Promise<Session>;
     /** Fork a session, optionally at a specific message. Returns the new forked session. */
     forkSession(projectId: string, sessionId: string, messageId?: string): Promise<Session>;
-    /** Rename a session. */
-    renameSession(projectId: string, sessionId: string, title: string): Promise<Session>;
     /** Fetch the unified diff of all files changed in this session. */
     getDiff(projectId: string, sessionId: string): Promise<string>;
     /** Fetch the current live todo list for a session. */

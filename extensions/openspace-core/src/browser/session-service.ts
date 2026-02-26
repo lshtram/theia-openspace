@@ -45,6 +45,14 @@ export interface StreamingUpdate {
 }
 
 /**
+ * Returns a display-safe title for a session.
+ * Falls back to a short ID prefix when title is absent or blank.
+ */
+export function sessionDisplayTitle(session: { id: string; title?: string }): string {
+    return session.title?.trim() || `Session ${session.id.slice(0, 8)}`;
+}
+
+/**
  * SessionService Symbol for DI binding.
  */
 export const SessionService = Symbol('SessionService');
@@ -108,11 +116,12 @@ export interface SessionService extends Disposable {
     revertSession(): Promise<void>;
     unrevertSession(): Promise<void>;
     compactSession(): Promise<void>;
-    renameSession(sessionId: string, title: string): Promise<void>;
     autoSelectProjectByWorkspace(workspacePath: string): Promise<boolean>;
 
 
     // State update methods (for SyncService integration)
+    /** Increment the unseen message count for a background session. */
+    incrementUnseenForSession(sessionId: string): void;
     appendMessage(message: Message): void;
     updateStreamingMessage(messageId: string, delta: string, isDone: boolean): void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,7 +182,7 @@ export interface SessionService extends Disposable {
 @injectable()
 export class SessionServiceImpl implements SessionService {
 
-    private readonly HUB_MCP_URL = 'http://localhost:3000/mcp';
+    private readonly HUB_MCP_URL = `${window.location.origin}/mcp`;
     private readonly HUB_READINESS_ATTEMPTS = 20;
     private readonly HUB_READINESS_INTERVAL_MS = 500;
 
@@ -2052,6 +2061,10 @@ export class SessionServiceImpl implements SessionService {
      */
     setNotificationService(svc: SessionNotificationService): void {
         this._notificationService = svc;
+    }
+
+    incrementUnseenForSession(sessionId: string): void {
+        this._notificationService?.incrementUnseen(sessionId);
     }
 
     /**

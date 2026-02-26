@@ -350,8 +350,7 @@ export class OpenCodeSyncServiceImpl implements OpenCodeSyncService {
                 // Increment unseen count when a new assistant message arrives for a background session
                 if (event.type === 'created' && event.data?.info?.role === 'assistant') {
                     this.logger.debug(`[SyncService] Incrementing unseen count for background session ${event.sessionId}`);
-                    (this.sessionService as { _notificationService?: { incrementUnseen: (id: string) => void } })
-                        ._notificationService?.incrementUnseen(event.sessionId);
+                    this.sessionService.incrementUnseenForSession(event.sessionId);
                 }
                 this.logger.debug('[SyncService] Ignoring message event for non-active session');
                 return;

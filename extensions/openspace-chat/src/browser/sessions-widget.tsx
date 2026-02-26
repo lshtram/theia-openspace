@@ -21,7 +21,7 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { FrontendApplication } from '@theia/core/lib/browser/frontend-application';
 import { MessageService } from '@theia/core/lib/common/message-service';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service';
 import { Session } from 'openspace-core/lib/common/opencode-protocol';
 
 interface ExtendedSession extends Session {
@@ -156,7 +156,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
 
     const handleArchive = async (session: Session, e: React.MouseEvent) => {
         e.stopPropagation();
-        const action = await messageService.warn(`Archive "${session.title}"?`, 'Archive', 'Cancel');
+        const action = await messageService.warn(`Archive "${sessionDisplayTitle(session)}"?`, 'Archive', 'Cancel');
         if (action !== 'Archive') { return; }
         try {
             await sessionService.archiveSession(session.id);
@@ -169,7 +169,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
     const startRename = (session: Session, e: React.MouseEvent) => {
         e.stopPropagation();
         setEditingId(session.id);
-        setEditDraft(session.title);
+        setEditDraft(session.title ?? '');
     };
 
     const saveRename = async (sessionId: string) => {
@@ -255,7 +255,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter' && editingId !== session.id) { handleSwitch(session.id); } }}
-                        title={editingId === session.id ? undefined : session.title}
+                        title={editingId === session.id ? undefined : sessionDisplayTitle(session)}
                         style={extSession.parentID ? { paddingLeft: '24px' } : undefined}
                         onMouseEnter={(e) => handleHoverEnter(session.id, e)}
                         onMouseLeave={handleHoverLeave}
@@ -277,7 +277,7 @@ const SessionsView: React.FC<SessionsViewProps> = ({ sessionService, messageServ
                                     aria-label="Edit session title"
                                 />
                             ) : (
-                                session.title
+                                sessionDisplayTitle(session)
                             )}
                             {editingId !== session.id && (() => {
                                 const status = sessionService.getSessionStatus(session.id);

@@ -27,7 +27,7 @@ import { PreferenceService } from '@theia/core/lib/common/preferences';
 import { CommonCommands } from '@theia/core/lib/browser/common-frontend-contribution';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { SessionService } from 'openspace-core/lib/browser/session-service';
+import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service';
 import { Message, MessagePartInput, Session, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { OPENSPACE_RENAME_SESSION_EVENT } from './chat-view-contribution';
 import { PromptInput } from './prompt-input/prompt-input';
@@ -226,7 +226,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
 
     const startTitleEdit = React.useCallback(() => {
         if (!activeSession) { return; }
-        setTitleEdit({ draft: activeSession.title, editing: true, saving: false });
+        setTitleEdit({ draft: activeSession.title ?? '', editing: true, saving: false });
         requestAnimationFrame(() => titleInputRef.current?.select());
     }, [activeSession]);
 
@@ -307,9 +307,9 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         data-test-sessions-count={sessions.length}
                         aria-haspopup="listbox"
                         aria-expanded={showSessionList}
-                        title={activeSession?.title ?? 'No Session'}
+                        title={activeSession ? sessionDisplayTitle(activeSession) : 'No Session'}
                     >
-                        {activeSession ? activeSession.title : 'No Session'}
+                        {activeSession ? sessionDisplayTitle(activeSession) : 'No Session'}
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="10" height="10" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.5 }} aria-hidden="true">
                             <path d="m6 9 6 6 6-6"/>
                         </svg>
@@ -379,7 +379,7 @@ const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                                     onKeyDown={(e) => { if (e.key === 'Enter') { onSessionSwitch(session.id); } }}
                                 >
                                     <span className="session-status-indicator">{statusIndicator}</span>
-                                    <span className="session-list-item-title">{session.title}</span>
+                                    <span className="session-list-item-title">{sessionDisplayTitle(session)}</span>
                                 </div>
                             );
                         })}
@@ -857,8 +857,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         };
         const childCount = countDescendants(activeSession.id);
         const confirmMsg = childCount > 0
-            ? `Delete session "${activeSession.title}" and ${childCount} child session${childCount === 1 ? '' : 's'}?`
-            : `Delete session "${activeSession.title}"?`;
+            ? `Delete session "${sessionDisplayTitle(activeSession)}" and ${childCount} child session${childCount === 1 ? '' : 's'}?`
+            : `Delete session "${sessionDisplayTitle(activeSession)}"?`;
 
         const action = await messageService.warn(confirmMsg, 'Delete', 'Cancel');
         if (action !== 'Delete') return;

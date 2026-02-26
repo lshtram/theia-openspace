@@ -32,12 +32,6 @@ import { ViewerToggleService } from './viewer-toggle/viewer-toggle-service';
 import { ViewerToggleOpenHandler } from './viewer-toggle/viewer-toggle-open-handler';
 import { ViewerToggleContribution } from './viewer-toggle/viewer-toggle-contribution';
 
-/**
- * SessionServiceWiring Symbol for DI binding.
- * This binding wires the SessionService to OpenCodeSyncService to break the circular dependency.
- */
-export const SessionServiceWiring = Symbol('SessionServiceWiring');
-
 export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // 1. Filter contribution (existing - Phase 0)
     bind(FilterContribution).to(OpenSpaceFilterContribution).inSingletonScope();
@@ -62,14 +56,7 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
         );
     }).inSingletonScope();
 
-    // 5. SessionService wiring - Wire SessionService to SyncService.
-    // Task 19: Removed queueMicrotask wiring here — BridgeContribution.onStart() already handles
-    // this in a well-defined lifecycle phase, so the queueMicrotask caused duplicate wiring.
-    // Binding retained (returns null) to avoid breaking existing injection points that may
-    // depend on the SessionServiceWiring token being present in the container.
-    bind(SessionServiceWiring).toConstantValue(null);
-
-    // 5b. Wire SessionNotificationService into SessionService via setter injection.
+    // 5. Wire SessionNotificationService into SessionService via setter injection.
     // Resolved eagerly via FrontendApplicationContribution lifecycle (onStart).
     // This avoids circular DI — SessionService does not @inject() NotificationService.
     bind(FrontendApplicationContribution).toDynamicValue(ctx => ({

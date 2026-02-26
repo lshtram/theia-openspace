@@ -31,9 +31,9 @@ task_id: TheiaOpenspaceWorkplan
 | **Phase 1C: Code Hardening** | ✅ COMPLETE | 1C.1–1C.7 all complete |
 | **Phase 2: Chat Polish** | ✅ COMPLETE (2.0–2.8) | Code-level audit 2026-02-25: all core tasks done |
 | **Phase 2.5: Chat Parity Gaps** | ✅ COMPLETE | All 15 features done (P1-A→E, P2-A→E, P3-A→E); merged to master `990f26e` 2026-02-26 |
-| **Phase 2.6: Session Management Parity** | ⬜ NOT STARTED | 13 gaps vs opencode; see session-management-parity.md |
-| **Phase 2.7: Model Selector Enhancements** | ⬜ NOT STARTED | 7 gaps vs opencode; see model-selector-enhancements.md |
-| **Phase 2.8: Notifications & Feedback** | ⬜ NOT STARTED | 6 gaps vs opencode; see notifications-feedback.md |
+| **Phase 2.6: Session Management Parity** | ✅ COMPLETE | All 13 items (S1-A→S3-C) implemented; CSS hygiene fixes added 2026-02-26 |
+| **Phase 2.7: Model Selector Enhancements** | 🟡 IN PROGRESS | 2/7 done (M1-B free tag ✅, M2-A tooltip ✅); 2 partial (M1-A persistence, M1-D sort); 3 missing (M1-C status tags, M2-B favorites, M2-C CTA) |
+| **Phase 2.8: Notifications & Feedback** | ⬜ NOT STARTED | 0/6 done; 1 partial (N2-B copy state); plan ready at notifications-feedback.md |
 | **Phase 4-Val: Wire Phase 4 into MCP** | ✅ COMPLETE | Presentation done; whiteboard MCP fully wired |
 | **Phase T4: PatchEngine** | ✅ COMPLETE | OCC-versioned artifact mutations via MCP tools |
 | **Phase T5: ArtifactStore** | ✅ COMPLETE | Atomic writes, backups, audit log |
@@ -44,23 +44,23 @@ task_id: TheiaOpenspaceWorkplan
 | Phase EW: Editor Windows (Syntax Highlighting) | ✅ COMPLETE | openspace-languages extension; TextMate grammars for 27 languages via tm-grammars; 32/32 unit tests passing |
 | Phase EW.5: Markdown Viewer | ✅ COMPLETE | openspace-viewers extension; MarkdownViewerWidget with Mermaid diagram support and Monaco edit mode; 16 new unit tests (569 total passing) |
 
-**Next Task:** Phase 2.6: Session Management Parity (13 items, S1→S3) + Phase 2.7: Model Selector Enhancements (7 items, M1→M2) + Phase 2.8: Notifications & Feedback (6 items, N1→N2) — Phase 2.5 Chat Parity complete.
+**Next Task:** Phase 2.7: Model Selector Enhancements (5 remaining items: M1-A persistence, M1-C status tags, M1-D sort, M2-B favorites, M2-C CTA) + Phase 2.8: Notifications & Feedback (6 items, N1→N2) — Phase 2.6 Session Management Parity complete.
 
 ---
 
 ## What's Next
 
-**Immediate:** Phase 2.6 Session Management Parity track (Phase 2.5 Chat Parity is complete).
+**Immediate:** Phase 2.7 Model Selector Enhancements (5 remaining gaps) and Phase 2.8 Notifications & Feedback (6 gaps).
 
 **Phase 2.5 — Chat Parity Gaps:** ✅ COMPLETE (2026-02-26). All 15 features implemented on branch `feature/chat-feature-parity`:
 - Sprint 1 (P1): P1-A copy button ✅, P1-B inline title editing ✅, P1-C prompt autosave ✅, P1-D token/cost per turn ✅, P1-E context usage indicator ✅.
 - Sprint 2 (P2): P2-A file line range ✅, P2-B context items panel ✅, P2-C toast system ✅, P2-D split diff ✅, P2-E session summary badge ✅.
 - Sprint 3 (P3): P3-A review panel ✅, P3-B line comments ✅, P3-C scroll-spy ✅, P3-D scroll persistence ✅, P3-E model pricing tooltip ✅.
 
-**Phase 2.6 — Session Management Parity:** Bridging session UX gaps vs opencode client (skeleton loader, archive animation, back-nav, cascade delete, error dot, keyboard shortcuts, hover preview, unseen tracking, scroll persistence, etc.). Full plan: `docs/plans/2026-02-25-session-management-parity.md`.
-- Sprint 1 (S1): S1-A inline title edit (shared with P1-B), S1-B skeleton loader, S1-C archive animation, S1-D back-nav, S1-E cascade delete.
-- Sprint 2 (S2): S2-A error dot, S2-B diff badge (shared with P2-E), S2-C panel rename, S2-D share UI, S2-E keybinds.
-- Sprint 3 (S3): S3-A hover preview, S3-B unseen tracking, S3-C scroll persistence.
+**Phase 2.6 — Session Management Parity:** ✅ COMPLETE (2026-02-26). All 13 items confirmed implemented by codebase audit. CSS hygiene fixes (6 missing CSS classes) added in same session.
+- Sprint 1 (S1): S1-A inline title edit ✅, S1-B skeleton loader ✅, S1-C archive animation ✅, S1-D back-nav ✅, S1-E cascade delete ✅.
+- Sprint 2 (S2): S2-A error dot ✅, S2-B diff badge ✅, S2-C panel rename ✅, S2-D share UI ✅, S2-E keybinds ✅.
+- Sprint 3 (S3): S3-A hover preview ✅, S3-B unseen tracking ✅, S3-C scroll persistence ✅.
 
 **Phase 2.7 — Model Selector Enhancements:** 7 gaps vs opencode client (recent models persistence, free/status tags, tooltip, favorites, provider sort, empty state CTA). Full plan: `docs/plans/2026-02-26-model-selector-enhancements.md`.
 - Sprint 1 (M1): M1-A recent persistence, M1-B free tag, M1-C status tags, M1-D provider sort.
