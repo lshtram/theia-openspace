@@ -54,7 +54,9 @@ export class NarrationFsm {
       this._state = validateNarrationTransition({ from: this._state, trigger: 'enqueue' });
       // Start processing asynchronously so callers see 'queued' state
       Promise.resolve().then(() => this.drainLoop(request)).catch((err) => {
-        this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
+        if (this._state !== 'idle') {
+          this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
+        }
         this.options.onError?.(err as Error);
       });
     } else {
@@ -84,6 +86,7 @@ export class NarrationFsm {
 
   // M-6: Iterative drain loop replaces recursive processQueue() to avoid stack growth
   private async drainLoop(first: NarrationRequest): Promise<void> {
+    if (this._state !== 'queued') return; // stop() fired before microtask ran
     this._abortController = new AbortController();
     const { signal } = this._abortController;
     let current: NarrationRequest | undefined = first;
@@ -102,8 +105,7 @@ export class NarrationFsm {
         const isAbort = (err instanceof Error && err.name === 'AbortError') ||
                         (err instanceof DOMException && err.name === 'AbortError');
         if (isAbort) {
-          // Clean cancel — state already set to idle by stop()
-          this.options.onModeChange?.('idle');
+          // Clean cancel — stop() already set state to idle and called onModeChange
           console.log('[Voice] Narration cancelled');
           return;
         }

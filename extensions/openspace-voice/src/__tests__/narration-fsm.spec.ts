@@ -42,8 +42,44 @@ describe('NarrationFsm (state transitions only)', () => {
     setTimeout(() => {
       assert.equal(fsm.state, 'idle');
       assert.isFalse(errorCalled);
+      assert.isTrue(modeChanges.includes('idle'));
       done();
     }, 50);
+  });
+
+  it('stop() while fetching aborts cleanly — no onError, state becomes idle', (done) => {
+    let errorCalled = false;
+    let abortSignal: AbortSignal | undefined;
+
+    const origFetch = globalThis.fetch;
+    // Stub fetch: hang until aborted
+    (globalThis as unknown as Record<string, unknown>).fetch = (_url: string, opts?: RequestInit) => {
+      abortSignal = opts?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        if (opts?.signal) {
+          opts.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        }
+      });
+    };
+
+    const fsm = new NarrationFsm({
+      narrateEndpoint: '/openspace/voice/narrate',
+      utteranceBaseUrl: '/openspace/voice/utterances',
+      onError: () => { errorCalled = true; },
+    });
+
+    fsm.enqueue({ text: 'hello', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
+
+    // Wait one tick so drainLoop has started and fetch is in flight
+    setTimeout(() => {
+      fsm.stop(); // aborts the fetch
+      setTimeout(() => {
+        assert.equal(fsm.state, 'idle');
+        assert.isFalse(errorCalled);
+        (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
+        done();
+      }, 50);
+    }, 10);
   });
 
   it('stop() transitions state to idle synchronously', () => {
