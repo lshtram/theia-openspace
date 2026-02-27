@@ -36,6 +36,11 @@ export class VoiceWaveformOverlay {
   private currentEmotion: EmotionKind | null = null;
   private currentMode: VoiceMode = 'recording';
   private waitingAnimationId: number | null = null;
+  private _onCancel: (() => void) | null = null;
+
+  setOnCancel(cb: (() => void) | null): void {
+    this._onCancel = cb;
+  }
 
   get barColor(): string {
     if (this.currentMode === 'speaking') {
@@ -109,6 +114,12 @@ export class VoiceWaveformOverlay {
       border: `1px solid ${this.borderColor}`,
       transition: 'background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease',
     });
+
+    if (this._onCancel) {
+      container.style.pointerEvents = 'auto';
+      container.style.cursor = 'pointer';
+      container.addEventListener('click', this._onCancel);
+    }
 
     if (this.currentMode === 'waiting') {
       container.appendChild(this.createWaitingIndicator());
