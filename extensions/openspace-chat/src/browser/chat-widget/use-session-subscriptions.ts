@@ -31,6 +31,8 @@ export interface SessionSubscriptionState {
     retryStatus: { attempt: number; message: string; next: number } | undefined;
     pendingQuestions: SDKTypes.QuestionRequest[];
     pendingPermissions: PermissionNotification[];
+    /** React-state copy of sessionService.activeSession?.id — changes trigger dependent useEffects */
+    activeSessionId: string | undefined;
 }
 
 /**
@@ -51,6 +53,7 @@ export function useSessionSubscriptions(
     const [retryStatus, setRetryStatus] = React.useState<{ attempt: number; message: string; next: number } | undefined>(undefined);
     const [pendingQuestions, setPendingQuestions] = React.useState<SDKTypes.QuestionRequest[]>([]);
     const [pendingPermissions, setPendingPermissions] = React.useState<PermissionNotification[]>([]);
+    const [activeSessionId, setActiveSessionId] = React.useState<string | undefined>(sessionService.activeSession?.id);
     const disposablesRef = React.useRef<Disposable[]>([]);
 
     React.useEffect(() => {
@@ -127,7 +130,8 @@ export function useSessionSubscriptions(
             }
         }) ?? { dispose: () => {} };
 
-        const sessionChangedDisposable = sessionService.onActiveSessionChanged(() => {
+        const sessionChangedDisposable = sessionService.onActiveSessionChanged(session => {
+            setActiveSessionId(session?.id);
             loadSessions();
         });
 
@@ -182,5 +186,6 @@ export function useSessionSubscriptions(
         retryStatus,
         pendingQuestions,
         pendingPermissions,
+        activeSessionId,
     };
 }

@@ -243,10 +243,12 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [mcpStatus, setMcpStatus] = React.useState<Record<string, unknown> | undefined>(undefined);
     React.useEffect(() => {
         setMcpStatus(undefined);
-        if (activeSession) {
-            sessionService.getMcpStatus().then(setMcpStatus).catch(() => setMcpStatus(undefined));
+        if (subscriptions.activeSessionId) {
+            sessionService.getMcpStatus()
+                .then(v => { setMcpStatus(v); })
+                .catch(() => { setMcpStatus(undefined); });
         }
-    }, [activeSession?.id]);
+    }, [subscriptions.activeSessionId]);
 
     return (
         <div className="chat-container">

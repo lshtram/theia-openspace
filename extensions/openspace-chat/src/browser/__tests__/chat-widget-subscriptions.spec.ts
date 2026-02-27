@@ -691,4 +691,90 @@ describe('ChatWidget - Subscription Churn (Bug H3)', () => {
             }
         });
     });
+
+    // ─── MCP status fetching ─────────────────────────────────────────────────
+
+    describe('MCP status fetching', () => {
+        it('calls getMcpStatus when activeSession is set at mount time', async () => {
+            const getMcpStatus = sinon.stub().resolves({ 'server-a': { status: 'connected' } });
+            const sessionService = createMockSessionService({
+                activeProject: mockProject,
+                activeSession: mockSession1,
+                getMcpStatus,
+            });
+
+            const { unmount } = renderComponent(sessionService);
+
+            try {
+                await flushAsync();
+                expect(getMcpStatus.callCount).to.equal(1, 'getMcpStatus should be called once when session is active at mount');
+            } finally {
+                unmount();
+            }
+        });
+
+        it('calls getMcpStatus when onActiveSessionChanged fires after initial mount', async () => {
+            let sessionChangedCallback: ((session: any) => void) | undefined;
+            const getMcpStatus = sinon.stub().resolves({ 'server-a': { status: 'connected' } });
+            const sessionService = createMockSessionService({
+                activeProject: mockProject,
+                activeSession: undefined,
+                getMcpStatus,
+                onActiveSessionChanged: sinon.stub().callsFake((cb: (s: any) => void) => {
+                    sessionChangedCallback = cb;
+                    return { dispose: sinon.stub() };
+                }),
+            });
+
+            const { unmount } = renderComponent(sessionService);
+
+            try {
+                await flushAsync();
+                // No session at mount — getMcpStatus should NOT have been called yet
+                expect(getMcpStatus.callCount).to.equal(0, 'getMcpStatus should not be called when no session at mount');
+
+                // Simulate session being restored asynchronously
+                sessionService.activeSession = mockSession1;
+                await act(async () => {
+                    sessionChangedCallback!(mockSession1);
+                });
+                await flushAsync();
+
+                expect(getMcpStatus.callCount).to.equal(1, 'getMcpStatus should be called after onActiveSessionChanged fires');
+            } finally {
+                unmount();
+            }
+        });
+
+        it('does NOT re-call getMcpStatus when onActiveSessionChanged fires with same session id', async () => {
+            let sessionChangedCallback: ((session: any) => void) | undefined;
+            const getMcpStatus = sinon.stub().resolves({ 'server-a': { status: 'connected' } });
+            const sessionService = createMockSessionService({
+                activeProject: mockProject,
+                activeSession: mockSession1,
+                getMcpStatus,
+                onActiveSessionChanged: sinon.stub().callsFake((cb: (s: any) => void) => {
+                    sessionChangedCallback = cb;
+                    return { dispose: sinon.stub() };
+                }),
+            });
+
+            const { unmount } = renderComponent(sessionService);
+
+            try {
+                await flushAsync();
+                const countAfterMount = getMcpStatus.callCount;
+
+                // Fire session changed with the SAME session — should not trigger another fetch
+                await act(async () => {
+                    sessionChangedCallback!(mockSession1);
+                });
+                await flushAsync();
+
+                expect(getMcpStatus.callCount).to.equal(countAfterMount, 'getMcpStatus should not be re-called for same session id');
+            } finally {
+                unmount();
+            }
+        });
+    });
 });
