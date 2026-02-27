@@ -25,4 +25,34 @@ describe('NarrationFsm (state transitions only)', () => {
   it('pause/resume only valid when playing', () => {
     assert.throws(() => fsm.pause()); // can't pause when idle
   });
+
+  it('stop() while queued returns to idle without calling onError', (done) => {
+    let errorCalled = false;
+    let modeChanges: string[] = [];
+    const fsm = new NarrationFsm({
+      narrateEndpoint: '/openspace/voice/narrate',
+      utteranceBaseUrl: '/openspace/voice/utterances',
+      onError: () => { errorCalled = true; },
+      onModeChange: (m) => { modeChanges.push(m); },
+    });
+    fsm.enqueue({ text: 'hello', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
+    // stop immediately before drain loop can do anything
+    fsm.stop();
+    // Give drain loop a tick to settle
+    setTimeout(() => {
+      assert.equal(fsm.state, 'idle');
+      assert.isFalse(errorCalled);
+      done();
+    }, 50);
+  });
+
+  it('stop() transitions state to idle synchronously', () => {
+    const fsm = new NarrationFsm({
+      narrateEndpoint: '/openspace/voice/narrate',
+      utteranceBaseUrl: '/openspace/voice/utterances',
+    });
+    fsm.enqueue({ text: 'hello', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
+    fsm.stop();
+    assert.equal(fsm.state, 'idle');
+  });
 });

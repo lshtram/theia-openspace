@@ -43,6 +43,7 @@ export class NarrationFsm {
   private _state: NarrationState = 'idle';
   private audioCtx: AudioContext | null = null;
   private queue: NarrationRequest[] = [];
+  private _abortController: AbortController | null = null;
 
   constructor(private readonly options: NarrationFsmOptions) {}
 
@@ -72,6 +73,8 @@ export class NarrationFsm {
   }
 
   stop(): void {
+    this._abortController?.abort();
+    this._abortController = null;
     this.queue = [];
     this.audioCtx?.close();
     this.audioCtx = null;
@@ -81,6 +84,8 @@ export class NarrationFsm {
 
   // M-6: Iterative drain loop replaces recursive processQueue() to avoid stack growth
   private async drainLoop(first: NarrationRequest): Promise<void> {
+    this._abortController = new AbortController();
+    const { signal } = this._abortController;
     let current: NarrationRequest | undefined = first;
     console.log('[Voice] drainLoop started, mode:', current?.mode);
     while (current) {
@@ -88,12 +93,20 @@ export class NarrationFsm {
       this.options.onModeChange?.('waiting');
       console.log('[Voice] Waiting for TTS...');
       try {
-        await this.fetchAndPlay(current);
+        await this.fetchAndPlay(current, signal);
         this._state = validateNarrationTransition({ from: this._state, trigger: 'complete' });
         this.options.onPlaybackComplete?.();
         this.options.onModeChange?.('idle');
         console.log('[Voice] Narration complete');
       } catch (err) {
+        const isAbort = (err instanceof Error && err.name === 'AbortError') ||
+                        (err instanceof DOMException && err.name === 'AbortError');
+        if (isAbort) {
+          // Clean cancel — state already set to idle by stop()
+          this.options.onModeChange?.('idle');
+          console.log('[Voice] Narration cancelled');
+          return;
+        }
         // M-7: Use validateNarrationTransition (not direct assignment) for error transitions
         this._state = validateNarrationTransition({ from: this._state, trigger: 'error' });
         this.options.onError?.(err as Error);
@@ -109,13 +122,14 @@ export class NarrationFsm {
     }
   }
 
-  private async fetchAndPlay(request: NarrationRequest): Promise<void> {
+  private async fetchAndPlay(request: NarrationRequest, signal: AbortSignal): Promise<void> {
     console.log('[Voice] fetchAndPlay (streaming) - text:', request.text.substring(0, 100));
 
     const response = await fetch(this.options.narrateEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal,
     });
 
     if (!response.ok) throw new Error(`Narrate endpoint returned ${response.status}`);
@@ -140,6 +154,7 @@ export class NarrationFsm {
 
     const playPending = async (): Promise<void> => {
       while (pending.has(nextSeq)) {
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const float32 = pending.get(nextSeq)!;
         pending.delete(nextSeq);
         nextSeq++;
