@@ -207,6 +207,17 @@ Use **separate slides** when each point needs its own visual treatment or when t
 
 **Every presentation must include visuals.** Text-only slides are ineffective for conveying complex technical concepts.
 
+#### What Actually Works
+
+| Visual type | How | Works today |
+|---|---|---|
+| Syntax-highlighted code | Fenced code blocks with language tag | ✅ |
+| SVG diagrams | `<img src="design/assets/diagrams/foo.svg">` | ✅ |
+| Background images | `data-background-image` directive | ✅ |
+| HTML/CSS charts | Inline HTML with flexbox/position | ✅ |
+| Chart.js charts | CDN `<script>` + `<canvas>` | ✅ (via CDN) |
+| Mermaid diagrams | `mermaid` fenced block | ❌ (plugin not enabled) |
+
 #### Visuals Playbook
 
 **Decision tree:**
@@ -215,8 +226,7 @@ Use **separate slides** when each point needs its own visual treatment or when t
 - **Atmosphere image** only for title or section divider slides.
 
 **Minimums:**
-- All decks: at least 2 visuals.
-- Demo decks: 3-5 visuals, including **1 diagram** and **1 image**.
+Every deck MUST have at least 3 visuals: 1 background image, 1 diagram or chart, 1 syntax-highlighted code block.
 
 **Local asset workflow (required):**
 1. Search and download a candidate.
@@ -290,22 +300,33 @@ Create diagrams in the local TLDraw whiteboard, then export as images:
 - Reference the local asset path in the deck
 
 **2. Mermaid Diagrams**
-RevealJS supports Mermaid for text-based diagrams:
+
+❌ **Not currently available.** The RevealMermaid plugin is not enabled. Use SVG images or HTML/CSS diagrams instead.
+
+**3. Chart.js Charts (via CDN)**
+
+Charts render via Chart.js loaded from jsdelivr CDN. Use `<canvas>` + CDN `<script>` + inline init:
 
 ```markdown
-```mermaid
-graph LR
-    A[Client] -->|GET /events| B[Server]
-    B -->|event stream| A
-```
+<canvas id="my-chart" style="max-height: 45vh;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('my-chart'), {
+  type: 'bar',
+  data: {
+    labels: ['A', 'B', 'C'],
+    datasets: [{ label: 'Values', data: [10, 20, 15], backgroundColor: ['#6366f1','#10b981','#f59e0b'] }]
+  },
+  options: { responsive: true,
+    plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+});
+</script>
 ```
 
-Common Mermaid diagram types:
-- `graph TD/LR` — flowcharts and architecture diagrams
-- `sequenceDiagram` — sequence diagrams for request/response flows
-- `gantt` — timelines and project schedules
+Only `https://cdn.jsdelivr.net/npm/chart.js` and `https://cdn.jsdelivr.net/npm/mermaid` CDN origins are allowed. Inline scripts must reference `Chart` or `mermaid` to pass the security filter.
 
-**3. HTML/CSS Diagrams**
+**4. HTML/CSS Diagrams**
 For simple diagrams, use inline HTML with flexbox/grid layouts (see examples below).
 
 #### Finding Images Online
@@ -522,6 +543,17 @@ Show data flow with arrows and labeled components:
   Single HTTP connection • Text events • Automatic reconnect
 </div>
 ```
+
+### Half-Screen Layout
+
+Presentations run embedded in the IDE, often side-by-side with code. Design for ~50% screen width:
+
+- **Max 6 bullet points per slide** — more than 6 causes overflow
+- **Font sizes:** use `font-size: 0.75em` or smaller for supplementary text
+- **Images:** `max-height: 40vh` on images to prevent overflow
+- **Code blocks:** max 12 lines; use `font-size: 0.6em` on `<pre>` for dense code
+- **Avoid fixed pixel heights** on layout containers — use `vh` or `%` instead
+- **Test at 50% width** by splitting the IDE editor and presentation side-by-side
 
 ### Code on Slides: Show, Don't Tell
 
