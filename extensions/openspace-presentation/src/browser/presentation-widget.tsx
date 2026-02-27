@@ -454,7 +454,9 @@ More content</pre>
      * attributes on the <section> element. DOMPurify strips HTML comments, so
      * we extract them before sanitization.
      *
-     * Only data-background-* and data-notes attributes are allowed through.
+     * Allowed attributes: data-background-*, data-notes, data-auto-animate,
+     * data-auto-animate-{id,easing,duration,unmatched}, data-transition,
+     * data-transition-speed, data-visibility, data-timing, data-state.
      * Returns a string of attributes to append to the <section> tag, and
      * the content with the comment directives removed.
      */
@@ -471,7 +473,7 @@ More content</pre>
                 directives += ` ${attrName}="${attrValue}"`;
             }
             // Handle boolean attributes (no value) like data-auto-animate
-            const boolAttrRe = /\b(data-auto-animate)\b(?!=)/g;
+            const boolAttrRe = /\b(data-auto-animate)(?![-=])/g;
             let boolMatch: RegExpExecArray | null;
             while ((boolMatch = boolAttrRe.exec(attrs)) !== null) {
                 directives += ` ${boolMatch[1]}`;
