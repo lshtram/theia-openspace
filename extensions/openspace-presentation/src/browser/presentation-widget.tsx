@@ -28,6 +28,8 @@ import { IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecyc
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { attachTabDblClickToggle } from 'openspace-core/lib/browser/tab-dblclick-toggle';
 import Reveal from 'reveal.js';
+import RevealHighlight from 'reveal.js/plugin/highlight/highlight.esm.js';
+import RevealNotes from 'reveal.js/plugin/notes/notes.esm.js';
 // reveal.js base CSS is loaded as a static <link> tag via injectRevealBaseCSS()
 // to avoid webpack style-loader call stack recursion with large CSS bundles.
 import { marked } from 'marked';
@@ -145,6 +147,14 @@ export class PresentationWidget extends ReactWidget {
         link.href = '/reveal-themes/reveal.css';
         link.dataset.revealBase = 'true';
         document.head.appendChild(link);
+        // Inject highlight.js syntax theme for RevealHighlight plugin
+        const highlightHref = '/reveal-themes/highlight-monokai.css';
+        if (!document.querySelector(`link[href="${highlightHref}"]`)) {
+            const highlightLink = document.createElement('link');
+            highlightLink.rel = 'stylesheet';
+            highlightLink.href = highlightHref;
+            document.head.appendChild(highlightLink);
+        }
     }
 
     // T2-22: Store the URI for findByUri comparison
@@ -387,8 +397,13 @@ More content</pre>
                 const sanitized = DOMPurify.sanitize(renderedHtml, {
                     ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
-                        'tr','th','td','span','div','sup','sub'],
-                    ALLOWED_ATTR: ['href','src','alt','class','id','style']
+                        'tr','th','td','span','div','sup','sub',
+                        'svg','path','circle','line','rect','polyline','polygon','text','g','defs','use','marker','animate',
+                        'canvas','script'],
+                    ALLOWED_ATTR: ['href','src','alt','class','id','style',
+                        'viewBox','xmlns','width','height','fill','stroke','stroke-width','d','cx','cy','r',
+                        'x','y','x1','y1','x2','y2','points','transform','opacity','font-size','text-anchor',
+                        'data-id','data-line-numbers','data-trim','data-noescape','type','defer','async']
                 });
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
                 // No data-markdown attribute — reveal.js treats this as a plain HTML section
@@ -751,7 +766,7 @@ More content</pre>
             center: true,
             transition: options.transition ?? 'slide',
             backgroundTransition: 'fade',
-            plugins: [],
+            plugins: [RevealHighlight, RevealNotes],
         });
 
         await this.revealDeck.initialize();

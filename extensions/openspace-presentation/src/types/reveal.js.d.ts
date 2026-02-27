@@ -40,6 +40,24 @@ declare module 'reveal.js/plugin/markdown/markdown.esm.js' {
     export default RevealMarkdown;
 }
 
+declare module 'reveal.js/plugin/highlight/highlight.esm.js' {
+    interface RevealPlugin {
+        id: string;
+        init(deck: import('reveal.js').default): void | Promise<void>;
+    }
+    const RevealHighlight: RevealPlugin;
+    export default RevealHighlight;
+}
+
+declare module 'reveal.js/plugin/notes/notes.esm.js' {
+    interface RevealPlugin {
+        id: string;
+        init(deck: import('reveal.js').default): void | Promise<void>;
+    }
+    const RevealNotes: RevealPlugin;
+    export default RevealNotes;
+}
+
 declare module 'reveal.js/dist/theme/beige.css';
 declare module 'reveal.js/dist/theme/black-contrast.css';
 declare module 'reveal.js/dist/theme/black.css';
