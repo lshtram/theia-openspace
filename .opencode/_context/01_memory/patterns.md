@@ -165,6 +165,24 @@ browser-app/lib/frontend/extensions_openspace-presentation_lib_browser_openspace
 
 **Rule**: After a webpack rebuild, grep the chunk file named after the extension, not `bundle.js`.
 
+### Webpack Cache Invalidation for Local Extensions (Added 2026-02-27)
+
+**Problem:** Webpack's filesystem cache treats everything in `node_modules/` as "managed" — it skips content hashing and only checks package name + version. Our local extensions are symlinked into `node_modules/` (`node_modules/openspace-voice -> ../extensions/openspace-voice`). Since they keep version `0.1.0` forever, webpack NEVER detects content changes after `tsc` recompiles them. Combined with `resolve.symlinks: false`, this causes **silently stale bundles** — the worst kind of bug because the code looks correct at every layer except the final served bundle.
+
+**Fix (applied 2026-02-27):** `webpack.config.js` now uses `snapshot.managedPaths` with a regex that EXCLUDES our `openspace-*` and `voice-core` packages from the managed set. Webpack hashes these modules normally while still caching third-party deps.
+
+**Verification after ANY webpack rebuild:**
+```bash
+rg "your-unique-string" browser-app/lib/frontend/
+```
+If your new code is NOT found, the cache is stale. Emergency fix:
+```bash
+rm -rf browser-app/.webpack-cache
+yarn --cwd browser-app webpack --config webpack.config.js --mode development
+```
+
+**When adding a new local extension:** Add its package name to the `LOCAL_PACKAGES` array in `browser-app/webpack.config.js`.
+
 ## Critical Runtime Patterns (Discovered 2026-02-17)
 
 ### Pattern: Circular DI Dependencies in Theia Extensions

@@ -2,6 +2,26 @@
 
 ## Current Milestones
 
+### TTS Sentence-Chunk Streaming (2026-02-27) -- COMPLETE
+
+Reduced narration first-audio latency from "full text synthesis wait" to
+"first sentence ready" (~300–600ms on CPU, vs multiple seconds previously).
+
+Architecture:
+- Backend: `narrateTextStreaming()` splits cleaned text into sentences,
+  synthesizes each, streams NDJSON chunks over chunked HTTP transfer
+- Browser: `NarrationFsm.fetchAndPlay()` reads `ReadableStream`, decodes and
+  plays each chunk in seq order while next chunk synthesizes in parallel
+
+Files changed:
+- `sentence-splitter.ts` (new utility)
+- `voice-backend-service.ts` (new `narrateTextStreaming` method + `NarrateStreamChunk`)
+- `voice-hub-contribution.ts` (route updated for NDJSON streaming)
+- `narration-fsm.ts` (streaming fetchAndPlay + exported `parseNdjsonLines` helper)
+
+Commits: `a628d51`, `295ca2b`, `38d3339`, `93a145b`
+Tests: **1307 passing, 0 failing, 1 pending**
+
 ### God Object Decomposition (2026-02-26/27) -- COMPLETE
 
 **Branch:** `refactor/god-object-decomposition` (pushed to origin)

@@ -8,8 +8,8 @@
 All tasks are now managed in GitHub Issues: https://github.com/lshtram/theia-openspace/issues
 
 ## Current Focus
-- **Status:** R1 Hygiene (all 7 items) COMPLETE and merged to master.
-- **Previous:** God object decomposition merged to master. R1 hygiene fix branch created and completed.
+- **Status:** TTS Sentence-Chunk Streaming COMPLETE — all 4 tasks done, 1307 tests passing.
+- **Previous:** R1 Hygiene (all 7 items) COMPLETE, God object decomposition COMPLETE.
 - **Next:** Phase 2.7 model selector enhancements or Phase 2.8 notifications & feedback.
 
 ## R1 Hygiene (2026-02-27) -- COMPLETE
