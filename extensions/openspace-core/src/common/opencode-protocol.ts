@@ -280,6 +280,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
 
     // MCP config reading (Node-side, resolves C1/E2 — no fs access in browser bundle)
     getMcpConfig(directory: string): Promise<Record<string, unknown> | undefined>;
+
+    // MCP live status from OpenCode REST API (GET /mcp?directory=...)
+    getMcpStatus(directory: string): Promise<Record<string, unknown> | undefined>;
 }
 
 /**

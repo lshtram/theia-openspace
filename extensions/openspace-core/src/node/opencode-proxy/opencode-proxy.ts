@@ -198,4 +198,8 @@ export class OpenCodeProxy implements OpenCodeService {
             return undefined;
         }
     }
+
+    async getMcpStatus(directory: string): Promise<Record<string, unknown> | undefined> {
+        return this.rest.getMcpStatus(directory);
+    }
 }
