@@ -191,14 +191,55 @@ Note: The standout pattern: Modular Monolith wins everywhere Monolith wins, and 
 
 ---
 
-<!-- SLIDE 7A — ARCHITECTURE DIAGRAM -->
+<!-- SLIDE 7A — ARCHITECTURE DIAGRAM (split layout) -->
 <!-- .slide: data-background-color="#0a0e1a" -->
 
-## Architecture at a Glance
+## Modular Architecture
 
-<img src="design/assets/diagrams/modular-monolith-architecture.svg" style="width: 92%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);">
+<div style="display: flex; gap: 1.5em; align-items: center;">
+  <div style="flex: 1; font-size: 0.8em;">
+    <h3 style="font-size: 1em; color: var(--r-heading-color);">Modules as boundaries</h3>
+    <ul>
+      <li>Each module owns its domain</li>
+      <li>No cross-module direct DB access</li>
+      <li>Contracts enforced at compile time</li>
+    </ul>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/diagrams/modular-monolith-architecture.svg"
+         style="width: 100%; max-height: 40vh; object-fit: contain; border-radius: 8px;">
+  </div>
+</div>
 
 Note: The diagram makes the boundary story visual — one deployable, but with clear module seams and extraction paths.
+
+---
+
+<!-- SLIDE 7B — THE NUMBERS (Chart.js) -->
+<!-- .slide: data-background-color="#0a0e1a" -->
+
+## The Numbers
+
+<canvas id="arch-chart" style="max-height: 45vh;"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('arch-chart'), {
+  type: 'bar',
+  data: {
+    labels: ['Monolith', 'Modular Mono', 'Microservices'],
+    datasets: [
+      { label: 'Deploy time (min)', data: [35, 35, 8], backgroundColor: ['#ef4444','#6366f1','#10b981'] },
+      { label: 'Ops complexity (1-10)', data: [2, 3, 9], backgroundColor: ['#fca5a5','#a5b4fc','#6ee7b7'] }
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } } } }
+});
+</script>
+
+Note: The numbers crystallize the trade-off: Microservices wins on deploy time only when you have the ops maturity to manage 9× the complexity. For our team, that trade is losing.
 
 ---
 
