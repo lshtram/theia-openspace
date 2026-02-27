@@ -202,22 +202,58 @@ export class NarrationFsm {
     };
 
     const playerLoop = async (): Promise<void> => {
+      // nextStartTime tracks when the next AudioBuffer should begin in the AudioContext timeline.
+      // By scheduling each chunk at exactly the end of the previous one, the Web Audio scheduler
+      // plays them back-to-back without any JavaScript-event-loop-induced gaps.
+      let nextStartTime: number | null = null;
+      // lastEnded resolves when the last scheduled source finishes playing, so we can await
+      // the end of all audio before returning.
+      let lastEnded: Promise<void> = Promise.resolve();
+
+      const scheduleChunk = (float32: Float32Array): void => {
+        const ctx = this.audioCtx!;
+        const buffer = ctx.createBuffer(1, float32.length, 24000);
+        buffer.copyToChannel(float32, 0);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+
+        // First chunk: start immediately (slightly in the future to avoid under-run).
+        // Subsequent chunks: start exactly when the previous one ends.
+        if (nextStartTime === null) {
+          nextStartTime = ctx.currentTime + 0.005; // 5 ms look-ahead for first chunk
+        }
+        source.start(nextStartTime);
+        nextStartTime += buffer.duration;
+
+        lastEnded = new Promise<void>(resolve => {
+          source.onended = () => resolve();
+        });
+      };
+
       while (true) {
         const waitPromise = playerWait; // snapshot before draining
-        // Play all in-order chunks currently buffered
+        // Schedule all in-order chunks currently buffered
         while (pending.has(nextPlaySeq)) {
           if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
           const float32 = pending.get(nextPlaySeq)!;
           pending.delete(nextPlaySeq);
           nextPlaySeq++;
-          await this.playFloat32(float32, signal);
+          scheduleChunk(float32);
         }
-        // Exit when stream is complete and no more chunks to play
+        // Exit when stream is complete and no more chunks to schedule
         if (streamDone && !pending.has(nextPlaySeq)) break;
         // Wait for reader to notify us a new chunk arrived
         await waitPromise;
       }
       if (streamError) throw streamError;
+      // Wait for all scheduled audio to finish before resolving.
+      // If aborted, stop() will close the AudioContext which fires onended on all sources.
+      // Race against abort signal so we don't hang if onended never fires (e.g. in tests).
+      await Promise.race([
+        lastEnded,
+        new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true })),
+      ]);
     };
 
     const [readerResult, playerResult] = await Promise.allSettled([readerLoop(), playerLoop()]);
@@ -225,20 +261,6 @@ export class NarrationFsm {
                     ?? (readerResult.status === 'rejected' ? readerResult.reason : null);
     if (firstError) throw firstError as Error;
     this.options.onEmotionChange?.(null);
-  }
-
-  private async playFloat32(float32: Float32Array, signal?: AbortSignal): Promise<void> {
-    if (!this.audioCtx) return;
-    const buffer = this.audioCtx.createBuffer(1, float32.length, 24000);
-    buffer.copyToChannel(float32, 0);
-    const source = this.audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.audioCtx.destination);
-    await new Promise<void>((resolve) => {
-      source.onended = () => resolve();
-      signal?.addEventListener('abort', () => { source.stop(); resolve(); });
-      source.start();
-    });
   }
 
 }

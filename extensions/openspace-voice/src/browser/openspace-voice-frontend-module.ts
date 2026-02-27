@@ -78,77 +78,63 @@ export default new ContainerModule((bind) => {
       },
     });
 
-    // DOM-based narration trigger: observe when assistant messages finish streaming
+    // DOM-based narration trigger: observe when assistant messages finish streaming.
+    // Observe document.body (always stable) instead of .message-timeline-content
+    // (which can be replaced by React re-renders, orphaning a node-specific observer).
     let lastNarratedMessageId: string | null = null;
-    let narrationObserver: MutationObserver | null = null;
-    const MAX_SETUP_RETRIES = 60;
-    let setupRetries = 0;
 
-    const setupObserver = (): void => {
-      const timeline = document.querySelector('.message-timeline-content');
-      if (!timeline) {
-        setupRetries++;
-        if (setupRetries >= MAX_SETUP_RETRIES) {
-          console.warn('[Voice] Chat timeline not found after', MAX_SETUP_RETRIES, 'retries — narration observer not attached');
-          return;
-        }
-        setTimeout(setupObserver, 1000);
-        return;
+    const narrationObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
+        const target = mutation.target as HTMLElement;
+        if (!target.matches?.('article.message-bubble-assistant')) continue;
+
+        // We care about the streaming class being REMOVED (message is now complete)
+        const wasStreaming = (mutation.oldValue ?? '').includes('message-bubble-streaming');
+        const isStreaming = target.classList.contains('message-bubble-streaming');
+        if (!wasStreaming || isStreaming) continue;
+
+        // Message just finished streaming
+        const messageId = target.getAttribute('data-message-id');
+        if (!messageId || messageId === lastNarratedMessageId) continue;
+
+        // Check voice state
+        if (sessionFsm.state === 'inactive') continue;
+        if (sessionFsm.policy.narrationMode === 'narrate-off') continue;
+
+        // Extract text from rendered DOM (skip code blocks)
+        const mdBodies = target.querySelectorAll('.message-bubble-content .part-text .md-body');
+        const text = Array.from(mdBodies)
+          .map(el => (el as HTMLElement).textContent ?? '')
+          .join('\n')
+          .trim();
+
+        if (!text) continue;
+
+        lastNarratedMessageId = messageId;
+        console.log('[Voice] Narrating message', messageId, '- text length:', text.length);
+        narrationFsm.enqueue({
+          text,
+          mode: sessionFsm.policy.narrationMode,
+          voice: sessionFsm.policy.voice,
+          speed: sessionFsm.policy.speed,
+        });
       }
+    });
 
-      narrationObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
-          const target = mutation.target as HTMLElement;
-          if (!target.matches?.('article.message-bubble-assistant')) continue;
-
-          // We care about the streaming class being REMOVED (message is now complete)
-          const wasStreaming = (mutation.oldValue ?? '').includes('message-bubble-streaming');
-          const isStreaming = target.classList.contains('message-bubble-streaming');
-          if (!wasStreaming || isStreaming) continue;
-
-          // Message just finished streaming
-          const messageId = target.getAttribute('data-message-id');
-          if (!messageId || messageId === lastNarratedMessageId) continue;
-
-          // Check voice state
-          if (sessionFsm.state === 'inactive') continue;
-          if (sessionFsm.policy.narrationMode === 'narrate-off') continue;
-
-          // Extract text from rendered DOM (skip code blocks)
-          const mdBodies = target.querySelectorAll('.message-bubble-content .part-text .md-body');
-          const text = Array.from(mdBodies)
-            .map(el => (el as HTMLElement).textContent ?? '')
-            .join('\n')
-            .trim();
-
-          if (!text) continue;
-
-          lastNarratedMessageId = messageId;
-          console.log('[Voice] Narrating message', messageId, '- text length:', text.length);
-          narrationFsm.enqueue({
-            text,
-            mode: sessionFsm.policy.narrationMode,
-            voice: sessionFsm.policy.voice,
-            speed: sessionFsm.policy.speed,
-          });
-        }
-      });
-
-      narrationObserver.observe(timeline, {
-        attributes: true,
-        attributeFilter: ['class'],
-        attributeOldValue: true,
-        subtree: true,
-      });
-
-      console.log('[Voice] DOM narration observer attached');
-    };
+    // Attach to document.body — always stable, survives React re-renders of child nodes.
+    // subtree:true means we still catch class mutations on any descendant article element.
+    narrationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+      attributeOldValue: true,
+      subtree: true,
+    });
+    console.log('[Voice] DOM narration observer attached to document.body');
 
     // Disconnect observer on page unload to prevent leaks
     window.addEventListener('unload', () => {
-      narrationObserver?.disconnect();
-      narrationObserver = null;
+      narrationObserver.disconnect();
     });
 
     // Cancel narration on Esc
@@ -157,13 +143,6 @@ export default new ContainerModule((bind) => {
         narrationFsm.stop();
       }
     });
-
-    // Start observing once DOM is ready
-    if (document.readyState === 'complete') {
-      setupObserver();
-    } else {
-      window.addEventListener('load', setupObserver);
-    }
 
     return narrationFsm;
   }).inSingletonScope();

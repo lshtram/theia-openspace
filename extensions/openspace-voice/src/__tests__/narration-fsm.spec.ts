@@ -130,12 +130,13 @@ describe('NarrationFsm (state transitions only)', () => {
     let capturedSource: { onended: (() => void) | null; stop: () => void } | null = null;
     const origAudioContext = (globalThis as Record<string, unknown>).AudioContext;
     (globalThis as Record<string, unknown>).AudioContext = class {
+      get currentTime() { return 0; }
       createBuffer(ch: number, len: number, sr: number) {
-        return { copyToChannel() {} };
+        return { copyToChannel() {}, duration: len / sr };
       }
       createBufferSource() {
         const src = { buffer: null as unknown, onended: null as (() => void) | null,
-                      connect() {}, start() {}, stop() {} };
+                      connect() {}, start(_when?: number) {}, stop() {} };
         capturedSource = src;
         return src;
       }
@@ -199,15 +200,16 @@ describe('NarrationFsm (state transitions only)', () => {
     };
 
     (globalThis as Record<string, unknown>).AudioContext = class {
+      get currentTime() { return 0; }
       createBuffer(_ch: number, _len: number, _rate: number) {
-        return { copyToChannel() {} };
+        return { copyToChannel() {}, duration: 0.01 };
       }
       createBufferSource() {
         const src = {
           buffer: null as unknown,
           onended: null as (() => void) | null,
           connect() {},
-          start() {
+          start(_when?: number) {
             Promise.resolve().then(() => { src.onended?.(); });
           },
           stop() {},
