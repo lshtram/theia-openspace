@@ -138,9 +138,13 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
 
     function getMcpSummary(status: Record<string, unknown>): { connected: number; total: number; pillColor: string } {
         const entries = Object.entries(status);
-        const connected = entries.filter(([, v]) => (v as { type: string }).type === 'connected').length;
+        const getStatusField = (v: unknown): string => {
+            const obj = v as Record<string, unknown>;
+            return (obj?.['status'] as string) ?? (obj?.['type'] as string) ?? '';
+        };
+        const connected = entries.filter(([, v]) => getStatusField(v) === 'connected').length;
         const hasError = entries.some(([, v]) => {
-            const t = (v as { type: string }).type;
+            const t = getStatusField(v);
             return t === 'failed' || t === 'error';
         });
         const pillColor = hasError ? '#f44336' : connected === entries.length ? '#4caf50' : '#ff9800';
@@ -287,9 +291,10 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                         {showMcpDropdown && (
                             <div className="mcp-status-dropdown" role="menu" aria-label="MCP server status">
                                 {Object.entries(mcpStatus).map(([name, val]) => {
-                                    const s = val as { type: string };
-                                    const dot = s.type === 'connected' ? '#4caf50'
-                                        : (s.type === 'failed' || s.type === 'error') ? '#f44336'
+                                    const obj = val as Record<string, unknown>;
+                                    const sField = (obj?.['status'] as string) ?? (obj?.['type'] as string) ?? '';
+                                    const dot = sField === 'connected' ? '#4caf50'
+                                        : (sField === 'failed' || sField === 'error') ? '#f44336'
                                         : '#ff9800';
                                     return (
                                         <div key={name} className="mcp-status-row" role="menuitem">
