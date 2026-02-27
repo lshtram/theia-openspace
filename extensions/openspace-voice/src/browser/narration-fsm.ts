@@ -203,6 +203,7 @@ export class NarrationFsm {
 
     const playerLoop = async (): Promise<void> => {
       while (true) {
+        const waitPromise = playerWait; // snapshot before draining
         // Play all in-order chunks currently buffered
         while (pending.has(nextPlaySeq)) {
           if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -214,12 +215,15 @@ export class NarrationFsm {
         // Exit when stream is complete and no more chunks to play
         if (streamDone && !pending.has(nextPlaySeq)) break;
         // Wait for reader to notify us a new chunk arrived
-        await playerWait;
+        await waitPromise;
       }
       if (streamError) throw streamError;
     };
 
-    await Promise.all([readerLoop(), playerLoop()]);
+    const [readerResult, playerResult] = await Promise.allSettled([readerLoop(), playerLoop()]);
+    const firstError = (playerResult.status === 'rejected' ? playerResult.reason : null)
+                    ?? (readerResult.status === 'rejected' ? readerResult.reason : null);
+    if (firstError) throw firstError as Error;
     this.options.onEmotionChange?.(null);
   }
 

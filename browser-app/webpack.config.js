@@ -17,29 +17,50 @@ configs[0].module.rules.push({
     loader: require.resolve('@theia/application-manager/lib/expose-loader')
 }); */
 
-// Suppress known harmless warnings from Monaco Editor
-// Persistent filesystem cache — survives between builds
-// Cuts warm build time from ~45s to ~5s when dependencies haven't changed
+// Persistent filesystem cache — survives between builds.
+// Cuts warm build time from ~45s to ~5s when dependencies haven't changed.
+//
+// CACHE INVALIDATION FOR LOCAL EXTENSIONS:
+// Local extensions are symlinked: node_modules/openspace-* -> ../extensions/*.
+// With resolve.symlinks=false (required for worktree support), webpack sees
+// these modules at node_modules/openspace-* paths. By default, webpack treats
+// everything in node_modules/ as "managed" — meaning it skips content hashing
+// and only checks package name + version. Since our local extensions keep the
+// same version (0.1.0) across rebuilds, webpack never detects content changes
+// after `tsc` recompiles them. This causes stale bundles.
+//
+// Fix: Use snapshot.managedPaths with a regex that EXCLUDES our openspace-*
+// and voice-core packages from the "managed" assumption. Webpack will then
+// check content hashes for these modules on every build.
+const LOCAL_PACKAGES = ['openspace-chat', 'openspace-core', 'openspace-layout',
+    'openspace-languages', 'openspace-presentation', 'openspace-settings',
+    'openspace-viewers', 'openspace-voice', 'openspace-whiteboard', 'voice-core'];
+const localPkgPattern = LOCAL_PACKAGES.join('|');
+
 function applyFilesystemCache(config) {
     config.cache = {
         type: 'filesystem',
         cacheDirectory: path.resolve(__dirname, '.webpack-cache'),
         buildDependencies: {
-            // Invalidate cache when any webpack config changes, or when local
-            // extension lib files change (without this, the cache serves stale
-            // bundles after a `tsc` recompile of local extensions).
             config: [
                 __filename,
                 path.resolve(__dirname, 'gen-webpack.config.js'),
                 path.resolve(__dirname, 'gen-webpack.node.config.js'),
-                // Local extension entry points — changing these busts the cache
-                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/chat-widget.js'),
-                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/message-bubble.js'),
-                path.resolve(__dirname, '../extensions/openspace-chat/lib/browser/prompt-input/prompt-input.js'),
-                path.resolve(__dirname, '../extensions/openspace-core/lib/browser/session-service.js'),
-                path.resolve(__dirname, '../extensions/openspace-core/lib/node/opencode-proxy.js'),
             ],
         },
+    };
+    // Override managedPaths: treat node_modules as managed EXCEPT our local
+    // symlinked packages. The regex captures the package path but uses a
+    // negative lookahead to exclude our local packages from the managed set.
+    // This means webpack will hash+timestamp our local packages normally,
+    // while still skipping expensive checks for third-party dependencies.
+    config.snapshot = {
+        ...(config.snapshot || {}),
+        managedPaths: [
+            new RegExp(
+                `^(.+?[\\/]node_modules[\\/](?!(${localPkgPattern})[\\/])(@.+?[\\/])?.+?)[\\/]`
+            ),
+        ],
     };
 }
 

@@ -89,9 +89,21 @@ Any commit touching Hub routes, MCP tools, browser extensions, ArtifactStore, or
 requires the full E2E suite to pass before `git push`.
 
 ### Rule 6: Webpack bundle rebuild required after browser extension changes
-After TypeScript changes to a browser extension, rebuild the webpack bundle:
-`yarn --cwd browser-app webpack --config webpack.config.js --mode development`
-Then hard-refresh the browser (Cmd+Shift+R).
+After TypeScript changes to a browser extension:
+1. Compile the extension: `yarn --cwd extensions/<name> build`
+2. Rebuild webpack: `yarn --cwd browser-app webpack --config webpack.config.js --mode development`
+3. Hard-refresh the browser (Cmd+Shift+R)
+
+**Verification:** After webpack rebuild, confirm your change is in the bundle:
+```bash
+rg "your-new-log-string" browser-app/lib/frontend/ 
+```
+If the string is NOT found, the cache served a stale bundle. Clear and rebuild:
+```bash
+rm -rf browser-app/.webpack-cache
+yarn --cwd browser-app webpack --config webpack.config.js --mode development
+```
+See patterns.md -> "Webpack Cache Invalidation for Local Extensions" for details.
 
 ### Rule 7: React imports in Theia extensions
 Always use `import * as React from '@theia/core/shared/react'`, not bare `'react'`.

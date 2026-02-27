@@ -3,7 +3,6 @@ import { assert } from 'chai';
 import { VoiceBackendService } from '../node/voice-backend-service';
 import type { SttProvider } from '@openspace-ai/voice-core';
 import type { TtsProvider } from '@openspace-ai/voice-core';
-import { splitIntoSentences } from '../common/sentence-splitter';
 
 const mockStt: SttProvider = {
   kind: 'stt',

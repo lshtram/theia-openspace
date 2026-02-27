@@ -232,15 +232,16 @@ describe('NarrationFsm (state transitions only)', () => {
     fsm.enqueue({ text: 'hi', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
 
     setTimeout(() => {
+      let testErr: unknown;
       try {
         assert.isFalse(errorCalled, 'no error expected');
         assert.isTrue(playbackComplete, 'playback should complete');
         assert.equal(fsm.state, 'idle');
-      } finally {
+      } catch (e) { testErr = e; } finally {
         (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
         (globalThis as unknown as Record<string, unknown>).AudioContext = origAudioContext;
-        done();
       }
+      done(testErr);
     }, 500);
   });
 });
