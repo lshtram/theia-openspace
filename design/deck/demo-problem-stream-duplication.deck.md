@@ -284,6 +284,31 @@ The contrast with the problem slide is intentional — same metric labels, green
 
 <!-- .slide: data-background-gradient="linear-gradient(135deg, #0f0f0f 0%, #1e293b 100%)" -->
 
+## Impact
+
+<canvas id="impact-chart" style="max-height: 45vh;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('impact-chart'), {
+  type: 'bar',
+  data: {
+    labels: ['CPU usage', 'Memory (MB)', 'Latency (ms)', 'Error rate (%)'],
+    datasets: [
+      { label: 'Before fix', data: [85, 420, 340, 12], backgroundColor: 'rgba(239,68,68,0.7)' },
+      { label: 'After fix',  data: [22, 180, 45, 0.1], backgroundColor: 'rgba(16,185,129,0.7)' }
+    ]
+  },
+  options: { responsive: true,
+    plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } } } }
+});
+</script>
+
+---
+
+<!-- .slide: data-background-gradient="linear-gradient(135deg, #0f0f0f 0%, #1e293b 100%)" -->
+
 ## Incident Timeline
 
 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8em; margin-top: 1em; font-size: 0.78em;">
