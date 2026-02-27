@@ -151,6 +151,13 @@ export default new ContainerModule((bind) => {
       narrationObserver = null;
     });
 
+    // Cancel narration on Esc
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && narrationFsm.state !== 'idle') {
+        narrationFsm.stop();
+      }
+    });
+
     // Start observing once DOM is ready
     if (document.readyState === 'complete') {
       setupObserver();
