@@ -143,7 +143,6 @@ nodeConfig.config.externals = {
 // overflows the call stack when large CSS files are bundled together).
 const revealThemesSrc = path.resolve(__dirname, '../node_modules/reveal.js/dist/theme');
 const revealBaseCssSrc = path.resolve(__dirname, '../node_modules/reveal.js/dist/reveal.css');
-const revealResetCssSrc = path.resolve(__dirname, '../node_modules/reveal.js/dist/reset.css');
 configs[0].plugins = [
     ...(configs[0].plugins || []),
     new CopyPlugin({
@@ -156,12 +155,6 @@ configs[0].plugins = [
             {
                 from: revealBaseCssSrc,
                 to: path.join(__dirname, 'lib/frontend/reveal-themes/reveal.css'),
-            },
-            {
-                // reset.css is reveal.js's CSS normaliser; serves alongside reveal.css
-                // in case theme authors or future reveal versions reference it.
-                from: revealResetCssSrc,
-                to: path.join(__dirname, 'lib/frontend/reveal-themes/reset.css'),
             },
             {
                 // RevealHighlight plugin CSS — monokai theme for code blocks

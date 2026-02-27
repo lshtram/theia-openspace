@@ -148,6 +148,8 @@ export class PresentationWidget extends ReactWidget {
         link.dataset.revealBase = 'true';
         document.head.appendChild(link);
         // Inject highlight.js syntax theme for RevealHighlight plugin
+        // Note: the revealBaseCssInjected guard above ensures this runs only once;
+        // the querySelector check below is belt-and-suspenders for defensive clarity.
         const highlightHref = '/reveal-themes/highlight-monokai.css';
         if (!document.querySelector(`link[href="${highlightHref}"]`)) {
             const highlightLink = document.createElement('link');
@@ -398,7 +400,7 @@ More content</pre>
                     ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
                         'tr','th','td','span','div','sup','sub',
-                        'svg','path','circle','line','rect','polyline','polygon','text','g','defs','use','marker','animate',
+                        'svg','path','circle','line','rect','polyline','polygon','text','g','defs','marker','animate',
                         'canvas','script'],
                     ALLOWED_ATTR: ['href','src','alt','class','id','style',
                         'viewBox','xmlns','width','height','fill','stroke','stroke-width','d','cx','cy','r',
