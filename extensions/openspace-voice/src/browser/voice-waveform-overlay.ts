@@ -37,9 +37,23 @@ export class VoiceWaveformOverlay {
   private currentMode: VoiceMode = 'recording';
   private waitingAnimationId: number | null = null;
   private _onCancel: (() => void) | null = null;
+  private _boundCancel: (() => void) | null = null;
 
   setOnCancel(cb: (() => void) | null): void {
+    // If overlay is currently visible, update the live container
+    if (this.container && this._boundCancel) {
+      this.container.removeEventListener('click', this._boundCancel);
+      this.container.style.pointerEvents = 'none';
+      this.container.style.cursor = '';
+      this._boundCancel = null;
+    }
     this._onCancel = cb;
+    if (this.container && cb) {
+      this.container.style.pointerEvents = 'auto';
+      this.container.style.cursor = 'pointer';
+      this.container.addEventListener('click', cb);
+      this._boundCancel = cb;
+    }
   }
 
   get barColor(): string {
@@ -119,6 +133,7 @@ export class VoiceWaveformOverlay {
       container.style.pointerEvents = 'auto';
       container.style.cursor = 'pointer';
       container.addEventListener('click', this._onCancel);
+      this._boundCancel = this._onCancel;
     }
 
     if (this.currentMode === 'waiting') {
@@ -226,6 +241,10 @@ export class VoiceWaveformOverlay {
       this.waitingAnimationId = null;
     }
     if (this.container) {
+      if (this._boundCancel) {
+        this.container.removeEventListener('click', this._boundCancel);
+        this._boundCancel = null;
+      }
       this.container.remove();
       this.container = null;
       this.canvas = null;
