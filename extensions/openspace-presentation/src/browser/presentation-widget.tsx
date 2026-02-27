@@ -401,7 +401,7 @@ More content</pre>
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
                         'tr','th','td','span','div','sup','sub',
                         'svg','path','circle','line','rect','polyline','polygon','text','g','defs','marker','animate',
-                        'canvas','script'],
+                        'canvas'],
                     ALLOWED_ATTR: ['href','src','alt','class','id','style',
                         'viewBox','xmlns','width','height','fill','stroke','stroke-width','d','cx','cy','r',
                         'x','y','x1','y1','x2','y2','points','transform','opacity','font-size','text-anchor',
