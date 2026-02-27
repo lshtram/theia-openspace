@@ -388,8 +388,11 @@ More content</pre>
             // Step 2: Inject combined CSS into the container (outside .reveal)
             this.injectDeckStyles(container, css);
 
-            // Step 3: Render remaining slide content (no <style> tags remain)
-            slidesEl.innerHTML = cleanedSlides.map(slide => {
+            // Step 3: Render remaining slide content (no <style> tags remain).
+            // Each slide map returns both its HTML and any extracted scripts so that
+            // scripts can be injected as real DOM elements after setting innerHTML.
+            // (Scripts placed inside innerHTML strings are NEVER executed per HTML spec.)
+            const slideResults = cleanedSlides.map(slide => {
                 // Extract <!-- .slide: --> directives BEFORE sanitization, since DOMPurify
                 // strips HTML comments by default. The directives are applied as attributes
                 // on the <section> element (e.g. data-background-image="...").
@@ -416,18 +419,32 @@ More content</pre>
                         'data-id','data-line-numbers','data-trim','data-noescape','type','defer','async']
                 });
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
-                // Re-inject allowed scripts after the sanitized content
-                let scriptTags = '';
-                for (const s of scripts) {
-                    if (s.src) {
-                        scriptTags += `<script src="${s.src}"></script>`;
-                    } else if (s.inline) {
-                        scriptTags += `<script>${s.inline}</script>`;
-                    }
+                // No data-markdown attribute — reveal.js treats this as a plain HTML section.
+                // Scripts are NOT embedded in the HTML string — they are injected via
+                // document.createElement() below after innerHTML is set.
+                return { html: `<section${notesAttr}${directives}>${sanitized}</section>`, scripts };
+            });
+
+            slidesEl.innerHTML = slideResults.map(r => r.html).join('');
+
+            // Inject all collected scripts as real DOM <script> elements.
+            // Scripts placed inside innerHTML are never executed per the HTML spec;
+            // only elements created via document.createElement('script') and appended
+            // to the live DOM are executed by browsers.
+            // Sort order: CDN src scripts first (give them a head start loading),
+            // then inline scripts (which depend on the CDN library being available).
+            const allScripts = slideResults.flatMap(r => r.scripts);
+            const srcScripts = allScripts.filter(s => s.src);
+            const inlineScripts = allScripts.filter(s => s.inline);
+            for (const s of [...srcScripts, ...inlineScripts]) {
+                const scriptEl = document.createElement('script');
+                if (s.src) {
+                    scriptEl.src = s.src;
+                } else if (s.inline) {
+                    scriptEl.textContent = s.inline;
                 }
-                // No data-markdown attribute — reveal.js treats this as a plain HTML section
-                return `<section${notesAttr}${directives}>${sanitized}${scriptTags}</section>`;
-            }).join('');
+                slidesEl.appendChild(scriptEl);
+            }
         }
     }
 
@@ -459,18 +476,40 @@ More content</pre>
     }
 
     /**
+     * Check whether a script `src` URL is on the CDN allowlist.
+     * Uses a package boundary check (not a simple startsWith) to prevent
+     * malicious packages like `chart.js.evil` or `chart.jsXSS` from matching.
+     * A src is allowed when it equals the allowlisted URL exactly, or when
+     * the package path segment following the package name starts with `/` (sub-path)
+     * or `@` (version specifier), e.g.:
+     *   https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js  ✓
+     *   https://cdn.jsdelivr.net/npm/chart.js/auto                          ✓
+     *   https://cdn.jsdelivr.net/npm/chart.js.evil                          ✗
+     */
+    private static isSrcAllowed(src: string): boolean {
+        const CDN_BASE = 'https://cdn.jsdelivr.net/npm/';
+        if (!src.startsWith(CDN_BASE)) { return false; }
+        const rest = src.slice(CDN_BASE.length);
+        return PresentationWidget.ALLOWED_SCRIPT_SRCS.some(allowed => {
+            const pkg = allowed.slice(CDN_BASE.length); // e.g. 'chart.js'
+            return rest === pkg || rest.startsWith(pkg + '/') || rest.startsWith(pkg + '@');
+        });
+    }
+
+    /**
      * Extract <script> tags from slide HTML before DOMPurify sanitization.
-     * Only scripts with src matching ALLOWED_SCRIPT_SRCS or inline scripts
-     * referencing allowed globals (Chart, mermaid) are passed through.
+     * Only scripts with src matching ALLOWED_SCRIPT_SRCS (package-boundary checked)
+     * or inline scripts referencing allowed globals (Chart, mermaid) are passed through.
      * Returns the cleaned HTML (scripts removed) and an array of script descriptors.
      */
     static extractScripts(html: string): { cleanHtml: string; scripts: Array<{ src?: string; inline?: string }> } {
         const scripts: Array<{ src?: string; inline?: string }> = [];
         const cleanHtml = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (_match, attrs: string, body: string) => {
-            const srcMatch = /\bsrc=["']([^"']*)["']/.exec(attrs);
+            // Use case-insensitive match for SRC attribute
+            const srcMatch = /\bsrc=["']([^"']*)["']/i.exec(attrs);
             if (srcMatch) {
                 const src = srcMatch[1];
-                if (PresentationWidget.ALLOWED_SCRIPT_SRCS.some(allowed => src.startsWith(allowed))) {
+                if (PresentationWidget.isSrcAllowed(src)) {
                     scripts.push({ src });
                 }
             } else if (body.trim()) {
