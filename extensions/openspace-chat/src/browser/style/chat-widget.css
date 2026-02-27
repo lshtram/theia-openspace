@@ -2704,3 +2704,70 @@
     margin-left: 4px;
     opacity: 0.8;
 }
+
+/* ─── MCP Status Pill ────────────────────────────────────────────────────── */
+.mcp-status-pill {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px;
+    height: 22px;
+    font-size: 11px;
+    color: var(--oc-text-dim, #858585);
+    background: transparent;
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.mcp-status-pill:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+}
+.mcp-status-pill-icon {
+    font-size: 10px;
+    line-height: 1;
+}
+.mcp-status-pill-count {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ─── MCP Status Dropdown ────────────────────────────────────────────────── */
+.mcp-status-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: var(--oc-bg-raised, #252526);
+    border: 1px solid var(--oc-border, #333);
+    border-radius: 4px;
+    min-width: 180px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+    padding: 4px 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.mcp-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--oc-text, #ccc);
+}
+.mcp-status-row:hover {
+    background: var(--oc-bg-hover, #2a2d2e);
+}
+.mcp-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.mcp-status-name {
+    font-family: monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

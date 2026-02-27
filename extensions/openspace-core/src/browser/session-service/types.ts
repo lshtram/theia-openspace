@@ -115,6 +115,7 @@ export interface SessionService extends Disposable {
     clearStreamingPartText(messageId: string): void;
     reloadMessages(): Promise<void>;
     getMessagesForPreview(sessionId: string): Promise<Message[]>;
+    getMcpStatus(): Promise<Record<string, unknown> | undefined>;
 
     // Question state
     readonly pendingQuestions: SDKTypes.QuestionRequest[];

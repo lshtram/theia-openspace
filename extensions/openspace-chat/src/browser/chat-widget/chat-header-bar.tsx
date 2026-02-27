@@ -43,6 +43,7 @@ export interface ChatHeaderBarProps {
     onToggleDropdown: () => void;
     enabledModels: string[];
     onManageModels: () => void;
+    mcpStatus?: Record<string, unknown>;
 }
 
 export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
@@ -67,10 +68,13 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
     onNavigateToParent,
     onToggleDropdown,
     enabledModels,
-    onManageModels
+    onManageModels,
+    mcpStatus
 }) => {
     const [showMenu, setShowMenu] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const [showMcpDropdown, setShowMcpDropdown] = React.useState(false);
+    const mcpDropdownRef = React.useRef<HTMLDivElement>(null);
     const [copyFeedback, setCopyFeedback] = React.useState(false);
     const [titleEdit, setTitleEdit] = React.useState<{ draft: string; editing: boolean; saving: boolean }>({
         draft: '',
@@ -114,12 +118,34 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
         return () => document.removeEventListener('mousedown', handleOutside);
     }, [showMenu]);
 
+    React.useEffect(() => {
+        if (!showMcpDropdown) return;
+        const handleOutsideClick = (e: MouseEvent) => {
+            if (!mcpDropdownRef.current?.contains(e.target as Node)) {
+                setShowMcpDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, [showMcpDropdown]);
+
     // Listen for the keyboard-shortcut rename event (Mod+Shift+N) dispatched by ChatCommandContribution
     React.useEffect(() => {
         const handler = () => { if (activeSession) { startTitleEdit(); } };
         document.addEventListener(OPENSPACE_RENAME_SESSION_EVENT, handler);
         return () => document.removeEventListener(OPENSPACE_RENAME_SESSION_EVENT, handler);
     }, [activeSession, startTitleEdit]);
+
+    function getMcpSummary(status: Record<string, unknown>): { connected: number; total: number; pillColor: string } {
+        const entries = Object.entries(status);
+        const connected = entries.filter(([, v]) => (v as { type: string }).type === 'connected').length;
+        const hasError = entries.some(([, v]) => {
+            const t = (v as { type: string }).type;
+            return t === 'failed' || t === 'error';
+        });
+        const pillColor = hasError ? '#f44336' : connected === entries.length ? '#4caf50' : '#ff9800';
+        return { connected, total: entries.length, pillColor };
+    }
 
     return (
         <div className="chat-header-bar session-header">
@@ -241,6 +267,42 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* MCP status pill */}
+            {mcpStatus && (() => {
+                const { connected, total, pillColor } = getMcpSummary(mcpStatus);
+                return (
+                    <div ref={mcpDropdownRef} style={{ position: 'relative' }}>
+                        <button
+                            type="button"
+                            className="mcp-status-pill"
+                            style={{ borderColor: pillColor }}
+                            title={`MCP servers: ${connected}/${total} connected`}
+                            aria-label={`MCP servers: ${connected} of ${total} connected`}
+                            onClick={() => setShowMcpDropdown(v => !v)}
+                        >
+                            <span className="mcp-status-pill-icon">⬡</span>
+                            <span className="mcp-status-pill-count">{connected}</span>
+                        </button>
+                        {showMcpDropdown && (
+                            <div className="mcp-status-dropdown" role="menu" aria-label="MCP server status">
+                                {Object.entries(mcpStatus).map(([name, val]) => {
+                                    const s = val as { type: string };
+                                    const dot = s.type === 'connected' ? '#4caf50'
+                                        : (s.type === 'failed' || s.type === 'error') ? '#f44336'
+                                        : '#ff9800';
+                                    return (
+                                        <div key={name} className="mcp-status-row" role="menuitem">
+                                            <span className="mcp-status-dot" style={{ background: dot }} />
+                                            <span className="mcp-status-name">{name}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* Model selector pill */}
             <ModelSelector sessionService={sessionService} enabledModels={enabledModels} onManageModels={onManageModels} />

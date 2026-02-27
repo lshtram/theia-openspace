@@ -121,11 +121,12 @@ function makeMockSessionService(overrides: Partial<any> = {}): any {
         compactSession: sinon.stub().resolves(),
         revertSession: sinon.stub().resolves(),
         unrevertSession: sinon.stub().resolves(),
-        getSessionError: sinon.stub().returns(undefined),
-        getMessagesForPreview: sinon.stub().resolves([]),
-        onSessionStatusChanged: sinon.stub().returns({ dispose: sinon.stub() }),
-        ...overrides,
-    };
+         getSessionError: sinon.stub().returns(undefined),
+         getMessagesForPreview: sinon.stub().resolves([]),
+         onSessionStatusChanged: sinon.stub().returns({ dispose: sinon.stub() }),
+         getMcpStatus: sinon.stub().resolves(undefined),
+         ...overrides,
+     };
 }
 
 // ─── P1-D: Token / Cost Display Per Turn ─────────────────────────────────────
