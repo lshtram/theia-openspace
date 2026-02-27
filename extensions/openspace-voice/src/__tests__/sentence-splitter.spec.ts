@@ -25,8 +25,7 @@ describe('splitIntoSentences', () => {
 
   it('filters out empty/whitespace-only fragments', () => {
     const result = splitIntoSentences('One.  Two.   Three.');
-    assert.equal(result.length, 3);
-    result.forEach(s => assert.isAbove(s.trim().length, 0));
+    assert.deepEqual(result, ['One.', 'Two.', 'Three.']);
   });
 
   it('returns single element for text with no sentence-ending punctuation', () => {
@@ -41,16 +40,14 @@ describe('splitIntoSentences', () => {
 
   it('preserves punctuation at end of sentence', () => {
     const result = splitIntoSentences('Done! Really?');
+    assert.equal(result.length, 2);
     assert.equal(result[0], 'Done!');
     assert.equal(result[1], 'Really?');
   });
 
-  it('handles abbreviations gracefully - does not split on "e.g."', () => {
-    // Abbreviations are tricky - acceptable to split here, just verify no crash
+  it('splits on abbreviation periods (known behavior)', () => {
     const result = splitIntoSentences('Use e.g. this approach. It works.');
-    assert.isAbove(result.length, 0);
-    // Last fragment should be non-empty
-    result.forEach(s => assert.isAbove(s.trim().length, 0));
+    assert.deepEqual(result, ['Use e.g.', 'this approach.', 'It works.']);
   });
 
   it('splits text of multiple sentences into correct count', () => {
