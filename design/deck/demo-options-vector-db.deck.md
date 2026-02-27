@@ -38,6 +38,22 @@ Note: Show the minimal flow once so the rest of the options are grounded in the 
 
 <!-- .slide: data-background-color="#fdfaf6" -->
 
+## How Vector Search Works
+
+<div style="display: flex; gap: 1.5em; align-items: center;">
+  <div style="flex: 1; font-size: 0.8em;">
+    <p>Vectors are embedded representations of data. Similarity search finds nearest neighbors.</p>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/diagrams/vector-db-flow.svg"
+         style="width: 100%; max-height: 40vh; object-fit: contain;">
+  </div>
+</div>
+
+---
+
+<!-- .slide: data-background-color="#fdfaf6" -->
+
 ## The Problem We're Solving
 
 <div class="two-column">
@@ -324,6 +340,32 @@ Walk through each row. Note that Pinecone wins on scale and ops simplicity, Weav
 </div>
 
 Note: This is the visual distillation — show the three axes and where each option sits.
+
+---
+
+<!-- .slide: data-background-color="#fdfaf6" -->
+
+## Capability Comparison
+
+<canvas id="radar-chart" style="max-height: 45vh;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('radar-chart'), {
+  type: 'radar',
+  data: {
+    labels: ['Query Speed','Scalability','Filtering','Ecosystem','Cost'],
+    datasets: [
+      { label: 'Pinecone', data: [9,9,7,8,5], borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.2)' },
+      { label: 'Weaviate', data: [7,8,9,7,8], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.2)' },
+      { label: 'pgvector', data: [6,6,8,9,10], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.2)' }
+    ]
+  },
+  options: { responsive: true,
+    plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    scales: { r: { ticks: { color: '#94a3b8', backdropColor: 'transparent' },
+                   grid: { color: '#334155' }, pointLabels: { color: '#e2e8f0' } } } }
+});
+</script>
 
 ---
 
