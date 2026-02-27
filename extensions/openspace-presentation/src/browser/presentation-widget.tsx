@@ -460,15 +460,21 @@ More content</pre>
      */
     static extractSlideDirectives(content: string): { directives: string; cleanContent: string } {
         const directiveRe = /<!--\s*\.slide:\s*(.*?)\s*-->/gs;
-        const allowedAttrRe = /\b(data-background-(?:image|opacity|color|video|size|position|repeat|transition|interactive)|data-notes)=["']([^"']*)["']/g;
+        const allowedAttrRe = /\b(data-background-(?:image|opacity|color|gradient|video|size|position|repeat|transition|interactive)|data-notes|data-auto-animate(?:-id|-easing|-duration|-unmatched)?|data-transition(?:-speed)?|data-visibility|data-timing|data-state)=["']([^"']*)["']/g;
         let directives = '';
         const cleanContent = content.replace(directiveRe, (_match, attrs: string) => {
-            // Only pass through known-safe data-background-* and data-notes attrs
+            // Pass through known-safe data-background-*, data-notes, and reveal.js section attrs
             let match: RegExpExecArray | null;
             while ((match = allowedAttrRe.exec(attrs)) !== null) {
                 const attrName = match[1];
                 const attrValue = match[2].replace(/"/g, '&quot;');
                 directives += ` ${attrName}="${attrValue}"`;
+            }
+            // Handle boolean attributes (no value) like data-auto-animate
+            const boolAttrRe = /\b(data-auto-animate)\b(?!=)/g;
+            let boolMatch: RegExpExecArray | null;
+            while ((boolMatch = boolAttrRe.exec(attrs)) !== null) {
+                directives += ` ${boolMatch[1]}`;
             }
             return '';
         });
