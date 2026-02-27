@@ -54,6 +54,16 @@ export class RestApiFacade {
         await this.http.post<boolean>(`/mcp/${encodeURIComponent(name)}/connect`);
     }
 
+    async getMcpStatus(directory: string): Promise<Record<string, unknown> | undefined> {
+        try {
+            return await this.http.get<Record<string, unknown>>(
+                `/mcp?directory=${encodeURIComponent(directory)}`
+            );
+        } catch {
+            return undefined;
+        }
+    }
+
     // =========================================================================
     // Project Methods
     // =========================================================================

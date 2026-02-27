@@ -291,6 +291,28 @@ describe('OpenCodeProxy — HTTP methods', () => {
         });
     });
 
+    // ── MCP status ──────────────────────────────────────────────────────────
+
+    describe('getMcpStatus()', () => {
+        it('makes GET /mcp with directory query param', async () => {
+            const mockStatus = {
+                'openspace-hub': { type: 'connected', tools: [] }
+            };
+            mock.respondWith(mockStatus);
+            const result = await proxy.getMcpStatus('/workspace/foo');
+            expect(mock.capturedMethod).to.equal('GET');
+            expect(mock.capturedUrl).to.include('/mcp');
+            expect(mock.capturedUrl).to.include('directory=');
+            expect(result).to.deep.equal(mockStatus);
+        });
+
+        it('returns undefined when fetch fails', async () => {
+            mock.mockRawRequest = () => { throw new Error('network'); };
+            const result = await proxy.getMcpStatus('/workspace/foo');
+            expect(result).to.be.undefined;
+        });
+    });
+
     // ── HTTP error handling ──────────────────────────────────────────────────
 
     describe('HTTP error handling', () => {
