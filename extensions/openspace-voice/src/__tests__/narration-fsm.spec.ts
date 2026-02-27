@@ -101,4 +101,73 @@ describe('NarrationFsm (state transitions only)', () => {
     fsm.stop();
     assert.equal(fsm.state, 'idle');
   });
+
+  it('stop() during audio playback — no onError, state becomes idle', (done) => {
+    let errorCalled = false;
+
+    // Minimal NDJSON response: one audio chunk + done
+    const dummyPcm = new Int16Array(24); // 1ms of silence
+    const bytes = new Uint8Array(dummyPcm.buffer);
+    let binaryStr = '';
+    for (let i = 0; i < bytes.length; i++) binaryStr += String.fromCharCode(bytes[i]);
+    const audioBase64 = btoa(binaryStr);
+    const ndjson = JSON.stringify({ seq: 0, audioBase64, done: false }) + '\n' +
+                   JSON.stringify({ seq: 1, done: true }) + '\n';
+
+    const origFetch = globalThis.fetch;
+    (globalThis as unknown as Record<string, unknown>).fetch = (_url: string, opts?: RequestInit) => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(ndjson));
+          controller.close();
+        }
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    };
+
+    // Stub AudioContext so onended never fires automatically
+    let capturedSource: { onended: (() => void) | null; stop: () => void } | null = null;
+    const origAudioContext = (globalThis as Record<string, unknown>).AudioContext;
+    (globalThis as Record<string, unknown>).AudioContext = class {
+      createBuffer(ch: number, len: number, sr: number) {
+        return { copyToChannel() {} };
+      }
+      createBufferSource() {
+        const src = { buffer: null as unknown, onended: null as (() => void) | null,
+                      connect() {}, start() {}, stop() {} };
+        capturedSource = src;
+        return src;
+      }
+      get destination() { return {}; }
+      close() {}
+    };
+
+    const fsm2 = new NarrationFsm({
+      narrateEndpoint: '/openspace/voice/narrate',
+      utteranceBaseUrl: '/openspace/voice/utterances',
+      onError: () => { errorCalled = true; },
+    });
+
+    fsm2.enqueue({ text: 'hi', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
+
+    // Wait for playFloat32 to be awaiting onended
+    const interval = setInterval(() => {
+      if (capturedSource) {
+        clearInterval(interval);
+        // Now stop while audio is "playing" (onended will never fire on its own)
+        fsm2.stop();
+        setTimeout(() => {
+          try {
+            assert.equal(fsm2.state, 'idle');
+            assert.isFalse(errorCalled, 'onError should NOT be called on clean cancel');
+            done();
+          } finally {
+            (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
+            (globalThis as unknown as Record<string, unknown>).AudioContext = origAudioContext;
+          }
+        }, 50);
+      }
+    }, 5);
+  });
 });

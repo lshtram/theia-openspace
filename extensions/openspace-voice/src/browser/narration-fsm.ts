@@ -97,6 +97,8 @@ export class NarrationFsm {
       console.log('[Voice] Waiting for TTS...');
       try {
         await this.fetchAndPlay(current, signal);
+        // stop() may have fired during audio playback — state is already idle
+        if (this._state === 'idle') return;
         this._state = validateNarrationTransition({ from: this._state, trigger: 'complete' });
         this.options.onPlaybackComplete?.();
         this.options.onModeChange?.('idle');
@@ -160,7 +162,7 @@ export class NarrationFsm {
         const float32 = pending.get(nextSeq)!;
         pending.delete(nextSeq);
         nextSeq++;
-        await this.playFloat32(float32);
+        await this.playFloat32(float32, signal);
       }
     };
 
@@ -215,7 +217,7 @@ export class NarrationFsm {
     this.options.onEmotionChange?.(null);
   }
 
-  private async playFloat32(float32: Float32Array): Promise<void> {
+  private async playFloat32(float32: Float32Array, signal?: AbortSignal): Promise<void> {
     if (!this.audioCtx) return;
     const buffer = this.audioCtx.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);
@@ -224,6 +226,7 @@ export class NarrationFsm {
     source.connect(this.audioCtx.destination);
     await new Promise<void>((resolve) => {
       source.onended = () => resolve();
+      signal?.addEventListener('abort', () => { source.stop(); resolve(); });
       source.start();
     });
   }
