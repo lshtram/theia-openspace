@@ -3,6 +3,7 @@ import { assert } from 'chai';
 import { VoiceBackendService } from '../node/voice-backend-service';
 import type { SttProvider } from '@openspace-ai/voice-core';
 import type { TtsProvider } from '@openspace-ai/voice-core';
+import { splitIntoSentences } from '../common/sentence-splitter';
 
 const mockStt: SttProvider = {
   kind: 'stt',
@@ -88,5 +89,78 @@ describe('VoiceBackendService', () => {
       speed: 1.0,
     });
     assert.deepEqual(result.segments, []);
+  });
+});
+
+describe('VoiceBackendService streaming', () => {
+  let service: VoiceBackendService;
+
+  before(() => {
+    service = new VoiceBackendService({
+      sttProvider: mockStt,
+      ttsProvider: mockTts,
+    });
+  });
+
+  beforeEach(() => {
+    lastSynthesizedText = '';
+  });
+
+  it('narrateTextStreaming with narrate-off calls onChunk with done:true immediately', async () => {
+    const doneChunks: Array<{ seq: number; done: boolean }> = [];
+    await service.narrateTextStreaming(
+      { text: 'hello', mode: 'narrate-off', voice: 'af_sarah', speed: 1.0 },
+      (chunk) => doneChunks.push(chunk),
+    );
+    assert.equal(doneChunks.length, 1);
+    assert.isTrue(doneChunks[0].done);
+    assert.equal(doneChunks[0].seq, -1);
+  });
+
+  it('narrateTextStreaming yields one chunk per sentence', async () => {
+    const received: Array<{ seq: number; audioBase64?: string; done: boolean }> = [];
+    await service.narrateTextStreaming(
+      { text: 'First sentence. Second sentence.', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 },
+      (chunk) => received.push(chunk),
+    );
+    // 2 sentences + 1 done marker
+    assert.equal(received.length, 3);
+    assert.isFalse(received[0].done);
+    assert.equal(received[0].seq, 0);
+    assert.isString(received[0].audioBase64);
+    assert.isFalse(received[1].done);
+    assert.equal(received[1].seq, 1);
+    assert.isTrue(received[2].done);
+    assert.equal(received[2].seq, -1);
+  });
+
+  it('narrateTextStreaming sends cleaned text to TTS per sentence', async () => {
+    const synthesized: string[] = [];
+    const captureTts: TtsProvider = {
+      kind: 'tts', id: 'capture',
+      isAvailable: async () => true,
+      synthesize: async (req) => { synthesized.push(req.text); return { audio: new Uint8Array([1, 2, 3]), sampleRate: 24000 }; },
+      dispose: async () => {},
+    };
+    const svc = new VoiceBackendService({ sttProvider: mockStt, ttsProvider: captureTts });
+    await svc.narrateTextStreaming(
+      { text: '**Bold sentence.** Normal sentence.', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 },
+      () => {},
+    );
+    // Should have synthesized cleaned text fragments
+    assert.isAbove(synthesized.length, 0);
+    synthesized.forEach(s => {
+      assert.notInclude(s, '**', 'bold markers should be stripped');
+    });
+  });
+
+  it('narrateTextStreaming returns empty for all-code text', async () => {
+    const received: Array<{ done: boolean }> = [];
+    await service.narrateTextStreaming(
+      { text: '```js\nconsole.log("x");\n```', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 },
+      (chunk) => received.push(chunk),
+    );
+    assert.equal(received.length, 1);
+    assert.isTrue(received[0].done);
   });
 });

@@ -56,27 +56,47 @@ export class VoiceHubContribution implements BackendApplicationContribution {
             }
         );
 
-        // POST /openspace/voice/narrate -- Text cleanup + TTS synthesis
+        // POST /openspace/voice/narrate -- Text cleanup + TTS synthesis (NDJSON streaming)
         app.post(
             '/openspace/voice/narrate',
             express.json(),
             async (req: Request, res: Response) => {
                 try {
-                    // M-5: Await provider initialization before handling requests
                     await this.readyPromise;
                     const { text, mode, voice, speed } = req.body as {
                         text: string; mode: string; voice: string; speed: number;
                     };
-                    const result = await this.voiceService.narrateText({
-                        text,
-                        mode: mode as 'narrate-off' | 'narrate-everything' | 'narrate-summary',
-                        voice,
-                        speed,
-                    });
-                    res.json(result);
+
+                    // Set up NDJSON streaming response
+                    res.setHeader('Content-Type', 'application/x-ndjson');
+                    res.setHeader('Transfer-Encoding', 'chunked');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.flushHeaders();
+
+                    await this.voiceService.narrateTextStreaming(
+                        {
+                            text,
+                            mode: mode as 'narrate-off' | 'narrate-everything' | 'narrate-summary',
+                            voice,
+                            speed,
+                        },
+                        (chunk) => {
+                            res.write(JSON.stringify(chunk) + '\n');
+                        },
+                    );
+
+                    res.end();
                 } catch (err) {
                     console.error('[VoiceHub] Narrate error:', err);
-                    res.status(500).json({ error: String(err) });
+                    if (!res.headersSent) {
+                        res.status(500).json({ error: String(err) });
+                    } else {
+                        // Headers already sent as chunked — send error chunk then close
+                        try {
+                            res.write(JSON.stringify({ seq: -1, done: true, error: String(err) }) + '\n');
+                            res.end();
+                        } catch { /* stream already closed */ }
+                    }
                 }
             }
         );
