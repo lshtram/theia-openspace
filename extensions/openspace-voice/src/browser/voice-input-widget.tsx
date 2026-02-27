@@ -133,7 +133,7 @@ export class VoiceInputWidget extends ReactWidget {
   };
 
   private handleStopNarration = () => {
-    this.narrationFsm.pause();
+    this.narrationFsm.stop();
     this.update();
   };
 }
