@@ -108,13 +108,14 @@ function createMockSessionService(overrides: Partial<any> = {}): any {
         shareSession: sinon.stub().resolves('https://share.example.com/session'),
         unshareSession: sinon.stub().resolves(),
         forkSession: sinon.stub().resolves(undefined),
-        compactSession: sinon.stub().resolves(),
-        revertSession: sinon.stub().resolves(),
-        unrevertSession: sinon.stub().resolves(),
-        getSessionError: sinon.stub().returns(undefined),
-        getMessagesForPreview: sinon.stub().resolves([]),
-        ...overrides,
-    };
+         compactSession: sinon.stub().resolves(),
+         revertSession: sinon.stub().resolves(),
+         unrevertSession: sinon.stub().resolves(),
+         getSessionError: sinon.stub().returns(undefined),
+         getMessagesForPreview: sinon.stub().resolves([]),
+         getMcpStatus: sinon.stub().resolves(undefined),
+         ...overrides,
+     };
 }
 
 const mockMessageService = {

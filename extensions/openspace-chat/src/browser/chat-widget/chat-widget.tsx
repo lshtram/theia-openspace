@@ -240,6 +240,14 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         return totalInput + totalOutput > 0 ? { input: totalInput, output: totalOutput, contextLimit } : null;
     }, [subscriptions.messages, subscriptions.isStreaming]);
 
+    const [mcpStatus, setMcpStatus] = React.useState<Record<string, unknown> | undefined>(undefined);
+    React.useEffect(() => {
+        setMcpStatus(undefined);
+        if (activeSession) {
+            sessionService.getMcpStatus().then(setMcpStatus).catch(() => setMcpStatus(undefined));
+        }
+    }, [activeSession?.id]);
+
     return (
         <div className="chat-container">
             <div className="chat-active">
@@ -264,9 +272,10 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     onRenameSession={sessionActions.handleRenameSession}
                     onNavigateToParent={sessionActions.handleNavigateToParent}
                     onToggleDropdown={sessionActions.handleToggleDropdown}
-                    enabledModels={enabledModels}
-                    onManageModels={handleManageModels}
-                />
+                     enabledModels={enabledModels}
+                     onManageModels={handleManageModels}
+                     mcpStatus={mcpStatus}
+                 />
                 {!hasActiveSession ? (
                     <div className="chat-no-session">
                         <p>No active session</p>
