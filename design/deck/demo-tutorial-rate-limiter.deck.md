@@ -58,6 +58,22 @@ This is the destination. Notice the middleware is three lines — max and window
 
 <!-- .slide: data-background-color="#0d0f0d" -->
 
+## The Rate Limiter
+
+<div style="display: flex; gap: 1.5em; align-items: center;">
+  <div style="flex: 1; font-size: 0.8em;">
+    <p>Token bucket algorithm: tokens replenish at a fixed rate; requests consume tokens.</p>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/diagrams/rate-limiter-flow.svg"
+         style="width: 100%; max-height: 40vh; object-fit: contain;">
+  </div>
+</div>
+
+---
+
+<!-- .slide: data-background-color="#0d0f0d" -->
+
 ## Prerequisites
 
 <p class="term-label">// what to know before we start</p>
@@ -71,7 +87,6 @@ This is the destination. Notice the middleware is three lines — max and window
 
 - `lib/rateLimiter.js` — core algorithm + Redis adapter <!-- .element: class="fragment fade-up" -->
 - `middleware/rateLimit.js` — Express middleware wrapper <!-- .element: class="fragment fade-up" -->
-- `test/rateLimiter.test.js` — load test with assertions <!-- .element: class="fragment fade-up" -->
 
 Note:
 Quick check — has anyone used Redis in Node before? If not, that's fine — I'll call out every Redis command as we use it. The key mental model is: Redis is our distributed counter. It replaces the in-memory Map you'd use in a single-server setup.
@@ -340,6 +355,33 @@ The key test pattern: fire Promise.all with 25 concurrent requests. Redis's Lua 
 
 Note:
 Use this slide as a reset after the code-heavy steps. The gate visual makes the system easier to remember.
+
+---
+
+<!-- .slide: data-background-color="#0d0f0d" -->
+
+## Token Replenishment
+
+<canvas id="token-chart" style="max-height: 45vh;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('token-chart'), {
+  type: 'line',
+  data: {
+    labels: ['0s','1s','2s','3s','4s','5s','6s'],
+    datasets: [
+      { label: 'Tokens', data: [10,8,6,10,9,7,10],
+        borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.15)', tension: 0.3 },
+      { label: 'Requests', data: [0,2,2,0,1,2,0],
+        borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', tension: 0 }
+    ]
+  },
+  options: { responsive: true,
+    plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } } } }
+});
+</script>
 
 ---
 
