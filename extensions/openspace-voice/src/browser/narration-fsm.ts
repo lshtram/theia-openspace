@@ -146,74 +146,80 @@ export class NarrationFsm {
     this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
     this.options.onModeChange?.('speaking');
 
-    // Ordered play queue: chunks may be decoded before the previous one finishes playing.
-    // We process them strictly in seq order.
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let leftover = '';
     // seq-ordered pending buffers: seq -> Float32Array
     const pending = new Map<number, Float32Array>();
-    let nextSeq = 0;
+    let nextPlaySeq = 0;
     let streamDone = false;
+    let streamError: Error | null = null;
 
-    const playPending = async (): Promise<void> => {
-      while (pending.has(nextSeq)) {
-        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        const float32 = pending.get(nextSeq)!;
-        pending.delete(nextSeq);
-        nextSeq++;
-        await this.playFloat32(float32, signal);
+    // Notify mechanism: player waits on this when pending is empty but stream isn't done yet.
+    // Reader resolves it each time a new chunk arrives.
+    let notifyPlayer!: () => void;
+    const makeNotify = (): Promise<void> =>
+      new Promise<void>(resolve => { notifyPlayer = resolve; });
+    let playerWait = makeNotify();
+
+    const readerLoop = async (): Promise<void> => {
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let leftover = '';
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const text = leftover + decoder.decode(value, { stream: true });
+          const lines = text.split('\n');
+          leftover = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let chunk: { seq: number; audioBase64?: string; done: boolean; error?: string };
+            try { chunk = JSON.parse(line); } catch { continue; }
+            if (chunk.done) { streamDone = true; notifyPlayer(); return; }
+            if (chunk.error) {
+              streamError = new Error(`TTS server error: ${chunk.error}`);
+              streamDone = true;
+              notifyPlayer();
+              return;
+            }
+            if (chunk.audioBase64) {
+              const bytes = Uint8Array.from(atob(chunk.audioBase64), c => c.charCodeAt(0));
+              const int16 = new Int16Array(bytes.buffer);
+              const float32 = new Float32Array(int16.length);
+              // L-4: Correct Int16->Float32 conversion uses / 32768 (not / 32767)
+              for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+              pending.set(chunk.seq, float32);
+            }
+            // Wake player after each chunk so it can start playing without waiting for the next read
+            notifyPlayer();
+            playerWait = makeNotify();
+          }
+        }
+      } finally {
+        // Always signal player to unblock, even if reader exits early (abort, error, or done)
+        streamDone = true;
+        notifyPlayer();
       }
     };
 
-    while (!streamDone) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      const text = leftover + decoder.decode(value, { stream: true });
-      const lines = text.split('\n');
-      // Last element may be partial — save for next iteration
-      leftover = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let chunk: { seq: number; audioBase64?: string; done: boolean; error?: string };
-        try {
-          chunk = JSON.parse(line);
-        } catch {
-          continue;
+    const playerLoop = async (): Promise<void> => {
+      while (true) {
+        // Play all in-order chunks currently buffered
+        while (pending.has(nextPlaySeq)) {
+          if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+          const float32 = pending.get(nextPlaySeq)!;
+          pending.delete(nextPlaySeq);
+          nextPlaySeq++;
+          await this.playFloat32(float32, signal);
         }
-
-        if (chunk.done) {
-          streamDone = true;
-          break;
-        }
-
-        if (chunk.error) {
-          throw new Error(`TTS server error: ${chunk.error}`);
-        }
-
-        if (chunk.audioBase64) {
-          // Decode PCM immediately (off the main render path)
-          const bytes = Uint8Array.from(atob(chunk.audioBase64), c => c.charCodeAt(0));
-          const int16 = new Int16Array(bytes.buffer);
-          const float32 = new Float32Array(int16.length);
-          // L-4: Correct Int16->Float32 conversion uses / 32768 (not / 32767)
-          for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-          pending.set(chunk.seq, float32);
-        }
-
-        // Play any chunks that are now in order
-        await playPending();
+        // Exit when stream is complete and no more chunks to play
+        if (streamDone && !pending.has(nextPlaySeq)) break;
+        // Wait for reader to notify us a new chunk arrived
+        await playerWait;
       }
+      if (streamError) throw streamError;
+    };
 
-      // After processing this read batch, drain any in-order pending chunks
-      await playPending();
-    }
-
-    // Drain any remaining chunks that arrived out of order
-    await playPending();
-
+    await Promise.all([readerLoop(), playerLoop()]);
     this.options.onEmotionChange?.(null);
   }
 

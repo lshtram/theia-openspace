@@ -168,6 +168,79 @@ describe('NarrationFsm (state transitions only)', () => {
           }
         }, 50);
       }
-    }, 5);
+        }, 5);
+  });
+
+  it('concurrent read+play: sentence N+1 starts without gap after sentence N ends', (done) => {
+    const makeChunk = (seq: number): string => {
+      const pcm = new Int16Array(240); // 10ms silence at 24kHz
+      const bytes = new Uint8Array(pcm.buffer);
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return JSON.stringify({ seq, audioBase64: btoa(s), done: false });
+    };
+    const ndjson =
+      makeChunk(0) + '\n' +
+      makeChunk(1) + '\n' +
+      JSON.stringify({ seq: 2, done: true }) + '\n';
+
+    const origFetch = globalThis.fetch;
+    const origAudioContext = (globalThis as Record<string, unknown>).AudioContext;
+
+    (globalThis as unknown as Record<string, unknown>).fetch = (_url: string, _opts?: RequestInit) => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(ndjson));
+          controller.close();
+        }
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    };
+
+    (globalThis as Record<string, unknown>).AudioContext = class {
+      createBuffer(_ch: number, _len: number, _rate: number) {
+        return { copyToChannel() {} };
+      }
+      createBufferSource() {
+        const src = {
+          buffer: null as unknown,
+          onended: null as (() => void) | null,
+          connect() {},
+          start() {
+            Promise.resolve().then(() => { src.onended?.(); });
+          },
+          stop() {},
+        };
+        return src;
+      }
+      get destination() { return {}; }
+      close() {}
+      suspend() { return Promise.resolve(); }
+      resume() { return Promise.resolve(); }
+    };
+
+    let errorCalled = false;
+    let playbackComplete = false;
+    const fsm = new NarrationFsm({
+      narrateEndpoint: '/openspace/voice/narrate',
+      utteranceBaseUrl: '/openspace/voice/utterances',
+      onError: () => { errorCalled = true; },
+      onPlaybackComplete: () => { playbackComplete = true; },
+    });
+
+    fsm.enqueue({ text: 'hi', mode: 'narrate-everything', voice: 'af_sarah', speed: 1.0 });
+
+    setTimeout(() => {
+      try {
+        assert.isFalse(errorCalled, 'no error expected');
+        assert.isTrue(playbackComplete, 'playback should complete');
+        assert.equal(fsm.state, 'idle');
+      } finally {
+        (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
+        (globalThis as unknown as Record<string, unknown>).AudioContext = origAudioContext;
+        done();
+      }
+    }, 500);
   });
 });
