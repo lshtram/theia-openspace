@@ -137,6 +137,10 @@ export class PresentationWidget extends ReactWidget {
     protected editorDisposables = new DisposableCollection();
     private static readonly loadedThemes = new Set<string>();
     private static revealBaseCssInjected = false;
+    private static readonly ALLOWED_SCRIPT_SRCS = [
+        'https://cdn.jsdelivr.net/npm/chart.js',
+        'https://cdn.jsdelivr.net/npm/mermaid',
+    ];
 
     /** Inject reveal.js base CSS via <link> tag once (avoids style-loader stack overflow). */
     private static injectRevealBaseCSS(): void {
@@ -395,8 +399,12 @@ More content</pre>
                 // This avoids the RevealMarkdown plugin's data-markdown processing loop
                 // which causes a stack overflow (infinite recursion in writeSlidesDom).
                 const renderedHtml = marked.parse(cleanContent, { async: false }) as string;
+                // Extract <script> tags before DOMPurify sanitization (which strips them).
+                // Only scripts from ALLOWED_SCRIPT_SRCS and inline scripts referencing
+                // Chart/mermaid are passed through; all others are discarded.
+                const { cleanHtml: scriptlessHtml, scripts } = PresentationWidget.extractScripts(renderedHtml as string);
                 // Task 4: Sanitize rendered HTML to prevent XSS via crafted .deck.md files
-                const sanitized = DOMPurify.sanitize(renderedHtml, {
+                const sanitized = DOMPurify.sanitize(scriptlessHtml, {
                     ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','a','img',
                         'code','pre','em','strong','blockquote','br','hr','table','thead','tbody',
                         'tr','th','td','span','div','sup','sub',
@@ -408,8 +416,17 @@ More content</pre>
                         'data-id','data-line-numbers','data-trim','data-noescape','type','defer','async']
                 });
                 const notesAttr = slide.notes ? ` data-notes="${slide.notes.replace(/"/g, '&quot;')}"` : '';
+                // Re-inject allowed scripts after the sanitized content
+                let scriptTags = '';
+                for (const s of scripts) {
+                    if (s.src) {
+                        scriptTags += `<script src="${s.src}"></script>`;
+                    } else if (s.inline) {
+                        scriptTags += `<script>${s.inline}</script>`;
+                    }
+                }
                 // No data-markdown attribute — reveal.js treats this as a plain HTML section
-                return `<section${notesAttr}${directives}>${sanitized}</section>`;
+                return `<section${notesAttr}${directives}>${sanitized}${scriptTags}</section>`;
             }).join('');
         }
     }
@@ -439,6 +456,32 @@ More content</pre>
             return '';
         });
         return { directives, cleanContent: cleanContent.trim() };
+    }
+
+    /**
+     * Extract <script> tags from slide HTML before DOMPurify sanitization.
+     * Only scripts with src matching ALLOWED_SCRIPT_SRCS or inline scripts
+     * referencing allowed globals (Chart, mermaid) are passed through.
+     * Returns the cleaned HTML (scripts removed) and an array of script descriptors.
+     */
+    static extractScripts(html: string): { cleanHtml: string; scripts: Array<{ src?: string; inline?: string }> } {
+        const scripts: Array<{ src?: string; inline?: string }> = [];
+        const cleanHtml = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (_match, attrs: string, body: string) => {
+            const srcMatch = /\bsrc=["']([^"']*)["']/.exec(attrs);
+            if (srcMatch) {
+                const src = srcMatch[1];
+                if (PresentationWidget.ALLOWED_SCRIPT_SRCS.some(allowed => src.startsWith(allowed))) {
+                    scripts.push({ src });
+                }
+            } else if (body.trim()) {
+                // Inline script — allow only if it references Chart or mermaid
+                if (/\b(Chart|mermaid)\b/.test(body)) {
+                    scripts.push({ inline: body });
+                }
+            }
+            return '';
+        });
+        return { cleanHtml, scripts };
     }
 
     /**
