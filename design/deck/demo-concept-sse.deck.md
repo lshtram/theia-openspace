@@ -131,7 +131,7 @@ Note: The critical header is Content-Type: text/event-stream. That's what tells 
 
 Events are plain UTF-8 text lines. A **blank line** (`\n\n`) ends each event:
 
-```
+```http
 data: {"message": "Hello"}\n\n
 
 id: 42\n
@@ -256,6 +256,31 @@ Note: Line 5 — flushHeaders sends the HTTP headers immediately, opening the st
 </div>
 
 Note: The key insight is that SSE and WebSockets share the persistent connection benefit but SSE stays on plain HTTP — works through load balancers, proxies, and firewalls without special configuration.
+
+---
+
+<!-- ============================================================
+  SLIDE 9 — HOW SSE WORKS (SPLIT DIAGRAM)
+  ============================================================ -->
+
+<!-- .slide: data-background-color="#faf8f5" -->
+
+## How SSE Works
+
+<div style="display: flex; gap: 1.5em; align-items: center;">
+  <div style="flex: 1; font-size: 0.8em;">
+    <p>Server pushes events over a persistent HTTP connection. Client reconnects automatically.</p>
+    <ul>
+      <li>Single long-lived HTTP connection</li>
+      <li>Text/event-stream content type</li>
+      <li>Built-in reconnection via EventSource</li>
+    </ul>
+  </div>
+  <div style="flex: 1;">
+    <img src="design/assets/diagrams/sse-flow-diagram.svg"
+         style="width: 100%; max-height: 40vh; object-fit: contain;">
+  </div>
+</div>
 
 ---
 
