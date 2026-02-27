@@ -119,6 +119,16 @@ export class SessionServiceImpl implements SessionService {
         }
     }
 
+    async getMcpStatus(): Promise<Record<string, unknown> | undefined> {
+        try {
+            const wt = this.lifecycle.activeProject?.worktree;
+            if (!wt) { return undefined; }
+            return await this.openCodeService.getMcpStatus(wt);
+        } catch {
+            return undefined;
+        }
+    }
+
     /** Testability seam — tests stub this to avoid real hub polling. */
     protected waitForHub(): Promise<void> {
         return waitForHubFn(`${window.location.origin}/mcp`, { maxAttempts: 20, intervalMs: 500 });
