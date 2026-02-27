@@ -64,6 +64,7 @@ export class VoiceCommandContribution
       console.log('[Voice] Enabled voice from policy');
     }
     this.updateStatusBar();
+    this.waveformOverlay.setOnCancel(() => this.narrationFsm.stop());
   }
 
   // ── CommandContribution ───────────────────────────────────────────────────
