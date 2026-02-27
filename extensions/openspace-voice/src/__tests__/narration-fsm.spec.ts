@@ -42,7 +42,7 @@ describe('NarrationFsm (state transitions only)', () => {
     setTimeout(() => {
       assert.equal(fsm.state, 'idle');
       assert.isFalse(errorCalled);
-      assert.isTrue(modeChanges.includes('idle'));
+      assert.deepEqual(modeChanges, ['idle']);
       done();
     }, 50);
   });
@@ -72,13 +72,23 @@ describe('NarrationFsm (state transitions only)', () => {
 
     // Wait one tick so drainLoop has started and fetch is in flight
     setTimeout(() => {
-      fsm.stop(); // aborts the fetch
-      setTimeout(() => {
-        assert.equal(fsm.state, 'idle');
-        assert.isFalse(errorCalled);
+      try {
+        fsm.stop(); // aborts the fetch
+        setTimeout(() => {
+          try {
+            assert.equal(fsm.state, 'idle');
+            assert.isFalse(errorCalled);
+            assert.isDefined(abortSignal, 'fetch should have received an AbortSignal');
+            assert.isTrue(abortSignal!.aborted, 'signal should be aborted after stop()');
+            done();
+          } finally {
+            (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
+          }
+        }, 50);
+      } catch (e) {
         (globalThis as unknown as Record<string, unknown>).fetch = origFetch;
-        done();
-      }, 50);
+        done(e);
+      }
     }, 10);
   });
 
