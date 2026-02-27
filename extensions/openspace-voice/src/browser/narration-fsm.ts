@@ -22,6 +22,23 @@ export interface NarrationFsmOptions {
   onModeChange?: (mode: 'idle' | 'waiting' | 'speaking') => void;
 }
 
+/**
+ * Parse complete NDJSON lines from a text chunk.
+ * Returns only fully-parseable lines; partial last lines are ignored.
+ */
+export function parseNdjsonLines(text: string): Array<{ seq: number; audioBase64?: string; done: boolean; error?: string }> {
+  return text
+    .split('\n')
+    .filter(line => line.trim().length > 0)
+    .flatMap(line => {
+      try {
+        return [JSON.parse(line) as { seq: number; audioBase64?: string; done: boolean; error?: string }];
+      } catch {
+        return [];
+      }
+    });
+}
+
 export class NarrationFsm {
   private _state: NarrationState = 'idle';
   private audioCtx: AudioContext | null = null;
@@ -93,7 +110,8 @@ export class NarrationFsm {
   }
 
   private async fetchAndPlay(request: NarrationRequest): Promise<void> {
-    console.log('[Voice] fetchAndPlay - text:', request.text.substring(0, 100));
+    console.log('[Voice] fetchAndPlay (streaming) - text:', request.text.substring(0, 100));
+
     const response = await fetch(this.options.narrateEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,101 +119,96 @@ export class NarrationFsm {
     });
 
     if (!response.ok) throw new Error(`Narrate endpoint returned ${response.status}`);
-    const result = await response.json() as {
-      segments: Array<{ type: string; audioBase64?: string; utteranceId?: string; emotion?: { kind: string } }>;
-    };
-
-    this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
-    this.options.onModeChange?.('speaking');
+    if (!response.body) throw new Error('No response body for streaming narrate');
 
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
     }
 
-    for (const segment of result.segments) {
-      if (segment.emotion?.kind) {
-        this.options.onEmotionChange?.(segment.emotion.kind as EmotionKind);
+    this._state = validateNarrationTransition({ from: this._state, trigger: 'audioReady' });
+    this.options.onModeChange?.('speaking');
+
+    // Ordered play queue: chunks may be decoded before the previous one finishes playing.
+    // We process them strictly in seq order.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let leftover = '';
+    // seq-ordered pending buffers: seq -> Float32Array
+    const pending = new Map<number, Float32Array>();
+    let nextSeq = 0;
+    let streamDone = false;
+
+    const playPending = async (): Promise<void> => {
+      while (pending.has(nextSeq)) {
+        const float32 = pending.get(nextSeq)!;
+        pending.delete(nextSeq);
+        nextSeq++;
+        await this.playFloat32(float32);
       }
-      
-      if (segment.type === 'speech' && segment.audioBase64) {
-        const bytes = Uint8Array.from(atob(segment.audioBase64), (c) => c.charCodeAt(0));
-        await this.playAudioBuffer(bytes);
-      } else if (segment.type === 'utterance' && segment.utteranceId) {
-        await this.playUtterance(segment.utteranceId);
+    };
+
+    while (!streamDone) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const text = leftover + decoder.decode(value, { stream: true });
+      const lines = text.split('\n');
+      // Last element may be partial — save for next iteration
+      leftover = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let chunk: { seq: number; audioBase64?: string; done: boolean; error?: string };
+        try {
+          chunk = JSON.parse(line);
+        } catch {
+          continue;
+        }
+
+        if (chunk.done) {
+          streamDone = true;
+          break;
+        }
+
+        if (chunk.error) {
+          throw new Error(`TTS server error: ${chunk.error}`);
+        }
+
+        if (chunk.audioBase64) {
+          // Decode PCM immediately (off the main render path)
+          const bytes = Uint8Array.from(atob(chunk.audioBase64), c => c.charCodeAt(0));
+          const int16 = new Int16Array(bytes.buffer);
+          const float32 = new Float32Array(int16.length);
+          // L-4: Correct Int16->Float32 conversion uses / 32768 (not / 32767)
+          for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+          pending.set(chunk.seq, float32);
+        }
+
+        // Play any chunks that are now in order
+        await playPending();
       }
+
+      // After processing this read batch, drain any in-order pending chunks
+      await playPending();
     }
-    
+
+    // Drain any remaining chunks that arrived out of order
+    await playPending();
+
     this.options.onEmotionChange?.(null);
   }
 
-  private async playAudioBuffer(pcmBytes: Uint8Array): Promise<void> {
+  private async playFloat32(float32: Float32Array): Promise<void> {
     if (!this.audioCtx) return;
-    const int16 = new Int16Array(pcmBytes.buffer);
-    const float32 = new Float32Array(int16.length);
-    // L-4: Correct Int16->Float32 conversion uses / 32768 (not / 32767)
-    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-
     const buffer = this.audioCtx.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);
-
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.audioCtx.destination);
-
     await new Promise<void>((resolve) => {
       source.onended = () => resolve();
       source.start();
     });
   }
 
-  private async playUtterance(utteranceId: string): Promise<void> {
-    const url = `${this.options.utteranceBaseUrl}/${utteranceId}`;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        this.playFallbackTone(utteranceId);
-        return;
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      if (arrayBuffer.byteLength === 0) {
-        this.playFallbackTone(utteranceId);
-        return;
-      }
-      if (!this.audioCtx) return;
-      const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
-      const source = this.audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(this.audioCtx.destination);
-      await new Promise<void>((resolve) => {
-        source.onended = () => resolve();
-        source.start();
-      });
-    } catch {
-      this.playFallbackTone(utteranceId);
-    }
-  }
-
-  private playFallbackTone(utteranceId: string): void {
-    if (!this.audioCtx) return;
-    const osc = this.audioCtx.createOscillator();
-    const gain = this.audioCtx.createGain();
-    
-    const freqMap: Record<string, number> = {
-      'hmm': 220,
-      'wow': 440,
-      'uh-oh': 330,
-      'nice': 392,
-      'interesting': 277,
-    };
-    
-    osc.frequency.value = freqMap[utteranceId] || 300;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.15);
-    
-    osc.connect(gain);
-    gain.connect(this.audioCtx.destination);
-    osc.start();
-    osc.stop(this.audioCtx.currentTime + 0.15);
-  }
 }
