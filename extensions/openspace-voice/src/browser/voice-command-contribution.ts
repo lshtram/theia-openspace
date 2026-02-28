@@ -5,15 +5,16 @@ import { KeybindingContribution, KeybindingRegistry } from '@theia/core/lib/brow
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { StatusBar, StatusBarAlignment } from '@theia/core/lib/browser/status-bar/status-bar';
 import { QuickPickService, QuickPickValue } from '@theia/core/lib/common/quick-pick-service';
+import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { SessionFsm } from './session-fsm';
 import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
 import { VoiceWaveformOverlay } from './voice-waveform-overlay';
 import { VoiceTextProcessor } from './voice-text-processor';
-import type { VoicePolicy } from '../common/voice-policy';
-import { NARRATION_MODES, SUPPORTED_LANGUAGES, SUPPORTED_VOICES } from '../common/voice-policy';
-import type { NarrationMode } from '../common/voice-policy';
+import type { VoicePolicy, NarrationMode } from '../common/voice-policy';
+import { DEFAULT_VOICE_POLICY, NARRATION_MODES, SUPPORTED_LANGUAGES, SUPPORTED_VOICES } from '../common/voice-policy';
 import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
+import { PreferenceScope } from '@theia/core/lib/common/preferences/preference-scope';
 import { VoicePreferenceKeys } from './voice-preferences';
 
 export const VOICE_COMMANDS = {
@@ -38,6 +39,7 @@ export class VoiceCommandContribution
   @inject(PreferenceService) private readonly preferenceService!: PreferenceService;
 
   private recording = false;
+  private readonly toDispose = new DisposableCollection();
 
   private readonly waveformOverlay = new VoiceWaveformOverlay();
 
@@ -60,10 +62,18 @@ export class VoiceCommandContribution
 
   // ── FrontendApplicationContribution ──────────────────────────────────────
 
-  onStart(): void {
+  async onStart(): Promise<void> {
+    // Wait for preference providers to load before reading stored values
+    await this.preferenceService.ready;
+
     // Seed policy from stored preferences
     const stored = this.policyFromPreferences();
-    this.sessionFsm.updatePolicy(stored);
+    try {
+      this.sessionFsm.updatePolicy(stored);
+    } catch (err) {
+      console.warn('[Voice] Stored preferences invalid, falling back to defaults:', err);
+      this.sessionFsm.updatePolicy(DEFAULT_VOICE_POLICY);
+    }
 
     // Sync FSM enabled/inactive state
     if (stored.enabled && this.sessionFsm.state === 'inactive') {
@@ -73,20 +83,31 @@ export class VoiceCommandContribution
     }
 
     // React to future Settings panel changes in real-time
-    this.preferenceService.onPreferenceChanged(change => {
-      if (!change.preferenceName.startsWith('openspace.voice.')) return;
-      const updated = this.policyFromPreferences();
-      this.sessionFsm.updatePolicy(updated);
-      if (updated.enabled && this.sessionFsm.state === 'inactive') {
-        this.sessionFsm.enable();
-      } else if (!updated.enabled && this.sessionFsm.state !== 'inactive') {
-        this.sessionFsm.disable();
-      }
-      this.updateStatusBar();
-    });
+    this.toDispose.push(
+      this.preferenceService.onPreferenceChanged(change => {
+        if (!change.preferenceName.startsWith('openspace.voice.')) return;
+        const updated = this.policyFromPreferences();
+        try {
+          this.sessionFsm.updatePolicy(updated);
+        } catch (err) {
+          console.warn('[Voice] Preference change produced invalid policy, ignoring:', err);
+          return;
+        }
+        if (updated.enabled && this.sessionFsm.state === 'inactive') {
+          this.sessionFsm.enable();
+        } else if (!updated.enabled && this.sessionFsm.state !== 'inactive') {
+          this.sessionFsm.disable();
+        }
+        this.updateStatusBar();
+      })
+    );
 
     this.updateStatusBar();
     this.waveformOverlay.setOnCancel(() => this.narrationFsm.stop());
+  }
+
+  onStop(): void {
+    this.toDispose.dispose();
   }
 
   // ── CommandContribution ───────────────────────────────────────────────────
@@ -431,17 +452,17 @@ export class VoiceCommandContribution
   private async persistPolicyToPreferences(policy: Partial<VoicePolicy>): Promise<void> {
     const updates: Array<Promise<void>> = [];
     if (policy.enabled !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.ENABLED, policy.enabled, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.ENABLED, policy.enabled, PreferenceScope.User));
     if (policy.narrationMode !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.NARRATION_MODE, policy.narrationMode, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.NARRATION_MODE, policy.narrationMode, PreferenceScope.User));
     if (policy.voice !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.VOICE, policy.voice, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.VOICE, policy.voice, PreferenceScope.User));
     if (policy.speed !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.SPEED, policy.speed, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.SPEED, policy.speed, PreferenceScope.User));
     if (policy.language !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.LANGUAGE, policy.language, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.LANGUAGE, policy.language, PreferenceScope.User));
     if (policy.autoDetectLanguage !== undefined)
-      updates.push(this.preferenceService.set(VoicePreferenceKeys.AUTO_DETECT_LANGUAGE, policy.autoDetectLanguage, undefined));
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.AUTO_DETECT_LANGUAGE, policy.autoDetectLanguage, PreferenceScope.User));
     await Promise.all(updates);
   }
 }
