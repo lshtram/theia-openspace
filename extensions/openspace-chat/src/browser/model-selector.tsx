@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
+import * as ReactDOM from '@theia/core/shared/react-dom';
 import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { ProviderWithModels } from 'openspace-core/lib/common/opencode-protocol';
 
@@ -71,8 +72,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         } catch { return []; }
     });
     
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
+    const [dropdownStyle, setDropdownStyle] = React.useState<React.CSSProperties>({});
 
     // Flatten and filter models based on search and enabled list
     const filteredModels = React.useMemo<FlatModel[]>(() => {
@@ -174,6 +177,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 
     // Handle dropdown open
     const handleOpen = React.useCallback(() => {
+        if (triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setDropdownStyle({
+                position: 'fixed',
+                bottom: window.innerHeight - rect.top + 4,
+                right: window.innerWidth - rect.right,
+                zIndex: 9999,
+            });
+        }
         setIsOpen(true);
         setSearchQuery('');
         fetchModels();
@@ -293,7 +305,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     // Close on outside click
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            if (
+                triggerRef.current && !triggerRef.current.contains(target) &&
+                dropdownRef.current && !dropdownRef.current.contains(target)
+            ) {
                 handleClose();
             }
         };
@@ -336,10 +352,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     return (
         <div
             className="model-selector"
-            ref={dropdownRef}
             onKeyDown={handleKeyDown}
         >
             <button
+                ref={triggerRef}
                 type="button"
                 className="model-selector-pill"
                 onClick={handleToggle}
@@ -358,12 +374,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                 </svg>
             </button>
 
-            {isOpen && (
-                <div 
-                    className="model-dropdown"
-                    role="listbox"
-                    aria-label="Available models"
-                >
+            {ReactDOM.createPortal(
+                isOpen ? (
+                    <div 
+                        ref={dropdownRef}
+                        className="model-dropdown model-dropdown-portal"
+                        role="listbox"
+                        aria-label="Available models"
+                        style={dropdownStyle}
+                    >
                     {/* Search Input */}
                     <div className="model-dropdown-search">
                         <input
@@ -526,6 +545,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                         </button>
                     </div>
                 </div>
+                ) : null,
+                document.body
             )}
         </div>
     );

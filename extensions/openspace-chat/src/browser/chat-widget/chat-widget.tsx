@@ -343,9 +343,9 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                 for (const [, m] of Object.entries(p.models)) {
                     const fullId = `${p.id}/${m.id}`;
                     if (fullId === activeModel) {
-                        const modes = (m as unknown as { modes?: string[] }).modes;
-                        // Use model-specific modes if available (>1), else show default only
-                        setModelModes(modes && modes.length > 1 ? modes : ['default']);
+                        // Use capabilities.reasoning to detect thinking-capable models
+                        const hasReasoning = (m as unknown as { capabilities?: { reasoning?: boolean } }).capabilities?.reasoning;
+                        setModelModes(hasReasoning ? ['default', 'thinking'] : ['default']);
                         return;
                     }
                 }

@@ -332,7 +332,7 @@
    ============================================================================ */
 
 /* Model Dropdown Panel */
-.openspace-chat-widget .model-dropdown {
+ .openspace-chat-widget .model-dropdown {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -341,6 +341,21 @@
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 1000;
+    min-width: 240px;
+    max-width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Portal version — position is set via inline style; override absolute */
+.model-dropdown-portal {
+    position: fixed !important;
+    top: unset !important;
+    right: unset !important;
+    background: var(--theia-dropdown-background);
+    border: 1px solid var(--theia-dropdown-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     min-width: 240px;
     max-width: 320px;
     max-height: 400px;

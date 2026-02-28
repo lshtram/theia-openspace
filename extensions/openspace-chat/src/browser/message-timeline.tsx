@@ -609,7 +609,7 @@ export const MessageTimeline: React.FC<MessageTimelineProps> = ({
                             return (
                                 <React.Fragment key={`run-${planIdx}`}>
                                     {/* All messages in one TurnGroup — for the last message, exclude the response text */}
-                                    <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs} streamingStatus={streamingStatus}>
+                                    <TurnGroup isStreaming={isRunStreaming} durationSecs={totalDurationSecs} streamingStatus={streamingStatus} autoCollapse={shouldRenderResponse}>
                                         {indices.map(idx => {
                                             const m = messages[idx];
                                             const isMessageStreaming = isStreaming && streamingMessageId === m.id;

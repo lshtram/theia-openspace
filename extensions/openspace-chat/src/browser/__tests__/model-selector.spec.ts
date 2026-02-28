@@ -85,7 +85,7 @@ describe('ModelSelector', () => {
 
         it('dropdown is hidden initially', () => {
             const { container, unmount } = mount(makeSessionService());
-            expect(container.querySelector('.model-dropdown')).to.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             unmount();
         });
     });
@@ -94,7 +94,7 @@ describe('ModelSelector', () => {
         it('opens dropdown on click', async () => {
             const { container, unmount } = mount(makeSessionService());
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
-            expect(container.querySelector('.model-dropdown')).to.not.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.not.equal(null);
             unmount();
         });
 
@@ -102,7 +102,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(makeSessionService());
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
-            expect(container.querySelector('.model-dropdown')).to.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             unmount();
         });
 
@@ -127,7 +127,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            const headers = Array.from(container.querySelectorAll('.model-provider-header')).map(e => e.textContent?.trim());
+            const headers = Array.from(document.body.querySelectorAll('.model-provider-header')).map(e => e.textContent?.trim());
             expect(headers).to.include('OpenAI');
             expect(headers).to.include('Anthropic');
             unmount();
@@ -139,7 +139,7 @@ describe('ModelSelector', () => {
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
             // Empty state: either old .model-dropdown-empty or new .model-selector-empty-text
-            const emptyEl = container.querySelector('.model-dropdown-empty') ?? container.querySelector('.model-selector-empty-text');
+            const emptyEl = document.body.querySelector('.model-dropdown-empty') ?? document.body.querySelector('.model-selector-empty-text');
             expect(emptyEl?.textContent).to.include('No models');
             unmount();
         });
@@ -150,7 +150,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            expect(container.querySelector('.model-dropdown-error')).to.not.equal(null);
+            expect(document.body.querySelector('.model-dropdown-error')).to.not.equal(null);
             unmount();
         });
     });
@@ -163,7 +163,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-option') as HTMLElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-option') as HTMLElement)?.click(); });
             expect((svc.setActiveModel as sinon.SinonStub).calledWith('openai/gpt-4o')).to.equal(true);
             unmount();
         });
@@ -175,8 +175,8 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-option') as HTMLElement)?.click(); });
-            expect(container.querySelector('.model-dropdown')).to.equal(null);
+            await act(async () => { (document.body.querySelector('.model-option') as HTMLElement)?.click(); });
+            expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             unmount();
         });
     });
@@ -188,7 +188,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc, onManage);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-manage-btn') as HTMLButtonElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-manage-btn') as HTMLButtonElement)?.click(); });
             expect(onManage.calledOnce).to.equal(true);
             unmount();
         });
@@ -198,8 +198,8 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-manage-btn') as HTMLButtonElement)?.click(); });
-            expect(container.querySelector('.model-dropdown')).to.equal(null);
+            await act(async () => { (document.body.querySelector('.model-manage-btn') as HTMLButtonElement)?.click(); });
+            expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             unmount();
         });
     });
@@ -242,7 +242,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-option') as HTMLElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-option') as HTMLElement)?.click(); });
             const stored = JSON.parse(localStorageStore['openspace.recentModels'] ?? '[]') as string[];
             expect(stored).to.include('openai/gpt-4o');
             unmount();
@@ -257,7 +257,7 @@ describe('ModelSelector', () => {
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
             // Recent section should appear
-            const recentHeader = container.querySelector('.model-section-header');
+            const recentHeader = document.body.querySelector('.model-section-header');
             expect(recentHeader?.textContent).to.equal('Recent');
             unmount();
         });
@@ -275,7 +275,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            const headers = Array.from(container.querySelectorAll('.model-provider-header')).map(e => e.textContent?.trim() ?? '');
+            const headers = Array.from(document.body.querySelectorAll('.model-provider-header')).map(e => e.textContent?.trim() ?? '');
             expect(headers).to.deep.equal(['Alpha AI', 'Midway', 'Zeta Corp']);
             unmount();
         });
@@ -309,7 +309,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            expect(container.querySelector('.model-favorite-btn')).to.not.equal(null);
+            expect(document.body.querySelector('.model-favorite-btn')).to.not.equal(null);
             unmount();
         });
 
@@ -320,9 +320,9 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
             // Favorites section header should appear
-            const sectionHeaders = Array.from(container.querySelectorAll('.model-section-header')).map(e => e.textContent?.trim() ?? '');
+            const sectionHeaders = Array.from(document.body.querySelectorAll('.model-section-header')).map(e => e.textContent?.trim() ?? '');
             expect(sectionHeaders).to.include('Favorites');
             unmount();
         });
@@ -334,7 +334,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
             const stored = JSON.parse(localStorageStore['openspace.favoriteModels'] ?? '[]') as string[];
             expect(stored).to.include('openai/gpt-4o');
             unmount();
@@ -350,7 +350,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            const badge = container.querySelector('.model-status-tag--deprecated');
+            const badge = document.body.querySelector('.model-status-tag--deprecated');
             expect(badge).to.not.equal(null);
             expect(badge?.textContent).to.include('deprecated');
             unmount();
@@ -364,7 +364,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            const badge = container.querySelector('.model-status-tag--preview');
+            const badge = document.body.querySelector('.model-status-tag--preview');
             expect(badge).to.not.equal(null);
             unmount();
         });
@@ -377,7 +377,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc, onManage);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            const ctaBtn = container.querySelector('.model-selector-empty-cta');
+            const ctaBtn = document.body.querySelector('.model-selector-empty-cta');
             expect(ctaBtn).to.not.equal(null);
             unmount();
         });
@@ -388,7 +388,7 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc, onManage);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            await act(async () => { (container.querySelector('.model-selector-empty-cta') as HTMLButtonElement)?.click(); });
+            await act(async () => { (document.body.querySelector('.model-selector-empty-cta') as HTMLButtonElement)?.click(); });
             expect(onManage.calledOnce).to.equal(true);
             unmount();
         });
@@ -401,7 +401,7 @@ describe('ModelSelector', () => {
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
             // Verify that when there ARE models, no CTA appears (CTA is only for zero-models case)
-            const cta = container.querySelector('.model-selector-empty-cta');
+            const cta = document.body.querySelector('.model-selector-empty-cta');
             expect(cta).to.equal(null);
             unmount();
         });

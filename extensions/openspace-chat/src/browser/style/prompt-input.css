@@ -414,6 +414,17 @@
     margin-bottom: 4px;
 }
 
+/* Portal versions — position is set via inline fixed style */
+.agent-selector-portal-dropdown,
+.mode-selector-portal-dropdown {
+    background: var(--theia-editorWidget-background, var(--oc-bg-elevated, #1e1e1e));
+    border: 1px solid var(--theia-border-color, var(--oc-border, #ccc));
+    border-radius: 6px;
+    padding: 4px;
+    min-width: 160px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
 /* Agent selector */
 .agent-selector {
     position: relative;
