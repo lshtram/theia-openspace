@@ -8,8 +8,11 @@ import { AudioFsm } from './audio-fsm';
 import { NarrationFsm } from './narration-fsm';
 import { VoiceCommandContribution } from './voice-command-contribution';
 import { VoiceInputWidget } from './voice-input-widget';
+import { PreferenceContribution } from '@theia/core/lib/common/preferences/preference-schema';
+import { VoicePreferenceSchema } from './voice-preferences';
 
 export default new ContainerModule((bind) => {
+  bind(PreferenceContribution).toConstantValue({ schema: VoicePreferenceSchema });
   bind(SessionFsm).toSelf().inSingletonScope();
 
   bind(AudioFsm).toDynamicValue(({ container }) => {
