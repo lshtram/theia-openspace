@@ -278,4 +278,64 @@ describe('ModelSelector', () => {
             unmount();
         });
     });
+
+    describe('M2-B: model favorites', () => {
+        let localStorageStore: Record<string, string> = {};
+        let originalLocalStorage: Storage;
+
+        before(() => {
+            originalLocalStorage = (global as any).localStorage;
+            (global as any).localStorage = {
+                getItem: (k: string) => localStorageStore[k] ?? null,
+                setItem: (k: string, v: string) => { localStorageStore[k] = v; },
+                removeItem: (k: string) => { delete localStorageStore[k]; },
+                clear: () => { localStorageStore = {}; },
+            };
+        });
+
+        after(() => {
+            (global as any).localStorage = originalLocalStorage;
+        });
+
+        beforeEach(() => { localStorageStore = {}; });
+        afterEach(() => { localStorageStore = {}; });
+
+        it('renders a star button on each model option', async () => {
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            expect(container.querySelector('.model-favorite-btn')).to.not.equal(null);
+            unmount();
+        });
+
+        it('clicking star adds model to favorites section', async () => {
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => { (container.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
+            // Favorites section header should appear
+            const sectionHeaders = Array.from(container.querySelectorAll('.model-section-header')).map(e => e.textContent?.trim() ?? '');
+            expect(sectionHeaders).to.include('Favorites');
+            unmount();
+        });
+
+        it('persists favorites to localStorage', async () => {
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => { (container.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
+            const stored = JSON.parse(localStorageStore['openspace.favoriteModels'] ?? '[]') as string[];
+            expect(stored).to.include('openai/gpt-4o');
+            unmount();
+        });
+    });
 });

@@ -61,6 +61,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
             return stored ? (JSON.parse(stored) as string[]) : [];
         } catch { return []; }
     });
+
+    const FAVORITES_KEY = 'openspace.favoriteModels';
+    const [favoriteModels, setFavoriteModels] = React.useState<string[]>(() => {
+        try {
+            const stored = localStorage.getItem(FAVORITES_KEY);
+            return stored ? (JSON.parse(stored) as string[]) : [];
+        } catch { return []; }
+    });
     
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -199,6 +207,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         });
     }, [sessionService]);
 
+    // Toggle a model as favorite
+    const toggleFavorite = React.useCallback((fullId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setFavoriteModels(prev => {
+            const next = prev.includes(fullId) ? prev.filter(id => id !== fullId) : [...prev, fullId];
+            try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
+    }, []);
+
     // Track focused option index for keyboard navigation
     const [focusedIndex, setFocusedIndex] = React.useState(-1);
     // P3-E: Track hovered model for tooltip
@@ -305,6 +324,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
             .filter((m): m is FlatModel => m !== undefined);
     }, [recentModels, filteredModels]);
 
+    // Get favorite model objects
+    const favoriteModelObjects = React.useMemo(() => {
+        return favoriteModels
+            .map(id => filteredModels.find(m => m.fullId === id))
+            .filter((m): m is FlatModel => m !== undefined);
+    }, [favoriteModels, filteredModels]);
+
     return (
         <div
             className="model-selector"
@@ -401,6 +427,29 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 
                     {!isLoading && !error && (
                         <div className="model-dropdown-content">
+                            {/* Favorites Section */}
+                            {favoriteModelObjects.length > 0 && !searchQuery && (
+                                <div className="model-section">
+                                    <div className="model-section-header">Favorites</div>
+                                    {favoriteModelObjects.map(model => {
+                                        const flatIdx = filteredModels.indexOf(model);
+                                        return (
+                                            <ModelOption
+                                                key={`fav-${model.fullId}`}
+                                                model={model}
+                                                isSelected={model.fullId === activeModel}
+                                                isFocused={flatIdx === focusedIndex}
+                                                isHovered={hoveredModelId === model.fullId}
+                                                isFavorite={true}
+                                                onSelect={handleSelect}
+                                                onHover={setHoveredModelId}
+                                                onToggleFavorite={toggleFavorite}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            )}
+
                             {/* Recent Models Section */}
                             {recentModelObjects.length > 0 && !searchQuery && (
                                 <div className="model-section">
@@ -414,8 +463,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                                                 isSelected={model.fullId === activeModel}
                                                 isFocused={flatIdx === focusedIndex}
                                                 isHovered={hoveredModelId === model.fullId}
+                                                isFavorite={favoriteModels.includes(model.fullId)}
                                                 onSelect={handleSelect}
                                                 onHover={setHoveredModelId}
+                                                onToggleFavorite={toggleFavorite}
                                             />
                                         );
                                     })}
@@ -437,8 +488,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                                                 isSelected={model.fullId === activeModel}
                                                 isFocused={flatIdx === focusedIndex}
                                                 isHovered={hoveredModelId === model.fullId}
+                                                isFavorite={favoriteModels.includes(model.fullId)}
                                                 onSelect={handleSelect}
                                                 onHover={setHoveredModelId}
+                                                onToggleFavorite={toggleFavorite}
                                             />
                                         );
                                     })}
@@ -469,11 +522,13 @@ interface ModelOptionProps {
     isSelected: boolean;
     isFocused?: boolean;
     isHovered?: boolean;
+    isFavorite?: boolean;
     onSelect: (fullId: string) => void;
     onHover?: (fullId: string | undefined) => void;
+    onToggleFavorite?: (fullId: string, e: React.MouseEvent) => void;
 }
 
-const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, isHovered, onSelect, onHover }) => {
+const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, isHovered, isFavorite, onSelect, onHover, onToggleFavorite }) => {
     const divRef = React.useRef<HTMLDivElement>(null);
     const [localHovered, setLocalHovered] = React.useState(false);
 
@@ -514,6 +569,15 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
             {model.free && <span className="model-free-badge">Free</span>}
             {model.latest && <span className="model-latest-badge">Latest</span>}
             <span className="model-option-id">{model.fullId}</span>
+            {onToggleFavorite && (
+                <button
+                    type="button"
+                    className={`model-favorite-btn${isFavorite ? ' active' : ''}`}
+                    onClick={e => onToggleFavorite(model.fullId, e)}
+                    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >★</button>
+            )}
             {showTooltip && (
                 <div className="model-tooltip">
                     {model.contextLength !== undefined && (
