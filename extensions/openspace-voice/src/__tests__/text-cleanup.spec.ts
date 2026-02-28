@@ -43,4 +43,12 @@ describe('cleanTextForTts', () => {
   it('strips bullet markers', () => {
     assert.equal(cleanTextForTts('- item one\n- item two'), 'item one\nitem two');
   });
+
+  it('strips emoji characters', () => {
+    assert.equal(cleanTextForTts('Great work! 🎉 Let me check 🚀'), 'Great work! Let me check');
+  });
+
+  it('strips emoji with surrounding text intact', () => {
+    assert.equal(cleanTextForTts('Hello 👋 world'), 'Hello world');
+  });
 });

@@ -29,6 +29,9 @@ export function cleanTextForTts(text: string): string {
   // Strip bullet markers
   result = result.replace(/^[-*+]\s+/gm, '');
 
+  // Strip emoji (Unicode emoji presentation + extended pictographic + variation selectors)
+  result = result.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '');
+
   // Collapse multiple whitespace (but preserve single newlines)
   result = result.replace(/[^\S\n]+/g, ' ');
 
