@@ -431,19 +431,41 @@ More content</pre>
             // Scripts placed inside innerHTML are never executed per the HTML spec;
             // only elements created via document.createElement('script') and appended
             // to the live DOM are executed by browsers.
-            // Sort order: CDN src scripts first (give them a head start loading),
-            // then inline scripts (which depend on the CDN library being available).
+            //
+            // Race condition fix: CDN scripts (src=) load asynchronously. Inline scripts
+            // that depend on them (e.g. `new Chart(...)`) must not execute until all CDN
+            // scripts have finished loading. We chain inline scripts onto the onload of
+            // the last CDN script so they only run after the CDN library is available.
             const allScripts = slideResults.flatMap(r => r.scripts);
             const srcScripts = allScripts.filter(s => s.src);
             const inlineScripts = allScripts.filter(s => s.inline);
-            for (const s of [...srcScripts, ...inlineScripts]) {
-                const scriptEl = document.createElement('script');
-                if (s.src) {
-                    scriptEl.src = s.src;
-                } else if (s.inline) {
-                    scriptEl.textContent = s.inline;
+
+            if (srcScripts.length === 0) {
+                // No CDN scripts — inject inline scripts immediately
+                for (const s of inlineScripts) {
+                    const scriptEl = document.createElement('script');
+                    scriptEl.textContent = s.inline!;
+                    slidesEl.appendChild(scriptEl);
                 }
-                slidesEl.appendChild(scriptEl);
+            } else {
+                // Inject CDN scripts first; attach inline scripts to fire after the last one loads
+                let lastSrcEl: HTMLScriptElement | null = null;
+                for (const s of srcScripts) {
+                    const scriptEl = document.createElement('script');
+                    scriptEl.src = s.src!;
+                    slidesEl.appendChild(scriptEl);
+                    lastSrcEl = scriptEl;
+                }
+                // Chain all inline scripts onto the last CDN script's onload
+                if (inlineScripts.length > 0 && lastSrcEl) {
+                    lastSrcEl.addEventListener('load', () => {
+                        for (const s of inlineScripts) {
+                            const scriptEl = document.createElement('script');
+                            scriptEl.textContent = s.inline!;
+                            slidesEl.appendChild(scriptEl);
+                        }
+                    });
+                }
             }
         }
     }
