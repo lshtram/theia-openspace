@@ -581,6 +581,47 @@
     color: gold;
 }
 
+/* Status tags on model options */
+.openspace-chat-widget .model-status-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.openspace-chat-widget .model-status-tag--deprecated {
+    background: rgba(255, 120, 0, 0.2);
+    color: #ff7800;
+}
+.openspace-chat-widget .model-status-tag--preview {
+    background: rgba(0, 120, 255, 0.2);
+    color: #0078ff;
+}
+.openspace-chat-widget .model-status-tag--experimental {
+    background: rgba(180, 180, 0, 0.2);
+    color: #b4b400;
+}
+
+/* Empty-state CTA for model selector */
+.openspace-chat-widget .model-selector-empty-state {
+    padding: 12px;
+    text-align: center;
+}
+.openspace-chat-widget .model-selector-empty-text {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-bottom: 8px;
+}
+.openspace-chat-widget .model-selector-empty-cta {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--theia-button-background);
+    background: var(--theia-button-background);
+    color: var(--theia-button-foreground);
+    cursor: pointer;
+    font-size: 12px;
+}
+
 /* ============================================================================
    Message Part Styles (MVP rendering for SDK Part types)
    ============================================================================ */

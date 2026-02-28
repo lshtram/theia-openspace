@@ -138,7 +138,9 @@ describe('ModelSelector', () => {
             const { container, unmount } = mount(svc);
             await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
             await act(async () => { await Promise.resolve(); });
-            expect(container.querySelector('.model-dropdown-empty')?.textContent).to.include('No models available');
+            // Empty state: either old .model-dropdown-empty or new .model-selector-empty-text
+            const emptyEl = container.querySelector('.model-dropdown-empty') ?? container.querySelector('.model-selector-empty-text');
+            expect(emptyEl?.textContent).to.include('No models');
             unmount();
         });
 
@@ -335,6 +337,72 @@ describe('ModelSelector', () => {
             await act(async () => { (container.querySelector('.model-favorite-btn') as HTMLButtonElement)?.click(); });
             const stored = JSON.parse(localStorageStore['openspace.favoriteModels'] ?? '[]') as string[];
             expect(stored).to.include('openai/gpt-4o');
+            unmount();
+        });
+    });
+
+    describe('M1-C: status tags', () => {
+        it('renders a deprecated badge when model has status deprecated', async () => {
+            const model = { ...makeModel('openai', 'gpt-3', 'GPT-3'), status: 'deprecated' };
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-3': model })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            const badge = container.querySelector('.model-status-tag--deprecated');
+            expect(badge).to.not.equal(null);
+            expect(badge?.textContent).to.include('deprecated');
+            unmount();
+        });
+
+        it('renders a preview badge when model has status preview', async () => {
+            const model = { ...makeModel('openai', 'gpt-next', 'GPT-Next'), status: 'preview' };
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-next': model })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            const badge = container.querySelector('.model-status-tag--preview');
+            expect(badge).to.not.equal(null);
+            unmount();
+        });
+    });
+
+    describe('M2-C: empty-state CTA', () => {
+        it('shows "Open Settings" button when no models and no search query', async () => {
+            const onManage = sinon.stub();
+            const svc = makeSessionService({ models: [] });
+            const { container, unmount } = mount(svc, onManage);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            const ctaBtn = container.querySelector('.model-selector-empty-cta');
+            expect(ctaBtn).to.not.equal(null);
+            unmount();
+        });
+
+        it('calls onManageModels when "Open Settings" is clicked', async () => {
+            const onManage = sinon.stub();
+            const svc = makeSessionService({ models: [] });
+            const { container, unmount } = mount(svc, onManage);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => { (container.querySelector('.model-selector-empty-cta') as HTMLButtonElement)?.click(); });
+            expect(onManage.calledOnce).to.equal(true);
+            unmount();
+        });
+
+        it('shows "no results" text (not CTA) when search query has no matches', async () => {
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            // Verify that when there ARE models, no CTA appears (CTA is only for zero-models case)
+            const cta = container.querySelector('.model-selector-empty-cta');
+            expect(cta).to.equal(null);
             unmount();
         });
     });

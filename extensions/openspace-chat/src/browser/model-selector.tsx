@@ -35,6 +35,7 @@ interface FlatModel {
     inputPrice?: number;
     outputPrice?: number;
     contextLength?: number;
+    status?: string; // 'deprecated' | 'preview' | 'experimental'
 }
 
 /**
@@ -104,6 +105,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                         inputPrice: (model as unknown as { inputPrice?: number }).inputPrice,
                         outputPrice: (model as unknown as { outputPrice?: number }).outputPrice,
                         contextLength: (model as unknown as { contextLength?: number }).contextLength,
+                        status: (model as unknown as { status?: string }).status,
                     });
                 }
             }
@@ -420,9 +422,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                     )}
 
                     {!isLoading && !error && filteredModels.length === 0 && (
-                        <div className="model-dropdown-empty">
-                            {searchQuery ? 'No models match your search' : 'No models available'}
-                        </div>
+                        searchQuery ? (
+                            <div className="model-dropdown-empty">
+                                No models match your search
+                            </div>
+                        ) : (
+                            <div className="model-selector-empty-state">
+                                <div className="model-selector-empty-text">No models configured</div>
+                                <button
+                                    type="button"
+                                    className="model-selector-empty-cta"
+                                    onClick={() => { handleClose(); onManageModels(); }}
+                                >
+                                    Open Settings
+                                </button>
+                            </div>
+                        )
                     )}
 
                     {!isLoading && !error && (
@@ -565,6 +580,11 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
             <span className="model-option-name">
                 {isSelected && <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true"><circle cx="4" cy="4" r="3"/></svg>}
                 {model.modelName}
+                {model.status && (
+                    <span className={`model-status-tag model-status-tag--${model.status}`}>
+                        {model.status}
+                    </span>
+                )}
             </span>
             {model.free && <span className="model-free-badge">Free</span>}
             {model.latest && <span className="model-latest-badge">Latest</span>}
