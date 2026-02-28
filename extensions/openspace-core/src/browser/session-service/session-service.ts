@@ -198,6 +198,7 @@ export class SessionServiceImpl implements SessionService {
             const cached = this.lifecycle.getSessionStatus(sessionId);
             if (cached) { this.lifecycle.updateSessionStatus(cached, sessionId); }
             await this.interactions.loadPendingQuestions(this.lifecycle.activeProject.id, sessionId);
+            await this.interactions.loadPendingPermissions(sessionId);
         } catch (error: unknown) {
             const err = error as Error;
             if (err.message?.includes('Session not found')) {
@@ -287,7 +288,15 @@ export class SessionServiceImpl implements SessionService {
         if (!this.lifecycle.activeProject) { throw this.setError('No active project'); }
         if (!this.lifecycle.activeSession) { throw this.setError('No active session'); }
         try { await this.openCodeService.abortSession(this.lifecycle.activeProject.id, this.lifecycle.activeSession.id); }
-        catch (e) { this.captureError(e); throw e; } finally { this.streamingState.abortStreaming(); }
+        catch (e) { this.captureError(e); throw e; }
+        finally {
+            this.streamingState.abortStreaming();
+            // Optimistically clear sessionBusy immediately — don't wait for the SSE
+            // session.status:idle roundtrip, which can arrive late or be missed entirely.
+            // The server SSE will confirm (or re-assert busy if still running), but the
+            // UI should respond to the user's intent without a perceptible delay.
+            this.lifecycle.updateSessionStatus({ type: 'idle' });
+        }
     }
 
     // ── Session CRUD delegation ──

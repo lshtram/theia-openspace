@@ -128,8 +128,8 @@ export class RestApiFacade {
         return this.http.post<Session>(`/session/${encodeURIComponent(sessionId)}/init`, {});
     }
 
-    async abortSession(_projectId: string, sessionId: string): Promise<Session> {
-        return this.http.post<Session>(`/session/${encodeURIComponent(sessionId)}/abort`, {});
+    async abortSession(_projectId: string, sessionId: string): Promise<boolean> {
+        return this.http.post<boolean>(`/session/${encodeURIComponent(sessionId)}/abort`, {});
     }
 
     async shareSession(_projectId: string, sessionId: string): Promise<Session> {
@@ -185,6 +185,14 @@ export class RestApiFacade {
 
     async replyPermission(_projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void> {
         await this.http.post<unknown>(`/permission/${encodeURIComponent(requestId)}/reply`, { reply });
+    }
+
+    async listPendingPermissions(): Promise<SDKTypes.PermissionRequest[]> {
+        try {
+            return await this.http.get<SDKTypes.PermissionRequest[]>('/permission');
+        } catch {
+            return [];
+        }
     }
 
     // =========================================================================

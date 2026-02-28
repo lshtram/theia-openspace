@@ -89,7 +89,7 @@ export class SseEventRouter {
             } else if (eventType.startsWith('file.')) {
                 this.forwardFileEvent(innerEvent as SDKTypes.EventFileEdited | SDKTypes.EventFileWatcherUpdated, client);
             } else if (eventType.startsWith('permission.')) {
-                this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied, client);
+                this.forwardPermissionEvent(innerEvent as SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied | SDKTypes.EventPermissionAsked, client);
             } else if (eventType.startsWith('question.')) {
                 this.forwardQuestionEvent(innerEvent as SDKTypes.EventQuestionAsked | SDKTypes.EventQuestionReplied | SDKTypes.EventQuestionRejected, client);
             } else if (eventType.startsWith('todo.')) {
@@ -140,7 +140,13 @@ export class SseEventRouter {
             if (type === 'error_occurred') {
                 const errorEvent = event as SDKTypes.EventSessionError;
                 const errObj = errorEvent.properties.error;
-                const errMsg = errObj && 'message' in errObj ? (errObj as { message: string }).message : String(errObj ?? 'Unknown error');
+                let errMsg = 'Unknown error';
+                if (errObj) {
+                    // Error union types use { name, data: { message } } shape.
+                    // MessageOutputLengthError may not have data.message, use name as fallback.
+                    const data = (errObj as { name: string; data?: { message?: string } }).data;
+                    errMsg = data?.message ?? errObj.name ?? 'Unknown error';
+                }
                 errorData = { error: errMsg } as unknown as Session;
             }
 
@@ -296,7 +302,7 @@ export class SseEventRouter {
     /**
      * Forward permission event to client.
      */
-    protected forwardPermissionEvent(event: SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied, client: OpenCodeClient): void {
+    protected forwardPermissionEvent(event: SDKTypes.EventPermissionUpdated | SDKTypes.EventPermissionReplied | SDKTypes.EventPermissionAsked, client: OpenCodeClient): void {
         try {
             if (event.type === 'permission.updated') {
                 const perm = event.properties;
@@ -325,18 +331,52 @@ export class SseEventRouter {
                 client.onPermissionEvent(notification);
                 this.logger.debug(`[SseEventRouter] Forwarded permission.updated: ${perm.id}`);
 
-            } else if (event.type === 'permission.replied') {
+            } else if (event.type === 'permission.asked') {
+                // New PermissionNext system: permission.asked replaces permission.updated
                 const props = event.properties;
 
                 const notification: PermissionNotification = {
-                    type: props.response === 'granted' ? 'granted' : 'denied',
+                    type: 'requested',
                     sessionId: props.sessionID,
                     projectId: '',
-                    permissionId: props.permissionID
+                    permissionId: props.id,
+                    permission: {
+                        id: props.id,
+                        type: props.permission,
+                        message: props.permission,
+                        status: 'pending'
+                    },
+                    callID: props.tool?.callID,
+                    messageID: props.tool?.messageID,
+                    title: props.permission,
+                    patterns: props.patterns,
+                    metadata: props.metadata,
                 };
 
                 client.onPermissionEvent(notification);
-                this.logger.debug(`[SseEventRouter] Forwarded permission.replied: ${props.permissionID}`);
+                this.logger.debug(`[SseEventRouter] Forwarded permission.asked: ${props.id}`);
+
+            } else if (event.type === 'permission.replied') {
+                // Handle both old shape (permissionID/response) and new shape (requestID/reply)
+                const props = event.properties as {
+                    sessionID: string;
+                    permissionID?: string;
+                    requestID?: string;
+                    response?: string;
+                    reply?: string;
+                };
+                const permId = props.permissionID ?? props.requestID ?? '';
+                const response = props.response ?? props.reply ?? '';
+
+                const notification: PermissionNotification = {
+                    type: response === 'reject' ? 'denied' : 'granted',
+                    sessionId: props.sessionID,
+                    projectId: '',
+                    permissionId: permId
+                };
+
+                client.onPermissionEvent(notification);
+                this.logger.debug(`[SseEventRouter] Forwarded permission.replied: ${permId}`);
             }
         } catch (error) {
             this.logger.error(`[SseEventRouter] Error forwarding permission event: ${error}`);

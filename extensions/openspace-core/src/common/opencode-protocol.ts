@@ -216,7 +216,7 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     archiveSession(projectId: string, sessionId: string): Promise<Session>;
     renameSession(projectId: string, sessionId: string, title: string): Promise<Session>;
     initSession(projectId: string, sessionId: string): Promise<Session>;
-    abortSession(projectId: string, sessionId: string): Promise<Session>;
+    abortSession(projectId: string, sessionId: string): Promise<boolean>;
      shareSession(projectId: string, sessionId: string): Promise<Session>;
     unshareSession(projectId: string, sessionId: string): Promise<Session>;
     compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session>;
@@ -271,6 +271,9 @@ export interface OpenCodeService extends RpcServer<OpenCodeClient> {
     listPendingQuestions(projectId: string, sessionId: string): Promise<SDKTypes.QuestionRequest[]>;
     answerQuestion(projectId: string, requestId: string, answers: SDKTypes.QuestionAnswer[]): Promise<boolean>;
     rejectQuestion(projectId: string, requestId: string): Promise<boolean>;
+
+    // Permission methods
+    listPendingPermissions(): Promise<SDKTypes.PermissionRequest[]>;
 
     // Path validation (Node-side, uses fs.realpath for symlink resolution)
     validatePath(filePath: string, workspaceRoot: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }>;
@@ -413,6 +416,8 @@ export interface PermissionNotification {
     readonly title?: string;
     /** Glob patterns the permission applies to */
     readonly patterns?: string[];
+    /** Raw metadata from the permission request (contains command, filePath, etc.) */
+    readonly metadata?: { [key: string]: unknown };
 }
 
 export type PermissionEventType = 'requested' | 'granted' | 'denied';

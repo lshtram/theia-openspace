@@ -137,6 +137,43 @@ export class InteractionServiceImpl implements Disposable {
         this.onPermissionChangedEmitter.fire([...this._pendingPermissions]);
     }
 
+    /**
+     * Load pending permissions from the REST API.
+     * Handles permission.asked events that fired before SSE was established (race condition).
+     * Filters to the given sessionId only.
+     */
+    async loadPendingPermissions(sessionId: string): Promise<void> {
+        try {
+            const all = await this.openCodeService.listPendingPermissions();
+            const forSession = all.filter(r => r.sessionID === sessionId);
+            if (forSession.length > 0) {
+                this.logger.info(`[Interaction] Loaded ${forSession.length} pending permission(s) for session ${sessionId}`);
+                for (const req of forSession) {
+                    const notification: PermissionNotification = {
+                        type: 'requested',
+                        sessionId: req.sessionID,
+                        projectId: '',
+                        permissionId: req.id,
+                        permission: {
+                            id: req.id,
+                            type: req.permission,
+                            message: req.permission,
+                            status: 'pending'
+                        },
+                        callID: req.tool?.callID,
+                        messageID: req.tool?.messageID,
+                        title: req.permission,
+                        patterns: req.patterns,
+                        metadata: req.metadata,
+                    };
+                    this.addPendingPermission(notification);
+                }
+            }
+        } catch (error) {
+            this.logger.warn('[Interaction] Failed to load pending permissions (non-fatal):', error);
+        }
+    }
+
     async replyPermission(projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void> {
         this.logger.info(`[Interaction] Operation: replyPermission(${requestId}, ${reply})`);
         await this.openCodeService.replyPermission(projectId, requestId, reply);

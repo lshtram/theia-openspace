@@ -14,9 +14,10 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+import * as path from 'path';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
-import { Application, Request, Response } from 'express';
+import { Application, Request, Response, static as expressStatic } from 'express';
 import { ILogger } from '@theia/core/lib/common/logger';
 import { MutableHubState, AgentCommand, PaneStateSnapshot, CommandDefinition } from '../common/command-manifest';
 import { OpenSpaceMcpServer, CommandBridgeResult } from './hub-mcp/hub-mcp';
@@ -164,6 +165,13 @@ export class OpenSpaceHub implements BackendApplicationContribution {
         // Resolve workspace root (use HOME as fallback)
         const workspaceRoot = process.env.THEIA_WORKSPACE_ROOT || process.cwd();
         this.mcpServer = new OpenSpaceMcpServer(workspaceRoot, this.logger);
+
+        // Serve /design/** as static files from the workspace's design/ directory.
+        // This allows deck.md files to reference assets as /design/assets/... and
+        // have them resolve correctly in the browser presentation panel.
+        const designDir = path.resolve(workspaceRoot, 'design');
+        app.use('/design', expressStatic(designDir));
+        this.logger.info(`[Hub] Serving /design from ${designDir}`);
 
         // Rate-limit all Hub routes — must be first middleware to protect all endpoints
         app.use('/openspace', (req: Request, res: Response, next: () => void) => {

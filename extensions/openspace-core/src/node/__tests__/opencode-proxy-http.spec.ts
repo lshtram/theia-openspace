@@ -162,11 +162,11 @@ describe('OpenCodeProxy — HTTP methods', () => {
 
     describe('abortSession()', () => {
         it('makes POST /session/:id/abort', async () => {
-            mock.respondWith({ id: 'sess-1', title: 'Aborted', time: { created: 0 } });
+            mock.respondWith(true);
             const result = await proxy.abortSession('proj-1', 'sess-1');
             expect(mock.capturedMethod).to.equal('POST');
             expect(mock.capturedUrl).to.include('/session/sess-1/abort');
-            expect(result.id).to.equal('sess-1');
+            expect(result).to.equal(true);
         });
     });
 

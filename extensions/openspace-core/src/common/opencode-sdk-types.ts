@@ -403,6 +403,28 @@ export type EventPermissionReplied = {
         response: string;
     };
 };
+/**
+ * A pending permission request from PermissionNext — returned by GET /permission.
+ * Matches the shape of PermissionNext.Request from the server.
+ */
+export type PermissionRequest = {
+    id: string;
+    sessionID: string;
+    permission: string;
+    patterns: string[];
+    metadata: { [key: string]: unknown };
+    always: string[];
+    tool?: {
+        messageID: string;
+        callID: string;
+    };
+};
+
+/** New-style permission request fired by PermissionNext.ask (replaces permission.updated). */
+export type EventPermissionAsked = {
+    type: "permission.asked";
+    properties: PermissionRequest;
+};
 export type QuestionOption = {
     label: string;
     description: string;
@@ -655,7 +677,7 @@ export type EventServerConnected = {
         [key: string]: unknown;
     };
 };
-export type Event = EventServerInstanceDisposed | EventInstallationUpdated | EventInstallationUpdateAvailable | EventLspClientDiagnostics | EventLspUpdated | EventMessageUpdated | EventMessageRemoved | EventMessagePartUpdated | EventMessagePartDelta | EventMessagePartRemoved | EventPermissionUpdated | EventPermissionReplied | EventQuestionAsked | EventQuestionReplied | EventQuestionRejected | EventSessionStatus | EventSessionIdle | EventSessionCompacted | EventFileEdited | EventTodoUpdated | EventCommandExecuted | EventSessionCreated | EventSessionUpdated | EventSessionDeleted | EventSessionDiff | EventSessionError | EventFileWatcherUpdated | EventVcsBranchUpdated | EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventPtyCreated | EventPtyUpdated | EventPtyExited | EventPtyDeleted | EventServerConnected;
+export type Event = EventServerInstanceDisposed | EventInstallationUpdated | EventInstallationUpdateAvailable | EventLspClientDiagnostics | EventLspUpdated | EventMessageUpdated | EventMessageRemoved | EventMessagePartUpdated | EventMessagePartDelta | EventMessagePartRemoved | EventPermissionUpdated | EventPermissionReplied | EventPermissionAsked | EventQuestionAsked | EventQuestionReplied | EventQuestionRejected | EventSessionStatus | EventSessionIdle | EventSessionCompacted | EventFileEdited | EventTodoUpdated | EventCommandExecuted | EventSessionCreated | EventSessionUpdated | EventSessionDeleted | EventSessionDiff | EventSessionError | EventFileWatcherUpdated | EventVcsBranchUpdated | EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventPtyCreated | EventPtyUpdated | EventPtyExited | EventPtyDeleted | EventServerConnected;
 export type GlobalEvent = {
     directory: string;
     payload: Event;

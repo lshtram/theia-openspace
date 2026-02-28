@@ -33,7 +33,6 @@ import { PaneCommandContribution } from './pane-command-contribution';
 import { EditorCommandContribution } from './editor-command-contribution';
 import { TerminalCommandContribution } from './terminal-command-contribution';
 import { FileCommandContribution } from './file-command-contribution';
-import { PermissionDialogContribution } from './permission-dialog-contribution';
 
 // Viewer toggle
 import { ViewerToggleService } from './viewer-toggle/viewer-toggle-service';
@@ -85,7 +84,8 @@ export default new ContainerModule((bind, _unbind, _isBound, _rebind) => {
     // 6. Application contributions
     // BridgeContribution runs on app startup (collects commands, publishes manifest, connects to Hub)
     bind(FrontendApplicationContribution).to(OpenSpaceBridgeContribution).inSingletonScope();
-    bind(FrontendApplicationContribution).to(PermissionDialogContribution).inSingletonScope();
+    // PermissionDialogContribution disabled — inline permission prompts in chat widget replace the modal
+    // bind(FrontendApplicationContribution).to(PermissionDialogContribution).inSingletonScope();
 
     // 7. Command contributions
     bind(CommandContribution).to(PaneCommandContribution).inSingletonScope();

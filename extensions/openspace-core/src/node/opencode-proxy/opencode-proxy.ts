@@ -135,7 +135,7 @@ export class OpenCodeProxy implements OpenCodeService {
     archiveSession(projectId: string, sessionId: string): Promise<Session> { return this.rest.archiveSession(projectId, sessionId); }
     renameSession(projectId: string, sessionId: string, title: string): Promise<Session> { return this.rest.renameSession(projectId, sessionId, title); }
     initSession(projectId: string, sessionId: string): Promise<Session> { return this.rest.initSession(projectId, sessionId); }
-    abortSession(projectId: string, sessionId: string): Promise<Session> { return this.rest.abortSession(projectId, sessionId); }
+    abortSession(projectId: string, sessionId: string): Promise<boolean> { return this.rest.abortSession(projectId, sessionId); }
     shareSession(projectId: string, sessionId: string): Promise<Session> { return this.rest.shareSession(projectId, sessionId); }
     unshareSession(projectId: string, sessionId: string): Promise<Session> { return this.rest.unshareSession(projectId, sessionId); }
     compactSession(projectId: string, sessionId: string, model?: { providerID: string; modelID: string }): Promise<Session> { return this.rest.compactSession(projectId, sessionId, model); }
@@ -146,6 +146,7 @@ export class OpenCodeProxy implements OpenCodeService {
     getTodos(projectId: string, sessionId: string): Promise<Array<{ id: string; description: string; status: string }>> { return this.rest.getTodos(projectId, sessionId); }
     grantPermission(projectId: string, sessionId: string, permissionId: string): Promise<Session> { return this.rest.grantPermission(projectId, sessionId, permissionId); }
     replyPermission(projectId: string, requestId: string, reply: 'once' | 'always' | 'reject'): Promise<void> { return this.rest.replyPermission(projectId, requestId, reply); }
+    listPendingPermissions(): Promise<SDKTypes.PermissionRequest[]> { return this.rest.listPendingPermissions(); }
     getMessages(projectId: string, sessionId: string, limit?: number, before?: string): Promise<MessageWithParts[]> { return this.rest.getMessages(projectId, sessionId, limit, before); }
     getMessage(projectId: string, sessionId: string, messageId: string): Promise<MessageWithParts> { return this.rest.getMessage(projectId, sessionId, messageId); }
     createMessage(projectId: string, sessionId: string, message: Partial<Message>, model?: { providerID: string; modelID: string }): Promise<MessageWithParts> { return this.rest.createMessage(projectId, sessionId, message, model); }
