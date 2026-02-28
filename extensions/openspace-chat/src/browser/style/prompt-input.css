@@ -444,3 +444,26 @@
     font-size: 11px;
     opacity: 0.6;
 }
+
+/* Model mode selector */
+.model-mode-selector {
+    position: relative;
+}
+.mode-selector-option {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    color: var(--theia-foreground);
+    text-align: left;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.mode-selector-option:hover {
+    background: var(--theia-list-hoverBackground);
+}
+.mode-selector-option.active {
+    background: var(--theia-list-activeSelectionBackground);
+}
