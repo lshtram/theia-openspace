@@ -54,7 +54,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState<string | undefined>();
     const [searchQuery, setSearchQuery] = React.useState('');
-    const [recentModels, setRecentModels] = React.useState<string[]>([]);
+    const RECENT_KEY = 'openspace.recentModels';
+    const [recentModels, setRecentModels] = React.useState<string[]>(() => {
+        try {
+            const stored = localStorage.getItem(RECENT_KEY);
+            return stored ? (JSON.parse(stored) as string[]) : [];
+        } catch { return []; }
+    });
     
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -97,7 +103,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         return models;
     }, [providers, searchQuery, enabledModels]);
 
-    // Group filtered models by provider
+    // Group filtered models by provider (sorted alphabetically by provider name)
     const groupedModels = React.useMemo(() => {
         const groups: Record<string, FlatModel[]> = {};
         for (const model of filteredModels) {
@@ -106,7 +112,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
             }
             groups[model.providerName].push(model);
         }
-        return groups;
+        return Object.fromEntries(
+            Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+        );
     }, [filteredModels]);
 
     // Subscribe to active model changes
@@ -183,9 +191,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         setActiveModel(fullId);
         setIsOpen(false);
         
-        // Add to recent models
+        // Add to recent models (with localStorage persistence)
         setRecentModels(prev => {
             const updated = [fullId, ...prev.filter(m => m !== fullId)].slice(0, 5);
+            try { localStorage.setItem(RECENT_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
             return updated;
         });
     }, [sessionService]);

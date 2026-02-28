@@ -211,4 +211,71 @@ describe('ModelSelector', () => {
             unmount();
         });
     });
+
+    describe('M1-A: recent models localStorage persistence', () => {
+        let localStorageStore: Record<string, string> = {};
+        let originalLocalStorage: Storage;
+
+        before(() => {
+            originalLocalStorage = (global as any).localStorage;
+            (global as any).localStorage = {
+                getItem: (k: string) => localStorageStore[k] ?? null,
+                setItem: (k: string, v: string) => { localStorageStore[k] = v; },
+                removeItem: (k: string) => { delete localStorageStore[k]; },
+                clear: () => { localStorageStore = {}; },
+            };
+        });
+
+        after(() => {
+            (global as any).localStorage = originalLocalStorage;
+        });
+
+        beforeEach(() => { localStorageStore = {}; });
+        afterEach(() => { localStorageStore = {}; });
+
+        it('saves selected model to localStorage', async () => {
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => { (container.querySelector('.model-option') as HTMLElement)?.click(); });
+            const stored = JSON.parse(localStorageStore['openspace.recentModels'] ?? '[]') as string[];
+            expect(stored).to.include('openai/gpt-4o');
+            unmount();
+        });
+
+        it('restores recent models from localStorage on mount', async () => {
+            localStorageStore['openspace.recentModels'] = JSON.stringify(['openai/gpt-4o']);
+            const svc = makeSessionService({
+                models: [makeProvider('openai', 'OpenAI', { 'gpt-4o': makeModel('openai', 'gpt-4o', 'GPT-4o') })],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            // Recent section should appear
+            const recentHeader = container.querySelector('.model-section-header');
+            expect(recentHeader?.textContent).to.equal('Recent');
+            unmount();
+        });
+    });
+
+    describe('M1-D: provider sort', () => {
+        it('renders provider groups in alphabetical order', async () => {
+            const svc = makeSessionService({
+                models: [
+                    makeProvider('zeta', 'Zeta Corp', { 'z1': makeModel('zeta', 'z1', 'Z1') }),
+                    makeProvider('alpha', 'Alpha AI', { 'a1': makeModel('alpha', 'a1', 'A1') }),
+                    makeProvider('midway', 'Midway', { 'm1': makeModel('midway', 'm1', 'M1') }),
+                ],
+            });
+            const { container, unmount } = mount(svc);
+            await act(async () => { (container.querySelector('.model-selector-pill') as HTMLButtonElement)?.click(); });
+            await act(async () => { await Promise.resolve(); });
+            const headers = Array.from(container.querySelectorAll('.model-provider-header')).map(e => e.textContent?.trim() ?? '');
+            expect(headers).to.deep.equal(['Alpha AI', 'Midway', 'Zeta Corp']);
+            unmount();
+        });
+    });
 });
