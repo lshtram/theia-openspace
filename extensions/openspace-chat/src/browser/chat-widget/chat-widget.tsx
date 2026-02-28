@@ -287,6 +287,19 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         return totalInput + totalOutput > 0 ? { input: totalInput, output: totalOutput, contextLimit } : null;
     }, [subscriptions.messages, subscriptions.isStreaming]);
 
+    // N2-C: Fire a one-time toast when context usage exceeds 80% for the active session
+    const contextWarnedSessions = React.useRef(new Set<string>());
+    React.useEffect(() => {
+        if (!activeSession || !contextUsage?.contextLimit) { return; }
+        const sid = activeSession.id;
+        if (contextWarnedSessions.current.has(sid)) { return; }
+        const total = contextUsage.input + contextUsage.output;
+        if (total / contextUsage.contextLimit > 0.8) {
+            contextWarnedSessions.current.add(sid);
+            messageService?.info('Context window is over 80% full. Consider using Compact session to free space.')?.catch(() => {});
+        }
+    }, [contextUsage, activeSession]);
+
     const [mcpStatus, setMcpStatus] = React.useState<Record<string, unknown> | undefined>(undefined);
     React.useEffect(() => {
         setMcpStatus(undefined);
