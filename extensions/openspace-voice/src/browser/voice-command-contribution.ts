@@ -12,6 +12,9 @@ import { VoiceWaveformOverlay } from './voice-waveform-overlay';
 import { VoiceTextProcessor } from './voice-text-processor';
 import type { VoicePolicy } from '../common/voice-policy';
 import { NARRATION_MODES, SUPPORTED_LANGUAGES, SUPPORTED_VOICES } from '../common/voice-policy';
+import type { NarrationMode } from '../common/voice-policy';
+import { PreferenceService } from '@theia/core/lib/common/preferences/preference-service';
+import { VoicePreferenceKeys } from './voice-preferences';
 
 export const VOICE_COMMANDS = {
   TOGGLE_VOICE:    { id: 'openspace.voice.toggle',         label: 'Voice: Toggle Voice Input' },
@@ -32,6 +35,7 @@ export class VoiceCommandContribution
   @inject(QuickPickService)  private readonly quickPickService!: QuickPickService;
   private readonly textProcessor = new VoiceTextProcessor();
   @inject(StatusBar)         private readonly statusBar!: StatusBar;
+  @inject(PreferenceService) private readonly preferenceService!: PreferenceService;
 
   private recording = false;
 
@@ -57,12 +61,30 @@ export class VoiceCommandContribution
   // ── FrontendApplicationContribution ──────────────────────────────────────
 
   onStart(): void {
-    console.log('[Voice] onStart - policy.enabled:', this.sessionFsm.policy.enabled, 'state:', this.sessionFsm.state);
-    // Sync FSM state with policy: if policy says enabled, ensure FSM is enabled
-    if (this.sessionFsm.policy.enabled && this.sessionFsm.state === 'inactive') {
+    // Seed policy from stored preferences
+    const stored = this.policyFromPreferences();
+    this.sessionFsm.updatePolicy(stored);
+
+    // Sync FSM enabled/inactive state
+    if (stored.enabled && this.sessionFsm.state === 'inactive') {
       this.sessionFsm.enable();
-      console.log('[Voice] Enabled voice from policy');
+    } else if (!stored.enabled && this.sessionFsm.state !== 'inactive') {
+      this.sessionFsm.disable();
     }
+
+    // React to future Settings panel changes in real-time
+    this.preferenceService.onPreferenceChanged(change => {
+      if (!change.preferenceName.startsWith('openspace.voice.')) return;
+      const updated = this.policyFromPreferences();
+      this.sessionFsm.updatePolicy(updated);
+      if (updated.enabled && this.sessionFsm.state === 'inactive') {
+        this.sessionFsm.enable();
+      } else if (!updated.enabled && this.sessionFsm.state !== 'inactive') {
+        this.sessionFsm.disable();
+      }
+      this.updateStatusBar();
+    });
+
     this.updateStatusBar();
     this.waveformOverlay.setOnCancel(() => this.narrationFsm.stop());
   }
@@ -116,6 +138,9 @@ export class VoiceCommandContribution
       execute: async (args?: Partial<VoicePolicy>): Promise<void> => {
         if (args && Object.keys(args).length > 0) {
           this.sessionFsm.updatePolicy(args);
+          this.persistPolicyToPreferences(args).catch(err =>
+            console.warn('[Voice] Failed to persist policy to preferences:', err)
+          );
           return;
         }
         await this.showPolicyWizard();
@@ -297,14 +322,19 @@ export class VoiceCommandContribution
     if (voiceChoice === undefined) { return; }
 
     // Apply all choices
-    this.sessionFsm.updatePolicy({
+    const newPolicy = {
       enabled:            enabledChoice.value,
       narrationMode:      modeChoice.value as typeof NARRATION_MODES[number],
       speed:              speedChoice.value,
       voice:              voiceChoice.value,
       language:           selectedLanguage,
       autoDetectLanguage: autoDetectChoice.value,
-    });
+    };
+    this.sessionFsm.updatePolicy(newPolicy);
+    // Persist to Theia preferences so Settings panel stays in sync
+    this.persistPolicyToPreferences(newPolicy).catch(err =>
+      console.warn('[Voice] Failed to persist policy to preferences:', err)
+    );
 
     // Sync FSM state to enabled flag
     if (enabledChoice.value && this.sessionFsm.state === 'inactive') {
@@ -383,5 +413,35 @@ export class VoiceCommandContribution
 
   processTranscript(text: string): string {
     return this.textProcessor.process(text);
+  }
+
+  /** Read voice policy fields from Theia preferences. Returns a Partial<VoicePolicy>. */
+  private policyFromPreferences(): Partial<VoicePolicy> {
+    return {
+      enabled:              this.preferenceService.get<boolean>(VoicePreferenceKeys.ENABLED, true),
+      narrationMode:        this.preferenceService.get<string>(VoicePreferenceKeys.NARRATION_MODE, 'narrate-everything') as NarrationMode,
+      voice:                this.preferenceService.get<string>(VoicePreferenceKeys.VOICE, 'af_sarah'),
+      speed:                this.preferenceService.get<number>(VoicePreferenceKeys.SPEED, 1.0),
+      language:             this.preferenceService.get<string>(VoicePreferenceKeys.LANGUAGE, 'en-US'),
+      autoDetectLanguage:   this.preferenceService.get<boolean>(VoicePreferenceKeys.AUTO_DETECT_LANGUAGE, false),
+    };
+  }
+
+  /** Write current policy fields back to Theia preferences. */
+  private async persistPolicyToPreferences(policy: Partial<VoicePolicy>): Promise<void> {
+    const updates: Array<Promise<void>> = [];
+    if (policy.enabled !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.ENABLED, policy.enabled, undefined));
+    if (policy.narrationMode !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.NARRATION_MODE, policy.narrationMode, undefined));
+    if (policy.voice !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.VOICE, policy.voice, undefined));
+    if (policy.speed !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.SPEED, policy.speed, undefined));
+    if (policy.language !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.LANGUAGE, policy.language, undefined));
+    if (policy.autoDetectLanguage !== undefined)
+      updates.push(this.preferenceService.set(VoicePreferenceKeys.AUTO_DETECT_LANGUAGE, policy.autoDetectLanguage, undefined));
+    await Promise.all(updates);
   }
 }
