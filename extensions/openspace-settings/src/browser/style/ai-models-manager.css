@@ -57,6 +57,23 @@
     border-bottom: 1px solid var(--theia-widget-border);
     font-weight: 600;
     font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ai-models-provider-header:hover {
+    background: var(--theia-list-hoverBackground);
+}
+
+.ai-models-chevron {
+    flex-shrink: 0;
+    color: var(--theia-descriptionForeground);
+    transition: transform 0.15s ease;
+    transform: rotate(0deg);
+}
+
+.ai-models-chevron.expanded {
+    transform: rotate(90deg);
 }
 
 .ai-models-provider-name {

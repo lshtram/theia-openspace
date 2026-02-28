@@ -24,11 +24,34 @@ interface AiModelsManagerProps {
     sessionService: SessionService;
 }
 
+const ChevronIcon: React.FC<{ expanded: boolean }> = ({ expanded }) => (
+    <svg
+        className={`ai-models-chevron${expanded ? ' expanded' : ''}`}
+        width="12" height="12" viewBox="0 0 12 12"
+        aria-hidden="true"
+    >
+        <path d="M4 2 L8 6 L4 10" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
 const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, sessionService }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
     const [enabled, setEnabled] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | undefined>();
+    const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
+
+    const toggleCollapsed = (providerId: string) => {
+        setCollapsedProviders(prev => {
+            const next = new Set(prev);
+            if (next.has(providerId)) {
+                next.delete(providerId);
+            } else {
+                next.add(providerId);
+            }
+            return next;
+        });
+    };
 
     // Load providers from server
     React.useEffect(() => {
@@ -110,24 +133,33 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
             {providers.map(provider => {
                 const providerModelIds = Object.keys(provider.models).map(mId => `${provider.id}/${mId}`);
                 const providerEnabledCount = providerModelIds.filter(id => effectiveEnabled.has(id)).length;
+                const isCollapsed = collapsedProviders.has(provider.id);
 
                 return (
                     <div key={provider.id} className="ai-models-provider-group">
-                        <div className="ai-models-provider-header">
+                        <div
+                            className="ai-models-provider-header"
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={!isCollapsed}
+                            onClick={() => toggleCollapsed(provider.id)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCollapsed(provider.id); } }}
+                        >
+                            <ChevronIcon expanded={!isCollapsed} />
                             <span className="ai-models-provider-name">{provider.name}</span>
                             <span className="ai-models-provider-count">
                                 {providerEnabledCount}/{providerModelIds.length}
                             </span>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-all"
-                                onClick={() => handleToggleProvider(provider.id, true)}
+                                onClick={e => { e.stopPropagation(); handleToggleProvider(provider.id, true); }}
                             >All</button>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-none"
-                                onClick={() => handleToggleProvider(provider.id, false)}
+                                onClick={e => { e.stopPropagation(); handleToggleProvider(provider.id, false); }}
                             >None</button>
                         </div>
-                        {Object.entries(provider.models).map(([modelId, model]) => {
+                        {!isCollapsed && Object.entries(provider.models).map(([modelId, model]) => {
                             const fullId = `${provider.id}/${modelId}`;
                             const isEnabled = effectiveEnabled.has(fullId);
                             return (
