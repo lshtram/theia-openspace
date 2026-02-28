@@ -63,8 +63,8 @@
         "labelColor": "black",
         "bend": 0,
         "start": {
-          "x": 600,
-          "y": 410
+          "x": 598.7213858434577,
+          "y": 416.1688588216117
         },
         "end": {
           "x": 380,
@@ -85,7 +85,7 @@
         "scale": 1
       },
       "parentId": "page:page",
-      "index": "aAwOJ7wV",
+      "index": "a6sJzBVK",
       "typeName": "shape"
     },
     "shape:1772015993489-17-ud7w": {
@@ -326,8 +326,8 @@
           "y": 290
         },
         "end": {
-          "x": 600,
-          "y": 290
+          "x": 597.2306792912804,
+          "y": 312.82720155305657
         },
         "arrowheadStart": "none",
         "arrowheadEnd": "arrow",
@@ -344,8 +344,26 @@
         "scale": 1
       },
       "parentId": "page:page",
-      "index": "a9zjvIel",
+      "index": "a5u993SO",
       "typeName": "shape"
+    },
+    "binding:JEED_ZZD2SxAf6ZCiLKmR": {
+      "meta": {},
+      "id": "binding:JEED_ZZD2SxAf6ZCiLKmR",
+      "type": "arrow",
+      "fromId": "shape:1772015993489-19-4czl",
+      "toId": "shape:1772015993489-15-umr7",
+      "props": {
+        "isPrecise": true,
+        "isExact": false,
+        "normalizedAnchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "snap": "center",
+        "terminal": "start"
+      },
+      "typeName": "binding"
     },
     "shape:1772015993489-11-mokd": {
       "x": 80,
@@ -364,7 +382,7 @@
         "growY": 1.6953125,
         "url": "",
         "scale": 1,
-        "color": "black",
+        "color": "yellow",
         "labelColor": "black",
         "fill": "solid",
         "size": "m",
@@ -403,6 +421,24 @@
       "meta": {},
       "id": "document:document",
       "typeName": "document"
+    },
+    "binding:AYjXrzIL1HKeXZFh5PWqJ": {
+      "meta": {},
+      "id": "binding:AYjXrzIL1HKeXZFh5PWqJ",
+      "type": "arrow",
+      "fromId": "shape:1772015993489-20-9wdj",
+      "toId": "shape:1772015993489-16-8qbm",
+      "props": {
+        "isPrecise": true,
+        "isExact": false,
+        "normalizedAnchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "snap": "center",
+        "terminal": "end"
+      },
+      "typeName": "binding"
     },
     "shape:1772015993489-16-8qbm": {
       "x": 340,
