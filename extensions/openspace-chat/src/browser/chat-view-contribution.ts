@@ -23,6 +23,7 @@ import { MessageService } from '@theia/core/lib/common/message-service';
 import { PreferenceService } from '@theia/core/lib/common/preferences';
 import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
 import { OpenspacePreferences } from 'openspace-settings/lib/browser/openspace-preferences';
+import { SoundService } from './sound-service';
 import { ChatWidget } from './chat-widget/chat-widget';
 
 /**
@@ -50,6 +51,8 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
     @inject(PreferenceService)
     protected readonly preferenceService!: PreferenceService;
 
+    private readonly soundService = new SoundService();
+
     constructor() {
         super({
             widgetId: ChatWidget.ID,
@@ -74,10 +77,24 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
 
     /** N1-A: turn-complete toast; N1-B: error toast — gated by preferences. */
     private wireNotificationToasts(): void {
+        // Initialise SoundService from current preference
+        this.soundService.setEnabled(
+            this.preferenceService.get<boolean>(OpenspacePreferences.SOUNDS_ENABLED, false)
+        );
+        // Track preference changes
+        this.preferenceService.onPreferenceChanged(({ preferenceName }) => {
+            if (preferenceName === OpenspacePreferences.SOUNDS_ENABLED) {
+                this.soundService.setEnabled(
+                    this.preferenceService.get<boolean>(OpenspacePreferences.SOUNDS_ENABLED, false)
+                );
+            }
+        });
+
         this.sessionService.onBackgroundTurnComplete(_sessionId => {
             if (this.preferenceService.get<boolean>(OpenspacePreferences.NOTIFICATIONS_TURN_COMPLETE, true)) {
                 this.messageService.info('A background session has completed.').catch(() => {});
             }
+            this.soundService.play('turn-complete');
         });
 
         this.sessionService.onAnySessionError(({ sessionId, message }) => {
@@ -88,6 +105,7 @@ export class ChatViewContribution extends AbstractViewContribution<ChatWidget> {
                     this.messageService.error(`Session error: ${message}`).catch(() => {});
                 }
             }
+            this.soundService.play('error');
         });
     }
 }
