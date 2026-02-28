@@ -51,4 +51,8 @@ describe('cleanTextForTts', () => {
   it('strips emoji with surrounding text intact', () => {
     assert.equal(cleanTextForTts('Hello 👋 world'), 'Hello world');
   });
+
+  it('does not strip copyright or trademark symbols', () => {
+    assert.equal(cleanTextForTts('Licensed © 2024 and ™ pending'), 'Licensed © 2024 and ™ pending');
+  });
 });

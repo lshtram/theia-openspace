@@ -29,8 +29,10 @@ export function cleanTextForTts(text: string): string {
   // Strip bullet markers
   result = result.replace(/^[-*+]\s+/gm, '');
 
-  // Strip emoji (Unicode emoji presentation + extended pictographic + variation selectors)
-  result = result.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '');
+  // Strip emoji characters that display as pictograms by default
+  result = result.replace(/\p{Emoji_Presentation}/gu, '');
+  // Strip variation selector-16 and Zero Width Joiner residue left by multi-codepoint emoji
+  result = result.replace(/[\uFE0F\u200D]/g, '');
 
   // Collapse multiple whitespace (but preserve single newlines)
   result = result.replace(/[^\S\n]+/g, ' ');
