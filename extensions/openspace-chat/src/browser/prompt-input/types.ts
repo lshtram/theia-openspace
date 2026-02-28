@@ -117,4 +117,10 @@ export interface PromptInputProps {
     openCodeService?: OpenCodeService;
     /** Active session ID for file search via @mention */
     sessionId?: string;
+    /** Agents available for selection in the toolbar */
+    agentSelectorAgents?: import('openspace-core/lib/common/opencode-protocol').AgentInfo[];
+    /** Currently selected agent */
+    agentSelectorSelected?: import('openspace-core/lib/common/opencode-protocol').AgentInfo | null;
+    /** Called when user selects an agent */
+    onAgentSelect?: (agent: import('openspace-core/lib/common/opencode-protocol').AgentInfo | null) => void;
 }
