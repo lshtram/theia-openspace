@@ -15,7 +15,8 @@ import DOMPurify from 'dompurify';
 export function sanitizeHtml(html: string): string {
     return DOMPurify.sanitize(html, {
         ALLOWED_TAGS: ['span', 'div', 'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'code', 'pre', 'a'],
-        ALLOWED_ATTR: ['class', 'data-mention-id', 'data-mention-type', 'href', 'title'],
+        ALLOWED_ATTR: ['class', 'data-mention-id', 'data-mention-type', 'href', 'title',
+            'data-type', 'data-path', 'contenteditable'],
         ALLOW_DATA_ATTR: false,
     });
 }

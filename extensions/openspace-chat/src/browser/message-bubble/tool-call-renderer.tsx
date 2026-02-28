@@ -265,14 +265,18 @@ export const ToolBlock: React.FC<{
                 const matched = pendingPermissions.find(p => p.callID === callID);
                 if (!matched) return null;
                 const permId = matched.permissionId || '';
+                // Show rich detail: actual command (bash), file path (read/edit), or patterns
+                const metaCommand = matched.metadata?.command as string | undefined;
+                const metaFilePath = matched.metadata?.filePath as string | undefined;
+                const detail = metaCommand || metaFilePath || (matched.patterns && matched.patterns.length > 0 ? matched.patterns.join(', ') : undefined);
                 return (
                     <div className="part-tool-permission-prompt">
                         <span className="part-tool-permission-message">
                             {matched.title || matched.permission?.message || 'Permission required'}
                         </span>
-                        {matched.patterns && matched.patterns.length > 0 && (
-                            <span className="part-tool-permission-patterns" title={matched.patterns.join(', ')}>
-                                {matched.patterns.join(', ')}
+                        {detail && (
+                            <span className="part-tool-permission-patterns" title={detail}>
+                                {detail}
                             </span>
                         )}
                         <span className="part-tool-permission-actions">

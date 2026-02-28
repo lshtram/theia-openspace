@@ -1764,6 +1764,52 @@
     opacity: 0.6;
 }
 
+/* ── PermissionDock (orphan permissions without a linked tool call) ────────── */
+
+.openspace-chat-widget .permission-dock {
+    flex-shrink: 0;
+    border-top: 1px solid var(--oc-border, #333);
+    background: var(--oc-bg-raised, #252526);
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.openspace-chat-widget .permission-dock-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--oc-bg-tool, #1e1e2e);
+    border: 1px solid rgba(0, 122, 204, 0.4);
+    border-radius: 4px;
+    animation: permission-glow 2s ease-in-out infinite alternate;
+}
+
+.openspace-chat-widget .permission-dock-message {
+    font-size: 12px;
+    color: var(--theia-editor-foreground, var(--oc-text, #ccc));
+    font-weight: 500;
+}
+
+.openspace-chat-widget .permission-dock-detail {
+    font-size: 11px;
+    color: var(--oc-text-muted, #888);
+    font-family: var(--vscode-editor-font-family, monospace);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.openspace-chat-widget .permission-dock-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
 /* ── Inline Permission Prompt (below tool card, matched by callID) ────────── */
 
 .openspace-chat-widget .part-tool-permission-prompt {
