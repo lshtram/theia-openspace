@@ -29,6 +29,7 @@ import { SessionService } from 'openspace-core/lib/browser/session-service/sessi
 import { AgentInfo, Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from '../prompt-input/prompt-input';
 import { MessageTimeline } from '../message-timeline';
+import { ModelSelector } from '../model-selector';
 import { QuestionDock } from '../question-dock';
 import { TodoPanel } from '../todo-panel';
 import { SessionViewStore } from '../session-view-store';
@@ -313,6 +314,36 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         return handleSend(parts);
     }, [handleSend, selectedAgent]);
 
+    // ─── Model mode state ─────────────────────────────────────────────────
+    const [modelModes, setModelModes] = React.useState<string[]>([]);
+    const [selectedModelMode, setSelectedModelMode] = React.useState<string>('default');
+    React.useEffect(() => {
+        const activeModel = sessionService.activeModel;
+        if (!activeModel) { setModelModes([]); return; }
+        sessionService.getAvailableModels().then(providers => {
+            for (const p of providers) {
+                for (const [, m] of Object.entries(p.models)) {
+                    const fullId = `${p.id}/${m.id}`;
+                    if (fullId === activeModel) {
+                        const modes = (m as unknown as { modes?: string[] }).modes;
+                        setModelModes(modes && modes.length > 1 ? modes : []);
+                        return;
+                    }
+                }
+            }
+            setModelModes([]);
+        }).catch(() => setModelModes([]));
+    }, [sessionService, sessionService.activeModel]);
+
+    // Pre-built model selector slot to render inside the prompt toolbar
+    const modelSelectorSlot = React.useMemo(() => (
+        <ModelSelector
+            sessionService={sessionService}
+            enabledModels={enabledModels}
+            onManageModels={handleManageModels}
+        />
+    ), [sessionService, enabledModels, handleManageModels]);
+
     return (
         <div className="chat-container">
             <div className="chat-active">
@@ -442,6 +473,10 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             agentSelectorAgents={agents}
                             agentSelectorSelected={selectedAgent}
                             onAgentSelect={setSelectedAgent}
+                            modelSelectorSlot={modelSelectorSlot}
+                            modelModes={modelModes}
+                            selectedModelMode={selectedModelMode}
+                            onModelModeSelect={setSelectedModelMode}
                         />
                         <ChatFooter isStreaming={subscriptions.isStreaming} sessionBusy={subscriptions.sessionBusy} streamingStatus={subscriptions.streamingStatus} contextUsage={contextUsage} />
                     </>

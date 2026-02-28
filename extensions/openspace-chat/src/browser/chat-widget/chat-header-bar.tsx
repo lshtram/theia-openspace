@@ -18,7 +18,6 @@ import * as React from '@theia/core/shared/react';
 import { SessionService, sessionDisplayTitle } from 'openspace-core/lib/browser/session-service/session-service';
 import { Session, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { OPENSPACE_RENAME_SESSION_EVENT } from '../chat-view-contribution';
-import { ModelSelector } from '../model-selector';
 
 export interface ChatHeaderBarProps {
     showSessionList: boolean;
@@ -310,7 +309,7 @@ export const ChatHeaderBar: React.FC<ChatHeaderBarProps> = ({
             })()}
 
             {/* Model selector pill */}
-            <ModelSelector sessionService={sessionService} enabledModels={enabledModels} onManageModels={onManageModels} />
+            {/* ModelSelector has been moved to the prompt input toolbar */}
 
             {/* New session */}
             <button
