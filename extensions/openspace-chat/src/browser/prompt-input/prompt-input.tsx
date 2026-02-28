@@ -372,6 +372,15 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                     <input ref={attachments.fileInputRef as any} type="file" multiple style={{ display: 'none' }} onChange={attachments.handleFileSelect}
                         accept="image/*,.txt,.md,.json,.ts,.js,.tsx,.jsx,.css,.scss,.html,.py,.rs,.go,.java,.c,.cpp,.h,.hpp" />
 
+                    <div className="prompt-toolbar-left-group">
+                        <AgentSelector
+                            agents={agentSelectorAgents ?? []}
+                            selectedAgent={agentSelectorSelected ?? null}
+                            onSelect={onAgentSelect ?? (() => {})}
+                            disabled={disabled}
+                        />
+                    </div>
+
                     <button type="button" className="prompt-input-icon-btn" onClick={() => {
                         const el = editorRef.current; if (!el) return; el.focus();
                         const sel = window.getSelection();
