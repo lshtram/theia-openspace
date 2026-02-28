@@ -54,6 +54,7 @@ export class SessionServiceImpl implements SessionService {
     private _loadingCounter = 0;
     private _lastError: string | undefined;
     private _notificationService: SessionNotificationService | undefined;
+    private _abortRequested = false;
     private readonly onIsLoadingChangedEmitter = new Emitter<boolean>();
     private readonly onErrorChangedEmitter = new Emitter<string | undefined>();
     private readonly onBackgroundTurnCompleteEmitter = new Emitter<string>();
@@ -247,6 +248,7 @@ export class SessionServiceImpl implements SessionService {
         if (!this.lifecycle.activeProject) { throw this.setError('No active project'); }
         if (!this.lifecycle.activeSession) { throw this.setError('No active session'); }
         this.clearError();
+        this._abortRequested = false;
         const optimistic = {
             id: `temp-${crypto.randomUUID()}`, sessionID: this.lifecycle.activeSession.id,
             role: 'user', time: { created: Date.now() },
@@ -283,7 +285,14 @@ export class SessionServiceImpl implements SessionService {
                     signalDone();
                 }
             });
-        } catch (e) { this.messageStore.removeMessage(optimistic.id); this.captureError(e); throw e; }
+        } catch (e) {
+            // Only remove the optimistic user message on genuine send failure.
+            // If the user clicked Stop (abort), preserve it so the conversation stays intact.
+            if (!this._abortRequested) {
+                this.messageStore.removeMessage(optimistic.id);
+            }
+            this.captureError(e); throw e;
+        }
         finally { this.streamingState.stopIfIdle(); }
     }
 
@@ -291,6 +300,7 @@ export class SessionServiceImpl implements SessionService {
     async abort(): Promise<void> {
         if (!this.lifecycle.activeProject) { throw this.setError('No active project'); }
         if (!this.lifecycle.activeSession) { throw this.setError('No active session'); }
+        this._abortRequested = true;
         try { await this.openCodeService.abortSession(this.lifecycle.activeProject.id, this.lifecycle.activeSession.id); }
         catch (e) { this.captureError(e); throw e; }
         finally {

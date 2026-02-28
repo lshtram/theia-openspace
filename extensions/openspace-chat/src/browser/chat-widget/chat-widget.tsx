@@ -315,7 +315,12 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const [selectedAgent, setSelectedAgent] = React.useState<AgentInfo | null>(null);
     React.useEffect(() => {
         openCodeService.listAgents?.()
-            .then((list: AgentInfo[]) => setAgents(list ?? []))
+            .then((list: AgentInfo[]) => {
+                const loaded = list ?? [];
+                setAgents(loaded);
+                // Auto-select the first agent so the label shows a real name instead of "Default"
+                setSelectedAgent(prev => prev ?? (loaded.length > 0 ? loaded[0] : null));
+            })
             .catch(() => setAgents([]));
     }, [openCodeService]);
 
@@ -328,24 +333,25 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     }, [handleSend, selectedAgent]);
 
     // ─── Model mode state ─────────────────────────────────────────────────
-    const [modelModes, setModelModes] = React.useState<string[]>([]);
+    const [modelModes, setModelModes] = React.useState<string[]>(['default']);
     const [selectedModelMode, setSelectedModelMode] = React.useState<string>('default');
     React.useEffect(() => {
         const activeModel = sessionService.activeModel;
-        if (!activeModel) { setModelModes([]); return; }
+        if (!activeModel) { setModelModes(['default']); return; }
         sessionService.getAvailableModels().then(providers => {
             for (const p of providers) {
                 for (const [, m] of Object.entries(p.models)) {
                     const fullId = `${p.id}/${m.id}`;
                     if (fullId === activeModel) {
                         const modes = (m as unknown as { modes?: string[] }).modes;
-                        setModelModes(modes && modes.length > 1 ? modes : []);
+                        // Use model-specific modes if available (>1), else show default only
+                        setModelModes(modes && modes.length > 1 ? modes : ['default']);
                         return;
                     }
                 }
             }
-            setModelModes([]);
-        }).catch(() => setModelModes([]));
+            setModelModes(['default']);
+        }).catch(() => setModelModes(['default']));
     }, [sessionService, sessionService.activeModel]);
 
     // Pre-built model selector slot to render inside the prompt toolbar

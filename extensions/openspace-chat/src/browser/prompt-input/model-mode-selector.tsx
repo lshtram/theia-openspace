@@ -1,7 +1,7 @@
 /**
  * ModelModeSelector — inline dropdown for the prompt toolbar.
  * Shows the active model mode (e.g. "Default", "Think") and allows switching.
- * Only renders if the current model exposes more than one mode.
+ * Always renders with at least "Default" mode. Shows dropdown only when >1 modes.
  */
 import * as React from '@theia/core/shared/react';
 
@@ -37,24 +37,29 @@ export const ModelModeSelector: React.FC<ModelModeSelectorProps> = ({ modes, sel
         return () => document.removeEventListener('mousedown', handler);
     }, [isOpen]);
 
-    // Hide if only one mode available
-    if (modes.length <= 1) return null;
+    // Hide only if no modes at all
+    if (modes.length === 0) return null;
+
+    // If only one mode, render as a non-interactive badge (no dropdown)
+    const hasMultiple = modes.length > 1;
 
     return (
         <div className="model-mode-selector" ref={ref}>
             <button
                 type="button"
                 className="prompt-toolbar-pill"
-                onClick={() => !disabled && setIsOpen(o => !o)}
-                disabled={disabled}
-                title="Select model mode"
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
+                onClick={() => hasMultiple && !disabled && setIsOpen(o => !o)}
+                disabled={disabled || !hasMultiple}
+                title={hasMultiple ? 'Select model mode' : 'Model mode'}
+                aria-haspopup={hasMultiple ? 'listbox' : undefined}
+                aria-expanded={hasMultiple ? isOpen : undefined}
             >
                 {modeLabel(selected)}
-                <svg className="prompt-toolbar-pill-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="10" height="10"><polyline points="6 9 12 15 18 9"/></svg>
+                {hasMultiple && (
+                    <svg className="prompt-toolbar-pill-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="10" height="10"><polyline points="6 9 12 15 18 9"/></svg>
+                )}
             </button>
-            {isOpen && (
+            {hasMultiple && isOpen && (
                 <div className="mode-selector-dropdown prompt-toolbar-dropdown" role="listbox">
                     {modes.map(mode => (
                         <button
