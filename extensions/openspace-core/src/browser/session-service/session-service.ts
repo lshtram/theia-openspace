@@ -56,6 +56,8 @@ export class SessionServiceImpl implements SessionService {
     private _notificationService: SessionNotificationService | undefined;
     private readonly onIsLoadingChangedEmitter = new Emitter<boolean>();
     private readonly onErrorChangedEmitter = new Emitter<string | undefined>();
+    private readonly onBackgroundTurnCompleteEmitter = new Emitter<string>();
+    private readonly onAnySessionErrorEmitter = new Emitter<{ sessionId: string; message: string }>();
 
     // ── Delegated events ──
     get onActiveProjectChanged() { return this.lifecycle.onActiveProjectChanged; }
@@ -65,6 +67,8 @@ export class SessionServiceImpl implements SessionService {
     get onMessageStreaming() { return this.streamingState.onMessageStreaming; }
     get onIsLoadingChanged(): Event<boolean> { return this.onIsLoadingChangedEmitter.event; }
     get onErrorChanged(): Event<string | undefined> { return this.onErrorChangedEmitter.event; }
+    get onBackgroundTurnComplete() { return this.onBackgroundTurnCompleteEmitter.event; }
+    get onAnySessionError() { return this.onAnySessionErrorEmitter.event; }
     get onIsStreamingChanged() { return this.streamingState.onIsStreamingChanged; }
     get onStreamingStatusChanged() { return this.streamingState.onStreamingStatusChanged; }
     get onSessionStatusChanged() { return this.lifecycle.onSessionStatusChanged; }
@@ -198,6 +202,7 @@ export class SessionServiceImpl implements SessionService {
             const cached = this.lifecycle.getSessionStatus(sessionId);
             if (cached) { this.lifecycle.updateSessionStatus(cached, sessionId); }
             await this.interactions.loadPendingQuestions(this.lifecycle.activeProject.id, sessionId);
+            await this.interactions.loadPendingPermissions(sessionId);
         } catch (error: unknown) {
             const err = error as Error;
             if (err.message?.includes('Session not found')) {
@@ -287,7 +292,15 @@ export class SessionServiceImpl implements SessionService {
         if (!this.lifecycle.activeProject) { throw this.setError('No active project'); }
         if (!this.lifecycle.activeSession) { throw this.setError('No active session'); }
         try { await this.openCodeService.abortSession(this.lifecycle.activeProject.id, this.lifecycle.activeSession.id); }
-        catch (e) { this.captureError(e); throw e; } finally { this.streamingState.abortStreaming(); }
+        catch (e) { this.captureError(e); throw e; }
+        finally {
+            this.streamingState.abortStreaming();
+            // Optimistically clear sessionBusy immediately — don't wait for the SSE
+            // session.status:idle roundtrip, which can arrive late or be missed entirely.
+            // The server SSE will confirm (or re-assert busy if still running), but the
+            // UI should respond to the user's intent without a perceptible delay.
+            this.lifecycle.updateSessionStatus({ type: 'idle' });
+        }
     }
 
     // ── Session CRUD delegation ──
@@ -352,8 +365,16 @@ export class SessionServiceImpl implements SessionService {
     notifySessionError(sid: string, msg: string): void {
         this.lifecycle.notifySessionError(sid, msg);
         if (this.lifecycle.activeSession?.id === sid) { this._lastError = msg; this.onErrorChangedEmitter.fire(msg); }
+        this.onAnySessionErrorEmitter.fire({ sessionId: sid, message: msg });
     }
-    updateSessionStatus(status: SDKTypes.SessionStatus, sid?: string): void { this.lifecycle.updateSessionStatus(status, sid); }
+    updateSessionStatus(status: SDKTypes.SessionStatus, sid?: string): void {
+        const resolvedId = sid ?? this.lifecycle.activeSession?.id;
+        const wasBackground = resolvedId !== undefined && resolvedId !== this.lifecycle.activeSession?.id;
+        this.lifecycle.updateSessionStatus(status, sid);
+        if (status.type === 'idle' && wasBackground && resolvedId) {
+            this.onBackgroundTurnCompleteEmitter.fire(resolvedId);
+        }
+    }
     getSessionStatus(sid: string): SDKTypes.SessionStatus | undefined { return this.lifecycle.getSessionStatus(sid); }
     getSessionError(sid: string): string | undefined { return this.lifecycle.getSessionError(sid); }
 
@@ -401,6 +422,7 @@ export class SessionServiceImpl implements SessionService {
         this.streamingState.dispose(); this.messageStore.dispose();
         this.lifecycle.dispose(); this.interactions.dispose(); this.modelPref.dispose();
         this.onIsLoadingChangedEmitter.dispose(); this.onErrorChangedEmitter.dispose();
+        this.onBackgroundTurnCompleteEmitter.dispose(); this.onAnySessionErrorEmitter.dispose();
         this._loadingCounter = 0; this._lastError = undefined;
     }
 }

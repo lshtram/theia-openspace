@@ -69,6 +69,10 @@ export interface SessionService extends Disposable {
     readonly onIsStreamingChanged: Event<boolean>;
     readonly onStreamingStatusChanged: Event<string>;
     readonly onSessionStatusChanged: Event<SDKTypes.SessionStatus>;
+    /** Fired when a background session (not the active one) completes a turn (goes idle). */
+    readonly onBackgroundTurnComplete: Event<string>;
+    /** Fired when any session reports an error. */
+    readonly onAnySessionError: Event<{ sessionId: string; message: string }>;
 
     // Operations
     setActiveProject(projectId: string): Promise<void>;
