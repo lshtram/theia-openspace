@@ -124,6 +124,33 @@ All tasks, bugs, and deferred issues must be tracked in GitHub Issues.
 - Label issues as `bug` or `enhancement` with relevant priority labels
 - View all issues at: https://github.com/lshtram/theia-openspace/issues
 
+### Rule 11: In-flight task anchoring via current_task.md
+**Read `.opencode/_context/01_memory/current_task.md` before anything else at session start.**
+If it contains a task, that task is the highest-priority directive — resume it immediately.
+Background state in `active_context.md` does NOT override an in-flight task.
+
+**When starting any multi-step task:**
+1. Fill in `current_task.md` with the task, acceptance criteria, current step, and key files.
+2. Update "Where I Am" after each major step so a fresh agent can resume after compaction.
+3. When the task is complete, clear `current_task.md` (leave only the header comment block).
+
+**On context compaction:** Write your current step to `current_task.md` before compaction
+summarizes your state. Re-read `current_task.md` immediately after resuming.
+
+### Rule 12: Token Economy — keep context lean
+Context window fill-rate directly controls how often compaction fires and how much is lost.
+Apply these habits on every task:
+
+**Bash output:** Never dump full output into context. Pipe long commands through `| tail -50` or `2>&1 | tail -50`. Use `--reporter=min` or `--reporter=dot` for test runners. Use `wc -c` to check file size before reading large files.
+
+**File reads:** Prefer targeted reads with `offset`/`limit` over reading whole files. Load paths/references first; fetch file content only when you actually need it ("just-in-time").
+
+**Agent responses:** Keep prose concise. Output tokens cost ~4× input tokens. Prefer bullet lists over paragraphs. No summaries of work already done unless the user asks.
+
+**Memory files:** Archive anything completed or historical. Only keep what a fresh agent needs *right now*. Size targets: `active_context.md` ≤60 lines, `patterns.md` ≤150 lines, `progress.md` ≤40 lines.
+
+**Subagents:** For research or exploration tasks, use a Task subagent — it works in a clean context and returns a 1–2k token summary, not a 20k transcript.
+
 ---
 
 ## Superpowers Skills
@@ -157,7 +184,15 @@ When a skill applies, invoke it before taking any action. See `using-superpowers
 ## Memory Update Protocol
 
 At the end of every session:
-1. Update `.opencode/_context/01_memory/active_context.md` with current focus and recent decisions
-2. Add new patterns/gotchas to `.opencode/_context/01_memory/patterns.md`
-3. Update `.opencode/_context/01_memory/progress.md` with completed milestones
-4. Keep each memory file under 200 lines (archive overflow to `docs/archive/`)
+1. **Clear `current_task.md`** if the task is complete (leave only the header comment block).
+2. Update `.opencode/_context/01_memory/active_context.md` with current focus and recent decisions.
+3. Add new patterns/gotchas to `.opencode/_context/01_memory/patterns.md`.
+4. Update `.opencode/_context/01_memory/progress.md` with completed milestones.
+5. Keep each memory file **under 150 lines** — archive overflow to `docs/archive/`.
+   Keeping files small directly reduces how fast the context window fills up.
+
+**Size targets (aggressive — reduces compaction frequency):**
+- `current_task.md`: only the active task, nothing else
+- `active_context.md`: ≤ 60 lines — current focus + pending work only, no completed detail
+- `patterns.md`: ≤ 150 lines — actionable gotchas only; archive resolved/historical entries
+- `progress.md`: ≤ 40 lines — current milestones only; move completed to `docs/archive/progress-archive.md`
