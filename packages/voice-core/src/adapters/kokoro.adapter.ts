@@ -2,6 +2,43 @@
 import type { TtsProvider, TtsSynthesisRequest, TtsSynthesisResult } from '../providers/tts-provider.interface';
 import type { CancellationToken } from '../providers/stt-provider.interface';
 
+// Silence threshold: samples with absolute amplitude below this value are
+// considered silence. Kokoro pads output with near-zero values; 0.001 (~60 dBFS
+// below full-scale) reliably separates pad from speech without clipping.
+const SILENCE_THRESHOLD = 0.001;
+
+// Padding in samples to leave on each end after trimming so the audio doesn't
+// clip abruptly. 24000 Hz × 0.010 s = 240 samples.
+const SILENCE_PAD_SAMPLES = 240;
+
+/**
+ * Trim leading and trailing silence from a Float32Array of audio samples.
+ * Returns a view (subarray) — no allocation — unless the entire buffer is
+ * silent, in which case an empty Float32Array is returned.
+ */
+export function trimSilence(audio: Float32Array): Float32Array {
+  let start = 0;
+  while (start < audio.length && Math.abs(audio[start]) < SILENCE_THRESHOLD) {
+    start++;
+  }
+
+  let end = audio.length - 1;
+  while (end > start && Math.abs(audio[end]) < SILENCE_THRESHOLD) {
+    end--;
+  }
+
+  if (start > end) {
+    // Entire buffer is silence — return empty
+    return new Float32Array(0);
+  }
+
+  // Apply padding (clamp to buffer boundaries)
+  const paddedStart = Math.max(0, start - SILENCE_PAD_SAMPLES);
+  const paddedEnd = Math.min(audio.length - 1, end + SILENCE_PAD_SAMPLES);
+
+  return audio.subarray(paddedStart, paddedEnd + 1);
+}
+
 // Minimal type for KokoroTTS to avoid hard dependency on kokoro-js types at compile time
 interface KokoroTTSInstance {
   generate(text: string, options: { voice: string }): Promise<{ audio: Float32Array; sampling_rate: number }>;
@@ -47,10 +84,11 @@ export class KokoroAdapter implements TtsProvider {
     const audioData = audio?.audio;
 
     if (audioData && audioData.constructor === Float32Array) {
-      const int16 = new Int16Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
+      const trimmed = trimSilence(audioData);
+      const int16 = new Int16Array(trimmed.length);
+      for (let i = 0; i < trimmed.length; i++) {
         // Correct scale: full negative range is -32768, positive clamped to 32767
-        int16[i] = Math.max(-32768, Math.min(32767, Math.round(audioData[i] * 32768)));
+        int16[i] = Math.max(-32768, Math.min(32767, Math.round(trimmed[i] * 32768)));
       }
       audioBytes = new Uint8Array(int16.buffer);
     } else if (audioData instanceof Uint8Array) {

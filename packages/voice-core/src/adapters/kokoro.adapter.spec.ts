@@ -1,7 +1,7 @@
 // src/adapters/kokoro.adapter.spec.ts
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { KokoroAdapter } from './kokoro.adapter';
+import { KokoroAdapter, trimSilence } from './kokoro.adapter';
 
 // Expose the Float32→Int16 conversion logic for unit testing
 // (same formula used in KokoroAdapter.synthesize)
@@ -93,8 +93,7 @@ describe('KokoroAdapter', () => {
     });
   });
 
-  describe('concurrent getModel() via synthesize()', () => {
-    it('two simultaneous synthesize() calls share a single load attempt (no double-load)', async () => {
+  describe('concurrent getModel() via synthesize()', () => {    it('two simultaneous synthesize() calls share a single load attempt (no double-load)', async () => {
       // Verify the structural guarantee: both calls use a single shared modelLoadPromise.
       // We stub getModel() to avoid actually loading the ONNX model (which would take
       // seconds and cause native teardown issues in the test runner).
@@ -119,6 +118,60 @@ describe('KokoroAdapter', () => {
       expect(r1.audio.length > 0, 'first call should produce audio').to.equal(true);
       expect(r2.audio.length > 0, 'second call should produce audio').to.equal(true);
       expect(modelLoadCallCount, 'both calls settled').to.equal(2);
+    });
+  });
+
+  describe('trimSilence()', () => {
+    it('returns the original samples when there is no silence', () => {
+      const audio = new Float32Array([0.5, -0.5, 0.3]);
+      const result = trimSilence(audio);
+      expect(result.length).to.equal(3);
+    });
+
+    it('trims leading silence below threshold', () => {
+      // 3 silent samples, then speech, with padding = 240; since buffer is only
+      // 5 samples total, padding clamps to 0 on the left.
+      const audio = new Float32Array([0.0, 0.0, 0.0, 0.5, 0.4]);
+      const result = trimSilence(audio);
+      // paddedStart = max(0, 3 - 240) = 0; paddedEnd = min(4, 4+240) = 4
+      expect(result.length).to.equal(5);
+      // The content should include the speech samples
+      expect(Array.from(result)).to.include(0.5);
+    });
+
+    it('trims trailing silence below threshold', () => {
+      const audio = new Float32Array([0.5, 0.4, 0.0, 0.0, 0.0]);
+      const result = trimSilence(audio);
+      // start=0, end=1; paddedEnd = min(4, 1+240) = 4; paddedStart = 0
+      expect(result.length).to.equal(5);
+      expect(Array.from(result)).to.include(0.5);
+    });
+
+    it('trims both leading and trailing silence — with enough room for padding', () => {
+      // Build a 500-sample buffer: 250 silent, speech, 250 silent
+      const audio = new Float32Array(500);
+      audio[250] = 0.5; // single speech sample in the middle
+      const result = trimSilence(audio);
+      // start=250, end=250; paddedStart=max(0,250-240)=10; paddedEnd=min(499,250+240)=490
+      expect(result.length).to.equal(481); // 490 - 10 + 1
+    });
+
+    it('returns empty Float32Array when entire buffer is silence', () => {
+      const audio = new Float32Array([0.0, 0.0005, 0.0, -0.0005]);
+      const result = trimSilence(audio);
+      expect(result.length).to.equal(0);
+    });
+
+    it('handles empty input', () => {
+      const result = trimSilence(new Float32Array(0));
+      expect(result.length).to.equal(0);
+    });
+
+    it('returns a subarray (no copy) for normal audio — no extra allocation', () => {
+      const audio = new Float32Array([0.5, 0.4, 0.3]);
+      const result = trimSilence(audio);
+      // subarray shares the same underlying buffer
+      expect(result.buffer).to.equal(audio.buffer);
     });
   });
 });
