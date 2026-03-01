@@ -14,7 +14,7 @@
     border: 1px solid var(--theia-input-border, var(--oc-border));
     border-radius: 6px;
     background: var(--theia-input-background, var(--oc-bg-input));
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 0.15s ease;
     position: relative;
 }
@@ -148,7 +148,6 @@
     transition: background 0.1s, color 0.1s;
     min-width: 22px;
     min-height: 22px;
-    flex-shrink: 0;    /* never shrink — pills in left-group absorb all overflow */
 }
 
 .prompt-input-icon-btn:hover:not(:disabled) {
@@ -169,6 +168,7 @@
 
 /* ─── Send button ───────────────────────────────────────────── */
 .prompt-input-send-button {
+    margin-left: auto;
     background: var(--theia-button-background, var(--oc-accent));
     color: var(--theia-button-foreground, var(--oc-text-bright));
     border: none;
@@ -370,8 +370,6 @@
     align-items: center;
     gap: 4px;
     flex: 1;
-    min-width: 0;       /* allow shrinking below content minimum */
-    overflow: hidden;   /* clip pills rather than overflow into siblings */
 }
 
 /* Generic pill button for toolbar dropdowns */
@@ -389,10 +387,6 @@
     cursor: pointer;
     white-space: nowrap;
     line-height: 1.4;
-    flex-shrink: 1;         /* shrink before icon buttons and send button */
-    min-width: 0;           /* allow shrinking below content minimum */
-    overflow: hidden;       /* clip text rather than overflowing */
-    text-overflow: ellipsis;
 }
 .prompt-toolbar-pill:hover {
     background: var(--theia-list-hoverBackground);

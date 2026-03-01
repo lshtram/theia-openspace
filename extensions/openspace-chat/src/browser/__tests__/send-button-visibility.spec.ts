@@ -1,36 +1,51 @@
-import * as React from '@theia/core/shared/react';
+import * as fs from 'fs';
+import * as path from 'path';
 import { expect } from 'chai';
 
+// Derive __dirname from import.meta.url (works in ESM at runtime)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore TS1343
+const __dirname_here = path.dirname(new URL(import.meta.url).pathname);
+
 /**
- * Structural test: send button must be a sibling of left-group, not inside it,
- * and left-group must not be able to crowd it out.
+ * Structural test: verifies at the source level that:
+ * 1. prompt-toolbar-left-group wraps the pills (agent/model/mode selectors)
+ * 2. prompt-input-send-button appears AFTER the left-group closing tag in the JSX
+ *    (i.e. it is a sibling, not a child — so the left-group can never crowd it out)
  */
-describe('send button visibility — DOM structure', () => {
-    it('send button is a sibling of left-group, not nested inside it', () => {
-        const { document } = globalThis as any;
-        if (!document) {
-            // jsdom not available, skip
-            return;
-        }
-        const toolbar = document.createElement('div');
-        toolbar.className = 'prompt-input-toolbar';
+describe('send button visibility — source structure', () => {
+    const tsxPath = path.resolve(
+        __dirname_here,
+        '../prompt-input/prompt-input.tsx'
+    );
+    let src: string;
 
-        const leftGroup = document.createElement('div');
-        leftGroup.className = 'prompt-toolbar-left-group';
-        toolbar.appendChild(leftGroup);
+    before(() => {
+        src = fs.readFileSync(tsxPath, 'utf8');
+    });
 
-        const sendBtn = document.createElement('button');
-        sendBtn.className = 'prompt-input-send-button';
-        toolbar.appendChild(sendBtn);
+    it('prompt-toolbar-left-group class appears in the JSX source', () => {
+        expect(src).to.include('prompt-toolbar-left-group');
+    });
 
-        // send button must be a direct child of toolbar, not inside left-group
-        expect(sendBtn.parentElement).to.equal(toolbar);
-        expect(leftGroup.contains(sendBtn)).to.be.false;
+    it('prompt-input-send-button appears AFTER prompt-toolbar-left-group in the source', () => {
+        const leftGroupIdx = src.indexOf('prompt-toolbar-left-group');
+        const sendBtnIdx = src.indexOf('prompt-input-send-button');
+        expect(leftGroupIdx).to.be.greaterThan(-1, 'prompt-toolbar-left-group not found in source');
+        expect(sendBtnIdx).to.be.greaterThan(-1, 'prompt-input-send-button not found in source');
+        expect(sendBtnIdx).to.be.greaterThan(leftGroupIdx,
+            'send button should appear after left-group in source (sibling, not child)');
+    });
 
-        // left-group must precede send button in DOM (so flex order is correct)
-        const children = Array.from(toolbar.children);
-        const leftIdx = children.indexOf(leftGroup);
-        const sendIdx = children.indexOf(sendBtn);
-        expect(leftIdx).to.be.lessThan(sendIdx);
+    it('left-group closing tag appears before send button in the source', () => {
+        // The closing </div> of left-group must come before the send button's className
+        // Use a regex to find the position of the left-group closing tag
+        const leftGroupOpenIdx = src.indexOf('prompt-toolbar-left-group');
+        // Find the next closing </div> after the left-group opening
+        const closingTagIdx = src.indexOf('</div>', leftGroupOpenIdx);
+        const sendBtnIdx = src.indexOf('prompt-input-send-button');
+        expect(closingTagIdx).to.be.greaterThan(-1, '</div> after left-group not found');
+        expect(sendBtnIdx).to.be.greaterThan(closingTagIdx,
+            'send button should appear after the left-group closing tag');
     });
 });
