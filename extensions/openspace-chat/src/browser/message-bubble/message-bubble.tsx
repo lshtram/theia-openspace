@@ -44,6 +44,8 @@ export interface TurnGroupProps {
     isStreaming: boolean;
     durationSecs: number;
     streamingStatus?: string;
+    /** When false, the group stays expanded after streaming ends (e.g. aborted run with no response text). Default: true */
+    autoCollapse?: boolean;
     children: React.ReactNode;
 }
 
@@ -105,7 +107,7 @@ function groupParts(parts: MessagePart[]): Array<
 
 // ─── TurnGroup ──────────────────────────────────────────────────────────────
 
-export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, streamingStatus, children }) => {
+export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs, streamingStatus, autoCollapse = true, children }) => {
     const [showExpanded, setShowExpanded] = React.useState(isStreaming);
     const wasStreamingRef = React.useRef(isStreaming);
 
@@ -132,9 +134,12 @@ export const TurnGroup: React.FC<TurnGroupProps> = ({ isStreaming, durationSecs,
             setShowExpanded(true);
         } else if (wasStreamingRef.current) {
             wasStreamingRef.current = false;
-            setShowExpanded(false);
+            // Only auto-collapse if autoCollapse is enabled (i.e. a response text follows)
+            if (autoCollapse) {
+                setShowExpanded(false);
+            }
         }
-    }, [isStreaming]);
+    }, [isStreaming, autoCollapse]);
 
     React.useEffect(() => {
         if (!isStreaming) return;
@@ -357,6 +362,11 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 {(!isUser && !isStreaming && (parts.some(p => p.type === 'text') || costBarData)) && (
                     <div className="message-bubble-footer">
                         {costBarData && <CostBar costBarData={costBarData} />}
+                        <CopyButton parts={parts} isUser={isUser} isStreaming={isStreaming} />
+                    </div>
+                )}
+                {(isUser && parts.some(p => p.type === 'text')) && (
+                    <div className="message-bubble-footer message-bubble-footer-user">
                         <CopyButton parts={parts} isUser={isUser} isStreaming={isStreaming} />
                     </div>
                 )}

@@ -26,9 +26,10 @@ import { PreferenceService } from '@theia/core/lib/common/preferences';
 import { Message as LuminoMessage } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { SessionService } from 'openspace-core/lib/browser/session-service/session-service';
-import { Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
+import { AgentInfo, Message, OpenCodeService, PermissionNotification } from 'openspace-core/lib/common/opencode-protocol';
 import { PromptInput } from '../prompt-input/prompt-input';
 import { MessageTimeline } from '../message-timeline';
+import { ModelSelector } from '../model-selector';
 import { QuestionDock } from '../question-dock';
 import { TodoPanel } from '../todo-panel';
 import { SessionViewStore } from '../session-view-store';
@@ -235,7 +236,11 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const subscriptions = useSessionSubscriptions(sessionService, sessionActions.loadSessions);
     messagesRef.current = subscriptions.messages;
 
-    const { queuedCount, handleSend, handleCommand, handleBuiltinCommand } = useMessageQueue(sessionService, openCodeService, subscriptions.isStreaming);
+    // Ref for current model variant, accessible by useMessageQueue without re-creating callbacks
+    const selectedModelModeRef = React.useRef<string>('default');
+    const getVariant = React.useCallback(() => selectedModelModeRef.current, []);
+
+    const { queuedCount, handleSend, handleCommand, handleBuiltinCommand } = useMessageQueue(sessionService, openCodeService, subscriptions.isStreaming, getVariant);
     const { shellOutputs, handleShellCommand } = useShellExecution(openCodeService, workspaceRoot, messagesRef);
 
     // Auto-select project based on workspace on initial load (run only once)
@@ -286,6 +291,19 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
         return totalInput + totalOutput > 0 ? { input: totalInput, output: totalOutput, contextLimit } : null;
     }, [subscriptions.messages, subscriptions.isStreaming]);
 
+    // N2-C: Fire a one-time toast when context usage exceeds 80% for the active session
+    const contextWarnedSessions = React.useRef(new Set<string>());
+    React.useEffect(() => {
+        if (!activeSession || !contextUsage?.contextLimit) { return; }
+        const sid = activeSession.id;
+        if (contextWarnedSessions.current.has(sid)) { return; }
+        const total = contextUsage.input + contextUsage.output;
+        if (total / contextUsage.contextLimit > 0.8) {
+            contextWarnedSessions.current.add(sid);
+            messageService?.info('Context window is over 80% full. Consider using Compact session to free space.')?.catch(() => {});
+        }
+    }, [contextUsage, activeSession]);
+
     const [mcpStatus, setMcpStatus] = React.useState<Record<string, unknown> | undefined>(undefined);
     React.useEffect(() => {
         setMcpStatus(undefined);
@@ -295,6 +313,70 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                 .catch(() => { setMcpStatus(undefined); });
         }
     }, [subscriptions.activeSessionId]);
+
+    // ─── Agent selector state ─────────────────────────────────────────────
+    const [agents, setAgents] = React.useState<AgentInfo[]>([]);
+    const [selectedAgent, setSelectedAgent] = React.useState<AgentInfo | null>(null);
+    React.useEffect(() => {
+        openCodeService.listAgents?.()
+            .then((list: AgentInfo[]) => {
+                const loaded = list ?? [];
+                setAgents(loaded);
+            })
+            .catch(() => setAgents([]));
+    }, [openCodeService]);
+
+    // Wrap handleSend to prepend the selected agent as an AgentPart
+    const handleSendWithAgent = React.useCallback(async (parts: Parameters<typeof handleSend>[0]) => {
+        if (selectedAgent) {
+            return handleSend([{ type: 'agent', name: selectedAgent.name }, ...parts]);
+        }
+        return handleSend(parts);
+    }, [handleSend, selectedAgent]);
+
+    // ─── Model mode state ─────────────────────────────────────────────────
+    const [modelModes, setModelModes] = React.useState<string[]>(['default']);
+    const [selectedModelMode, setSelectedModelMode] = React.useState<string>('default');
+    // Track active model via event so React re-renders when it changes
+    const [activeModelId, setActiveModelId] = React.useState<string | undefined>(sessionService.activeModel);
+    React.useEffect(() => {
+        const disposable = sessionService.onActiveModelChanged(model => setActiveModelId(model));
+        return () => disposable.dispose();
+    }, [sessionService]);
+    // Keep the ref in sync so useMessageQueue can read the latest value
+    React.useEffect(() => { selectedModelModeRef.current = selectedModelMode; }, [selectedModelMode]);
+    // Reset selected mode to 'default' when model changes (stale variant prevention)
+    React.useEffect(() => { setSelectedModelMode('default'); }, [activeModelId]);
+    React.useEffect(() => {
+        if (!activeModelId) { setModelModes(['default']); return; }
+        sessionService.getAvailableModels().then(providers => {
+            for (const p of providers) {
+                for (const [, m] of Object.entries(p.models)) {
+                    const fullId = `${p.id}/${m.id}`;
+                    if (fullId === activeModelId) {
+                        // Use actual variant names from the server when available
+                        const variantKeys = m.variants ? Object.keys(m.variants) : [];
+                        if (variantKeys.length > 0) {
+                            setModelModes(['default', ...variantKeys]);
+                        } else {
+                            setModelModes(['default']);
+                        }
+                        return;
+                    }
+                }
+            }
+            setModelModes(['default']);
+        }).catch(() => setModelModes(['default']));
+    }, [sessionService, activeModelId]);
+
+    // Pre-built model selector slot to render inside the prompt toolbar
+    const modelSelectorSlot = React.useMemo(() => (
+        <ModelSelector
+            sessionService={sessionService}
+            enabledModels={enabledModels}
+            onManageModels={handleManageModels}
+        />
+    ), [sessionService, enabledModels, handleManageModels]);
 
     return (
         <div className="chat-container">
@@ -411,7 +493,7 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
 
                         {/* Multi-part Prompt Input (Task 2.1) */}
                         <PromptInput
-                            onSend={handleSend}
+                            onSend={handleSendWithAgent}
                             onCommand={handleCommand}
                             onBuiltinCommand={handleBuiltinCommand}
                             onShellCommand={handleShellCommand}
@@ -422,6 +504,13 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                             workspaceRoot={workspaceRoot}
                             openCodeService={openCodeService}
                             sessionId={activeSession?.id}
+                            agentSelectorAgents={agents}
+                            agentSelectorSelected={selectedAgent}
+                            onAgentSelect={setSelectedAgent}
+                            modelSelectorSlot={modelSelectorSlot}
+                            modelModes={modelModes}
+                            selectedModelMode={selectedModelMode}
+                            onModelModeSelect={setSelectedModelMode}
                         />
                         <ChatFooter isStreaming={subscriptions.isStreaming} sessionBusy={subscriptions.sessionBusy} streamingStatus={subscriptions.streamingStatus} contextUsage={contextUsage} />
                     </>

@@ -40,6 +40,7 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | undefined>();
     const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = React.useState('');
 
     const toggleCollapsed = (providerId: string) => {
         setCollapsedProviders(prev => {
@@ -95,6 +96,26 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
 
     const isAllEnabled = enabled.length === 0 || enabled.length === allModelIds.length;
 
+    // Filter providers/models by search query
+    const filteredProviders = React.useMemo(() => {
+        if (!searchQuery) return providers;
+        const q = searchQuery.toLowerCase();
+        return providers
+            .map(p => {
+                if (p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)) {
+                    return p; // show all models if provider name matches
+                }
+                const filteredModels = Object.fromEntries(
+                    Object.entries(p.models).filter(([mId, m]) =>
+                        m.name.toLowerCase().includes(q) || mId.toLowerCase().includes(q) || `${p.id}/${mId}`.toLowerCase().includes(q)
+                    )
+                );
+                if (Object.keys(filteredModels).length === 0) return null;
+                return { ...p, models: filteredModels };
+            })
+            .filter((p): p is ProviderWithModels => p !== null);
+    }, [providers, searchQuery]);
+
     const handleToggleModel = (fullId: string) => {
         save(toggleModel(fullId, enabled, allModelIds));
     };
@@ -117,6 +138,23 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
 
     return (
         <div className="ai-models-manager">
+            <div className="ai-models-search-row">
+                <input
+                    type="text"
+                    className="ai-models-search-input"
+                    placeholder="Search models or providers..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                    <button
+                        type="button"
+                        className="ai-models-search-clear"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Clear search"
+                    >×</button>
+                )}
+            </div>
             <div className="ai-models-global-controls">
                 <button
                     className={`ai-models-bulk-btn ${isAllEnabled ? 'active' : ''}`}
@@ -130,7 +168,11 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
                 >None</button>
             </div>
 
-            {providers.map(provider => {
+            {filteredProviders.length === 0 && searchQuery && (
+                <div className="ai-models-loading">No models match your search.</div>
+            )}
+
+            {filteredProviders.map(provider => {
                 const providerModelIds = Object.keys(provider.models).map(mId => `${provider.id}/${mId}`);
                 const providerEnabledCount = providerModelIds.filter(id => effectiveEnabled.has(id)).length;
                 const isCollapsed = collapsedProviders.has(provider.id);

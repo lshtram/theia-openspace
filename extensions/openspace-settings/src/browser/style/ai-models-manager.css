@@ -20,6 +20,51 @@
     color: var(--theia-inputValidation-errorForeground, var(--theia-errorForeground));
 }
 
+/* Search row */
+.ai-models-search-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 8px 16px 4px;
+}
+
+.ai-models-search-input {
+    width: 100%;
+    padding: 5px 28px 5px 8px;
+    font-size: 12px;
+    border: 1px solid var(--theia-input-border, var(--theia-widget-border));
+    border-radius: 4px;
+    background: var(--theia-input-background);
+    color: var(--theia-input-foreground, var(--theia-foreground));
+    outline: none;
+}
+
+.ai-models-search-input:focus {
+    border-color: var(--theia-focusBorder);
+}
+
+.ai-models-search-input::placeholder {
+    color: var(--theia-input-placeholderForeground);
+}
+
+.ai-models-search-clear {
+    position: absolute;
+    right: 20px;
+    background: none;
+    border: none;
+    color: var(--theia-descriptionForeground);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.ai-models-search-clear:hover {
+    color: var(--theia-foreground);
+    background: rgba(255,255,255,0.08);
+}
+
 /* Global All/None controls */
 .ai-models-global-controls {
     display: flex;

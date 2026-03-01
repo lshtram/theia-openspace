@@ -185,7 +185,7 @@ describe('P3-E: ModelSelector — pricing, free badge, latest badge', () => {
         // Wait for models to load
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-        expect(container.querySelector('.model-free-badge')).to.not.be.null;
+        expect(document.body.querySelector('.model-free-badge')).to.not.be.null;
         unmount();
     });
 
@@ -198,7 +198,7 @@ describe('P3-E: ModelSelector — pricing, free badge, latest badge', () => {
         act(() => { pill.click(); });
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-        expect(container.querySelector('.model-latest-badge')).to.not.be.null;
+        expect(document.body.querySelector('.model-latest-badge')).to.not.be.null;
         unmount();
     });
 
@@ -216,12 +216,12 @@ describe('P3-E: ModelSelector — pricing, free badge, latest badge', () => {
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
         // Hover the model option
-        const modelOption = container.querySelector('.model-option') as HTMLElement;
+        const modelOption = document.body.querySelector('.model-option') as HTMLElement;
         if (modelOption) {
             act(() => { modelOption.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); });
         }
 
-        expect(container.querySelector('.model-tooltip')).to.not.be.null;
+        expect(document.body.querySelector('.model-tooltip')).to.not.be.null;
         unmount();
     });
 
@@ -236,12 +236,12 @@ describe('P3-E: ModelSelector — pricing, free badge, latest badge', () => {
         act(() => { pill.click(); });
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-        const modelOption = container.querySelector('.model-option') as HTMLElement;
+        const modelOption = document.body.querySelector('.model-option') as HTMLElement;
         if (modelOption) {
             act(() => { modelOption.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); });
         }
 
-        const tooltip = container.querySelector('.model-tooltip');
+        const tooltip = document.body.querySelector('.model-tooltip');
         expect(tooltip?.textContent).to.include('128');
         unmount();
     });

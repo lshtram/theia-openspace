@@ -123,4 +123,12 @@ export interface PromptInputProps {
     agentSelectorSelected?: import('openspace-core/lib/common/opencode-protocol').AgentInfo | null;
     /** Called when user selects an agent */
     onAgentSelect?: (agent: import('openspace-core/lib/common/opencode-protocol').AgentInfo | null) => void;
+    /** Available model modes for the current model */
+    modelModes?: string[];
+    /** Currently selected model mode */
+    selectedModelMode?: string;
+    /** Called when user selects a model mode */
+    onModelModeSelect?: (mode: string) => void;
+    /** Pre-configured ModelSelector element to render in toolbar */
+    modelSelectorSlot?: import('@theia/core/shared/react').ReactNode;
 }

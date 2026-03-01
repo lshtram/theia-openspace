@@ -20,6 +20,7 @@ import { useTypeahead, useSlashMenu } from './use-typeahead';
 import { useAttachments } from './use-attachments';
 import { isCursorAtStart, isCursorAtEnd, getTextBeforeCursor } from './cursor-utils';
 import { AgentSelector } from './agent-selector';
+import { ModelModeSelector } from './model-mode-selector';
 import '../style/prompt-input.css';
 
 // P1-C: module-level singleton — one store shared across all PromptInput mounts
@@ -39,7 +40,11 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     sessionId,
     agentSelectorAgents,
     agentSelectorSelected,
-    onAgentSelect
+    onAgentSelect,
+    modelModes,
+    selectedModelMode,
+    onModelModeSelect,
+    modelSelectorSlot
 }) => {
     const editorRef = React.useRef<HTMLDivElement>(null);
     const [hasContent, setHasContent] = React.useState(false);
@@ -377,6 +382,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                             agents={agentSelectorAgents ?? []}
                             selectedAgent={agentSelectorSelected ?? null}
                             onSelect={onAgentSelect ?? (() => {})}
+                            disabled={disabled}
+                        />
+                        {modelSelectorSlot}
+                        <ModelModeSelector
+                            modes={modelModes ?? []}
+                            selected={selectedModelMode ?? 'default'}
+                            onSelect={onModelModeSelect ?? (() => {})}
                             disabled={disabled}
                         />
                     </div>

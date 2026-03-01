@@ -104,9 +104,9 @@ async function pressKey(element: HTMLElement, key: string, extras: Partial<Keybo
     });
 }
 
-/** Return all .model-option elements currently in the container. */
-function getOptions(container: HTMLElement): HTMLElement[] {
-    return Array.from(container.querySelectorAll('.model-option'));
+/** Return all .model-option elements currently in the portal (document.body). */
+function getOptions(_container: HTMLElement): HTMLElement[] {
+    return Array.from(document.body.querySelectorAll('.model-option'));
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             // Let models load
             await act(async () => { await Promise.resolve(); });
 
-            expect(container.querySelector('.model-dropdown')).to.not.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.not.equal(null);
             unmount();
         });
 
@@ -144,7 +144,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             await pressKey(pill, ' ');
             await act(async () => { await Promise.resolve(); });
 
-            expect(container.querySelector('.model-dropdown')).to.not.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.not.equal(null);
             unmount();
         });
     });
@@ -161,7 +161,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             const pill = container.querySelector('.model-selector-pill') as HTMLElement;
             await pressKey(pill, 'Escape');
 
-            expect(container.querySelector('.model-dropdown')).to.equal(null);
+            expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             unmount();
         });
     });
@@ -344,7 +344,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
                 options[0].focus();
                 await pressKey(options[0], 'Enter');
 
-                expect(container.querySelector('.model-dropdown')).to.equal(null);
+                expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             } finally {
                 unmount();
             }
@@ -398,7 +398,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             try {
                 await openDropdown(container);
 
-                const searchInput = container.querySelector('.model-search-input') as HTMLInputElement;
+                const searchInput = document.body.querySelector('.model-search-input') as HTMLInputElement;
                 expect(searchInput).to.not.equal(null);
 
                 // Simulate typing by setting value and dispatching change via React's onChange
@@ -414,7 +414,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
                 await pressKey(searchInput, 'Escape');
 
                 // Dropdown should still be open
-                expect(container.querySelector('.model-dropdown')).to.not.equal(null);
+                expect(document.body.querySelector('.model-dropdown')).to.not.equal(null);
             } finally {
                 unmount();
             }
@@ -426,13 +426,13 @@ describe('ModelSelector – Keyboard Navigation', () => {
             try {
                 await openDropdown(container);
 
-                const searchInput = container.querySelector('.model-search-input') as HTMLInputElement;
+                const searchInput = document.body.querySelector('.model-search-input') as HTMLInputElement;
                 expect(searchInput).to.not.equal(null);
 
                 // Escape with empty search should close
                 await pressKey(searchInput, 'Escape');
 
-                expect(container.querySelector('.model-dropdown')).to.equal(null);
+                expect(document.body.querySelector('.model-dropdown')).to.equal(null);
             } finally {
                 unmount();
             }
@@ -453,7 +453,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
                 let options = getOptions(container);
                 expect(options.length).to.equal(3);
 
-                const searchInput = container.querySelector('.model-search-input') as HTMLInputElement;
+                const searchInput = document.body.querySelector('.model-search-input') as HTMLInputElement;
 
                 // Simulate React onChange
                 await act(async () => {
@@ -479,7 +479,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             try {
                 await openDropdown(container);
 
-                const searchInput = container.querySelector('.model-search-input') as HTMLInputElement;
+                const searchInput = document.body.querySelector('.model-search-input') as HTMLInputElement;
 
                 await act(async () => {
                     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
@@ -489,7 +489,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
                     searchInput.dispatchEvent(new window.Event('change', { bubbles: true }));
                 });
 
-                expect(container.querySelector('.model-dropdown-empty')?.textContent).to.include('No models match');
+                expect(document.body.querySelector('.model-dropdown-empty')?.textContent).to.include('No models match');
             } finally {
                 unmount();
             }
@@ -523,7 +523,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             }
         });
 
-        it('pill button has aria-haspopup="listbox"', () => {
+        it('pill button has aria-haspopup="dialog"', () => {
             const svc = twoProviderService();
             const { container, unmount } = mount(svc);
             try {
@@ -534,13 +534,13 @@ describe('ModelSelector – Keyboard Navigation', () => {
             }
         });
 
-        it('dropdown has role="listbox"', async () => {
+        it('dropdown has role="dialog"', async () => {
             const svc = twoProviderService();
             const { container, unmount } = mount(svc);
             try {
                 await openDropdown(container);
-                const dropdown = container.querySelector('.model-dropdown') as HTMLElement;
-                expect(dropdown.getAttribute('role')).to.equal('listbox');
+                const dropdown = document.body.querySelector('.model-dropdown') as HTMLElement;
+                expect(dropdown.getAttribute('role')).to.equal('dialog');
             } finally {
                 unmount();
             }

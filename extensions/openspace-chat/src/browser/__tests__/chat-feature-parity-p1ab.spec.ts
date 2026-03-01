@@ -195,10 +195,10 @@ describe('P1-A: Copy response button', () => {
         unmount();
     });
 
-    it('does NOT render .copy-response-btn on user messages', () => {
+    it('renders .copy-response-btn on user messages', () => {
         const msg = makeMessage('user', [makeTextPart('My question')]);
         const { container, unmount } = mountBubble({ message: msg, isUser: true, isStreaming: false });
-        expect(container.querySelector('.copy-response-btn')).to.be.null;
+        expect(container.querySelector('.copy-response-btn')).to.not.be.null;
         unmount();
     });
 
