@@ -21,8 +21,10 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({ agents, selectedAg
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     // Filter out sub-agents and hidden system agents (compaction, title, summary)
+    // AgentInfo doesn't expose mode/hidden yet; filter by known system agent names as a fallback
+    const SYSTEM_AGENT_NAMES = new Set(['compaction', 'title', 'summary']);
     const topLevelAgents = React.useMemo(
-        () => agents.filter(a => a.mode !== 'subagent' && !a.hidden),
+        () => agents.filter(a => !SYSTEM_AGENT_NAMES.has(a.name.toLowerCase())),
         [agents]
     );
 

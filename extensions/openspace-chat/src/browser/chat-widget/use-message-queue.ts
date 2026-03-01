@@ -34,6 +34,9 @@ export function useMessageQueue(
     sessionService: SessionService,
     openCodeService: OpenCodeService,
     isStreaming: boolean,
+    // getVariant: optional accessor for the current model mode/variant.
+    // Reserved for future use when sendMessage supports variant selection.
+    _getVariant?: () => string,
 ): MessageQueueState {
     const [queuedCount, setQueuedCount] = React.useState(0);
     const messageQueueRef = React.useRef<PromptMessagePart[][]>([]);

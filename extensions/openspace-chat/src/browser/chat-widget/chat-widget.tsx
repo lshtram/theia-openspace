@@ -355,7 +355,8 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
                     const fullId = `${p.id}/${m.id}`;
                     if (fullId === activeModelId) {
                         // Use actual variant names from the server when available
-                        const variantKeys = m.variants ? Object.keys(m.variants) : [];
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const variantKeys = (m as any).variants ? Object.keys((m as any).variants) : [];
                         if (variantKeys.length > 0) {
                             setModelModes(['default', ...variantKeys]);
                         } else {
