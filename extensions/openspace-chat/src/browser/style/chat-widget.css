@@ -40,6 +40,7 @@
 .openspace-chat-widget .model-selector {
     position: relative;
     display: inline-flex;
+    max-width: 160px;    /* hard cap so it can't crowd the action buttons */
     min-width: 0;
     flex-shrink: 1;
 }
@@ -56,11 +57,11 @@
     color: var(--oc-text, #ccc);
     cursor: pointer;
     white-space: nowrap;
-    min-width: 0;
-    max-width: 180px;
+    max-width: 100%;     /* inherit from parent instead of hard 180px */
     overflow: hidden;
     text-overflow: ellipsis;
     transition: border-color 0.1s, background 0.1s;
+    min-width: 0;
 }
 
 .openspace-chat-widget .model-selector-pill:hover {
@@ -335,7 +336,7 @@
    ============================================================================ */
 
 /* Model Dropdown Panel */
- .openspace-chat-widget .model-dropdown {
+.openspace-chat-widget .model-dropdown {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -348,63 +349,6 @@
     max-width: 380px;
     max-height: 400px;
     overflow-y: auto;
-}
-
-/* Portal version — centered modal dialog */
-.model-dropdown-portal {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    background: var(--theia-dropdown-background, #252526);
-    border: 1px solid var(--theia-dropdown-border, #454545);
-    border-radius: 8px;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
-    width: 480px !important;
-    max-width: calc(100vw - 32px) !important;
-    max-height: calc(100vh - 80px) !important;
-    overflow: hidden;
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-/* Dialog header row */
-.model-dropdown-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px 8px;
-    border-bottom: 1px solid var(--theia-panel-border, #333);
-    flex-shrink: 0;
-}
-
-.model-dropdown-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--theia-foreground);
-}
-
-.model-dropdown-close {
-    background: none;
-    border: none;
-    color: var(--theia-descriptionForeground);
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: 3px;
-}
-
-.model-dropdown-close:hover {
-    background: rgba(255,255,255,0.08);
-    color: var(--theia-foreground);
-}
-
-/* Scrollable body */
-.model-dropdown-portal .model-dropdown-content {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
 }
 
 /* Loading State */
@@ -642,65 +586,6 @@
 .openspace-chat-widget .model-option.selected .model-option-id {
     color: var(--theia-list-activeSelectionForeground);
     opacity: 0.9;
-}
-
-/* Favorite star button on model options */
-.openspace-chat-widget .model-favorite-btn {
-    opacity: 0.3;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0 4px;
-    color: inherit;
-    font-size: 12px;
-    flex-shrink: 0;
-    margin-left: auto;
-}
-.openspace-chat-widget .model-favorite-btn:hover,
-.openspace-chat-widget .model-favorite-btn.active {
-    opacity: 1;
-    color: gold;
-}
-
-/* Status tags on model options */
-.openspace-chat-widget .model-status-tag {
-    font-size: 10px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    margin-left: 4px;
-    vertical-align: middle;
-}
-.openspace-chat-widget .model-status-tag--deprecated {
-    background: rgba(255, 120, 0, 0.2);
-    color: #ff7800;
-}
-.openspace-chat-widget .model-status-tag--preview {
-    background: rgba(0, 120, 255, 0.2);
-    color: #0078ff;
-}
-.openspace-chat-widget .model-status-tag--experimental {
-    background: rgba(180, 180, 0, 0.2);
-    color: #b4b400;
-}
-
-/* Empty-state CTA for model selector */
-.openspace-chat-widget .model-selector-empty-state {
-    padding: 12px;
-    text-align: center;
-}
-.openspace-chat-widget .model-selector-empty-text {
-    font-size: 12px;
-    opacity: 0.6;
-    margin-bottom: 8px;
-}
-.openspace-chat-widget .model-selector-empty-cta {
-    padding: 4px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--theia-button-background);
-    background: var(--theia-button-background);
-    color: var(--theia-button-foreground);
-    cursor: pointer;
-    font-size: 12px;
 }
 
 /* ============================================================================
@@ -1904,52 +1789,6 @@
     opacity: 0.6;
 }
 
-/* ── PermissionDock (orphan permissions without a linked tool call) ────────── */
-
-.openspace-chat-widget .permission-dock {
-    flex-shrink: 0;
-    border-top: 1px solid var(--oc-border, #333);
-    background: var(--oc-bg-raised, #252526);
-    padding: 8px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.openspace-chat-widget .permission-dock-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    background: var(--oc-bg-tool, #1e1e2e);
-    border: 1px solid rgba(0, 122, 204, 0.4);
-    border-radius: 4px;
-    animation: permission-glow 2s ease-in-out infinite alternate;
-}
-
-.openspace-chat-widget .permission-dock-message {
-    font-size: 12px;
-    color: var(--theia-editor-foreground, var(--oc-text, #ccc));
-    font-weight: 500;
-}
-
-.openspace-chat-widget .permission-dock-detail {
-    font-size: 11px;
-    color: var(--oc-text-muted, #888);
-    font-family: var(--vscode-editor-font-family, monospace);
-    max-width: 280px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.openspace-chat-widget .permission-dock-actions {
-    display: flex;
-    gap: 4px;
-    margin-left: auto;
-}
-
 /* ── Inline Permission Prompt (below tool card, matched by callID) ────────── */
 
 .openspace-chat-widget .part-tool-permission-prompt {
@@ -2666,10 +2505,6 @@
     justify-content: space-between;
     margin-top: 4px;
     min-height: 18px;
-}
-
-.message-bubble-footer-user {
-    justify-content: flex-end;
 }
 
 /* Copy icon — invisible until the containing bubble is hovered */
