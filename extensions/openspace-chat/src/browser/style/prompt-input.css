@@ -14,7 +14,8 @@
     border: 1px solid var(--theia-input-border, var(--oc-border));
     border-radius: 6px;
     background: var(--theia-input-background, var(--oc-bg-input));
-    overflow: hidden;
+    overflow: hidden;   /* typeahead popups are siblings of this wrapper in JSX (rendered
+                           before it), not children — so they are NOT clipped by this rule */
     transition: border-color 0.15s ease;
     position: relative;
 }

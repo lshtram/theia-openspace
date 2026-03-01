@@ -78,6 +78,11 @@ describe('send button visibility — CSS flex rules', () => {
      * Looks for the selector followed immediately by whitespace and '{',
      * to avoid matching pseudo-class variants like :hover or :focus-visible.
      * Returns the content between the '{' and its matching '}'.
+     *
+     * NOTE: This parser assumes plain CSS with no nested braces. It is valid
+     * for prompt-input.css which contains no @supports, SCSS, or other nesting.
+     * If the file ever gains nested braces, getRuleBlock may return a truncated
+     * block and produce a false-positive pass — add a brace-depth guard at that point.
      */
     function getRuleBlock(selector: string): string {
         // Match selector followed by optional whitespace then '{'
