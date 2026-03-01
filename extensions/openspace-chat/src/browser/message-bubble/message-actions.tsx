@@ -54,7 +54,7 @@ export const CopyButton: React.FC<{
     isStreaming: boolean;
 }> = ({ parts, isUser, isStreaming }) => {
     const [copied, setCopied] = React.useState(false);
-    const showCopyBtn = !isUser && !isStreaming && parts.some(p => p.type === 'text');
+    const showCopyBtn = !isStreaming && parts.some(p => p.type === 'text');
 
     const lastTextPart = React.useMemo(() => {
         const textParts = parts.filter(p => p.type === 'text');
@@ -76,8 +76,8 @@ export const CopyButton: React.FC<{
             type="button"
             className={copied ? 'copy-response-btn copy-response-btn--copied' : 'copy-response-btn'}
             onClick={handleCopy}
-            aria-label={copied ? 'Copied!' : 'Copy response'}
-            title={copied ? 'Copied!' : 'Copy response'}
+            aria-label={copied ? 'Copied!' : isUser ? 'Copy message' : 'Copy response'}
+            title={copied ? 'Copied!' : isUser ? 'Copy message' : 'Copy response'}
         >
             {copied ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

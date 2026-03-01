@@ -40,6 +40,8 @@
 .openspace-chat-widget .model-selector {
     position: relative;
     display: inline-flex;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .openspace-chat-widget .model-selector-pill {
@@ -54,6 +56,7 @@
     color: var(--oc-text, #ccc);
     cursor: pointer;
     white-space: nowrap;
+    min-width: 0;
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -347,19 +350,61 @@
     overflow-y: auto;
 }
 
-/* Portal version — position is set via inline style; override absolute */
+/* Portal version — centered modal dialog */
 .model-dropdown-portal {
     position: fixed !important;
-    top: unset !important;
-    right: unset !important;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    min-width: 240px;
-    max-width: 320px;
-    max-height: 400px;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: var(--theia-dropdown-background, #252526);
+    border: 1px solid var(--theia-dropdown-border, #454545);
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    width: 480px !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: calc(100vh - 80px) !important;
+    overflow: hidden;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Dialog header row */
+.model-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid var(--theia-panel-border, #333);
+    flex-shrink: 0;
+}
+
+.model-dropdown-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theia-foreground);
+}
+
+.model-dropdown-close {
+    background: none;
+    border: none;
+    color: var(--theia-descriptionForeground);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.model-dropdown-close:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--theia-foreground);
+}
+
+/* Scrollable body */
+.model-dropdown-portal .model-dropdown-content {
+    flex: 1;
     overflow-y: auto;
+    min-height: 0;
 }
 
 /* Loading State */
@@ -2600,6 +2645,10 @@
     justify-content: space-between;
     margin-top: 4px;
     min-height: 18px;
+}
+
+.message-bubble-footer-user {
+    justify-content: flex-end;
 }
 
 /* Copy icon — invisible until the containing bubble is hovered */

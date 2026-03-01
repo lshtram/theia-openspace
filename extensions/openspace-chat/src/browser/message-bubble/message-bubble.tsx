@@ -365,6 +365,11 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                         <CopyButton parts={parts} isUser={isUser} isStreaming={isStreaming} />
                     </div>
                 )}
+                {(isUser && parts.some(p => p.type === 'text')) && (
+                    <div className="message-bubble-footer message-bubble-footer-user">
+                        <CopyButton parts={parts} isUser={isUser} isStreaming={isStreaming} />
+                    </div>
+                )}
             </div>
         </article>
     );

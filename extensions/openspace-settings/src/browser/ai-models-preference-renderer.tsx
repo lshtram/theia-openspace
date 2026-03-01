@@ -24,11 +24,35 @@ interface AiModelsManagerProps {
     sessionService: SessionService;
 }
 
+const ChevronIcon: React.FC<{ expanded: boolean }> = ({ expanded }) => (
+    <svg
+        className={`ai-models-chevron${expanded ? ' expanded' : ''}`}
+        width="12" height="12" viewBox="0 0 12 12"
+        aria-hidden="true"
+    >
+        <path d="M4 2 L8 6 L4 10" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
 const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, sessionService }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
     const [enabled, setEnabled] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | undefined>();
+    const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = React.useState('');
+
+    const toggleCollapsed = (providerId: string) => {
+        setCollapsedProviders(prev => {
+            const next = new Set(prev);
+            if (next.has(providerId)) {
+                next.delete(providerId);
+            } else {
+                next.add(providerId);
+            }
+            return next;
+        });
+    };
 
     // Load providers from server
     React.useEffect(() => {
@@ -72,6 +96,26 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
 
     const isAllEnabled = enabled.length === 0 || enabled.length === allModelIds.length;
 
+    // Filter providers/models by search query
+    const filteredProviders = React.useMemo(() => {
+        if (!searchQuery) return providers;
+        const q = searchQuery.toLowerCase();
+        return providers
+            .map(p => {
+                if (p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)) {
+                    return p; // show all models if provider name matches
+                }
+                const filteredModels = Object.fromEntries(
+                    Object.entries(p.models).filter(([mId, m]) =>
+                        m.name.toLowerCase().includes(q) || mId.toLowerCase().includes(q) || `${p.id}/${mId}`.toLowerCase().includes(q)
+                    )
+                );
+                if (Object.keys(filteredModels).length === 0) return null;
+                return { ...p, models: filteredModels };
+            })
+            .filter((p): p is ProviderWithModels => p !== null);
+    }, [providers, searchQuery]);
+
     const handleToggleModel = (fullId: string) => {
         save(toggleModel(fullId, enabled, allModelIds));
     };
@@ -94,6 +138,23 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
 
     return (
         <div className="ai-models-manager">
+            <div className="ai-models-search-row">
+                <input
+                    type="text"
+                    className="ai-models-search-input"
+                    placeholder="Search models or providers..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                    <button
+                        type="button"
+                        className="ai-models-search-clear"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Clear search"
+                    >×</button>
+                )}
+            </div>
             <div className="ai-models-global-controls">
                 <button
                     className={`ai-models-bulk-btn ${isAllEnabled ? 'active' : ''}`}
@@ -107,27 +168,40 @@ const AiModelsManager: React.FC<AiModelsManagerProps> = ({ preferenceService, se
                 >None</button>
             </div>
 
-            {providers.map(provider => {
+            {filteredProviders.length === 0 && searchQuery && (
+                <div className="ai-models-loading">No models match your search.</div>
+            )}
+
+            {filteredProviders.map(provider => {
                 const providerModelIds = Object.keys(provider.models).map(mId => `${provider.id}/${mId}`);
                 const providerEnabledCount = providerModelIds.filter(id => effectiveEnabled.has(id)).length;
+                const isCollapsed = collapsedProviders.has(provider.id);
 
                 return (
                     <div key={provider.id} className="ai-models-provider-group">
-                        <div className="ai-models-provider-header">
+                        <div
+                            className="ai-models-provider-header"
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={!isCollapsed}
+                            onClick={() => toggleCollapsed(provider.id)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCollapsed(provider.id); } }}
+                        >
+                            <ChevronIcon expanded={!isCollapsed} />
                             <span className="ai-models-provider-name">{provider.name}</span>
                             <span className="ai-models-provider-count">
                                 {providerEnabledCount}/{providerModelIds.length}
                             </span>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-all"
-                                onClick={() => handleToggleProvider(provider.id, true)}
+                                onClick={e => { e.stopPropagation(); handleToggleProvider(provider.id, true); }}
                             >All</button>
                             <button
                                 className="ai-models-bulk-btn ai-models-provider-none"
-                                onClick={() => handleToggleProvider(provider.id, false)}
+                                onClick={e => { e.stopPropagation(); handleToggleProvider(provider.id, false); }}
                             >None</button>
                         </div>
-                        {Object.entries(provider.models).map(([modelId, model]) => {
+                        {!isCollapsed && Object.entries(provider.models).map(([modelId, model]) => {
                             const fullId = `${provider.id}/${modelId}`;
                             const isEnabled = effectiveEnabled.has(fullId);
                             return (

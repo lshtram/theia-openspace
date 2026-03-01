@@ -523,7 +523,7 @@ describe('ModelSelector – Keyboard Navigation', () => {
             }
         });
 
-        it('pill button has aria-haspopup="listbox"', () => {
+        it('pill button has aria-haspopup="dialog"', () => {
             const svc = twoProviderService();
             const { container, unmount } = mount(svc);
             try {
@@ -534,13 +534,13 @@ describe('ModelSelector – Keyboard Navigation', () => {
             }
         });
 
-        it('dropdown has role="listbox"', async () => {
+        it('dropdown has role="dialog"', async () => {
             const svc = twoProviderService();
             const { container, unmount } = mount(svc);
             try {
                 await openDropdown(container);
                 const dropdown = document.body.querySelector('.model-dropdown') as HTMLElement;
-                expect(dropdown.getAttribute('role')).to.equal('listbox');
+                expect(dropdown.getAttribute('role')).to.equal('dialog');
             } finally {
                 unmount();
             }

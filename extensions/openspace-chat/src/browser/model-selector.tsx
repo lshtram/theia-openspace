@@ -175,14 +175,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         }
     }, [sessionService]);
 
-    // Handle dropdown open
-    const handleOpen = React.useCallback(() => {
+    // Open dropdown as centered modal dialog
+    const handleOpen = React.useCallback(async () => {
         if (triggerRef.current) {
-            const rect = triggerRef.current.getBoundingClientRect();
+            // Centered modal dialog with fixed positioning
+            const modalWidth = Math.min(480, window.innerWidth - 32);
+            const modalHeight = Math.min(600, window.innerHeight - 100);
             setDropdownStyle({
                 position: 'fixed',
-                bottom: window.innerHeight - rect.top + 4,
-                right: window.innerWidth - rect.right,
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: modalWidth,
+                maxHeight: modalHeight,
                 zIndex: 9999,
             });
         }
@@ -376,13 +381,38 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 
             {ReactDOM.createPortal(
                 isOpen ? (
-                    <div 
-                        ref={dropdownRef}
-                        className="model-dropdown model-dropdown-portal"
-                        role="listbox"
-                        aria-label="Available models"
-                        style={dropdownStyle}
-                    >
+                    <>
+                        {/* Backdrop overlay */}
+                        <div 
+                            style={{
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                zIndex: 9998,
+                            }}
+                            onClick={handleClose}
+                        />
+                        <div 
+                            ref={dropdownRef}
+                            className="model-dropdown model-dropdown-portal"
+                            role="dialog"
+                            aria-label="Select a model"
+                            style={dropdownStyle}
+                        >
+                    {/* Dialog header */}
+                    <div className="model-dropdown-header">
+                        <span className="model-dropdown-title">Select Model</span>
+                        <button
+                            type="button"
+                            className="model-dropdown-close"
+                            onClick={handleClose}
+                            aria-label="Close"
+                        >×</button>
+                    </div>
+
                     {/* Search Input */}
                     <div className="model-dropdown-search">
                         <input
@@ -391,6 +421,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                             className="model-search-input"
                             placeholder="Search models..."
                             value={searchQuery}
+                            autoFocus
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Escape') {
@@ -545,6 +576,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                         </button>
                     </div>
                 </div>
+                </>
                 ) : null,
                 document.body
             )}
