@@ -236,7 +236,11 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     const subscriptions = useSessionSubscriptions(sessionService, sessionActions.loadSessions);
     messagesRef.current = subscriptions.messages;
 
-    const { queuedCount, handleSend, handleCommand, handleBuiltinCommand } = useMessageQueue(sessionService, openCodeService, subscriptions.isStreaming);
+    // Ref for current model variant, accessible by useMessageQueue without re-creating callbacks
+    const selectedModelModeRef = React.useRef<string>('default');
+    const getVariant = React.useCallback(() => selectedModelModeRef.current, []);
+
+    const { queuedCount, handleSend, handleCommand, handleBuiltinCommand } = useMessageQueue(sessionService, openCodeService, subscriptions.isStreaming, getVariant);
     const { shellOutputs, handleShellCommand } = useShellExecution(openCodeService, workspaceRoot, messagesRef);
 
     // Auto-select project based on workspace on initial load (run only once)
@@ -318,8 +322,6 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
             .then((list: AgentInfo[]) => {
                 const loaded = list ?? [];
                 setAgents(loaded);
-                // Auto-select the first agent so the label shows a real name instead of "Default"
-                setSelectedAgent(prev => prev ?? (loaded.length > 0 ? loaded[0] : null));
             })
             .catch(() => setAgents([]));
     }, [openCodeService]);
@@ -335,24 +337,37 @@ export const ChatComponent: React.FC<ChatComponentProps> = ({ sessionService, op
     // ─── Model mode state ─────────────────────────────────────────────────
     const [modelModes, setModelModes] = React.useState<string[]>(['default']);
     const [selectedModelMode, setSelectedModelMode] = React.useState<string>('default');
+    // Track active model via event so React re-renders when it changes
+    const [activeModelId, setActiveModelId] = React.useState<string | undefined>(sessionService.activeModel);
     React.useEffect(() => {
-        const activeModel = sessionService.activeModel;
-        if (!activeModel) { setModelModes(['default']); return; }
+        const disposable = sessionService.onActiveModelChanged(model => setActiveModelId(model));
+        return () => disposable.dispose();
+    }, [sessionService]);
+    // Keep the ref in sync so useMessageQueue can read the latest value
+    React.useEffect(() => { selectedModelModeRef.current = selectedModelMode; }, [selectedModelMode]);
+    // Reset selected mode to 'default' when model changes (stale variant prevention)
+    React.useEffect(() => { setSelectedModelMode('default'); }, [activeModelId]);
+    React.useEffect(() => {
+        if (!activeModelId) { setModelModes(['default']); return; }
         sessionService.getAvailableModels().then(providers => {
             for (const p of providers) {
                 for (const [, m] of Object.entries(p.models)) {
                     const fullId = `${p.id}/${m.id}`;
-                    if (fullId === activeModel) {
-                        // Use capabilities.reasoning to detect thinking-capable models
-                        const hasReasoning = (m as unknown as { capabilities?: { reasoning?: boolean } }).capabilities?.reasoning;
-                        setModelModes(hasReasoning ? ['default', 'thinking'] : ['default']);
+                    if (fullId === activeModelId) {
+                        // Use actual variant names from the server when available
+                        const variantKeys = m.variants ? Object.keys(m.variants) : [];
+                        if (variantKeys.length > 0) {
+                            setModelModes(['default', ...variantKeys]);
+                        } else {
+                            setModelModes(['default']);
+                        }
                         return;
                     }
                 }
             }
             setModelModes(['default']);
         }).catch(() => setModelModes(['default']));
-    }, [sessionService, sessionService.activeModel]);
+    }, [sessionService, activeModelId]);
 
     // Pre-built model selector slot to render inside the prompt toolbar
     const modelSelectorSlot = React.useMemo(() => (
