@@ -47,7 +47,7 @@ export function useModelPreference(
     }, [preferenceService]);
 
     const handleManageModels = React.useCallback(() => {
-        commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, 'AI Models');
+        commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id);
     }, [commandService]);
 
     // Subscribe to model changes (debug logging)
