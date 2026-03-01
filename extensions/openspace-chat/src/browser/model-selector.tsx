@@ -630,18 +630,24 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
             aria-current={isFocused || undefined}
             tabIndex={0}
         >
-            <span className="model-option-name">
-                {isSelected && <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true"><circle cx="4" cy="4" r="3"/></svg>}
-                {model.modelName}
-                {model.status && (
-                    <span className={`model-status-tag model-status-tag--${model.status}`}>
-                        {model.status}
-                    </span>
-                )}
-            </span>
-            {model.free && <span className="model-free-badge">Free</span>}
-            {model.latest && <span className="model-latest-badge">Latest</span>}
-            <span className="model-option-id">{model.fullId}</span>
+            <div className="model-option-main">
+                <div className="model-option-name-row">
+                    {isSelected && (
+                        <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true">
+                            <circle cx="4" cy="4" r="3"/>
+                        </svg>
+                    )}
+                    <span className="model-option-name-text">{model.modelName}</span>
+                    {model.status && (
+                        <span className={`model-status-tag model-status-tag--${model.status}`}>
+                            {model.status}
+                        </span>
+                    )}
+                    {model.free && <span className="model-free-badge">Free</span>}
+                    {model.latest && <span className="model-latest-badge">Latest</span>}
+                </div>
+                <div className="model-option-id">{model.fullId}</div>
+            </div>
             {onToggleFavorite && (
                 <button
                     type="button"
