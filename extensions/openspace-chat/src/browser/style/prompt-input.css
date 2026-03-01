@@ -14,7 +14,7 @@
     border: 1px solid var(--theia-input-border, var(--oc-border));
     border-radius: 6px;
     background: var(--theia-input-background, var(--oc-bg-input));
-    overflow: visible;
+    overflow: hidden;
     transition: border-color 0.15s ease;
     position: relative;
 }
@@ -148,6 +148,7 @@
     transition: background 0.1s, color 0.1s;
     min-width: 22px;
     min-height: 22px;
+    flex-shrink: 0;    /* never shrink — pills in left-group absorb all overflow */
 }
 
 .prompt-input-icon-btn:hover:not(:disabled) {
@@ -168,7 +169,6 @@
 
 /* ─── Send button ───────────────────────────────────────────── */
 .prompt-input-send-button {
-    margin-left: auto;
     background: var(--theia-button-background, var(--oc-accent));
     color: var(--theia-button-foreground, var(--oc-text-bright));
     border: none;
@@ -370,6 +370,8 @@
     align-items: center;
     gap: 4px;
     flex: 1;
+    min-width: 0;       /* allow shrinking below content minimum */
+    overflow: hidden;   /* clip pills rather than overflow into siblings */
 }
 
 /* Generic pill button for toolbar dropdowns */
@@ -379,16 +381,22 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 4px;
-    border: 1px solid var(--theia-border-color, var(--oc-border, #ccc));
-    background: transparent;
+    border: 1px solid var(--theia-input-border, var(--theia-panel-border));
+    background: var(--theia-input-background);
     color: var(--theia-foreground);
     font-size: 12px;
+    font-family: var(--theia-ui-font-family);
     cursor: pointer;
     white-space: nowrap;
     line-height: 1.4;
+    flex-shrink: 1;         /* shrink before icon buttons and send button */
+    min-width: 0;           /* allow shrinking below content minimum */
+    overflow: hidden;       /* clip text rather than overflowing */
+    text-overflow: ellipsis;
 }
 .prompt-toolbar-pill:hover {
-    background: var(--theia-list-activeSelectionBackground, rgba(255,255,255,0.1));
+    background: var(--theia-list-hoverBackground);
+    border-color: var(--theia-focusBorder);
 }
 .prompt-toolbar-pill:disabled {
     opacity: 0.4;
@@ -405,24 +413,26 @@
     bottom: 100%;
     left: 0;
     z-index: 1000;
-    background: var(--theia-editorWidget-background, var(--oc-bg-elevated, #1e1e1e));
-    border: 1px solid var(--theia-border-color, var(--oc-border, #ccc));
+    background: var(--theia-editorWidget-background, var(--theia-dropdown-background));
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-dropdown-border));
     border-radius: 6px;
     padding: 4px;
     min-width: 160px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     margin-bottom: 4px;
+    font-family: var(--theia-ui-font-family);
 }
 
 /* Portal versions — position is set via inline fixed style */
 .agent-selector-portal-dropdown,
 .mode-selector-portal-dropdown {
-    background: var(--theia-editorWidget-background, var(--oc-bg-elevated, #1e1e1e));
-    border: 1px solid var(--theia-border-color, var(--oc-border, #ccc));
+    background: var(--theia-editorWidget-background, var(--theia-dropdown-background));
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-dropdown-border));
     border-radius: 6px;
     padding: 4px;
     min-width: 160px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-family: var(--theia-ui-font-family);
 }
 
 /* Agent selector */
@@ -441,6 +451,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
+    font-family: var(--theia-ui-font-family);
 }
 .agent-selector-option:hover {
     background: var(--theia-list-hoverBackground);
@@ -471,6 +482,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
+    font-family: var(--theia-ui-font-family);
 }
 .mode-selector-option:hover {
     background: var(--theia-list-hoverBackground);
