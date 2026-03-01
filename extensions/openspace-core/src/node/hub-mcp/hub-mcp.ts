@@ -164,7 +164,11 @@ export class OpenSpaceMcpServer {
         registerEditorTools(server, bridgeDeps);
         registerTerminalTools(server, bridgeDeps);
         registerFileTools(server, fileDeps);
-        registerPresentationTools(server, bridgeDeps);
+        registerPresentationTools(server, {
+            ...bridgeDeps,
+            workspaceRoot: this.workspaceRoot,
+            logger: this.logger,
+        });
         registerWhiteboardTools(server, bridgeDeps);
         registerVoiceTools(server, bridgeDeps);
     }

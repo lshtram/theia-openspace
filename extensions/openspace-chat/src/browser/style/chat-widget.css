@@ -335,25 +335,109 @@
    Model Selector Styles
    ============================================================================ */
 
-/* Model Dropdown Panel */
-.openspace-chat-widget .model-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    background: var(--theia-dropdown-background);
-    border: 1px solid var(--theia-dropdown-border);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    min-width: 300px;
-    max-width: 380px;
-    max-height: 400px;
-    overflow-y: auto;
+/* ── Backdrop ──────────────────────────────────────────────────────────── */
+.model-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 9998;
 }
 
-/* Loading State */
-.openspace-chat-widget .model-dropdown-loading {
-    padding: 16px;
+/* ── Dialog frame ──────────────────────────────────────────────────────── */
+.model-dialog {
+    background: var(--theia-editorWidget-background, var(--theia-editor-background));
+    border: 1px solid var(--theia-editorWidget-border, var(--theia-panel-border));
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Smooth height transitions when results change */
+    transition: height 0.18s ease;
+}
+
+/* ── Search bar ────────────────────────────────────────────────────────── */
+.model-dialog-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--theia-panel-border);
+    flex-shrink: 0;
+}
+
+.model-dialog-search-icon {
+    flex-shrink: 0;
+    color: var(--theia-input-placeholderForeground);
+    pointer-events: none;
+}
+
+.model-dialog-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--theia-input-foreground);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 0;
+    min-width: 0;
+}
+
+.model-dialog-search-input::placeholder {
+    color: var(--theia-input-placeholderForeground);
+}
+
+.model-dialog-search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    background: var(--theia-input-background);
+    border: 1px solid var(--theia-panel-border);
+    border-radius: 50%;
+    color: var(--theia-descriptionForeground);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.1s, color 0.1s;
+}
+
+.model-dialog-search-clear:hover {
+    background: var(--theia-list-hoverBackground);
+    color: var(--theia-foreground);
+    border-color: var(--theia-focusBorder);
+}
+
+/* ── Scrollable list ───────────────────────────────────────────────────── */
+.model-dialog-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 380px;
+    /* smooth height shrink when search narrows results */
+    transition: max-height 0.18s ease;
+}
+
+/* Custom scrollbar — thin and theme-colored */
+.model-dialog-list::-webkit-scrollbar {
+    width: 4px;
+}
+.model-dialog-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+.model-dialog-list::-webkit-scrollbar-thumb {
+    background: var(--theia-scrollbarSlider-background);
+    border-radius: 2px;
+}
+.model-dialog-list::-webkit-scrollbar-thumb:hover {
+    background: var(--theia-scrollbarSlider-hoverBackground);
+}
+
+/* ── Status / empty / error states ────────────────────────────────────── */
+.model-dialog-status {
+    padding: 14px 16px;
     text-align: center;
     color: var(--theia-descriptionForeground);
     font-size: 12px;
@@ -363,229 +447,191 @@
     gap: 8px;
 }
 
-.openspace-chat-widget .model-dropdown-loading .spinner {
-    animation: spin 1s linear infinite;
-}
-
-/* Error State */
-.openspace-chat-widget .model-dropdown-error {
-    padding: 12px;
+.model-dialog-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
     margin: 8px;
     background: var(--theia-inputValidation-errorBackground);
     border: 1px solid var(--theia-inputValidation-errorBorder);
-    border-radius: 4px;
-}
-
-.openspace-chat-widget .model-dropdown-error .error-message {
+    border-radius: 5px;
     color: var(--theia-errorForeground);
     font-size: 12px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
-.openspace-chat-widget .model-dropdown-error .retry-button {
-    width: 100%;
-    padding: 6px 12px;
+.model-dialog-retry {
+    margin-left: auto;
+    padding: 3px 10px;
     background: var(--theia-button-background);
     color: var(--theia-button-foreground);
-    border: 1px solid var(--theia-button-border);
+    border: none;
     border-radius: 3px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
+    flex-shrink: 0;
 }
 
-.openspace-chat-widget .model-dropdown-error .retry-button:hover {
+.model-dialog-retry:hover {
     background: var(--theia-button-hoverBackground);
 }
 
-/* Empty State */
-.openspace-chat-widget .model-dropdown-empty {
-    padding: 16px;
-    text-align: center;
-    color: var(--theia-descriptionForeground);
-    font-size: 12px;
+.model-dialog-link {
+    background: none;
+    border: none;
+    color: var(--theia-textLink-foreground);
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+    text-decoration: underline;
 }
 
-/* Provider Group */
-.openspace-chat-widget .model-provider-group {
-    padding: 4px 0;
+/* ── Provider group ────────────────────────────────────────────────────── */
+.model-dialog-group {
+    /* no extra padding — rows are flush */
 }
 
-.openspace-chat-widget .model-provider-group:not(:last-child) {
-    border-bottom: 1px solid var(--theia-panel-border);
-}
-
-/* Provider Header */
-.openspace-chat-widget .model-provider-header {
-    padding: 8px 12px 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--theia-descriptionForeground);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-/* Model Option */
-.openspace-chat-widget .model-option {
+/* Provider separator line with centered label */
+.model-dialog-separator {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 7px 12px;
+    align-items: center;
+    padding: 8px 12px 3px 12px;
+    gap: 8px;
+}
+
+.model-dialog-separator::before,
+.model-dialog-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--theia-panel-border);
+}
+
+.model-dialog-separator-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--theia-descriptionForeground);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Thin divider between provider groups */
+.model-dialog-group-divider {
+    height: 1px;
+    background: var(--theia-panel-border);
+    margin: 2px 0;
+    opacity: 0.5;
+}
+
+/* ── Model row — single compact line ───────────────────────────────────── */
+.model-dialog-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
     cursor: pointer;
     font-size: 13px;
     color: var(--theia-foreground);
-    transition: background-color 0.15s ease;
-    position: relative;
+    outline: none;
+    user-select: none;
+    transition: background-color 0.1s ease;
+    min-height: 28px;
 }
 
-.openspace-chat-widget .model-option-main {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
-}
-
-.openspace-chat-widget .model-option-name-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-}
-
-.openspace-chat-widget .model-option-name-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-    min-width: 0;
-}
-
-.openspace-chat-widget .model-option:hover,
-.openspace-chat-widget .model-option.highlighted {
+.model-dialog-row:hover {
     background: var(--theia-list-hoverBackground);
 }
 
-.openspace-chat-widget .model-option.selected {
+.model-dialog-row.selected {
     background: var(--theia-list-activeSelectionBackground);
     color: var(--theia-list-activeSelectionForeground);
 }
 
-.openspace-chat-widget .model-option.selected:hover,
-.openspace-chat-widget .model-option.selected.highlighted {
+.model-dialog-row.selected:hover {
     background: var(--theia-list-activeSelectionBackground);
-    opacity: 0.9;
+    filter: brightness(1.08);
 }
 
-.openspace-chat-widget .model-option.focused {
-    background: var(--theia-list-hoverBackground);
+.model-dialog-row.focused {
+    background: var(--theia-list-focusBackground, var(--theia-list-hoverBackground));
     outline: 1px solid var(--theia-focusBorder);
     outline-offset: -1px;
 }
 
-.openspace-chat-widget .model-option-indicator {
-    display: inline-flex;
+/* check-mark slot — fixed width so names stay aligned */
+.model-dialog-row-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
     flex-shrink: 0;
-    color: var(--theia-badge-background);
+    color: var(--theia-list-activeSelectionForeground, var(--theia-foreground));
 }
 
-.openspace-chat-widget .model-option.selected .model-option-indicator {
-    color: var(--theia-list-activeSelectionForeground);
-}
-
-.openspace-chat-widget .model-option-limit {
-    font-size: 11px;
-    color: var(--theia-descriptionForeground);
-    flex-shrink: 0;
-    margin-left: 8px;
-}
-
-.openspace-chat-widget .model-option.selected .model-option-limit {
-    color: var(--theia-list-activeSelectionForeground);
-    opacity: 0.8;
-}
-
-/* Model Dropdown Search */
-.openspace-chat-widget .model-dropdown-search {
-    position: relative;
-    padding: 8px;
-    border-bottom: 1px solid var(--theia-panel-border);
-}
-
-.openspace-chat-widget .model-search-input {
-    width: 100%;
-    padding: 6px 24px 6px 10px;
-    background: var(--theia-input-background);
-    color: var(--theia-input-foreground);
-    border: 1px solid var(--theia-input-border);
-    border-radius: 3px;
-    font-size: 13px;
-    box-sizing: border-box;
-}
-
-.openspace-chat-widget .model-search-input:focus {
-    outline: none;
-    border-color: var(--theia-focusBorder);
-}
-
-.openspace-chat-widget .model-search-clear {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: var(--theia-descriptionForeground);
-    font-size: 18px;
-    cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
-}
-
-.openspace-chat-widget .model-search-clear:hover {
-    color: var(--theia-foreground);
-}
-
-/* Model Dropdown Content (scrollable area) */
-.openspace-chat-widget .model-dropdown-content {
-    max-height: 320px;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-
-/* Model Section (for Recent, etc.) */
-.openspace-chat-widget .model-section {
-    padding: 4px 0;
-}
-
-.openspace-chat-widget .model-section:not(:last-child) {
-    border-bottom: 1px solid var(--theia-panel-border);
-}
-
-.openspace-chat-widget .model-section-header {
-    padding: 8px 12px 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--theia-descriptionForeground);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-/* Model Option ID (full provider/model) */
-.openspace-chat-widget .model-option-id {
-    font-size: 10px;
-    color: var(--theia-descriptionForeground);
-    opacity: 0.65;
+.model-dialog-row-name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
-.openspace-chat-widget .model-option.selected .model-option-id {
-    color: var(--theia-list-activeSelectionForeground);
-    opacity: 0.9;
+/* Status tags (preview / experimental / deprecated) */
+.model-dialog-row-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.model-dialog-row-tag--preview {
+    background: var(--theia-badge-background);
+    color: var(--theia-badge-foreground);
+}
+
+.model-dialog-row-tag--experimental {
+    background: rgba(255, 165, 0, 0.18);
+    color: #e8a030;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.model-dialog-row-tag--deprecated {
+    background: rgba(220, 60, 60, 0.15);
+    color: #c06060;
+    border: 1px solid rgba(220, 60, 60, 0.25);
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────── */
+.model-dialog-footer {
+    border-top: 1px solid var(--theia-panel-border);
+    padding: 6px 10px;
+    flex-shrink: 0;
+}
+
+.model-dialog-manage-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 6px 10px;
+    background: none;
+    border: 1px solid var(--theia-panel-border);
+    color: var(--theia-foreground);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.1s, border-color 0.1s;
+}
+
+.model-dialog-manage-btn:hover {
+    background: var(--theia-list-hoverBackground);
+    border-color: var(--theia-focusBorder);
 }
 
 /* ============================================================================
@@ -2253,30 +2299,6 @@
 .openspace-chat-widget .turn-group-sidebar-wrap .turn-group-body {
     flex: 1;
     min-width: 0;
-}
-
-/* ── Model Selector: Manage Models footer ──────────────────────────────── */
-
-.model-dropdown-footer {
-    border-top: 1px solid var(--theia-panel-border);
-    padding: 6px 8px;
-}
-
-.model-manage-btn {
-    width: 100%;
-    padding: 7px 12px;
-    background: none;
-    border: 1px solid var(--theia-panel-border);
-    color: var(--theia-foreground);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-    text-align: left;
-    transition: background 0.1s;
-}
-
-.model-manage-btn:hover {
-    background: var(--theia-list-hoverBackground);
 }
 
 /* ── Mermaid diagram rendering ─────────────────────────────────────────── */

@@ -47,7 +47,7 @@ export function useModelPreference(
     }, [preferenceService]);
 
     const handleManageModels = React.useCallback(() => {
-        commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id);
+        commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, 'openspace.models');
     }, [commandService]);
 
     // Subscribe to model changes (debug logging)

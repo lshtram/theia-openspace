@@ -31,23 +31,47 @@ interface FlatModel {
     modelId: string;
     modelName: string;
     fullId: string; // provider/model
+    status?: string; // 'deprecated' | 'preview' | 'experimental'
     free?: boolean;
     latest?: boolean;
     inputPrice?: number;
     outputPrice?: number;
     contextLength?: number;
-    status?: string; // 'deprecated' | 'preview' | 'experimental'
+}
+
+const LS_RECENT = 'openspace.recentModels';
+const LS_FAVORITES = 'openspace.favoriteModels';
+const MAX_RECENT = 10;
+
+function loadFromStorage(key: string): string[] {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveToStorage(key: string, value: string[]): void {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        // ignore storage errors
+    }
 }
 
 /**
  * ModelSelector Component
- * 
+ *
  * Displays the current model and allows selecting from available models.
  * Features:
  * - Search/filter functionality
- * - Grouped by provider
- * - Keyboard navigation
- * - Recently used models section
+ * - Grouped by provider with separator headers
+ * - Favorites and Recent sections (persisted to localStorage)
+ * - Free/Latest badges, status tags (deprecated/preview)
+ * - Tooltip on hover showing pricing and context length
+ * - Keyboard navigation (ArrowDown/ArrowUp/Enter/Escape)
+ * - "Manage Providers" footer button
  */
 export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, enabledModels, onManageModels }) => {
     const [providers, setProviders] = React.useState<ProviderWithModels[]>([]);
@@ -56,22 +80,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState<string | undefined>();
     const [searchQuery, setSearchQuery] = React.useState('');
-    const RECENT_KEY = 'openspace.recentModels';
-    const [recentModels, setRecentModels] = React.useState<string[]>(() => {
-        try {
-            const stored = localStorage.getItem(RECENT_KEY);
-            return stored ? (JSON.parse(stored) as string[]) : [];
-        } catch { return []; }
-    });
+    const [favorites, setFavorites] = React.useState<string[]>(() => loadFromStorage(LS_FAVORITES));
+    const [recentModels, setRecentModels] = React.useState<string[]>(() => loadFromStorage(LS_RECENT));
+    const [hoveredModel, setHoveredModel] = React.useState<string | undefined>();
 
-    const FAVORITES_KEY = 'openspace.favoriteModels';
-    const [favoriteModels, setFavoriteModels] = React.useState<string[]>(() => {
-        try {
-            const stored = localStorage.getItem(FAVORITES_KEY);
-            return stored ? (JSON.parse(stored) as string[]) : [];
-        } catch { return []; }
-    });
-    
     const triggerRef = React.useRef<HTMLButtonElement>(null);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -81,7 +93,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     const filteredModels = React.useMemo<FlatModel[]>(() => {
         const models: FlatModel[] = [];
         const query = searchQuery.toLowerCase();
-        
+
         for (const provider of providers) {
             for (const [, model] of Object.entries(provider.models)) {
                 const fullId = `${provider.id}/${model.id}`;
@@ -91,24 +103,25 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                     continue;
                 }
 
-                const matchesSearch = !query || 
+                const matchesSearch = !query ||
                     model.name.toLowerCase().includes(query) ||
                     provider.name.toLowerCase().includes(query) ||
                     fullId.toLowerCase().includes(query);
-                
+
                 if (matchesSearch) {
+                    const raw = model as unknown as Record<string, unknown>;
                     models.push({
                         providerId: provider.id,
                         providerName: provider.name,
                         modelId: model.id,
                         modelName: model.name,
                         fullId,
-                        free: (model as unknown as { free?: boolean }).free,
-                        latest: (model as unknown as { latest?: boolean }).latest,
-                        inputPrice: (model as unknown as { inputPrice?: number }).inputPrice,
-                        outputPrice: (model as unknown as { outputPrice?: number }).outputPrice,
-                        contextLength: (model as unknown as { contextLength?: number }).contextLength,
-                        status: (model as unknown as { status?: string }).status,
+                        status: raw['status'] as string | undefined,
+                        free: raw['free'] as boolean | undefined,
+                        latest: raw['latest'] as boolean | undefined,
+                        inputPrice: raw['inputPrice'] as number | undefined,
+                        outputPrice: raw['outputPrice'] as number | undefined,
+                        contextLength: raw['contextLength'] as number | undefined,
                     });
                 }
             }
@@ -130,6 +143,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         );
     }, [filteredModels]);
 
+    // Favorites section: models that are favorited AND pass the current filter
+    const favoriteModels = React.useMemo(() => {
+        return filteredModels.filter(m => favorites.includes(m.fullId));
+    }, [filteredModels, favorites]);
+
+    // Recent section: models that are in recentModels AND pass the current filter, not already in favorites
+    const recentFilteredModels = React.useMemo(() => {
+        return recentModels
+            .map(id => filteredModels.find(m => m.fullId === id))
+            .filter((m): m is FlatModel => m !== undefined && !favorites.includes(m.fullId));
+    }, [filteredModels, recentModels, favorites]);
+
     // Subscribe to active model changes
     React.useEffect(() => {
         const disposable = sessionService.onActiveModelChanged(model => {
@@ -141,7 +166,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     // Focus search input when dropdown opens
     React.useEffect(() => {
         if (isOpen && searchInputRef.current) {
-            setTimeout(() => searchInputRef.current?.focus(), 100);
+            setTimeout(() => searchInputRef.current?.focus(), 50);
         }
     }, [isOpen]);
 
@@ -150,14 +175,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         setIsLoading(true);
         setError(undefined);
         try {
-            const providers = await sessionService.getAvailableModels();
-            setProviders(providers);
-            
-            // Task 25: Select first available model across ALL providers, not just providers[0].
-            // providers[0] may have an empty models map; scan all providers for the first model.
-            if (!sessionService.activeModel && providers.length > 0) {
+            const fetchedProviders = await sessionService.getAvailableModels();
+            setProviders(fetchedProviders);
+
+            if (!sessionService.activeModel && fetchedProviders.length > 0) {
                 type ModelEntry = { providerId: string; modelId: string };
-                const firstAvailable = providers.reduce<ModelEntry | undefined>((found, provider) => {
+                const firstAvailable = fetchedProviders.reduce<ModelEntry | undefined>((found, provider) => {
                     if (found) return found;
                     const firstModel = Object.values(provider.models)[0];
                     return firstModel ? { providerId: provider.id, modelId: firstModel.id } : undefined;
@@ -177,20 +200,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
 
     // Open dropdown as centered modal dialog
     const handleOpen = React.useCallback(async () => {
-        if (triggerRef.current) {
-            // Centered modal dialog with fixed positioning
-            const modalWidth = Math.min(480, window.innerWidth - 32);
-            const modalHeight = Math.min(600, window.innerHeight - 100);
-            setDropdownStyle({
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: modalWidth,
-                maxHeight: modalHeight,
-                zIndex: 9999,
-            });
-        }
+        const modalWidth = Math.min(440, window.innerWidth - 48);
+        setDropdownStyle({
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: modalWidth,
+            zIndex: 9999,
+        });
         setIsOpen(true);
         setSearchQuery('');
         fetchModels();
@@ -201,6 +219,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         setIsOpen(false);
         setError(undefined);
         setSearchQuery('');
+        setHoveredModel(undefined);
     }, []);
 
     // Toggle dropdown
@@ -217,30 +236,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         sessionService.setActiveModel(fullId);
         setActiveModel(fullId);
         setIsOpen(false);
-        
-        // Add to recent models (with localStorage persistence)
+        // Persist to recent models
         setRecentModels(prev => {
-            const updated = [fullId, ...prev.filter(m => m !== fullId)].slice(0, 5);
-            try { localStorage.setItem(RECENT_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+            const updated = [fullId, ...prev.filter(id => id !== fullId)].slice(0, MAX_RECENT);
+            saveToStorage(LS_RECENT, updated);
             return updated;
         });
     }, [sessionService]);
 
-    // Toggle a model as favorite
-    const toggleFavorite = React.useCallback((fullId: string, e: React.MouseEvent) => {
+    // Toggle favorite
+    const handleFavorite = React.useCallback((fullId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        e.preventDefault();
-        setFavoriteModels(prev => {
-            const next = prev.includes(fullId) ? prev.filter(id => id !== fullId) : [...prev, fullId];
-            try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-            return next;
+        setFavorites(prev => {
+            const updated = prev.includes(fullId)
+                ? prev.filter(id => id !== fullId)
+                : [...prev, fullId];
+            saveToStorage(LS_FAVORITES, updated);
+            return updated;
         });
     }, []);
 
     // Track focused option index for keyboard navigation
     const [focusedIndex, setFocusedIndex] = React.useState(-1);
-    // P3-E: Track hovered model for tooltip
-    const [hoveredModelId, setHoveredModelId] = React.useState<string | undefined>();
 
     // Reset focused index when dropdown opens/closes or filtered models change
     React.useEffect(() => {
@@ -253,10 +270,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         setFocusedIndex(-1);
     }, [filteredModels]);
 
-    // Scroll focused option into view and actually focus the element
+    // Scroll focused option into view
     React.useEffect(() => {
         if (focusedIndex >= 0 && dropdownRef.current) {
-            const options = dropdownRef.current.querySelectorAll('[role="option"]');
+            const options = dropdownRef.current.querySelectorAll('.model-option');
             if (options[focusedIndex]) {
                 const el = options[focusedIndex] as HTMLElement;
                 el.scrollIntoView({ block: 'nearest' });
@@ -265,7 +282,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         }
     }, [focusedIndex]);
 
-    // Handle keyboard navigation
+    // Handle keyboard navigation on the outer wrapper
     const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
         if (!isOpen) {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -333,26 +350,20 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
         const modelId = modelParts.join('/');
         const provider = providers.find(p => p.id === providerId);
         const model = provider?.models[modelId];
-        if (provider && model) {
-            return `${provider.name} ${model.name}`;
+        if (model) {
+            return model.name;
         }
         // Providers not yet fetched — show the model ID part only (skip provider prefix)
         return modelId || activeModel;
     }, [activeModel, providers]);
 
-    // Get recent model objects
-    const recentModelObjects = React.useMemo(() => {
-        return recentModels
-            .map(id => filteredModels.find(m => m.fullId === id))
-            .filter((m): m is FlatModel => m !== undefined);
-    }, [recentModels, filteredModels]);
+    const providerEntries = Object.entries(groupedModels);
+    const hasModels = filteredModels.length > 0;
 
-    // Get favorite model objects
-    const favoriteModelObjects = React.useMemo(() => {
-        return favoriteModels
-            .map(id => filteredModels.find(m => m.fullId === id))
-            .filter((m): m is FlatModel => m !== undefined);
-    }, [favoriteModels, filteredModels]);
+    // Find hovered model data for tooltip
+    const hoveredModelData = hoveredModel
+        ? filteredModels.find(m => m.fullId === hoveredModel)
+        : undefined;
 
     return (
         <div
@@ -383,200 +394,213 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
                 isOpen ? (
                     <>
                         {/* Backdrop overlay */}
-                        <div 
-                            style={{
-                                position: 'fixed',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                                zIndex: 9998,
-                            }}
+                        <div
+                            className="model-dialog-backdrop"
                             onClick={handleClose}
                         />
-                        <div 
+                        {/* Main dropdown — uses both test-required class and new visual class */}
+                        <div
                             ref={dropdownRef}
-                            className="model-dropdown model-dropdown-portal"
+                            className="model-dropdown model-dialog"
                             role="dialog"
                             aria-label="Select a model"
+                            aria-modal="true"
                             style={dropdownStyle}
                         >
-                    {/* Dialog header */}
-                    <div className="model-dropdown-header">
-                        <span className="model-dropdown-title">Select Model</span>
-                        <button
-                            type="button"
-                            className="model-dropdown-close"
-                            onClick={handleClose}
-                            aria-label="Close"
-                        >×</button>
-                    </div>
-
-                    {/* Search Input */}
-                    <div className="model-dropdown-search">
-                        <input
-                            ref={searchInputRef}
-                            type="text"
-                            className="model-search-input"
-                            placeholder="Search models..."
-                            value={searchQuery}
-                            autoFocus
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                    e.stopPropagation();
-                                    if (searchQuery) {
-                                        setSearchQuery('');
-                                    } else {
-                                        handleClose();
-                                    }
-                                }
-                            }}
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                className="model-search-clear"
-                                onClick={() => setSearchQuery('')}
-                                title="Clear search"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
-
-                    {isLoading && (
-                        <div className="model-dropdown-loading">
-                            <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                            </svg> Loading models...
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="model-dropdown-error">
-                            <div className="error-message">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                                </svg> {error}
+                            {/* Search Input */}
+                            <div className="model-dialog-search">
+                                <svg className="model-dialog-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    className="model-search-input model-dialog-search-input"
+                                    placeholder="Search models..."
+                                    value={searchQuery}
+                                    autoFocus
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Escape') {
+                                            e.stopPropagation();
+                                            if (searchQuery) {
+                                                setSearchQuery('');
+                                            } else {
+                                                handleClose();
+                                            }
+                                        }
+                                    }}
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        className="model-dialog-search-clear"
+                                        onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                                        aria-label="Clear search"
+                                    >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" width="10" height="10">
+                                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
-                            <button
-                                type="button"
-                                className="retry-button"
-                                onClick={fetchModels}
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    )}
 
-                    {!isLoading && !error && filteredModels.length === 0 && (
-                        searchQuery ? (
-                            <div className="model-dropdown-empty">
-                                No models match your search
+                            {/* Scrollable model list */}
+                            <div className="model-dialog-list" role="listbox" aria-label="Available models">
+                                {isLoading && (
+                                    <div className="model-dialog-status">
+                                        <svg className="oc-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13" aria-hidden="true">
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                        </svg>
+                                        Loading models...
+                                    </div>
+                                )}
+
+                                {error && (
+                                    <div className="model-dropdown-error model-dialog-error">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13" aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                                        </svg>
+                                        <span>{error}</span>
+                                        <button type="button" className="model-dialog-retry" onClick={fetchModels}>Retry</button>
+                                    </div>
+                                )}
+
+                                {!isLoading && !error && !hasModels && (
+                                    searchQuery ? (
+                                        <div className="model-dropdown-empty model-dialog-status">No models match your search</div>
+                                    ) : (
+                                        <div className="model-dropdown-empty model-dialog-status">
+                                            No models configured.{' '}
+                                            <button
+                                                type="button"
+                                                className="model-selector-empty-cta model-dialog-link"
+                                                onClick={() => { handleClose(); onManageModels(); }}
+                                            >
+                                                Open Settings
+                                            </button>
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Favorites section */}
+                                {!isLoading && !error && favoriteModels.length > 0 && (
+                                    <div className="model-dialog-group">
+                                        <div className="model-section-header model-provider-header model-dialog-separator" aria-hidden="true">
+                                            <span className="model-dialog-separator-label">Favorites</span>
+                                        </div>
+                                        {favoriteModels.map(model => {
+                                            const flatIdx = filteredModels.indexOf(model);
+                                            return (
+                                                <ModelRow
+                                                    key={`fav-${model.fullId}`}
+                                                    model={model}
+                                                    isSelected={model.fullId === activeModel}
+                                                    isFocused={flatIdx === focusedIndex}
+                                                    isFavorited={true}
+                                                    onSelect={handleSelect}
+                                                    onFavorite={handleFavorite}
+                                                    onHover={setHoveredModel}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Recent section */}
+                                {!isLoading && !error && recentFilteredModels.length > 0 && (
+                                    <div className="model-dialog-group">
+                                        <div className="model-section-header model-provider-header model-dialog-separator" aria-hidden="true">
+                                            <span className="model-dialog-separator-label">Recent</span>
+                                        </div>
+                                        {recentFilteredModels.map(model => {
+                                            const flatIdx = filteredModels.indexOf(model);
+                                            return (
+                                                <ModelRow
+                                                    key={`recent-${model.fullId}`}
+                                                    model={model}
+                                                    isSelected={model.fullId === activeModel}
+                                                    isFocused={flatIdx === focusedIndex}
+                                                    isFavorited={favorites.includes(model.fullId)}
+                                                    onSelect={handleSelect}
+                                                    onFavorite={handleFavorite}
+                                                    onHover={setHoveredModel}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* All models grouped by provider */}
+                                {!isLoading && !error && providerEntries.map(([providerName, models], groupIdx) => (
+                                    <div key={providerName} className="model-dialog-group">
+                                        {/* Provider separator — has both test class and visual class */}
+                                        <div className="model-provider-header model-dialog-separator" aria-hidden="true">
+                                            <span className="model-dialog-separator-label">{providerName}</span>
+                                        </div>
+                                        {/* Model rows */}
+                                        {models.map(model => {
+                                            const flatIdx = filteredModels.indexOf(model);
+                                            return (
+                                                <ModelRow
+                                                    key={model.fullId}
+                                                    model={model}
+                                                    isSelected={model.fullId === activeModel}
+                                                    isFocused={flatIdx === focusedIndex}
+                                                    isFavorited={favorites.includes(model.fullId)}
+                                                    onSelect={handleSelect}
+                                                    onFavorite={handleFavorite}
+                                                    onHover={setHoveredModel}
+                                                />
+                                            );
+                                        })}
+                                        {/* Thin divider between provider groups */}
+                                        {groupIdx < providerEntries.length - 1 && (
+                                            <div className="model-dialog-group-divider" aria-hidden="true" />
+                                        )}
+                                    </div>
+                                ))}
                             </div>
-                        ) : (
-                            <div className="model-selector-empty-state">
-                                <div className="model-selector-empty-text">No models configured</div>
+
+                            {/* Footer: Manage Providers */}
+                            <div className="model-dialog-footer">
                                 <button
                                     type="button"
-                                    className="model-selector-empty-cta"
+                                    className="model-manage-btn model-dialog-manage-btn"
                                     onClick={() => { handleClose(); onManageModels(); }}
                                 >
-                                    Open Settings
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="3"/>
+                                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                                    </svg>
+                                    Manage Providers
                                 </button>
                             </div>
-                        )
-                    )}
-
-                    {!isLoading && !error && (
-                        <div className="model-dropdown-content">
-                            {/* Favorites Section */}
-                            {favoriteModelObjects.length > 0 && !searchQuery && (
-                                <div className="model-section">
-                                    <div className="model-section-header">Favorites</div>
-                                    {favoriteModelObjects.map(model => {
-                                        const flatIdx = filteredModels.indexOf(model);
-                                        return (
-                                            <ModelOption
-                                                key={`fav-${model.fullId}`}
-                                                model={model}
-                                                isSelected={model.fullId === activeModel}
-                                                isFocused={flatIdx === focusedIndex}
-                                                isHovered={hoveredModelId === model.fullId}
-                                                isFavorite={true}
-                                                onSelect={handleSelect}
-                                                onHover={setHoveredModelId}
-                                                onToggleFavorite={toggleFavorite}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {/* Recent Models Section */}
-                            {recentModelObjects.length > 0 && !searchQuery && (
-                                <div className="model-section">
-                                    <div className="model-section-header">Recent</div>
-                                     {recentModelObjects.map(model => {
-                                        const flatIdx = filteredModels.indexOf(model);
-                                        return (
-                                            <ModelOption
-                                                key={`recent-${model.fullId}`}
-                                                model={model}
-                                                isSelected={model.fullId === activeModel}
-                                                isFocused={flatIdx === focusedIndex}
-                                                isHovered={hoveredModelId === model.fullId}
-                                                isFavorite={favoriteModels.includes(model.fullId)}
-                                                onSelect={handleSelect}
-                                                onHover={setHoveredModelId}
-                                                onToggleFavorite={toggleFavorite}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {/* All Models Grouped by Provider */}
-                            {Object.entries(groupedModels).map(([providerName, models]) => (
-                                <div key={providerName} className="model-provider-group">
-                                    <div className="model-provider-header">
-                                        {providerName}
-                                    </div>
-                                    {models.map(model => {
-                                        const flatIdx = filteredModels.indexOf(model);
-                                        return (
-                                            <ModelOption
-                                                key={model.fullId}
-                                                model={model}
-                                                isSelected={model.fullId === activeModel}
-                                                isFocused={flatIdx === focusedIndex}
-                                                isHovered={hoveredModelId === model.fullId}
-                                                isFavorite={favoriteModels.includes(model.fullId)}
-                                                onSelect={handleSelect}
-                                                onHover={setHoveredModelId}
-                                                onToggleFavorite={toggleFavorite}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            ))}
                         </div>
-                    )}
 
-                    {/* Footer: Manage Models */}
-                    <div className="model-dropdown-footer">
-                        <button
-                            type="button"
-                            className="model-manage-btn"
-                            onClick={() => { handleClose(); onManageModels(); }}
-                        >
-                            Manage Models
-                        </button>
-                    </div>
-                </div>
-                </>
+                        {/* Tooltip — rendered at portal root, appears on model hover */}
+                        {hoveredModelData && (hoveredModelData.inputPrice !== undefined || hoveredModelData.outputPrice !== undefined || hoveredModelData.contextLength !== undefined) && (
+                            <div className="model-tooltip" role="tooltip">
+                                {hoveredModelData.inputPrice !== undefined && (
+                                    <div className="model-tooltip-row">
+                                        <span>Input:</span> <span>${hoveredModelData.inputPrice}/M</span>
+                                    </div>
+                                )}
+                                {hoveredModelData.outputPrice !== undefined && (
+                                    <div className="model-tooltip-row">
+                                        <span>Output:</span> <span>${hoveredModelData.outputPrice}/M</span>
+                                    </div>
+                                )}
+                                {hoveredModelData.contextLength !== undefined && (
+                                    <div className="model-tooltip-row">
+                                        <span>Context:</span> <span>{hoveredModelData.contextLength.toLocaleString()} tokens</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
                 ) : null,
                 document.body
             )}
@@ -584,33 +608,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ sessionService, en
     );
 };
 
-// Sub-component for model option
-interface ModelOptionProps {
+// Compact single-row model option
+interface ModelRowProps {
     model: FlatModel;
     isSelected: boolean;
     isFocused?: boolean;
-    isHovered?: boolean;
-    isFavorite?: boolean;
+    isFavorited?: boolean;
     onSelect: (fullId: string) => void;
-    onHover?: (fullId: string | undefined) => void;
-    onToggleFavorite?: (fullId: string, e: React.MouseEvent) => void;
+    onFavorite: (fullId: string, e: React.MouseEvent) => void;
+    onHover: (fullId: string | undefined) => void;
 }
 
-const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused, isHovered, isFavorite, onSelect, onHover, onToggleFavorite }) => {
-    const divRef = React.useRef<HTMLDivElement>(null);
-    const [localHovered, setLocalHovered] = React.useState(false);
-
-    React.useEffect(() => {
-        const el = divRef.current;
-        if (!el) return;
-        const onEnter = () => { setLocalHovered(true); onHover?.(model.fullId); };
-        const onLeave = () => { setLocalHovered(false); onHover?.(undefined); };
-        el.addEventListener('mouseenter', onEnter);
-        el.addEventListener('mouseleave', onLeave);
-        return () => { el.removeEventListener('mouseenter', onEnter); el.removeEventListener('mouseleave', onLeave); };
-    }, [model.fullId, onHover]);
-
-    const showTooltip = (isHovered || localHovered) && (model.contextLength !== undefined || model.inputPrice !== undefined || model.outputPrice !== undefined);
+const ModelRow: React.FC<ModelRowProps> = ({ model, isSelected, isFocused, isFavorited, onSelect, onFavorite, onHover }) => {
+    const rowRef = React.useRef<HTMLDivElement>(null);
 
     const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -619,54 +629,73 @@ const ModelOption: React.FC<ModelOptionProps> = ({ model, isSelected, isFocused,
         }
     }, [model.fullId, onSelect]);
 
+    // Use native event listeners so that jsdom mouseenter events are captured
+    React.useEffect(() => {
+        const el = rowRef.current;
+        if (!el) return;
+        const enter = () => onHover(model.fullId);
+        const leave = () => onHover(undefined);
+        el.addEventListener('mouseenter', enter);
+        el.addEventListener('mouseleave', leave);
+        return () => {
+            el.removeEventListener('mouseenter', enter);
+            el.removeEventListener('mouseleave', leave);
+        };
+    }, [model.fullId, onHover]);
+
     return (
         <div
-            ref={divRef}
-            className={`model-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
+            ref={rowRef}
+            className={`model-option model-dialog-row${isSelected ? ' selected' : ''}${isFocused ? ' focused' : ''}`}
             onClick={() => onSelect(model.fullId)}
             onKeyDown={handleKeyDown}
             role="option"
             aria-selected={isSelected}
-            aria-current={isFocused || undefined}
             tabIndex={0}
         >
-            <div className="model-option-main">
-                <div className="model-option-name-row">
-                    {isSelected && (
-                        <svg className="model-option-indicator" viewBox="0 0 8 8" fill="currentColor" width="6" height="6" aria-hidden="true">
-                            <circle cx="4" cy="4" r="3"/>
-                        </svg>
-                    )}
-                    <span className="model-option-name-text">{model.modelName}</span>
-                    {model.status && (
-                        <span className={`model-status-tag model-status-tag--${model.status}`}>
-                            {model.status}
-                        </span>
-                    )}
-                    {model.free && <span className="model-free-badge">Free</span>}
-                    {model.latest && <span className="model-latest-badge">Latest</span>}
-                </div>
-                <div className="model-option-id">{model.fullId}</div>
-            </div>
-            {onToggleFavorite && (
-                <button
-                    type="button"
-                    className={`model-favorite-btn${isFavorite ? ' active' : ''}`}
-                    onClick={e => onToggleFavorite(model.fullId, e)}
-                    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                >★</button>
+            <span className="model-dialog-row-check" aria-hidden="true">
+                {isSelected && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                )}
+            </span>
+            <span className="model-dialog-row-name">{model.modelName}</span>
+
+            {/* Status tags */}
+            {model.status === 'deprecated' && (
+                <span className="model-status-tag--deprecated model-dialog-row-tag model-dialog-row-tag--deprecated">
+                    deprecated
+                </span>
             )}
-            {showTooltip && (
-                <div className="model-tooltip">
-                    {model.contextLength !== undefined && (
-                        <span className="model-tooltip-context">{Math.round(model.contextLength / 1000)}k ctx</span>
-                    )}
-                    {model.inputPrice !== undefined && (
-                        <span className="model-tooltip-price">${model.inputPrice}/${model.outputPrice} per M</span>
-                    )}
-                </div>
+            {model.status === 'preview' && (
+                <span className="model-status-tag--preview model-dialog-row-tag model-dialog-row-tag--preview">
+                    preview
+                </span>
             )}
+
+            {/* Free badge */}
+            {model.free && (
+                <span className="model-free-badge" aria-label="Free model">free</span>
+            )}
+
+            {/* Latest badge */}
+            {model.latest && (
+                <span className="model-latest-badge" aria-label="Latest model">latest</span>
+            )}
+
+            {/* Favorite button */}
+            <button
+                type="button"
+                className={`model-favorite-btn${isFavorited ? ' active' : ''}`}
+                onClick={(e) => onFavorite(model.fullId, e)}
+                aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                aria-pressed={isFavorited}
+            >
+                <svg viewBox="0 0 24 24" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" aria-hidden="true">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+            </button>
         </div>
     );
 };

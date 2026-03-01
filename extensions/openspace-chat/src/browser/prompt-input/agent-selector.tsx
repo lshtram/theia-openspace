@@ -14,6 +14,9 @@ export interface AgentSelectorProps {
     disabled?: boolean;
 }
 
+// System agents that should not be shown in the agent selector
+const SYSTEM_AGENT_NAMES = new Set(['compaction', 'title', 'summary']);
+
 export const AgentSelector: React.FC<AgentSelectorProps> = ({ agents, selectedAgent, onSelect, disabled }) => {
     const [isOpen, setIsOpen] = React.useState(false);
     const [dropdownStyle, setDropdownStyle] = React.useState<React.CSSProperties>({});
@@ -22,7 +25,6 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({ agents, selectedAg
 
     // Filter out sub-agents and hidden system agents (compaction, title, summary)
     // AgentInfo doesn't expose mode/hidden yet; filter by known system agent names as a fallback
-    const SYSTEM_AGENT_NAMES = new Set(['compaction', 'title', 'summary']);
     const topLevelAgents = React.useMemo(
         () => agents.filter(a => !SYSTEM_AGENT_NAMES.has(a.name.toLowerCase())),
         [agents]
